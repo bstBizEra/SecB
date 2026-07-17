@@ -59,6 +59,8 @@ const requiredFields = [
   "objectType",
   "objectId",
   "objectVersion",
+  "projectId",
+  "workPackageId",
   "currentState",
   "requestedState",
   "actorId",
@@ -138,10 +140,16 @@ export class TransitionEngine {
     const authority = this.#authorize({
       actorId: request.actorId,
       authorityRef: request.authorityRef,
+      projectId: request.projectId,
+      workPackageId: request.workPackageId,
       objectType: request.objectType,
       objectId: request.objectId,
       currentState: request.currentState,
-      requestedState: request.requestedState
+      requestedState: request.requestedState,
+      producerActorId: request.producerActorId,
+      reviewerActorId: request.reviewerActorId,
+      qaActorId: request.qaActorId,
+      evidenceVerifierActorId: request.evidenceVerifierActorId
     });
     if (!authority?.allowed || !authority.decisionId) {
       throw new TransitionDeniedError("DENY_AUTHORITY", authority?.reason ?? "Effective authority was not established");
@@ -158,6 +166,8 @@ export class TransitionEngine {
       transitionId: `tr_${requestFingerprint.slice(0, 24)}`,
       objectType: request.objectType,
       objectId: request.objectId,
+      projectId: request.projectId,
+      workPackageId: request.workPackageId,
       previousVersion: request.objectVersion,
       objectVersion: request.objectVersion + 1,
       previousState: request.currentState,

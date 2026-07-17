@@ -1,7 +1,7 @@
 # SecB Local Build Rules
 
 **Document ID:** SECB-AGENTS-LOCAL-001
-**Version:** 0.2.0-alpha.0
+**Version:** 0.3.0-alpha.0
 **Effective scope:** Local repository development only
 **External publication authority:** Not granted
 

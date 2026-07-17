@@ -1,6 +1,6 @@
 {
   "name": "secb",
-  "version": "0.2.0-alpha.0",
+  "version": "0.3.0-alpha.0",
   "private": true,
   "description": "Local-first governed agent work and learning control plane",
   "type": "module",
@@ -9,10 +9,6 @@
   "scripts": {
     "validate": "node tools/validate-foundation.mjs",
     "test": "npm run validate && node --test tests/*.test.mjs"
-  },
-  "dependencies": {
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1"
   },
   "engines": {
     "node": ">=22"

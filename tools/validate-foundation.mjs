@@ -16,11 +16,16 @@ function read(relativePath) {
 }
 
 const version = read("VERSION").trim();
-const packageJson = JSON.parse(read("package.json"));
+const packageSource = read("package.json");
+const packageJson = JSON.parse(packageSource);
 const manifest = JSON.parse(read("MANIFEST.json"));
 
 assert(version === packageJson.version, "version.package", version);
 assert(version === manifest.version, "version.manifest", version);
+for (const key of ["name", "version", "type", "scripts", "dependencies", "engines"]) {
+  const occurrences = [...packageSource.matchAll(new RegExp(`"${key}"\\s*:`, "g"))].length;
+  assert(occurrences === 1, `package.unique.${key}`, "declared exactly once");
+}
 assert(new Set(manifest.files).size === manifest.files.length, "manifest.unique", `${manifest.files.length} unique paths`);
 
 for (const file of manifest.files) {
@@ -28,12 +33,13 @@ for (const file of manifest.files) {
 }
 
 const schemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"));
-assert(schemaFiles.length === 5, "schemas.count", "5 canonical bootstrap schemas");
+assert(schemaFiles.length === 6, "schemas.count", "6 canonical bootstrap schemas");
 const mandatoryIdentityFields = {
   "contracts/project-contract.schema.json": ["project_id", "version", "status", "approvals"],
   "contracts/work-package.schema.json": ["work_package_id", "version", "project_id", "baseline", "status"],
   "contracts/context-receipt.schema.json": ["receipt_id", "version", "project_id", "work_package_id", "session_id", "content_hash"],
   "contracts/handoff-envelope.schema.json": ["handoff_id", "version", "project_id", "work_package_id", "source_session_id", "content_hash"],
+  "contracts/event-envelope.schema.json": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "idempotency_key", "content_hash"],
   "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "content_hash", "verification_status"]
 };
 for (const file of schemaFiles) {

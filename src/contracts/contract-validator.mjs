@@ -8,6 +8,7 @@ const schemaPaths = {
   workPackage: "work-package.schema.json",
   contextReceipt: "context-receipt.schema.json",
   handoffEnvelope: "handoff-envelope.schema.json",
+  eventEnvelope: "event-envelope.schema.json",
   evidenceEnvelope: "evidence-envelope.schema.json"
 };
 

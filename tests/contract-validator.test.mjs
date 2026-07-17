@@ -13,6 +13,7 @@ const validFixtures = {
   workPackage: "valid/work-package.json",
   contextReceipt: "valid/context-receipt.json",
   handoffEnvelope: "valid/handoff-envelope.json",
+  eventEnvelope: "valid/event-envelope.json",
   evidenceEnvelope: "valid/evidence-envelope.json"
 };
 
@@ -21,6 +22,7 @@ const invalidFixtures = {
   workPackage: "invalid/work-package-unknown-field.json",
   contextReceipt: "invalid/context-bad-hash.json",
   handoffEnvelope: "invalid/handoff-missing-scope.json",
+  eventEnvelope: "invalid/event-missing-idempotency.json",
   evidenceEnvelope: "invalid/evidence-bad-status.json"
 };
 

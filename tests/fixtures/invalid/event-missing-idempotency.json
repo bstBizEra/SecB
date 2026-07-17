@@ -1,0 +1,14 @@
+{
+  "event_id": "evt_invalid",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_ledger_001",
+  "session_id": "ses_local_ledger_001",
+  "actor_id": "codex-local",
+  "event_type": "TRANSITION_REQUESTED",
+  "occurred_at": "2026-07-17T12:50:00+07:00",
+  "observed_fact": {},
+  "source": "state-machine",
+  "classification": "INTERNAL",
+  "content_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}

@@ -1,6 +1,6 @@
 # SecB Documentation Control Center
 
-**Version:** 0.2.0-alpha.0
+**Version:** 0.3.0-alpha.0
 **Status:** PHASE_0_CONTROL_CANDIDATE
 
 ## Canonical documents
@@ -11,6 +11,8 @@
 - [`contracts/`](../contracts/) — machine-readable contract schemas.
 - [`src/control/`](../src/control/) — fail-closed state-transition enforcement.
 - [`src/contracts/`](../src/contracts/) — executable JSON Schema validation.
+- [`src/ledger/`](../src/ledger/) — local append-only event and evidence ledger.
+- [ADR-0002](adr/0002-authority-and-local-durable-ledger.md) — scoped authority and durable ledger decision.
 
 ## Current disposition
 

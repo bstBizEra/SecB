@@ -7,6 +7,8 @@ function request(overrides = {}) {
     objectType: "Project",
     objectId: "prj_secb_local",
     objectVersion: 1,
+    projectId: "prj_secb_local",
+    workPackageId: "wp_p0_state_001",
     currentState: "DRAFT",
     requestedState: "REVIEW",
     actorId: "codex-local",

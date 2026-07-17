@@ -1,7 +1,7 @@
 # SecB Governed Multi-Agent Project Operating Model
 
 **Document ID:** SECB-OPERATING-MODEL-001
-**Version:** 0.2.0-alpha.0
+**Version:** 0.3.0-alpha.0
 **Status:** IMPLEMENTATION CANDIDATE / NOT OPERATIONALLY ACTIVATED
 
 ## 1. Constitutional model

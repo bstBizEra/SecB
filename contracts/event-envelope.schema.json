@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/event-envelope.schema.json",
+  "title": "SecB Event Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "event_type", "occurred_at", "observed_fact", "source", "idempotency_key", "classification", "content_hash"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "actor_id": {"type": "string", "minLength": 1},
+    "event_type": {"type": "string", "minLength": 1},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "observed_fact": {"type": "object"},
+    "source": {"type": "string", "minLength": 1},
+    "idempotency_key": {"type": "string", "minLength": 1},
+    "classification": {"type": "string", "minLength": 1},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

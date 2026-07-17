@@ -1,7 +1,7 @@
 # SecB Phase 0 Implementation Control
 
 **Document ID:** SECB-OPERATING-MODEL-P0-001
-**Version:** 0.2.0-alpha.0
+**Version:** 0.3.0-alpha.0
 **Status:** LOCAL BOOTSTRAP CANDIDATE
 
 ## Objective
@@ -37,7 +37,16 @@ External remote configuration, publication, deployment, production activation, a
 - Project, Work Package, Session, and Evidence transitions use explicit allowlists.
 - Authority resolution defaults to deny and must return a server-side decision identifier.
 - Identical idempotent requests replay the prior disposition; conflicting key reuse fails closed.
-- The implementation remains an in-process control library. Durable storage and distributed concurrency are not yet implemented.
+- The control logic remains an in-process library. The local ledger proves restart durability and single-host writer exclusion; distributed storage and concurrency are not yet implemented.
+
+### Authority and ledger increment
+
+- Authority grants are resolved from server-held configuration, scoped to actor, project, Work Package, role, transition, status, and validity window.
+- Conflicting producer/reviewer, reviewer/QA, QA/GOV, skill producer/publisher, and evidence producer/acceptor roles fail configuration.
+- Event and Evidence ledgers persist append-only NDJSON records with canonical SHA-256 entry hashes and record hash chaining.
+- Atomic writer locks and optimistic expected-sequence checks fail closed on concurrent or stale writes.
+- Idempotent replay returns the original record; conflicting replay, duplicate identity, corruption, and tampering are denied.
+- The local ledger is a Phase 0 durability proof. PostgreSQL and a production event store remain future system-of-record implementations.
 
 ## Canonical bootstrap states
 
