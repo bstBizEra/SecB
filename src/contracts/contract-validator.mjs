@@ -9,7 +9,8 @@ const schemaPaths = {
   contextReceipt: "context-receipt.schema.json",
   handoffEnvelope: "handoff-envelope.schema.json",
   eventEnvelope: "event-envelope.schema.json",
-  evidenceEnvelope: "evidence-envelope.schema.json"
+  evidenceEnvelope: "evidence-envelope.schema.json",
+  agentRegistration: "agent-registration.schema.json"
 };
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
