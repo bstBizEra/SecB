@@ -1,0 +1,29 @@
+schema_version: "1.0"
+event:
+  event_id: "EVT-TBD"
+  event_type: "session.created"
+  timestamp: null
+  sequence: 1
+  correlation:
+    project_id: "SECB"
+    project_session_id: "PSESSION-TBD"
+    agent_session_id: "ASESSION-TBD"
+    work_package_id: "WP-TBD"
+    agent_instance_id: "AGT-TBD"
+    runtime_deployment_id: "RT-TBD"
+    trace_id: "TBD"
+    span_id: "TBD"
+  source:
+    channel: "TBD"
+    host_id: "TBD"
+    process_id: null
+    runtime_version: "TBD"
+  classification:
+    sensitivity: "INTERNAL"
+    capture_level: "C1"
+    evidence_candidate: false
+  payload: {}
+  integrity:
+    payload_sha256: "TBD"
+    previous_event_hash: null
+    signature_ref: null

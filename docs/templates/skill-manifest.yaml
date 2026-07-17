@@ -1,0 +1,26 @@
+schema_version: "1.0"
+skill:
+  skill_id: "SKILL-TBD"
+  name: "TBD"
+  version: "0.1.0-candidate"
+  status: "CANDIDATE"
+  owner: "TBD"
+  source:
+    repository: "TBD"
+    commit_sha: "TBD"
+    licence: "TBD"
+  purpose: "TBD"
+  input_schema: "TBD"
+  output_schema: "TBD"
+  supported_runtimes: []
+  required_models: []
+  required_tools: []
+  required_mcp_methods: []
+  project_scopes: []
+  max_data_classification: "INTERNAL"
+  tests: []
+  evaluations: []
+  evidence_refs: []
+  known_limitations: []
+  approval_history: []
+  revocation_conditions: []

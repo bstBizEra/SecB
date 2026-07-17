@@ -1,0 +1,33 @@
+schema_version: "1.0"
+project_contract:
+  project_id: "SECB"
+  namespace: "bizera/secb"
+  version: 1
+  status: "DRAFT"
+  profile_id: "software-engineering"
+  owners:
+    business: "TBD"
+    technical: "TBD"
+    security: "TBD"
+    governance: "TBD"
+  repositories: []
+  environments: []
+  security_classification: "INTERNAL"
+  applicable_policies: []
+  approved_runtime_deployments: []
+  approved_agents: []
+  approved_models: []
+  approved_tools: []
+  approved_mcp_methods: []
+  approved_skills: []
+  evidence_destination: "TBD"
+  memory_policy:
+    project_memory: false
+    cross_project_publication: false
+  release_authority: "HUMAN_GOV_REQUIRED"
+  data_residency: ["TBD"]
+  retention_policy: "TBD"
+  required_exit_gates: []
+  effective_from: null
+  expires_at: null
+  approvals: []

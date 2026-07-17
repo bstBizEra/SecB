@@ -1,0 +1,25 @@
+schema_version: "1.0"
+context_receipt:
+  receipt_id: "CTX-TBD"
+  project_id: "SECB"
+  objective_id: "OBJ-TBD"
+  work_package_id: "WP-TBD"
+  agent_session_id: "ASESSION-TBD"
+  assigned_role: "TBD"
+  authority_scope: "A0"
+  baseline_version: "TBD"
+  requirements: []
+  acceptance_criteria: []
+  applicable_decisions: []
+  approved_knowledge: []
+  known_risks: []
+  unresolved_questions: []
+  allowed_tools: []
+  allowed_skills: []
+  evidence_obligations: []
+  token_budget: null
+  source_references: []
+  freshness_timestamp: null
+  issued_at: null
+  expires_at: null
+  receipt_sha256: "TBD"

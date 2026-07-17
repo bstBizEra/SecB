@@ -1,0 +1,24 @@
+schema_version: "1.0"
+agent_registration:
+  provider_id: "TBD"
+  runtime_product_id: "TBD"
+  runtime_deployment_id: "TBD"
+  agent_profile_id: "TBD"
+  agent_instance_id: "TBD"
+  runtime_version: "TBD"
+  deployment_location: "TBD"
+  owner: "TBD"
+  permitted_roles: []
+  authority_ceiling: "A0"
+  approved_models: []
+  approved_tools: []
+  approved_mcp_methods: []
+  approved_skills: []
+  repository_scopes: []
+  environment_scopes: []
+  max_data_classification: "INTERNAL"
+  delegation_rights: []
+  evidence_obligations: []
+  workload_identity_ref: "TBD"
+  evaluation_status: "CANDIDATE"
+  lifecycle_state: "PENDING"

@@ -19,6 +19,7 @@ const version = read("VERSION").trim();
 const packageSource = read("package.json");
 const packageJson = JSON.parse(packageSource);
 const manifest = JSON.parse(read("MANIFEST.json"));
+const docsManifest = JSON.parse(read("docs/MANIFEST.json"));
 
 assert(version === packageJson.version, "version.package", version);
 assert(version === manifest.version, "version.manifest", version);
@@ -30,6 +31,17 @@ assert(new Set(manifest.files).size === manifest.files.length, "manifest.unique"
 
 for (const file of manifest.files) {
   assert(existsSync(resolve(root, file)), `manifest.file.${file}`, "exists");
+}
+
+assert(docsManifest.status === "DRAFT_NOT_EFFECTIVE", "docs-manifest.status", "draft and not effective");
+assert(
+  docsManifest.file_count_excluding_manifests === docsManifest.files.length,
+  "docs-manifest.count",
+  `${docsManifest.files.length} declared paths`
+);
+assert(new Set(docsManifest.files).size === docsManifest.files.length, "docs-manifest.unique", "all paths unique");
+for (const file of docsManifest.files) {
+  assert(existsSync(resolve(root, file)), `docs-manifest.file.${file}`, "exists");
 }
 
 const schemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"));

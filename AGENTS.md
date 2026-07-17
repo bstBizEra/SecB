@@ -23,3 +23,19 @@ Build SecB as a governed agent work and learning control plane. SecB assigns and
 ## Current bootstrap boundary
 
 The Phase 0 artifacts are implementation candidates. They define future operational controls but do not self-authorize production, remote publication, mutation outside this repository, knowledge promotion, or skill publication.
+
+## Documentation control amendment — 2026-07-17
+
+The controlled documentation tree is rooted at [`docs/`](docs/). Before beginning a bounded slice, read the minimum sufficient chain in this order:
+
+1. [`docs/README.md`](docs/README.md)
+2. [`docs/00-governance/governance-baseline.md`](docs/00-governance/governance-baseline.md)
+3. [`docs/02-operating-model/universal-work-lifecycle.md`](docs/02-operating-model/universal-work-lifecycle.md)
+4. [`docs/02-operating-model/agent-team-and-sod.md`](docs/02-operating-model/agent-team-and-sod.md)
+5. [`docs/03-project-control/project-contract.md`](docs/03-project-control/project-contract.md)
+6. [`docs/03-project-control/work-package-contract.md`](docs/03-project-control/work-package-contract.md)
+7. Documents and templates directly referenced by the active bounded slice.
+
+Changes under `docs/**` also follow [`docs/AGENTS.md`](docs/AGENTS.md). The repository-level [`MANIFEST.json`](MANIFEST.json) is the canonical local build inventory; [`docs/MANIFEST.json`](docs/MANIFEST.json) inventories the imported documentation pack.
+
+The new documentation pack is `DRAFT / NOT EFFECTIVE`. Its presence satisfies required-reading availability but does not create an effective Project Contract, authorize a Work Package, assign a server-derived identity, accept evidence, or activate SecB. Those require their own governed records and independent decisions.

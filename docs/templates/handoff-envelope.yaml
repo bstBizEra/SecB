@@ -1,0 +1,24 @@
+schema_version: "1.0"
+handoff:
+  handoff_id: "HANDOFF-TBD"
+  sequence: 1
+  source_agent_instance_id: "TBD"
+  source_session_id: "TBD"
+  destination_role: "TBD"
+  project_id: "SECB"
+  work_package_id: "WP-TBD"
+  objective: "TBD"
+  authorized_scope: []
+  work_completed: []
+  artifacts_created: []
+  decisions_made: []
+  assumptions: []
+  evidence_refs: []
+  checks_performed: []
+  known_limitations: []
+  unresolved_findings: []
+  risks: []
+  recommended_next_action: "TBD"
+  confidence: null
+  context_delta: []
+  envelope_sha256: "TBD"

@@ -1,0 +1,33 @@
+schema_version: "1.0"
+work_package:
+  work_package_id: "WP-TBD"
+  project_id: "SECB"
+  objective_id: "OBJ-TBD"
+  version: 1
+  status: "DRAFT"
+  risk_class: "R0"
+  problem_statement: "TBD"
+  desired_outcome: "TBD"
+  scope: []
+  non_scope: []
+  baseline:
+    repository_id: "TBD"
+    commit_sha: "TBD"
+  acceptance_criteria: []
+  proof_methods: []
+  role_assignments: []
+  allowed:
+    paths: []
+    commands: []
+    models: []
+    tools: []
+    mcp_methods: []
+    skills: []
+    network_destinations: []
+  declared_write_set: []
+  evidence_obligations: []
+  execution_window:
+    starts_at: null
+    expires_at: null
+  rollback_authority: "TBD"
+  approvals: []
