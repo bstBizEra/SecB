@@ -1,0 +1,38 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "agent_registration_codex_p0_08_candidate"
+  status: "PROPOSED_NOT_ISSUED"
+  prepared_at: "2026-07-17T14:11:53.4233371+07:00"
+agent_registration:
+  provider_id: "provider_openai_candidate"
+  runtime_product_id: "runtime_product_codex_candidate"
+  runtime_deployment_id: "runtime_deployment_codex_local_candidate"
+  agent_profile_id: "agent_profile_secb_node_engineer_candidate"
+  agent_instance_id: null
+  proposed_agent_instance_id: "agent_codex_engin_p0_08_001"
+  proposed_session_id: "session_codex_engin_p0_08_001"
+  runtime_version: "CURRENT_CODEX_DESKTOP_VERSION_UNVERIFIED"
+  deployment_location: "LOCAL_WINDOWS"
+  owner: null
+  permitted_roles: ["ENGIN"]
+  authority_ceiling: "A2"
+  approved_models: []
+  proposed_models: ["openai/gpt-5"]
+  approved_tools: []
+  proposed_tools: ["filesystem_scoped", "powershell_scoped", "git_local", "node", "npm_test"]
+  approved_mcp_methods: []
+  approved_skills: []
+  repository_scopes: ["repo_secb_local"]
+  environment_scopes: ["env_secb_local_build"]
+  max_data_classification: "INTERNAL"
+  delegation_rights: []
+  evidence_obligations:
+    - "Structured command and file-change events"
+    - "Checkpoint and final diff hashes"
+    - "Producer verification and handoff"
+  workload_identity_ref: null
+  evaluation_status: "CANDIDATE"
+  lifecycle_state: "PENDING_SERVER_ISSUANCE"
+  effective_from: null
+  expires_at: null
+  approvals: []

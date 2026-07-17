@@ -258,3 +258,13 @@ Worktree cleanup is a separate authorized transition after evidence acceptance a
 - Assign server-derived producer, REV, QA, evidence verifier, integrator, and GOV identities.
 - Choose evidence storage, retention, execution windows, budgets, and cleanup authority.
 - Decide whether this wave may proceed after independent review of this plan.
+
+## 17. Instantiated Candidate Records
+
+- [Worktree resolution](../03-project-control/candidates/p0-wave-1-worktree-resolution.yaml)
+- [R2 successor Project Contract](../03-project-control/candidates/secb-local-v2-r2.project-contract.yaml)
+- [Codex P0-08 Work Package](../03-project-control/candidates/wp-p0-08-project-contract-service.work-package.yaml)
+- [Claude P0-15A Work Package](../03-project-control/candidates/wp-p0-15a-runtime-registry-core.work-package.yaml)
+- [Human governance decision request](../03-project-control/candidates/p0-wave-1-governance-decision.md)
+
+All remain candidates and grant no authority until their required identities, approvals, leases, evidence destinations, and execution windows become effective.

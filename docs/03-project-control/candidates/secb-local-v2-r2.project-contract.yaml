@@ -1,0 +1,78 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "project_contract_prj_secb_local_v2_r2_candidate"
+  record_status: "DRAFT_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  supersedes_candidate: "project_contract_prj_secb_local_v1_candidate"
+  source_template: "docs/templates/project-contract.yaml"
+  prepared_at: "2026-07-17T14:11:53.4233371+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: null
+project_contract:
+  project_id: "prj_secb_local"
+  namespace: "bizera/secb/local"
+  name: "SecB Local Phase 0 Parallel Build Wave 1"
+  description: "Candidate authority boundary for isolated local R2 implementation by Codex and Claude Code."
+  version: 2
+  status: "DRAFT"
+  profile_id: "software-engineering"
+  risk_ceiling: "R2"
+  owners:
+    business: null
+    technical: null
+    security: null
+    governance: null
+  repositories:
+    - repository_id: "repo_secb_local"
+      provider: "local_git"
+      path: "C:/laragon/www/SecB"
+      default_branch: "main"
+      protected_refs: ["main"]
+      authorized_baseline_commit: "26e299c160f58a5305b143456e8e43ecf2adac12"
+      remote: null
+  environments:
+    - environment_id: "env_secb_local_build"
+      kind: "local_isolated_worktrees"
+      activation_status: "CANDIDATE"
+  security_classification: "INTERNAL"
+  data_categories: ["repository_source", "governance_documents", "test_results", "build_evidence"]
+  applicable_policies:
+    - "AGENTS.md"
+    - "docs/AGENTS.md"
+    - "docs/00-governance/governance-baseline.md"
+    - "docs/00-governance/authority-and-risk-model.md"
+    - "docs/02-operating-model/agent-team-and-sod.md"
+    - "docs/03-project-control/work-package-contract.md"
+    - "docs/09-delivery/codex-claude-git-worktree-build-plan.md"
+  approved_runtime_deployments: []
+  proposed_runtime_deployments:
+    - "runtime_deployment_codex_local_candidate"
+    - "runtime_deployment_claude_code_local_2_1_139_candidate"
+  approved_agents: []
+  proposed_agent_registrations:
+    - "docs/03-project-control/candidates/agents/codex-p0-08.agent-registration.yaml"
+    - "docs/03-project-control/candidates/agents/claude-p0-15a.agent-registration.yaml"
+  approved_models: []
+  approved_tools: []
+  approved_mcp_methods: []
+  approved_skills: []
+  evidence_root: "C:/laragon/www/SecB-evidence/p0-wave-1"
+  evidence_destination_status: "PROPOSED_NOT_PROVISIONED"
+  memory_policy:
+    project_memory: false
+    cross_project_publication: false
+  release_authority: "HUMAN_GOV_REQUIRED"
+  integration_authority: "SEPARATE_HUMAN_AUTHORIZATION_REQUIRED"
+  data_residency: ["LOCAL_MACHINE_ONLY"]
+  provider_transport_policy: "ALLOW_APPROVED_PROVIDER_CONTROL_PLANE_ONLY"
+  agent_tool_network_policy: "DENY_ALL"
+  credential_policy: "TEMPORARY_PROVIDER_AUTH_ONLY_NO_AGENT_SECRET_ACCESS"
+  retention_policy: "PROPOSED_30_DAYS_PENDING_GOV"
+  required_exit_gates: ["G0", "G1", "G2", "G3", "G4", "G5", "G7", "G8"]
+  activation_restrictions:
+    - "No direct mutation of main."
+    - "No remote configuration, push, publication, deployment, or activation."
+    - "No MCP, A2A, browser, memory, knowledge promotion, or skill publication."
+    - "Producer work is limited to authorized sibling worktrees and exact write sets."
+  effective_from: null
+  expires_at: null
+  approvals: []

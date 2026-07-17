@@ -1,0 +1,47 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "worktree_resolution_p0_wave_1_candidate"
+  status: "RECORDED_NOT_EFFECTIVE"
+  observed_at: "2026-07-17T14:11:53.4233371+07:00"
+  observer_runtime: "Codex"
+  observer_actor_id: null
+  source: "Host-observed local Git state"
+baseline:
+  repository_id: "repo_secb_local"
+  primary_path: "C:/laragon/www/SecB"
+  primary_branch: "main"
+  primary_commit: "26e299c160f58a5305b143456e8e43ecf2adac12"
+  primary_working_tree: "CLEAN"
+  remotes: []
+resolutions:
+  - workspace_id: "ws_claude_nested_unverified_001"
+    path: "C:/laragon/www/SecB/.claude/worktrees/worktree-setup-revision-2d5b0a"
+    branch: "bst/worktree-setup-revision-2d5b0a"
+    commit: "2c2c24ce98482fbf6068d2e34655658440a2de56"
+    working_tree: "CLEAN"
+    owner_identity: null
+    provenance_status: "UNVERIFIED"
+    disposition: "HOLD_AND_PRESERVE_WORKTREE"
+    eligible_for_read_only_review: false
+    eligible_for_mutation: false
+    reason: "Nested under the primary repository, created outside this governed transition, and owner/authority are unresolved."
+  - workspace_id: "ws_claude_review_detached_001"
+    path: "C:/laragon/www/SecB-worktrees/claude-rev-p0-19"
+    branch: null
+    commit: "2c2c24ce98482fbf6068d2e34655658440a2de56"
+    working_tree: "CLEAN"
+    owner_identity: null
+    provenance_status: "UNVERIFIED"
+    disposition: "RESERVED_READ_ONLY_REVIEW"
+    eligible_for_read_only_review: true
+    eligible_for_mutation: false
+    reason: "Detached and clean, but identity, Context Receipt, evidence destination, and review authorization remain unresolved."
+planned_worktrees:
+  - path: "C:/laragon/www/SecB-worktrees/codex-p0-08-project-contract"
+    branch: "codex/p0/project-contract-service"
+    state: "NOT_CREATED"
+  - path: "C:/laragon/www/SecB-worktrees/claude-p0-15-runtime-registry"
+    branch: "claude/p0/runtime-registry-core"
+    state: "NOT_CREATED"
+cleanup_authority: null
+governance_decision_ref: "docs/03-project-control/candidates/p0-wave-1-governance-decision.md"

@@ -1,0 +1,64 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "work_package_wp_secb_p0_15a_runtime_registry_core_001_v1_candidate"
+  record_status: "REVIEW_REQUIRED_NOT_AUTHORIZED"
+  source_template: "docs/templates/work-package.yaml"
+  prepared_at: "2026-07-17T14:11:53.4233371+07:00"
+work_package:
+  work_package_id: "wp_secb_p0_15a_runtime_registry_core_001"
+  project_id: "prj_secb_local"
+  project_contract_ref: "docs/03-project-control/candidates/secb-local-v2-r2.project-contract.yaml#version=2"
+  objective_id: "obj_secb_p0_runtime_registry_core"
+  version: 1
+  status: "DRAFT"
+  risk_class: "R2"
+  problem_statement: "SecB lacks an executable registry that keeps Provider, Runtime Product, Runtime Deployment, Agent Profile, and Agent Instance identities distinct."
+  desired_outcome: "Implement a fail-closed in-process Runtime Registry core with adversarial tests and no authority derivation by runtime name."
+  baseline:
+    repository_id: "repo_secb_local"
+    repository_path: "C:/laragon/www/SecB"
+    branch_base: "main"
+    commit_sha: "26e299c160f58a5305b143456e8e43ecf2adac12"
+    required_working_tree: "CLEAN"
+  workspace:
+    path: "C:/laragon/www/SecB-worktrees/claude-p0-15-runtime-registry"
+    branch: "claude/p0/runtime-registry-core"
+    lease_status: "NOT_ISSUED"
+  role_assignment:
+    role: "ENGIN"
+    proposed_agent_instance_id: "agent_claude_engin_p0_15a_001"
+    agent_instance_id: null
+    proposed_session_id: "session_claude_engin_p0_15a_001"
+    session_id: null
+    assignment_status: "PENDING_SERVER_ISSUANCE"
+  scope:
+    - "Implement the Runtime Registry core in src/runtime/."
+    - "Add focused tests in tests/runtime-registry.test.mjs."
+  non_scope:
+    - "Project Contract service, runtime adapters, host agent, shared schemas, exports, manifests, dependencies, documentation, integration, MCP, remote operations, or activation."
+  acceptance_criteria:
+    - "Provider, Runtime Product, Runtime Deployment, Agent Profile, and Agent Instance identities remain distinct."
+    - "Missing identity, duplicate identity, invalid version, invalid parent reference, and unknown fields fail closed."
+    - "Disabled, quarantined, expired, or unapproved deployments and instances are ineligible."
+    - "Registry eligibility never creates transition or project authority."
+    - "Model, tool, network, credential, evaluation, and lifecycle metadata are explicit and closed."
+    - "Targeted and full repository tests pass after the final branch change."
+  allowed:
+    paths: ["src/runtime/**", "tests/runtime-registry.test.mjs"]
+    commands: ["npm test", "node --test tests/runtime-registry.test.mjs", "git status", "git diff", "git add <declared-write-set>", "git commit"]
+    tools: ["Read", "Glob", "Grep", "Bash_scoped", "git_local", "node", "npm"]
+    network_destinations: []
+    mcp_methods: []
+    skills: []
+  declared_write_set: ["src/runtime/**", "tests/runtime-registry.test.mjs"]
+  prohibited_write_set: ["src/index.mjs", "package.json", "package-lock.json", "MANIFEST.json", "contracts/**", "docs/**", "src/control/**", "src/contracts/**", "src/ledger/**", "src/project/**"]
+  evidence_destination: "C:/laragon/www/SecB-evidence/p0-wave-1/wp_secb_p0_15a_runtime_registry_core_001"
+  evidence_destination_status: "PROPOSED_NOT_PROVISIONED"
+  execution_window:
+    mode: "FOUR_HOURS_FROM_EFFECTIVE_APPROVAL"
+    duration_minutes: 240
+    starts_at: null
+    expires_at: null
+  rollback_authority: "DISCARD_UNINTEGRATED_WORKTREE_CHANGES_AFTER_HUMAN_APPROVAL"
+  integration_authority: "SEPARATE_WORK_PACKAGE_REQUIRED"
+  approvals: []
