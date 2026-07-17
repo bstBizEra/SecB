@@ -1,0 +1,20 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime and editor state
+.secb/runtime/
+.vscode/
+.idea/
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
