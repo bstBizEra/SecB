@@ -35,3 +35,16 @@ export {
   RegistryError,
   RuntimeRegistry
 } from "./registry/runtime-registry.mjs";
+
+export {
+  CLAUDE_CODE_ADAPTER,
+  CODEX_ADAPTER,
+  GENERIC_ADAPTER,
+  KNOWN_ADAPTERS,
+  createAdapterRegistration
+} from "./registry/adapters.mjs";
+
+export {
+  HostAgentError,
+  HostRuntimeAgent
+} from "./host/host-runtime-agent.mjs";
