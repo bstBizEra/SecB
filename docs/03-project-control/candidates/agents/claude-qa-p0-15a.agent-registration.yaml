@@ -1,0 +1,43 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "agent_registration_claude_qa_p0_15a_candidate"
+  status: "PROPOSED_NOT_ISSUED"
+  prepared_at: "2026-07-17T14:57:07.1956104+07:00"
+  provenance: "Wave-1 incident disposition — fresh independent identity for cross-lane QA"
+agent_registration:
+  provider_id: "provider_anthropic_candidate"
+  runtime_product_id: "runtime_product_claude_code_candidate"
+  runtime_deployment_id: "runtime_deployment_claude_code_local_2_1_139_candidate"
+  agent_profile_id: "agent_profile_secb_independent_qa_candidate"
+  agent_instance_id: null
+  proposed_agent_instance_id: "agent_claude_qa_p0_15a_001"
+  proposed_session_id: "session_claude_qa_p0_15a_001"
+  runtime_version: "2.1.139"
+  deployment_location: "LOCAL_WINDOWS"
+  owner: null
+  permitted_roles: ["QA"]
+  authority_ceiling: "A1"
+  approved_models: []
+  proposed_models: ["anthropic/claude-opus-4-6"]
+  approved_tools: []
+  proposed_tools: ["Read", "Glob", "Grep", "git_local_readonly", "node", "npm_test"]
+  approved_mcp_methods: []
+  approved_skills: []
+  repository_scopes: ["repo_secb_local"]
+  environment_scopes: ["env_secb_local_review"]
+  max_data_classification: "INTERNAL"
+  delegation_rights: []
+  evidence_obligations:
+    - "Independent QA verification results for P0-15A after REV disposition"
+    - "Test execution transcripts and acceptance-check outcomes"
+    - "SoD attestation: QA actor is distinct from producer and reviewer"
+  workload_identity_ref: null
+  evaluation_status: "CANDIDATE"
+  lifecycle_state: "PENDING_SERVER_ISSUANCE"
+  effective_from: null
+  expires_at: null
+  approvals: []
+sod_constraints:
+  qa_work_of: "agent_claude_engin_p0_15a_001 after review by agent_codex_rev_p0_15a_001"
+  prohibited_roles_same_scope: ["ENGIN", "REV"]
+  rationale: "QA must be independent of both producer and reviewer; fresh Claude QA identity is scope-isolated from the Claude ENGIN identity"

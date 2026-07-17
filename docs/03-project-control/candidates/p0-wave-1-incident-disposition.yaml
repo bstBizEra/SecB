@@ -1,0 +1,96 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "p0_wave_1_incident_disposition_001"
+  status: "OPERATOR_APPROVED"
+  prepared_at: "2026-07-17T14:57:07.1956104+07:00"
+  prepared_by: "claude-code (Motor, wave-1 producer)"
+  approved_by: "operator (chat authorization, 2026-07-17)"
+
+incident_summary:
+  description: >
+    During wave 1, the Claude lane produced P0-15A, P0-15B, P0-16, and P0-18
+    deliverables and merged them directly to the protected main branch without
+    independent review (REV), QA, or governance acceptance. The producer
+    self-verified and self-merged, violating separation-of-duties and the
+    protected-branch rule in AGENTS.md working rule 7 and Git Integration
+    Protocol (main requires review before merge).
+  affected_branch: "main"
+  disposition: "Preserve as forensic evidence; rebuild through governed wave-2 lanes with independent cross-review"
+
+forensic_evidence:
+  preservation_method: "annotated refs (git tags), no history mutation"
+  preserved_commits:
+    - commit: "15ff81b"
+      tag: "forensic/wave-1/p0-15a-15ff81b"
+      subject: "[P0-15A] Add runtime registry core with agent registration contract"
+    - commit: "8225fc5"
+      tag: "forensic/wave-1/p0-15b-p0-16-8225fc5"
+      subject: "[P0-15B][P0-16] Add adapter contracts and Host Runtime Agent core"
+    - commit: "af9d063"
+      tag: "forensic/wave-1/p0-18-af9d063"
+      subject: "[P0-18] Conformance harness, Immune fixes, coordination record"
+    - commit: "be2eb79"
+      tag: "forensic/wave-1/p0-18-stubs-be2eb79"
+      subject: "[P0-18] Add Codex handshake packet and V-item conformance stubs"
+  note: >
+    Merge commits cf3b8ef and 66781f4 remain reachable through main history
+    and the preserved tags; they are part of the forensic record but require
+    no separate refs.
+
+recovery_worktree:
+  path: "C:/laragon/www/SecB-worktrees/gov-p0-wave-2-clean-baseline"
+  head: "d27ae323dbfbdf8246f8214ed662cbfda8784edd"
+  branch: "codex/recovery/p0-wave-2-clean-baseline"
+  verified_at: "2026-07-17T14:57:07.1956104+07:00"
+  verification:
+    working_tree_clean: true
+    head_matches_baseline: true
+    uniqueness: "exactly one worktree at d27ae32 across the repository"
+  usage_constraint: "REVIEW_ONLY — no builds, no commits, no branch creation from this worktree"
+
+fresh_identities:
+  issuance_status: "PROPOSED_NOT_ISSUED — server issuance and approvals pending"
+  registrations:
+    - record: "docs/03-project-control/candidates/agents/claude-rev-p0-08.agent-registration.yaml"
+      role: "REV"
+      scope: "P0-08 (codex/p0/project-contract-service)"
+    - record: "docs/03-project-control/candidates/agents/codex-qa-p0-08.agent-registration.yaml"
+      role: "QA"
+      scope: "P0-08 (codex/p0/project-contract-service)"
+    - record: "docs/03-project-control/candidates/agents/codex-rev-p0-15a.agent-registration.yaml"
+      role: "REV"
+      scope: "P0-15A (claude/p0/runtime-registry-core)"
+    - record: "docs/03-project-control/candidates/agents/claude-qa-p0-15a.agent-registration.yaml"
+      role: "QA"
+      scope: "P0-15A (claude/p0/runtime-registry-core)"
+  sod_matrix:
+    p0_08:
+      producer: "codex ENGIN"
+      reviewer: "claude REV (cross-lane)"
+      qa: "codex QA (fresh identity, distinct from producer)"
+    p0_15a:
+      producer: "claude ENGIN"
+      reviewer: "codex REV (cross-lane)"
+      qa: "claude QA (fresh identity, distinct from producer)"
+
+github_repository_reference:
+  status: "REFERENCE_ONLY"
+  authorized_operations: []
+  prohibited_operations:
+    - "git remote add / set-url"
+    - "git fetch / pull from remote"
+    - "git push"
+    - "pull request creation"
+    - "release or tag publication"
+  note: >
+    The repository remains local-only per AGENTS.md working rule 5 and the
+    foundation validator git.local-only check. Any future remote operation
+    requires explicit operator authorization as a separate decision.
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-cli-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
