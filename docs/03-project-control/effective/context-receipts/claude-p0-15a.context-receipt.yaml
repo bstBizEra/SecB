@@ -1,0 +1,44 @@
+schema_version: "1.0"
+context_receipt:
+  receipt_id: "ctx_secb_claude_p0_15a_001"
+  project_id: "prj_secb_local"
+  objective_id: "obj_secb_p0_runtime_registry_core"
+  work_package_id: "wp_secb_p0_15a_runtime_registry_core_001"
+  agent_instance_id: "agent_claude_engin_p0_15a_001"
+  agent_session_id: "session_claude_engin_p0_15a_001"
+  assigned_role: "ENGIN"
+  authority_scope: "A2_R2_LOCAL_MUTATION_BOUNDED"
+  authority_packet_ref: "docs/03-project-control/effective/p0-wave-1-authority-packet.yaml"
+  baseline_version: "26e299c160f58a5305b143456e8e43ecf2adac12"
+  workspace_lease_id: "lease_secb_claude_p0_15a_001"
+  workspace_path: "C:/laragon/www/SecB-worktrees/claude-p0-15-runtime-registry"
+  branch: "claude/p0/runtime-registry-core"
+  requirements:
+    - "Mutate only src/runtime/** and tests/runtime-registry.test.mjs."
+    - "Keep network, MCP, skills, secrets, integration, publication, deployment, and activation denied."
+    - "Stop and preserve evidence on missing, conflicting, or expired authority."
+  acceptance_criteria:
+    - "All acceptance criteria in the authorized candidate Work Package are satisfied."
+    - "Targeted and full repository tests pass after the final producer change."
+    - "The final observed write set equals a subset of the declared write set."
+  applicable_decisions: ["dec_secb_p0_wave_1_authorization_001"]
+  approved_knowledge: []
+  known_risks:
+    - "Local OS identity binding is not an independent cryptographic human signature."
+    - "Reviewer, QA, evidence acceptor, and integration identities remain unissued."
+  unresolved_questions: []
+  allowed_tools: ["Read", "Glob", "Grep", "Bash_scoped", "git_local", "node", "npm"]
+  allowed_skills: []
+  allowed_network_destinations: []
+  evidence_destination: "C:/laragon/www/SecB-evidence/p0-wave-1/wp_secb_p0_15a_runtime_registry_core_001"
+  evidence_obligations:
+    - "Record baseline, commands, exit codes, changed paths, diff hash, test output, limitations, and handoff."
+    - "Do not self-accept evidence or claim governance acceptance."
+  source_references:
+    - "docs/03-project-control/candidates/wp-p0-15a-runtime-registry-core.work-package.yaml"
+    - "docs/03-project-control/candidates/secb-local-v2-r2.project-contract.yaml"
+    - "docs/09-delivery/codex-claude-git-worktree-build-plan.md"
+  freshness_timestamp: "2026-07-17T14:19:12.9499124+07:00"
+  issued_at: "2026-07-17T14:19:12.9499124+07:00"
+  expires_at: "2026-07-17T18:19:12.9499124+07:00"
+  receipt_sha256: "2865c7022f57712f5a360ae2a1d4de69936124a8cd9a1f62d1823ca360cd4c15"
