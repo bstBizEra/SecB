@@ -102,6 +102,7 @@
     "tests/conformance-harness.test.mjs",
     "tests/conformance-stubs.test.mjs",
     "docs/03-project-control/candidates/codex-handshake-p0-08.yaml",
+    "docs/03-project-control/candidates/p0-09-planning-005.claude-advisory.yaml",
     "tests/host-runtime-agent.test.mjs",
     "tests/runtime-registry.test.mjs",
     "tests/state-machine.test.mjs",
