@@ -1,0 +1,21 @@
+{
+  "handoff_id": "handoff_p0_state_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_state_001",
+  "source_session_id": "ses_local_001",
+  "destination_role": "REV",
+  "objective": "Independently review executable controls",
+  "authorized_scope": ["read repository", "run tests"],
+  "work_completed": ["transition engine implemented"],
+  "artifacts": ["src/control/state-machine.mjs"],
+  "assumptions": [],
+  "evidence_refs": ["ev_test_p0_state_001"],
+  "checks": ["npm test"],
+  "limitations": ["in-memory idempotency store only"],
+  "unresolved_findings": ["independent review pending"],
+  "risks": ["no durable storage yet"],
+  "recommended_next_action": "Perform independent review",
+  "context_delta": ["Added state-transition code"],
+  "content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

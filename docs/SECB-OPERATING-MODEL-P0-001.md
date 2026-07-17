@@ -1,7 +1,7 @@
 # SecB Phase 0 Implementation Control
 
 **Document ID:** SECB-OPERATING-MODEL-P0-001
-**Version:** 0.1.0-alpha.0
+**Version:** 0.2.0-alpha.0
 **Status:** LOCAL BOOTSTRAP CANDIDATE
 
 ## Objective
@@ -22,13 +22,22 @@ External remote configuration, publication, deployment, production activation, a
 | ID | Deliverable | Proof |
 |---|---|---|
 | P0-01 | Operating constitution | Required sections and source digest validate |
-| P0-02 | Canonical identity and version rules | Contract schemas reject missing identity/version |
-| P0-03 | Universal lifecycle and state rules | Lifecycle and fail-closed rule are normative |
+| P0-02 | Canonical identity and version rules | Executable contract validation rejects missing identity/version and unknown fields |
+| P0-03 | Universal lifecycle and state rules | Transition engine rejects undefined transitions, unknown states, denied policy, ineffective authority, missing evidence, and conflicting replays |
 | P0-04 | Risk, roles, and separation of duties | R0–R4 topology and independence rules exist |
 | P0-05 | Context and handoff contracts | JSON Schemas parse and require bounded fields |
 | P0-06 | Evidence contract | Evidence identity, provenance, hash, result, and status required |
 | P0-07 | Seven-ledger and source-of-truth boundaries | Canonical responsibilities are uniquely assigned |
 | P0-08 | Bootstrap verification | `npm test` passes from a clean local checkout |
+
+## Current implementation evidence
+
+- Contract schemas are compiled with JSON Schema Draft 2020-12 validation.
+- Five canonical valid fixtures and five targeted invalid fixtures exercise identity, scope, hash, status, and closed-object boundaries.
+- Project, Work Package, Session, and Evidence transitions use explicit allowlists.
+- Authority resolution defaults to deny and must return a server-side decision identifier.
+- Identical idempotent requests replay the prior disposition; conflicting key reuse fails closed.
+- The implementation remains an in-process control library. Durable storage and distributed concurrency are not yet implemented.
 
 ## Canonical bootstrap states
 

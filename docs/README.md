@@ -1,7 +1,7 @@
 # SecB Documentation Control Center
 
-**Version:** 0.1.0-alpha.0
-**Status:** PHASE_0_IMPLEMENTATION_CANDIDATE
+**Version:** 0.2.0-alpha.0
+**Status:** PHASE_0_CONTROL_CANDIDATE
 
 ## Canonical documents
 
@@ -9,6 +9,8 @@
 - [Phase 0 Implementation Control](SECB-OPERATING-MODEL-P0-001.md) — bounded deliverables, validation, and exit gates.
 - [ADR-0001](adr/0001-control-plane-and-bootstrap.md) — control-plane identity and constitution-first bootstrap decision.
 - [`contracts/`](../contracts/) — machine-readable contract schemas.
+- [`src/control/`](../src/control/) — fail-closed state-transition enforcement.
+- [`src/contracts/`](../src/contracts/) — executable JSON Schema validation.
 
 ## Current disposition
 

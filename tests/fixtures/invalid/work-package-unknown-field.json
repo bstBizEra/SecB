@@ -1,0 +1,18 @@
+{
+  "work_package_id": "wp_invalid",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "objective": "Invalid fixture",
+  "risk_class": "R2",
+  "status": "AUTHORIZED",
+  "baseline": "abc123",
+  "scope": ["src/"],
+  "non_scope": ["deployment"],
+  "acceptance_criteria": ["reject unknown fields"],
+  "roles": {"producer": "codex-local"},
+  "allowed_paths": ["src/"],
+  "prohibited_paths": ["outside"],
+  "evidence_obligations": ["test"],
+  "valid_until": "2026-07-18T00:00:00+07:00",
+  "caller_declared_authority": "ALLOW"
+}

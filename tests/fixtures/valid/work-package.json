@@ -1,0 +1,17 @@
+{
+  "work_package_id": "wp_p0_state_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "objective": "Implement executable contract and transition controls",
+  "risk_class": "R2",
+  "status": "AUTHORIZED",
+  "baseline": "b6f4934ce43e0a2ba53ae9aec9999b6e7764a659",
+  "scope": ["src/", "tests/", "contracts/", "docs/"],
+  "non_scope": ["remote publication", "deployment", "production activation"],
+  "acceptance_criteria": ["Invalid contracts and transitions fail closed", "npm test passes"],
+  "roles": {"producer": "codex-local", "reviewer": "independent-required"},
+  "allowed_paths": ["C:/laragon/www/SecB"],
+  "prohibited_paths": ["outside:C:/laragon/www/SecB"],
+  "evidence_obligations": ["test output", "git diff check", "commit identity"],
+  "valid_until": "2026-07-18T00:00:00+07:00"
+}

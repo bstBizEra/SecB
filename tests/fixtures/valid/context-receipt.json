@@ -1,0 +1,18 @@
+{
+  "receipt_id": "ctx_p0_state_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "objective_id": "obj_p0_controls",
+  "work_package_id": "wp_p0_state_001",
+  "session_id": "ses_local_001",
+  "assigned_role": "ENGIN",
+  "authority_scope": ["local repository mutation"],
+  "baseline_version": "b6f4934ce43e0a2ba53ae9aec9999b6e7764a659",
+  "acceptance_criteria": ["npm test passes"],
+  "allowed_tools": ["node", "npm", "git"],
+  "allowed_skills": [],
+  "evidence_obligations": ["test output", "diff check"],
+  "freshness_timestamp": "2026-07-17T12:30:00+07:00",
+  "source_references": ["docs/SECB-OPERATING-MODEL-P0-001.md"],
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

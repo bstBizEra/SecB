@@ -1,0 +1,18 @@
+{
+  "receipt_id": "ctx_invalid",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "objective_id": "obj_p0_controls",
+  "work_package_id": "wp_p0_state_001",
+  "session_id": "ses_local_001",
+  "assigned_role": "ENGIN",
+  "authority_scope": ["local"],
+  "baseline_version": "abc123",
+  "acceptance_criteria": ["reject hash"],
+  "allowed_tools": [],
+  "allowed_skills": [],
+  "evidence_obligations": ["test"],
+  "freshness_timestamp": "2026-07-17T12:30:00+07:00",
+  "source_references": ["source"],
+  "content_hash": "not-a-sha256"
+}

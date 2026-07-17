@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "profile_id": "software-engineering",
+  "status": "ACTIVE",
+  "owners": ["human-gov"],
+  "repositories": ["C:/laragon/www/SecB"],
+  "risk_class": "R2",
+  "evidence_destination": "local://evidence/secb",
+  "valid_from": "2026-07-17T00:00:00+07:00",
+  "valid_until": "2026-08-17T00:00:00+07:00",
+  "approvals": []
+}

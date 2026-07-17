@@ -1,0 +1,19 @@
+{
+  "evidence_id": "ev_invalid",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_state_001",
+  "session_id": "ses_local_001",
+  "actor_id": "codex-local",
+  "evidence_type": "test-result",
+  "source": "test",
+  "observed_at": "2026-07-17T12:30:00+07:00",
+  "procedure": "invalid fixture",
+  "result": "PASS",
+  "exit_status": 0,
+  "limitations": [],
+  "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "verification_status": "TRUST_ME",
+  "classification": "INTERNAL",
+  "retention_policy": "test"
+}
