@@ -9,6 +9,7 @@ function fixture(relativePath) {
 }
 
 const validFixtures = {
+  agentRegistration: "valid/agent-registration.json",
   project: "valid/project.json",
   workPackage: "valid/work-package.json",
   contextReceipt: "valid/context-receipt.json",
@@ -18,6 +19,7 @@ const validFixtures = {
 };
 
 const invalidFixtures = {
+  agentRegistration: "invalid/agent-registration-bad-ceiling.json",
   project: "invalid/project-missing-id.json",
   workPackage: "invalid/work-package-unknown-field.json",
   contextReceipt: "invalid/context-bad-hash.json",

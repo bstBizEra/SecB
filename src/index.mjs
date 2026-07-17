@@ -27,3 +27,11 @@ export {
   EventLedger,
   EvidenceLedger
 } from "./ledger/governed-ledgers.mjs";
+
+export {
+  AUTHORITY_LEVELS,
+  EVALUATION_TRANSITIONS,
+  LIFECYCLE_TRANSITIONS,
+  RegistryError,
+  RuntimeRegistry
+} from "./registry/runtime-registry.mjs";

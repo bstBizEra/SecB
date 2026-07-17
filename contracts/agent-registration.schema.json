@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/agent-registration.schema.json",
+  "title": "SecB Agent Registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provider_id",
+    "runtime_product_id",
+    "runtime_deployment_id",
+    "agent_profile_id",
+    "agent_instance_id",
+    "runtime_version",
+    "deployment_location",
+    "owner",
+    "permitted_roles",
+    "authority_ceiling",
+    "max_data_classification",
+    "evaluation_status",
+    "lifecycle_state"
+  ],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1 },
+    "runtime_product_id": { "type": "string", "minLength": 1 },
+    "runtime_deployment_id": { "type": "string", "minLength": 1 },
+    "agent_profile_id": { "type": "string", "minLength": 1 },
+    "agent_instance_id": { "type": "string", "minLength": 1 },
+    "runtime_version": { "type": "string", "minLength": 1 },
+    "deployment_location": { "type": "string", "minLength": 1 },
+    "owner": { "type": "string", "minLength": 1 },
+    "permitted_roles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "authority_ceiling": { "enum": ["A0", "A1", "A2", "A3", "A4", "A5"] },
+    "approved_models": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "approved_tools": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "approved_mcp_methods": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "approved_skills": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "repository_scopes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "environment_scopes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "max_data_classification": {
+      "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]
+    },
+    "delegation_rights": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "evidence_obligations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
+    "workload_identity_ref": { "type": "string" },
+    "evaluation_status": {
+      "enum": ["CANDIDATE", "APPROVED", "SUSPENDED", "REVOKED"]
+    },
+    "lifecycle_state": {
+      "enum": ["PENDING", "ACTIVE", "DEACTIVATED", "TERMINATED"]
+    }
+  }
+}
