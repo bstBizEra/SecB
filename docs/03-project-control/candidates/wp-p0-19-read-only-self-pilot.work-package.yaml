@@ -1,0 +1,140 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "work_package_wp_secb_p0_19_read_only_self_pilot_001_v1_candidate"
+  record_status: "DRAFT_NOT_AUTHORIZED"
+  source_template: "docs/templates/work-package.yaml"
+  source: "User-directed local candidate instantiation on 2026-07-17"
+  instantiated_at: "2026-07-17T13:58:22.1769677+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: null
+  limitations:
+    - "The referenced Project Contract is a non-effective candidate."
+    - "All role assignments, the evidence destination, and the execution window require governance resolution."
+    - "This record must not be treated as authorization to run the self-pilot."
+work_package:
+  work_package_id: "wp_secb_p0_19_read_only_self_pilot_001"
+  project_id: "prj_secb_local"
+  project_contract_ref: "docs/03-project-control/candidates/secb-local.project-contract.yaml#version=1"
+  objective_id: "obj_secb_p0_self_pilot_conformance"
+  version: 1
+  status: "DRAFT"
+  risk_class: "R0"
+  problem_statement: "SecB has executable control primitives but lacks one governed, end-to-end, read-only self-pilot trace."
+  desired_outcome: "Produce an independently reviewable trace from registered intent through human disposition without repository mutation or external access."
+  scope:
+    - "Verify the SecB local repository identity, branch, and authorized baseline."
+    - "Read the minimum governing documents and relevant source contracts."
+    - "Create versioned Context Receipt and Handoff Envelope candidates."
+    - "Observe and normalize repository, transition, event, and evidence facts."
+    - "Exercise applicable positive, negative, replay, tamper, stale-context, and separation-of-duties cases."
+    - "Produce producer findings for independent REV, QA, and human GOV disposition."
+  non_scope:
+    - "Any repository, filesystem, configuration, database, or runtime mutation during pilot execution."
+    - "Network access, remote Git operations, MCP calls, A2A delegation, credentials, deployment, release, or activation."
+    - "Access to unrelated projects or user data."
+    - "Memory admission, knowledge promotion, learning activation, or skill publication."
+    - "Capture or reconstruction of hidden model chain-of-thought."
+  dependencies:
+    - "An effective successor to project_contract_prj_secb_local_v1_candidate."
+    - "Server-derived Agent Instance and Session identities."
+    - "Distinct producer, REV, QA, evidence verifier, and human GOV assignments."
+    - "A governed local evidence destination and retention decision."
+  baseline:
+    repository_id: "repo_secb_local"
+    repository_path: "C:/laragon/www/SecB"
+    branch: "main"
+    commit_sha: "2a2ffb66ae0385c46e90d05a55f1bdb0e219ef16"
+    working_tree_required: "CLEAN"
+  acceptance_criteria:
+    - "The observed repository identity, branch, commit, and clean state match the authorized baseline."
+    - "Every observation is attributable to a server-derived session and a versioned Context Receipt."
+    - "All repository access remains read-only and inside C:/laragon/www/SecB."
+    - "Applicable V-001 through V-020 cases have explicit PASS, FAIL, BLOCKED, or justified NOT_APPLICABLE results."
+    - "Mutation, cross-project access, caller-declared authority, self-review, approval replay, evidence tampering, stale context, and direct promotion attempts are denied."
+    - "Event and evidence chains verify and replay deterministically."
+    - "Producer, REV, QA, evidence acceptance, and human GOV remain distinct."
+    - "No activation claim is made without an explicit human governance disposition."
+  proof_methods:
+    - "Read-only Git identity and baseline commands."
+    - "SHA-256 content hashing and durable-ledger chain verification."
+    - "JSON Schema and YAML parsing against controlled contracts and templates."
+    - "Fresh independent REV and QA examination of source evidence."
+    - "Recorded human GOV disposition bound to exact object versions."
+  role_assignments:
+    - role: "SARCHI"
+      actor_id: null
+      assignment_status: "UNASSIGNED"
+    - role: "ARCHI"
+      actor_id: null
+      assignment_status: "UNASSIGNED"
+    - role: "READ_ONLY_PRODUCER"
+      actor_id: null
+      assignment_status: "UNASSIGNED"
+    - role: "REV"
+      actor_id: null
+      assignment_status: "UNASSIGNED"
+    - role: "QA"
+      actor_id: null
+      assignment_status: "UNASSIGNED"
+    - role: "EVIDENCE_VERIFIER"
+      actor_id: null
+      assignment_status: "UNASSIGNED"
+    - role: "GOV"
+      actor_id: null
+      assignment_status: "UNASSIGNED"
+  independence_constraints:
+    - "Producer must not serve as REV, QA, evidence acceptor, or GOV."
+    - "REV must inspect source evidence directly and must not modify the observed workspace."
+    - "QA must execute fresh deterministic checks where feasible."
+    - "Only human GOV may issue the terminal pilot disposition."
+  allowed:
+    access_mode: "READ_ONLY"
+    paths: ["C:/laragon/www/SecB/**"]
+    commands:
+      - "git status --short --branch"
+      - "git rev-parse HEAD"
+      - "git rev-parse --show-toplevel"
+      - "git branch --show-current"
+      - "git ls-files"
+      - "git log --format=<bounded-read-only-format>"
+    models: []
+    tools: ["filesystem.read", "git.read", "crypto.sha256"]
+    mcp_methods: []
+    skills: []
+    network_destinations: []
+  prohibited:
+    commands:
+      - "Any command not explicitly allowlisted."
+      - "Any Git command that changes the index, working tree, refs, remotes, or configuration."
+      - "Any process start, package installation, test command with filesystem side effects, or network operation."
+    paths:
+      - "Any path outside C:/laragon/www/SecB."
+    capabilities:
+      - "write"
+      - "delete"
+      - "execute_unlisted_command"
+      - "network"
+      - "credential_access"
+      - "remote_publication"
+      - "deployment"
+      - "activation"
+  declared_write_set: []
+  prohibited_write_set: ["C:/laragon/www/SecB/**", "ALL_EXTERNAL_PATHS"]
+  evidence_obligations:
+    - "Baseline identity receipt"
+    - "Context Receipt for each governed session"
+    - "Structured event sequence with idempotency keys"
+    - "Evidence envelopes with hashes, procedure, result, limitations, and verification state"
+    - "Negative-case denial evidence"
+    - "Producer report and structured handoff"
+    - "Independent REV findings"
+    - "Fresh QA verdict"
+    - "Human GOV disposition"
+  evidence_destination: "PENDING_LOCAL_GOVERNED_LEDGER"
+  execution_window:
+    starts_at: null
+    expires_at: null
+  checkpoint_policy: "READ_ONLY_RESTART_FROM_SEALED_BASELINE"
+  rollback_authority: "NOT_APPLICABLE_NO_MUTATION"
+  activation_authority: "HUMAN_GOV_REQUIRED"
+  approvals: []

@@ -39,3 +39,7 @@ A Project Contract is effective only when:
 - human GOV issues an effective activation decision.
 
 Registration without effectiveness does not authorize work.
+
+## Local Candidate Instance
+
+The local Phase 0 candidate is recorded in [`candidates/secb-local.project-contract.yaml`](candidates/secb-local.project-contract.yaml). It is `DRAFT / NOT EFFECTIVE` and grants no authority.

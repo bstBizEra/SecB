@@ -26,3 +26,7 @@ Acceptance criteria must be testable or independently assessable. Statements suc
 ## Mutation Rule
 
 A Work Package that authorizes mutation must bind to a concrete baseline and isolated workspace lease. A plan alone is not mutation authority.
+
+## Local Candidate Instance
+
+The R0 read-only self-pilot candidate is recorded in [`candidates/wp-p0-19-read-only-self-pilot.work-package.yaml`](candidates/wp-p0-19-read-only-self-pilot.work-package.yaml). It is `DRAFT / NOT AUTHORIZED`; its empty write set and pending assignments prevent execution.

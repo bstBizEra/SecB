@@ -43,6 +43,8 @@ The following imported documents are controlled candidates. They are available f
 - [Project Contract](03-project-control/project-contract.md)
 - [Work Package Contract](03-project-control/work-package-contract.md)
 - [Read-only self-pilot](03-project-control/self-pilot.md)
+- [Local Project Contract candidate](03-project-control/candidates/secb-local.project-contract.yaml)
+- [Read-only self-pilot Work Package candidate](03-project-control/candidates/wp-p0-19-read-only-self-pilot.work-package.yaml)
 - [Evidence and provenance](04-assurance/evidence-and-provenance.md)
 - [Verification matrix](04-assurance/verification-matrix.md)
 - [Exit gates](04-assurance/exit-gates.md)

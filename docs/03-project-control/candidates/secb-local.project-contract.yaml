@@ -1,0 +1,77 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "project_contract_prj_secb_local_v1_candidate"
+  record_status: "DRAFT_NOT_EFFECTIVE"
+  source_template: "docs/templates/project-contract.yaml"
+  source: "User-directed local candidate instantiation on 2026-07-17"
+  instantiated_at: "2026-07-17T13:58:22.1769677+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: null
+  limitations:
+    - "No server-derived producer identity has been issued."
+    - "No independent REV, QA, or human GOV decision has been recorded."
+    - "This record grants no execution, publication, deployment, or activation authority."
+project_contract:
+  project_id: "prj_secb_local"
+  namespace: "bizera/secb/local"
+  name: "SecB Local Phase 0"
+  description: "Local-only SecB governance-kernel development and read-only self-pilot candidate."
+  version: 1
+  status: "DRAFT"
+  profile_id: "software-engineering"
+  risk_ceiling: "R0"
+  owners:
+    business: null
+    technical: null
+    security: null
+    governance: null
+  repositories:
+    - repository_id: "repo_secb_local"
+      provider: "local_git"
+      path: "C:/laragon/www/SecB"
+      default_branch: "main"
+      protected_refs: ["main"]
+      baseline_commit: "2a2ffb66ae0385c46e90d05a55f1bdb0e219ef16"
+      remote: null
+  environments:
+    - environment_id: "env_secb_local_observation"
+      kind: "local"
+      activation_status: "PROHIBITED"
+  security_classification: "INTERNAL"
+  data_categories:
+    - "repository_source"
+    - "governance_documents"
+    - "test_and_validation_results"
+  applicable_policies:
+    - "AGENTS.md"
+    - "docs/AGENTS.md"
+    - "docs/00-governance/governance-baseline.md"
+    - "docs/02-operating-model/agent-team-and-sod.md"
+    - "docs/03-project-control/project-contract.md"
+    - "docs/03-project-control/work-package-contract.md"
+    - "docs/03-project-control/self-pilot.md"
+  approved_runtime_deployments: []
+  approved_agents: []
+  approved_models: []
+  approved_tools: []
+  approved_mcp_methods: []
+  approved_skills: []
+  evidence_destination: "PENDING_LOCAL_GOVERNED_LEDGER"
+  memory_policy:
+    project_memory: false
+    cross_project_publication: false
+  release_authority: "HUMAN_GOV_REQUIRED"
+  integration_authority: "HUMAN_GOV_REQUIRED"
+  data_residency: ["LOCAL_MACHINE_ONLY"]
+  network_policy: "DENY_ALL"
+  credential_policy: "NO_CREDENTIALS_AUTHORIZED"
+  retention_policy: "PENDING_GOVERNANCE_DECISION"
+  required_exit_gates: ["G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8"]
+  activation_restrictions:
+    - "No remote configuration or publication."
+    - "No deployment, release, or operational activation."
+    - "No memory admission, knowledge promotion, or skill publication."
+    - "Only an independently reviewed and human-approved successor version may become effective."
+  effective_from: null
+  expires_at: null
+  approvals: []
