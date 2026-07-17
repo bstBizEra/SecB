@@ -11,4 +11,3 @@ SecB is being rebuilt from a clean, local-first baseline.
 - Runtime: not implemented
 
 Architecture, governance contracts, implementation code, and verification will be introduced as bounded, reviewable build slices before publication to Gitea or GitHub.
-
