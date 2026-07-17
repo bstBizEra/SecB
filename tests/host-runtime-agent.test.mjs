@@ -163,6 +163,24 @@ test("resolveAdapter returns quarantine status without emitting", () => {
   }
 });
 
+test("emitted event passes eventEnvelope schema validation", () => {
+  const { dir, registry, agent } = setup();
+  try {
+    registerAndActivate(registry, CLAUDE_CODE_ADAPTER, "inst_schema_check");
+    const { event } = agent.emitEvent("inst_schema_check", {
+      eventType: "file.observed",
+      observedFact: { path: "src/index.mjs" },
+      idempotencyKey: "idem_schema_001"
+    });
+    assert.ok(event.event_id);
+    assert.ok(event.content_hash);
+    assert.equal(event.version, 1);
+    assert.match(event.occurred_at, /^\d{4}-\d{2}-\d{2}T/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("suspended adapter is blocked from emitting after initial approval", () => {
   const { dir, registry, agent } = setup();
   try {

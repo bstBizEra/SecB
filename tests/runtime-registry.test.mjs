@@ -293,3 +293,49 @@ test("EVALUATION_TRANSITIONS has terminal REVOKED", () => {
 test("LIFECYCLE_TRANSITIONS has terminal TERMINATED", () => {
   assert.deepEqual(LIFECYCLE_TRANSITIONS.TERMINATED, []);
 });
+
+// --- Optimistic concurrency control ---
+
+test("register returns version 1", () => {
+  const reg = new RuntimeRegistry();
+  const result = reg.register(registration());
+  assert.equal(result.version, 1);
+});
+
+test("transitions increment version", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration());
+  const r1 = reg.transitionEvaluation("inst_claude_001", "APPROVED");
+  assert.equal(r1.version, 2);
+  const r2 = reg.transitionLifecycle("inst_claude_001", "ACTIVE");
+  assert.equal(r2.version, 3);
+});
+
+test("stale expectedVersion on evaluation transition is rejected", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration());
+  reg.transitionEvaluation("inst_claude_001", "APPROVED");
+  assert.throws(
+    () => reg.transitionEvaluation("inst_claude_001", "SUSPENDED", { expectedVersion: 1 }),
+    (err) => err instanceof RegistryError && err.code === "DENY_VERSION_CONFLICT"
+  );
+});
+
+test("stale expectedVersion on lifecycle transition is rejected", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration());
+  reg.transitionLifecycle("inst_claude_001", "ACTIVE");
+  assert.throws(
+    () => reg.transitionLifecycle("inst_claude_001", "DEACTIVATED", { expectedVersion: 1 }),
+    (err) => err instanceof RegistryError && err.code === "DENY_VERSION_CONFLICT"
+  );
+});
+
+test("correct expectedVersion allows transition", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration());
+  const r1 = reg.transitionEvaluation("inst_claude_001", "APPROVED", { expectedVersion: 1 });
+  assert.equal(r1.version, 2);
+  const r2 = reg.transitionLifecycle("inst_claude_001", "ACTIVE", { expectedVersion: 2 });
+  assert.equal(r2.version, 3);
+});

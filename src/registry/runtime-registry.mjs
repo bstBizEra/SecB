@@ -72,8 +72,9 @@ export class RuntimeRegistry {
       throw new RegistryError("DENY_INITIAL_STATE", "New registrations must start as PENDING");
     }
 
-    this.#entries.set(candidate.agent_instance_id, Object.freeze(candidate));
-    return { registered: true, agent_instance_id: candidate.agent_instance_id };
+    const versioned = Object.freeze({ ...candidate, _version: 1 });
+    this.#entries.set(candidate.agent_instance_id, versioned);
+    return { registered: true, agent_instance_id: candidate.agent_instance_id, version: 1 };
   }
 
   get(instanceId) {
@@ -111,10 +112,13 @@ export class RuntimeRegistry {
     };
   }
 
-  transitionEvaluation(instanceId, requestedStatus) {
+  transitionEvaluation(instanceId, requestedStatus, { expectedVersion } = {}) {
     const entry = this.#entries.get(instanceId);
     if (!entry) {
       throw new RegistryError("DENY_UNKNOWN_INSTANCE", `Instance not found: ${instanceId}`);
+    }
+    if (expectedVersion !== undefined && entry._version !== expectedVersion) {
+      throw new RegistryError("DENY_VERSION_CONFLICT", `Expected version ${expectedVersion}, actual ${entry._version}`);
     }
 
     const allowed = EVALUATION_TRANSITIONS[entry.evaluation_status];
@@ -125,15 +129,19 @@ export class RuntimeRegistry {
       );
     }
 
-    const updated = Object.freeze({ ...entry, evaluation_status: requestedStatus });
+    const nextVersion = entry._version + 1;
+    const updated = Object.freeze({ ...entry, evaluation_status: requestedStatus, _version: nextVersion });
     this.#entries.set(instanceId, updated);
-    return { previous: entry.evaluation_status, current: requestedStatus };
+    return { previous: entry.evaluation_status, current: requestedStatus, version: nextVersion };
   }
 
-  transitionLifecycle(instanceId, requestedState) {
+  transitionLifecycle(instanceId, requestedState, { expectedVersion } = {}) {
     const entry = this.#entries.get(instanceId);
     if (!entry) {
       throw new RegistryError("DENY_UNKNOWN_INSTANCE", `Instance not found: ${instanceId}`);
+    }
+    if (expectedVersion !== undefined && entry._version !== expectedVersion) {
+      throw new RegistryError("DENY_VERSION_CONFLICT", `Expected version ${expectedVersion}, actual ${entry._version}`);
     }
 
     const allowed = LIFECYCLE_TRANSITIONS[entry.lifecycle_state];
@@ -144,9 +152,10 @@ export class RuntimeRegistry {
       );
     }
 
-    const updated = Object.freeze({ ...entry, lifecycle_state: requestedState });
+    const nextVersion = entry._version + 1;
+    const updated = Object.freeze({ ...entry, lifecycle_state: requestedState, _version: nextVersion });
     this.#entries.set(instanceId, updated);
-    return { previous: entry.lifecycle_state, current: requestedState };
+    return { previous: entry.lifecycle_state, current: requestedState, version: nextVersion };
   }
 
   listByProduct(runtimeProductId) {

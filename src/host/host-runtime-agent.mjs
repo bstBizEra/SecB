@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { validateContract } from "../contracts/contract-validator.mjs";
 
 export class HostAgentError extends Error {
   constructor(code, message) {
@@ -63,6 +64,13 @@ export class HostRuntimeAgent {
       classification,
       content_hash: contentHash(observedFact)
     };
+
+    try {
+      validateContract("eventEnvelope", event);
+    } catch (err) {
+      this.#sequence--;
+      throw new HostAgentError("DENY_INVALID_EVENT", `Event failed schema validation: ${err.message}`);
+    }
 
     const result = this.#eventLedger.appendEvent(event, { expectedSequence: this.#sequence - 1 });
     return { event, ledgerSequence: result.sequence };
