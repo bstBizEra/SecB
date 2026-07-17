@@ -1,0 +1,102 @@
+schema_version: "1.0"
+handshake_type: "build-wave-coordination"
+wave_id: "parallel-build-wave-001"
+timestamp: "2026-07-17T12:30:00+07:00"
+
+from:
+  agent_id: "claude-code-motor"
+  team_id: "BST-SA"
+  branch: "main"
+  merge_commit: "cf3b8ef"
+
+to:
+  agent_id: "codex-cli-motor"
+  team_id: "BST-SA"
+  assigned_tasks: ["P0-08", "P0-09"]
+
+claude_lane_delivered:
+  - task: "P0-15A"
+    commit: "15ff81b"
+    deliverable: "Runtime registry core with agent-registration schema"
+    exports:
+      - "RuntimeRegistry"
+      - "RegistryError"
+      - "AUTHORITY_LEVELS"
+      - "EVALUATION_TRANSITIONS"
+      - "LIFECYCLE_TRANSITIONS"
+  - task: "P0-15B"
+    commit: "8225fc5"
+    deliverable: "Adapter contracts for Claude Code, Codex, generic"
+    exports:
+      - "CLAUDE_CODE_ADAPTER"
+      - "CODEX_ADAPTER"
+      - "GENERIC_ADAPTER"
+      - "KNOWN_ADAPTERS"
+      - "createAdapterRegistration"
+  - task: "P0-16"
+    commit: "8225fc5"
+    deliverable: "Host Runtime Agent (resolve → emit → observe pipeline)"
+    exports:
+      - "HostRuntimeAgent"
+      - "HostAgentError"
+  - task: "P0-18"
+    commit: "af9d063"
+    deliverable: "Conformance harness (16 cross-cutting tests) + Immune fixes"
+    test_count: 112
+
+integration_surface_for_codex:
+  barrel_export: "src/index.mjs"
+  contract_validator: "src/contracts/contract-validator.mjs"
+  manifest: "MANIFEST.json"
+  note: >
+    Codex P0-08 (Project Contract service) should add its exports to
+    src/index.mjs and its schema to contract-validator.mjs schemaPaths.
+    These are the only two files both lanes modify. MANIFEST.json will
+    need entries for new Codex files.
+
+available_for_codex_integration:
+  registry:
+    import: 'import { RuntimeRegistry } from "./registry/runtime-registry.mjs"'
+    usage: "Register runtime adapters, resolve identity for AuthorityEngine"
+  authority_engine:
+    import: 'import { AuthorityEngine } from "./control/authority-engine.mjs"'
+    usage: "Resolve grants, enforce SoD, wire into TransitionEngine"
+  transition_engine:
+    import: 'import { TransitionEngine } from "./control/state-machine.mjs"'
+    usage: "Project/WorkPackage/Session/Evidence state machines"
+  contract_validator:
+    import: 'import { validateContract } from "./contracts/contract-validator.mjs"'
+    usage: "Validate project/workPackage/agentRegistration schemas"
+  event_ledger:
+    import: 'import { EventLedger } from "./ledger/governed-ledgers.mjs"'
+    usage: "Append validated events with hash chain integrity"
+
+dependencies_satisfied_for_p0_08:
+  P0-02: "Canonical identities — schemas in contracts/"
+  P0-05: "Risk and authority engine — AuthorityEngine in src/control/"
+  P0-07: "Durable state machines — TransitionEngine with Project/WorkPackage/Session/Evidence"
+
+blocked_items_awaiting_codex:
+  - "P0-09 (Work Package service) — depends on P0-08"
+  - "P0-10 (Context federation) — depends on P0-08, P0-09"
+  - "P0-11 (Handoff/A2A) — depends on P0-06, P0-10"
+  - "V-002 (Project scope) — needs Project Contract service"
+  - "V-009 (Approval) — needs Work Package acceptance"
+  - "V-010 (Terminal) — needs project-scoped session"
+
+handshake_protocol:
+  request: >
+    BST-SA handshake v1:
+    team_id=BST-SA
+    agent_role=motor
+    source=project
+  expected_response: >
+    BST_SA_ACK team_id=BST-SA role=motor source=project ts=<ISO8601>
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-cli-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
