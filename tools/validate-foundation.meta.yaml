@@ -1,0 +1,11 @@
+name: validate-foundation.mjs
+description: Deterministically validates the SecB Phase 0 operating-constitution baseline.
+author: Codex
+created_at: 2026-07-17T12:00:00+07:00
+used_count: 1
+last_used: 2026-07-17T12:00:00+07:00
+one_time_fix: false
+utility_classification: validation
+approved_by: []
+has_tests: true
+security_reviewed: true

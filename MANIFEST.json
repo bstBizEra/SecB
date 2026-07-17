@@ -1,0 +1,25 @@
+{
+  "name": "SecB Phase 0 operating constitution",
+  "version": "0.1.0-alpha.0",
+  "source_sha256": "3741b7c62af2546c27fec3f3a8d8fa559fdded60227623cdb4229fbdb3889d52",
+  "files": [
+    ".gitignore",
+    "AGENTS.md",
+    "README.md",
+    "VERSION",
+    "package-lock.json",
+    "package.json",
+    "contracts/context-receipt.schema.json",
+    "contracts/evidence-envelope.schema.json",
+    "contracts/handoff-envelope.schema.json",
+    "contracts/project-contract.schema.json",
+    "contracts/work-package.schema.json",
+    "docs/README.md",
+    "docs/SECB-OPERATING-MODEL-001.md",
+    "docs/SECB-OPERATING-MODEL-P0-001.md",
+    "docs/adr/0001-control-plane-and-bootstrap.md",
+    "docs/source/ASSESSMENT.sha256",
+    "tools/validate-foundation.mjs",
+    "tools/validate-foundation.meta.yaml"
+  ]
+}

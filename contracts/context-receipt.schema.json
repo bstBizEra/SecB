@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/context-receipt.schema.json",
+  "title": "SecB Context Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt_id", "version", "project_id", "objective_id", "work_package_id", "session_id", "assigned_role", "authority_scope", "baseline_version", "acceptance_criteria", "allowed_tools", "allowed_skills", "evidence_obligations", "freshness_timestamp", "source_references", "content_hash"],
+  "properties": {
+    "receipt_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "objective_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "assigned_role": {"type": "string", "minLength": 1},
+    "authority_scope": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "baseline_version": {"type": "string", "minLength": 1},
+    "acceptance_criteria": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "allowed_tools": {"type": "array", "items": {"type": "string"}},
+    "allowed_skills": {"type": "array", "items": {"type": "string"}},
+    "evidence_obligations": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "freshness_timestamp": {"type": "string", "format": "date-time"},
+    "source_references": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

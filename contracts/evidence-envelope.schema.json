@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/evidence-envelope.schema.json",
+  "title": "SecB Evidence Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "evidence_type", "source", "observed_at", "procedure", "result", "exit_status", "limitations", "content_hash", "verification_status", "classification", "retention_policy"],
+  "properties": {
+    "evidence_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "actor_id": {"type": "string", "minLength": 1},
+    "evidence_type": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "procedure": {"type": "string", "minLength": 1},
+    "result": {"type": "string", "minLength": 1},
+    "exit_status": {"type": "integer"},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "verification_status": {"enum": ["CAPTURED", "SEALED", "VERIFICATION_PENDING", "VERIFIED", "ACCEPTED", "REJECTED", "SUPERSEDED", "QUARANTINED"]},
+    "classification": {"type": "string", "minLength": 1},
+    "retention_policy": {"type": "string", "minLength": 1}
+  }
+}
