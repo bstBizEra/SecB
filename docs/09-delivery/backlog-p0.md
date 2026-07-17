@@ -28,3 +28,7 @@
 | P0-20 | Governance verdict | residual risk and activation decision | P0-19 |
 
 No P0 backlog item grants mutation authority merely by being implemented.
+
+## Parallel Build Candidate
+
+The proposed first Codex/Claude implementation wave is defined in [`codex-claude-git-worktree-build-plan.md`](codex-claude-git-worktree-build-plan.md). It pairs P0-08 with a bounded P0-15A tranche using disjoint worktrees and write sets. The plan is `DRAFT / NOT AUTHORIZED`.

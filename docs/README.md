@@ -67,6 +67,7 @@ The following imported documents are controlled candidates. They are available f
 - [Phase 0 backlog](09-delivery/backlog-p0.md)
 - [Definition of done](09-delivery/definition-of-done.md)
 - [Implementation roadmap](09-delivery/implementation-roadmap.md)
+- [Codex and Claude Git worktree build plan](09-delivery/codex-claude-git-worktree-build-plan.md)
 - [Source traceability](SOURCE-TRACEABILITY.md)
 - [Documentation-specific agent instructions](AGENTS.md)
 - [Documentation pack manifest](MANIFEST.json)

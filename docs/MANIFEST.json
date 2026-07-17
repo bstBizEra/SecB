@@ -3,7 +3,7 @@
   "version": "1.0.0-draft",
   "status": "DRAFT_NOT_EFFECTIVE",
   "generated_at": "2026-07-17",
-  "file_count_excluding_manifests": 48,
+  "file_count_excluding_manifests": 49,
   "files": [
     "AGENTS.md",
     "docs/00-governance/authority-and-risk-model.md",
@@ -35,6 +35,7 @@
     "docs/08-security/data-privacy-retention.md",
     "docs/08-security/threat-model.md",
     "docs/09-delivery/backlog-p0.md",
+    "docs/09-delivery/codex-claude-git-worktree-build-plan.md",
     "docs/09-delivery/definition-of-done.md",
     "docs/09-delivery/implementation-roadmap.md",
     "docs/AGENTS.md",
