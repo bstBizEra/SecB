@@ -59,6 +59,28 @@ immune_review_round_1:
     - "Comparator is FIVE dimensions (risk, data-class, paths, tools, transitions); 'six' in the packet counted destination_role, which is a single declared field not a comparator dimension - naming corrected here, nothing dropped (reviewer note 1)"
   disclosure_correction: "This commit's file set is: non-escalation-comparator.mjs, handoff-service.mjs, handoff-service.test.mjs, V-015 activation, index/MANIFEST wiring, this record. The reconciliation-branch lineage gap (findings 01/02) is a branch-selection issue, not files this feature commit adds/removes."
 
+immune_review_round_2_final:
+  reviewed_target: "bst/integration-rehearsal-3 @ db85cde (the correct merge candidate; 6152897 confirmed ancestor)"
+  verdict: "APPROVE_FOR_MERGE"
+  test_result: "232 tests, 210 pass, 0 fail, 22 skipped"
+  resolutions:
+    - "IMM-P011R1-01 WITHDRAWN (lineage artifact; ProjectContractService + test present on the merge candidate; extend-only intact)"
+    - "IMM-P011R1-02 WITHDRAWN (lineage artifact; '*.env' present; secb.env ignored, absent, never tracked - no secret exposed)"
+    - "IMM-P011R1-03 FIXED (JSON-array key proven collision-proof against the old NUL and quote-injection inputs; file ASCII text, git-diffable)"
+  feature_integrity: "Confirmed unchanged by the clean rewrite: live-both-phases composition, fail-closed comparator, ledger-derived SoD, chain scoping, reserved-delimiter gate, seal honesty note, authority-never-transfers"
+  standing_guardrail_adopted: >
+    Reviews MUST be pinned to the actual merge candidate
+    (bst/integration-rehearsal-3), carrying tip hash + branch name; Immune
+    confirms merge-base lineage whenever a deletion or .gitignore/secret
+    surface change appears (that check distinguished artifact from
+    regression here). The pre-P0-08 reconciliation branch is STAGING-ONLY
+    and must never merge to main directly.
+  open_v_items_none_gating:
+    - "RISK-P011-01 contract-silent dimensions -> contract-carried (P0-10 R2 / schema-enrichment track)"
+    - "R2 receipt flip + V-014 gated on P0-10 R2 (not waived)"
+    - "Target destination_role grant verification deferred to downstream WP gate (authority-never-transfers); asserted claims recorded"
+    - "Shared SoD-derivation helper to prevent HandoffService/WP drift (minor)"
+
 self_certification:
   agent_id: "claude-code-motor"
   peer_agent_id: "claude-immune"
