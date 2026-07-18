@@ -81,3 +81,15 @@ export {
   WorkPackageContractService,
   WorkPackageServiceError
 } from "./services/work-package-service.mjs";
+
+export {
+  HandoffService,
+  HandoffServiceError
+} from "./services/handoff-service.mjs";
+
+export {
+  DATA_CLASS_ORDER,
+  RISK_ORDER,
+  intersectWithParent,
+  withinCeiling
+} from "./services/non-escalation-comparator.mjs";

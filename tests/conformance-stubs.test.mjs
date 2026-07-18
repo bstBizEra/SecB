@@ -9,6 +9,7 @@ import { TransitionEngine } from "../src/control/state-machine.mjs";
 import { DecisionLedger, KnowledgeLedger, OutcomeLedger } from "../src/ledger/temporal-ledgers.mjs";
 import { SkillResolver } from "../src/registry/skill-resolver.mjs";
 import { projectEvents } from "../src/ui/report-projections.mjs";
+import { HandoffService, HandoffServiceError } from "../src/services/handoff-service.mjs";
 import { WorkPackageContractService, WorkPackageServiceError } from "../src/services/work-package-service.mjs";
 
 // V-item conformance stubs — BLOCKED pending Codex P0-08/P0-09 and other P0 deliverables.
@@ -371,9 +372,59 @@ test("V-014 MCP: credential-bounded MCP invocation", { skip: "BLOCKED: P0-10 Con
   // Negative: MCP method without valid credential rejected
 });
 
-test("V-015 A2A: structured handoff non-escalation", { skip: "BLOCKED: P0-11 Handoff/A2A envelope" }, () => {
-  // Positive: handoff with equal or lesser authority proceeds
-  // Negative: handoff attempting authority escalation rejected
+// V-015 unblocked by P0-11 HandoffService R1 (gate waived 2026-07-19).
+test("V-015 A2A: structured handoff non-escalation", () => {
+  const BASE = "90c84a67e36a25941bc0983a0e687745919eca8c";
+  const win = { projectId: "prj_v015", workPackageId: "wp_v015", validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
+  const wp = new WorkPackageContractService({
+    grants: [
+      { ...win, grantId: "g_e", decisionId: "d_e", actorId: "eng", roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED", "WorkPackage:AUTHORIZED->READY", "WorkPackage:READY->RUNNING"] },
+      { ...win, grantId: "g_r", decisionId: "d_r", actorId: "rev", roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
+      { ...win, grantId: "g_g", decisionId: "d_g", actorId: "gov", roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED"] }
+    ],
+    now: () => new Date("2026-07-18T10:00:00Z")
+  });
+  wp.createWorkPackage({
+    work_package_id: "wp_v015", version: 1, project_id: "prj_v015", objective: "v015", risk_class: "R2",
+    status: "DRAFT", baseline: BASE, scope: ["src/"], non_scope: ["prod"], acceptance_criteria: ["ok"],
+    roles: { producer: "eng" }, allowed_paths: ["src/services", "tests"], prohibited_paths: ["out"],
+    evidence_obligations: ["self:t"], valid_until: "2026-08-01T00:00:00Z"
+  }, { idempotencyKey: "v015_c", actorId: "eng", authorityRef: "g_e" });
+  let s = 0;
+  for (const [state, a, g] of [["PLANNED", "eng", "g_e"], ["REVIEWED", "rev", "g_r"], ["AUTHORIZED", "gov", "g_g"], ["READY", "eng", "g_e"], ["RUNNING", "eng", "g_e"]]) {
+    wp.submitTransition({ projectId: "prj_v015", workPackageId: "wp_v015", version: 1, requestedState: state, actorId: a, authorityRef: g, policyDecision: "ALLOW", evidence: [{ ref: `e_${state}` }], idempotencyKey: `v015_t_${++s}`, reasonCode: "S" });
+  }
+  const handoff = new HandoffService({ workPackageService: wp, now: () => new Date("2026-07-18T10:00:00Z") });
+  const env = (over = {}) => {
+    const base = {
+      handoff_id: "v015_ho", version: 1, project_id: "prj_v015", work_package_id: "wp_v015",
+      source_session_id: "s", destination_role: "REV", objective: "review", authorized_scope: ["read"],
+      work_completed: [], artifacts: [], assumptions: [], evidence_refs: ["e"], checks: [], limitations: [],
+      unresolved_findings: [], risks: [], recommended_next_action: "review", context_delta: [], ...over
+    };
+    return { ...base, content_hash: canonicalFingerprint(base) };
+  };
+  const offer = (ceiling, id = "v015_ho") => handoff.offerHandoff({
+    envelope: env({ handoff_id: id }), actorId: "eng", authorityRef: "g_e", sourceSessionId: "s", baseline: BASE, ceiling, idempotencyKey: `v015_o_${id}`
+  });
+
+  // Positive: a handoff whose ceiling is within the effective contract, accepted by an independent reviewer
+  const ok = offer({ riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: [], transitions: [] });
+  assert.equal(ok.state, "OFFERED");
+  const accepted = handoff.acceptHandoff("prj_v015", "v015_ho", { actorId: "rev", authorityRef: "g_r", sessionId: "sr", baseline: BASE, idempotencyKey: "v015_a" });
+  assert.equal(accepted.state, "ACCEPTED");
+
+  // Negative: authority escalation (path outside the contract) rejected
+  assert.throws(
+    () => offer({ riskClass: "R2", dataClassification: "INTERNAL", paths: ["outside/root"], tools: [], transitions: [] }, "v015_esc"),
+    (e) => e instanceof HandoffServiceError && e.code === "DENY_ESCALATION"
+  );
+  // Negative: the executor cannot accept its own independence-bearing handoff
+  offer({ riskClass: "R1", dataClassification: "INTERNAL", paths: ["src/services"], tools: [], transitions: [] }, "v015_sod");
+  assert.throws(
+    () => handoff.acceptHandoff("prj_v015", "v015_sod", { actorId: "eng", authorityRef: "g_e", sessionId: "s", baseline: BASE, idempotencyKey: "v015_sod_a" }),
+    (e) => e instanceof HandoffServiceError && e.code === "DENY_SOD"
+  );
 });
 
 test("V-016 recovery: checkpoint resume and drift detection", { skip: "BLOCKED: P0-10 Checkpoint federation" }, () => {
