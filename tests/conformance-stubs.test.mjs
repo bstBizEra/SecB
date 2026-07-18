@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { AuthorityEngine } from "../src/control/authority-engine.mjs";
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { TransitionEngine } from "../src/control/state-machine.mjs";
+import { DecisionLedger, KnowledgeLedger, OutcomeLedger } from "../src/ledger/temporal-ledgers.mjs";
 import { WorkPackageContractService, WorkPackageServiceError } from "../src/services/work-package-service.mjs";
 
 // V-item conformance stubs — BLOCKED pending Codex P0-08/P0-09 and other P0 deliverables.
@@ -205,12 +209,41 @@ test("V-011 redaction: data classification enforcement on events", { skip: "BLOC
 });
 
 // Audit note 2026-07-18: wave-001 recorded P0-14 as delivered, but only the
-// Event and Evidence ledgers exist in src/ledger/governed-ledgers.mjs; the
-// decision/knowledge/outcome ledgers with temporal claims do not. V-012,
-// V-013, V-017, V-018 remain correctly blocked on that gap.
-test("V-012 memory: memory record temporal boundary", { skip: "BLOCKED: P0-14 Decision/knowledge/outcome ledgers" }, () => {
-  // Positive: memory record with valid temporal claim accepted
-  // Negative: memory record exceeding retention window pruned
+// Event and Evidence ledgers existed then. P0-14 temporal ledgers delivered
+// 2026-07-19 (src/ledger/temporal-ledgers.mjs) — V-012/V-017/V-018 unblocked.
+// V-013 remains blocked on the skill resolver.
+const temporalHarness = () => {
+  const dir = mkdtempSync(join(tmpdir(), "secb-v-temporal-"));
+  const decisions = new DecisionLedger({ filePath: join(dir, "d.ndjson") });
+  const knowledge = new KnowledgeLedger({
+    filePath: join(dir, "k.ndjson"),
+    evidenceLookup: (ref) => (ref === "ev_ok" ? { verification_status: "ACCEPTED" } : ref === "ev_raw" ? { verification_status: "CAPTURED" } : null)
+  });
+  const outcomes = new OutcomeLedger({
+    filePath: join(dir, "o.ndjson"),
+    decisionLookup: (ref) => decisions.read().find((r) => r.entry.entryId === ref) ?? null
+  });
+  const base = {
+    version: 1,
+    project_id: "prj_v", work_package_id: "wp_v", session_id: "ses_v", actor_id: "actor_v"
+  };
+  return { decisions, knowledge, outcomes, base, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+};
+
+test("V-012 memory: memory record temporal boundary", () => {
+  const h = temporalHarness();
+  try {
+    h.knowledge.appendClaim({
+      ...h.base, claim_id: "kc_v012", statement: "fact", derivation: "from ev_ok",
+      truth_status: "verified_true", evidence_refs: ["ev_ok"],
+      claimed_at: "2026-07-19T00:00:00Z", valid_from: "2026-07-19T00:00:00Z",
+      valid_until: "2026-08-01T00:00:00Z", retention_policy: "short"
+    }, { expectedSequence: 0, idempotencyKey: "v012_1" });
+    // Positive: within the temporal claim window the record resolves
+    assert.equal(h.knowledge.resolveClaim("kc_v012", { at: "2026-07-20T00:00:00Z" }).code, "ALLOW");
+    // Negative: beyond the retention window the record fails closed
+    assert.equal(h.knowledge.resolveClaim("kc_v012", { at: "2026-09-01T00:00:00Z" }).code, "DENY_TEMPORAL_BOUNDARY");
+  } finally { h.cleanup(); }
 });
 
 test("V-013 skill: skill lifecycle through SkillsHub", { skip: "BLOCKED: P0-14 + skill resolver" }, () => {
@@ -233,14 +266,52 @@ test("V-016 recovery: checkpoint resume and drift detection", { skip: "BLOCKED: 
   // Negative: drifted checkpoint detected and denied
 });
 
-test("V-017 knowledge: temporal knowledge claim derivation", { skip: "BLOCKED: P0-14 Knowledge ledger" }, () => {
-  // Positive: knowledge claim derived from verified evidence
-  // Negative: knowledge claim without evidence chain rejected
+test("V-017 knowledge: temporal knowledge claim derivation", () => {
+  const h = temporalHarness();
+  try {
+    const claimBody = (id, refs) => ({
+      ...h.base, claim_id: id, statement: "derived", derivation: "chain",
+      truth_status: "partially_supported", evidence_refs: refs,
+      claimed_at: "2026-07-19T00:00:00Z", valid_from: "2026-07-19T00:00:00Z",
+      valid_until: "2026-08-01T00:00:00Z", retention_policy: "short"
+    });
+    // Positive: claim derived from verified/accepted evidence
+    const ok = h.knowledge.appendClaim(claimBody("kc_v017", ["ev_ok"]), { expectedSequence: 0, idempotencyKey: "v017_1" });
+    assert.equal(ok.replayed, false);
+    // Negative: unresolvable or unverified evidence chains are rejected
+    assert.throws(
+      () => h.knowledge.appendClaim(claimBody("kc_v017_b", ["ev_missing"]), { expectedSequence: 1, idempotencyKey: "v017_2" }),
+      (error) => error.code === "DENY_EVIDENCE_CHAIN"
+    );
+    assert.throws(
+      () => h.knowledge.appendClaim(claimBody("kc_v017_c", ["ev_raw"]), { expectedSequence: 1, idempotencyKey: "v017_3" }),
+      (error) => error.code === "DENY_EVIDENCE_CHAIN"
+    );
+  } finally { h.cleanup(); }
 });
 
-test("V-018 outcome: outcome receipt validation", { skip: "BLOCKED: P0-14 Outcome ledger" }, () => {
-  // Positive: outcome receipt validates decision/skill/knowledge
-  // Negative: outcome receipt invalidates and triggers reversion
+test("V-018 outcome: outcome receipt validation", () => {
+  const h = temporalHarness();
+  try {
+    h.decisions.appendDecision({
+      ...h.base, decision_id: "dec_v018", decision_type: "GOVERNANCE", outcome: "ACCEPT",
+      rationale: "accepted", authority_ref: "grant_gov", evidence_refs: ["ev_ok"],
+      decided_at: "2026-07-19T00:00:00Z", valid_from: "2026-07-19T00:00:00Z", valid_until: "2026-12-31T00:00:00Z"
+    }, { expectedSequence: 0, idempotencyKey: "v018_d" });
+    const receipt = (id, status, revert) => ({
+      ...h.base, outcome_id: id, decision_ref: "dec_v018", knowledge_refs: [], skill_refs: [],
+      outcome_status: status, details: "observed", evidence_refs: ["ev_out"],
+      observed_at: "2026-07-19T01:00:00Z", reversion_required: revert
+    });
+    // Positive: receipt validates the decision
+    assert.equal(h.outcomes.appendOutcome(receipt("out_v018_a", "VALIDATED", false), { expectedSequence: 0, idempotencyKey: "v018_1" }).reversionRequired, false);
+    // Negative: invalidation triggers the reversion obligation
+    assert.equal(h.outcomes.appendOutcome(receipt("out_v018_b", "INVALIDATED", true), { expectedSequence: 1, idempotencyKey: "v018_2" }).reversionRequired, true);
+    assert.throws(
+      () => h.outcomes.appendOutcome(receipt("out_v018_c", "INVALIDATED", false), { expectedSequence: 2, idempotencyKey: "v018_3" }),
+      (error) => error.code === "DENY_INCONSISTENT_REVERSION"
+    );
+  } finally { h.cleanup(); }
 });
 
 // TransitionEngine hardening tests (TE-H1..H4) — implemented on the

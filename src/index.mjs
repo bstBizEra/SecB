@@ -34,6 +34,12 @@ export {
 } from "./ledger/governed-ledgers.mjs";
 
 export {
+  DecisionLedger,
+  KnowledgeLedger,
+  OutcomeLedger
+} from "./ledger/temporal-ledgers.mjs";
+
+export {
   AUTHORITY_LEVELS,
   EVALUATION_TRANSITIONS,
   LIFECYCLE_TRANSITIONS,
