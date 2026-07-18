@@ -1,0 +1,57 @@
+# SecB MCP Server Plan Disposition Record
+# Disposes: docs/03-project-control/candidates/secb-mcp-server-planning-001.cortex-advisory.yaml
+# Authority: explicit operator wording "adopt all GOV-MCP recommendations"
+#   received 2026-07-19 (satisfies the recorded explicit-wording guard).
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+disposition_record:
+  work_package: "wp_secb_mcp_server_planning_001"
+  disposed_at: "2026-07-19"
+  disposed_by: "human-operator"
+  disposition: "ADOPT_ALL_RECOMMENDATIONS"
+
+decisions:
+  - id: "GOV-MCP-01"
+    adopted: "stdio child-process transport (option A) for alpha; HTTP/SSE deferred behind the GOV-P017-05 floor plus a dedicated adversarial packet"
+  - id: "GOV-MCP-02"
+    adopted: "Hand-rolled pinned JSON-RPC subset for alpha (zero new deps, deny-by-default methods, unpinned-version refusal); SDK adoption re-asked at the mutation phase, never inherited silently"
+  - id: "GOV-MCP-03"
+    adopted: "The exact eight-tool READ-ONLY alpha allowlist ratified as enumerated, including exclusion of AuthorityEngine evaluation and report file generation; additions require re-registration + Immune re-review"
+  - id: "GOV-MCP-04"
+    adopted: "Caller-identity honesty position accepted: asserted instance id resolved against a seeded registry (APPROVED+ACTIVE); enforcement boundary acknowledged as the OS process spawn (SARCHI-AA-01); mutation tools blocked until a session/credential substrate exists"
+  - id: "GOV-MCP-05"
+    adopted: "Effective ceiling = min(server config, caller max_data_classification), default INTERNAL, exact-match lattice, unknown -> RESTRICTED withheld; above-INTERNAL server ceiling requires an explicit CLI argument; one shared lattice implementation (src/ui/report-projections.mjs)"
+  - id: "GOV-MCP-06"
+    adopted: "Invocation ledgering fail-closed: DENY_AUDIT_UNAVAILABLE (withhold results when the invocation record cannot append), dedicated ledger file, one bounded retry"
+  - id: "GOV-MCP-07"
+    adopted: "New numbered stream (proposed P0-21 'SecB MCP Server' to avoid collision with P0-19/P0-20; operator to confirm the id), sequenced BEHIND the P0-09 merge and P0-10 R2; baseline on post-merge main"
+  - id: "GOV-MCP-08"
+    adopted: "Server self-registration: the server ships and validates its own registration record (methods=catalog fingerprint, classification, evaluation, lifecycle) and refuses to serve unless it resolves APPROVED+ACTIVE"
+  - id: "GOV-MCP-09"
+    adopted: "Protocol version pinning: refuse non-pinned initialize outright with a typed error; version bumps are deliberate reviewed catalog releases"
+
+frozen_pre_implementation_artifacts:
+  transport: "newline-delimited JSON-RPC 2.0 over stdio; frozen five-method subset {initialize, tools/list, tools/call, ping, notifications/initialized}; everything else method-not-found"
+  alpha_tool_catalog: "the eight tools of GOV-MCP-03, ajv-schema'd params, static frozen descriptions; catalog module deep-frozen; tools/list a pure projection with a byte-snapshot test"
+  reserved_delimiter_scan: "every id-typed param via findReservedDelimiter (GOV-P011-08 shared constant) -> DENY_RESERVED_DELIMITER pre-dispatch"
+  classification_floor: "reuse src/ui/report-projections.mjs verbatim; no second lattice implementation (import-surface test forbids one under src/mcp)"
+  invocation_event_shape: "dedicated invocation EventLedger; one append per call (allowed OR denied) recording tool, caller assertion, request fingerprint, decision code, effective ceiling, duration; raw above-ceiling params NOT stored"
+  result_disposition: "structured JSON under claims-typed keys with a fixed {content_disposition: 'data_untrusted'} marker; server never emits imperative/model-directed text"
+  conformance_map: "SECB-FEDERATION-001 steps 2,3,4,6,7,8 discharged by alpha; step 1 as assertion+audit (honesty clause); step 5 (bounded credentials) structurally BLOCKED"
+
+implementation_gate: >
+  Per adopted GOV-MCP-07 and recommended_sequence step 2, implementation
+  of the SecB MCP Server is GATED on the P0-09 merge to main (and slotted
+  after P0-10 R2). This disposition does NOT waive that gate. Until it
+  clears, only the frozen artifacts above and (when authorized) the
+  tests-first conformance stubs proceed. V-014 remains skipped, its
+  completion joint with the eventual mutation phase (post P0-10 R2 +
+  P0-11 R1).
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-operator"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
