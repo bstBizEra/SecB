@@ -57,6 +57,14 @@ current_verified_integration_path:
     - "2. Codex ACK -> git merge bst/integration-rehearsal-3 (everything else)"
   superseded: "codex/integration/p0-09, codex/integration/p0-08-005, bst/p0-08-integration-candidate, rehearsals 1-2"
 
+# --- Appended 2026-07-19 (closing): final review outcomes (extend-only) ---
+closing_append:
+  - "V-002 project-scope binding + '..' containment fix: APPROVE_FOR_MERGE at 435b2b3 (review_v002_rounds in p0-14-immune-review.yaml)"
+  - "Fourth delimiter-class instance ('@' in work-package ids): closed at 33cc452, APPROVE_FOR_MERGE; pre-fix risk sized as latent parse ambiguity, no reachable exploit; RESERVED_ID_DELIMITERS exported as the GOV-P011-08 pre-ratification constant"
+  - "FIFTH latent instance discovered by the closing sweep: AuthorityEngine SoD scope key joins grant fields with '|' unvalidated - trusted operator-supplied construction data, shared-engine scope; folded into the GOV-P011-08 ratification track"
+  - "P0-11 and P0-17 planning packets recorded (eb203d0); 15 GOV decisions queued awaiting explicit operator wording"
+  - "ALL ELEVEN REVIEW ROUNDS OF THE WAVE CLOSED IN APPROVAL; final verified tree bst/integration-rehearsal-3 @ cb06283: 208 tests, 185 pass, 0 fail, 23 skipped"
+
 self_certification:
   agent_id: "claude-code-sarchi"
   peer_agent_id: "claude-immune"
