@@ -120,6 +120,8 @@
     "docs/03-project-control/candidates/p0-14-gov-disposition.yaml",
     "docs/03-project-control/candidates/p0-14-immune-review.yaml",
     "docs/03-project-control/candidates/p0-wave-2-delivery-evidence-summary.yaml",
+    "docs/03-project-control/candidates/p0-11-planning-001.cortex-advisory.yaml",
+    "docs/03-project-control/candidates/p0-17-planning-001.cortex-advisory.yaml",
     "contracts/decision-record.schema.json",
     "contracts/knowledge-claim.schema.json",
     "contracts/outcome-receipt.schema.json",
