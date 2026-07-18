@@ -1,0 +1,46 @@
+# TransitionEngine Hardening Specification (pre-production gate per GOV-P009-02)
+# Prepared by: Claude (BST-SA motor lane, advisory only)
+# Scope: src/control/state-machine.mjs - SHARED ENGINE; implementation requires
+#   cross-lane coordination (Codex + Claude) and its own review cycle. This spec
+#   and the paired conformance stubs are authored so the change is test-first
+#   when authorized. NO engine code is modified by this artifact.
+# Context: the P0-09 service currently compensates for these gaps with
+#   service-side pre-validation ("shim"); GOV-P009-02 couples PRODUCTION
+#   declaration (not P0-09 delivery) to closing them engine-side.
+
+hardening_items:
+  - id: "TE-H1"
+    title: "Strict scalar validation"
+    current: "requiredFields checks only undefined/null/''; non-string types (numbers, objects) and whitespace-only strings pass; objectVersion is the only typed check"
+    required: "Every string field must be a non-blank string (typeof + trim); evidenceRefs items must each be non-blank strings; idempotencyKey must be a string (P0-08 string-only rule); reasonCode/policyDecision typed; unknown envelope fields rejected (closed envelope)"
+    parity_source: "P0-08 ProjectContractService scalar rules; P0-09 ENVELOPE_REQUIRED_STRINGS + closed-envelope check"
+  - id: "TE-H2"
+    title: "Server-derived timestamps"
+    current: "result.timestamp is copied from request.timestamp (caller-controlled)"
+    required: "Engine takes an injectable now() (constructor), stamps results server-side; caller timestamp, if present, is retained as claimedTimestamp metadata only and excluded from the idempotency fingerprint so replays are not broken by clock drift"
+    parity_source: "P0-09 service serverNow pattern; GOV-P009-03 deny-on-use semantics"
+  - id: "TE-H3"
+    title: "Edge-legality before authority resolution"
+    current: "Authority resolver runs before the machine-edge check; an illegal-edge request with a valid grant reference exercises (and can leak signals from) the authority layer needlessly"
+    required: "Validate currentState->requestedState against the machine before invoking the authority resolver, mirroring the P0-09 service ordering; denial code precedence documented"
+    parity_source: "P0-09 submitTransition ordering (edge check precedes engine call)"
+  - id: "TE-H4"
+    title: "Fingerprint canonicalization parity"
+    current: "Engine has a private canonicalize/fingerprint pair; P0-09 duplicates it; P0-10 R2 plans a third consumer; drift between copies would fracture replay semantics"
+    required: "Extract one shared module (additive, e.g. src/contracts/canonical-fingerprint.mjs); engine, P0-09 service, and P0-10 federation consume it; byte-identical outputs verified by a parity conformance test"
+    parity_source: "RISK-P010-03"
+
+sequencing:
+  - "1. Codex-lane acknowledgement (shared surface; wave-001 record listed state-machine.mjs as do-not-modify for single lanes)"
+  - "2. Operator authorization for a coordinated hardening branch"
+  - "3. Implement test-first against the four stubs (TE-H1..H4) in tests/conformance-stubs.test.mjs"
+  - "4. P0-09 shim retirement ONLY after parity conformance passes (GOV-P009-02); shim checks become redundant-but-harmless until then"
+  - "5. Immune review; production-gate V-items closed"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

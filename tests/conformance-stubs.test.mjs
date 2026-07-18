@@ -188,3 +188,29 @@ test("V-018 outcome: outcome receipt validation", { skip: "BLOCKED: P0-14 Outcom
   // Positive: outcome receipt validates decision/skill/knowledge
   // Negative: outcome receipt invalidates and triggers reversion
 });
+
+// TransitionEngine hardening stubs (TE-H1..H4) — BLOCKED pending cross-lane
+// coordination on the shared engine. Spec: docs/03-project-control/candidates/
+// transition-engine-hardening-spec.yaml. Production declaration is gated on
+// these per GOV-P009-02; P0-09 service-side shim compensates until then.
+
+test("TE-H1 engine: strict scalar validation on transition envelopes", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
+  // Negative: non-string objectId/actorId, whitespace-only reasonCode,
+  // non-string idempotencyKey, unknown envelope fields -> typed denial
+});
+
+test("TE-H2 engine: server-derived result timestamps", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
+  // Positive: result.timestamp from injected now(); caller timestamp kept
+  // as claimed metadata and excluded from the idempotency fingerprint
+  // Negative: backdated caller timestamp does not alter replay identity
+});
+
+test("TE-H3 engine: edge legality checked before authority resolution", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
+  // Negative: illegal edge with valid grant ref -> DENY_UNDEFINED_TRANSITION
+  // without invoking the authority resolver (resolver call count = 0)
+});
+
+test("TE-H4 engine: shared canonical fingerprint parity", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
+  // Positive: engine, work-package service, and context federation produce
+  // byte-identical fingerprints for identical canonicalized payloads
+});
