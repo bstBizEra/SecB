@@ -54,6 +54,25 @@ operator_decision_required:
     question: "Which P0-08 integration lineage is canonical?"
     recommendation: "bst/p0-08-integration-candidate, because its 197-test verification ran against the TE-hardened engines the repo is converging on"
 
+# --- Appended 2026-07-19: operator disposition (extend-only) ---
+operator_disposition:
+  disposed_at: "2026-07-19"
+  disposed_by: "human-operator"
+  decisions:
+    - id: "REC-P009-01"
+      adopted: "Integrate the FULL P0-09 branch (bst/p0-09-work-package-auth-6f341f @ 4f08421, Immune rounds 1-4); codex/integration/p0-09 (round-2 cut) is SUPERSEDED and must not merge to main"
+    - id: "REC-P009-02"
+      adopted: "bst/p0-08-integration-candidate is the canonical P0-08 integration lineage; codex/integration/p0-08-005 is SUPERSEDED and must not merge to main"
+  resulting_merge_sequence:
+    - "1. main <- bst/p0-09-work-package-auth-6f341f (no gate remaining)"
+    - "2. main <- worktree-p0-09-reconciliation (supersedes bst/p0-followups-evidence-te, which it contains; GATED on Codex ACK for TE hardening)"
+    - "3. main <- bst/p0-08-integration-candidate (after 2)"
+  codex_lane_notice: >
+    codex/integration/p0-09 and codex/integration/p0-08-005 are superseded
+    by this disposition; their content is fully contained in (or verified
+    inferior to) the sequence above. The locked codex-p0-09-integration
+    worktree can be released.
+
 self_certification:
   agent_id: "claude-code-sarchi"
   peer_agent_id: "codex-cli-motor"
