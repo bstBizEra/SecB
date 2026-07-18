@@ -353,9 +353,13 @@ test("ids containing the composite-key delimiter are denied at both gates", () =
   // one storage key, letting a grant for one identity act on the other.
   denies(() => h.create({ work_package_id: "alpha|wp1" }), "DENY_ID_CHARSET");
   denies(() => h.create({ project_id: "prj|alpha" }), "DENY_ID_CHARSET");
+  // '@' collides TransitionEngine objectIds: ("wp@v1", v1) vs ("wp", ...)
+  denies(() => h.create({ work_package_id: "wp@v1" }), "DENY_ID_CHARSET");
+  denies(() => h.create({ project_id: "prj@x" }), "DENY_ID_CHARSET");
   h.create();
   denies(() => h.send({ workPackageId: "alpha|wp1" }), "DENY_MALFORMED_ENVELOPE");
   denies(() => h.send({ projectId: "prj|alpha" }), "DENY_MALFORMED_ENVELOPE");
+  denies(() => h.send({ workPackageId: "wp@v1" }), "DENY_MALFORMED_ENVELOPE");
   denies(() => h.send({ claimedTimestamp: 12345 }), "DENY_MALFORMED_ENVELOPE");
 });
 
