@@ -72,6 +72,7 @@ export {
 
 export {
   EFFECTIVE_STATES,
+  RESERVED_ID_DELIMITERS,
   WORK_PACKAGE_SERVICE_ROLE_GATES,
   WorkPackageContractService,
   WorkPackageServiceError

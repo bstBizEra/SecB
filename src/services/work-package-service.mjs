@@ -60,6 +60,12 @@ export const EFFECTIVE_STATES = Object.freeze([
 // GOV-P009-03: after expiry only these exits remain reachable.
 const POST_EXPIRY_TARGETS = Object.freeze(["REWORK", "CANCELLED", "REVOKED"]);
 
+// Reserved composite-key delimiters, denied in every id field. Exported
+// so future services extend one list instead of rediscovering the
+// finding class a fifth time (GOV-P011-08 pre-ratification home; moves
+// to a shared module when ratified system-wide).
+export const RESERVED_ID_DELIMITERS = Object.freeze(["|", "@"]);
+
 // GOV-P009-07: the obligation prefix (before the first ':') binds an
 // obligation to its producing stage and role. Unprefixed obligations are
 // legacy and behave as 'any' for one deprecation cycle. A null stage
@@ -232,10 +238,15 @@ export class WorkPackageContractService {
     for (const field of ["work_package_id", "project_id", "objective", "risk_class", "status", "baseline", "valid_until"]) {
       if (isBlank(draft[field])) deny("DENY_BLANK_SCALAR", `${field} must be a non-blank string`);
     }
-    // '|' is the composite-key delimiter; allowing it in ids would let two
-    // identities collide into one record and cross-authorize (Immune finding).
+    // Reserved delimiters (finding class IMM-P009-01, four instances):
+    // '|' is this service's composite-key delimiter; '@' is the
+    // TransitionEngine objectId delimiter (`${workPackageId}@v${version}`)
+    // and the skill-registry key delimiter. Either in an id lets two
+    // identities collide and cross-authorize.
     for (const field of ["work_package_id", "project_id"]) {
-      if (draft[field].includes("|")) deny("DENY_ID_CHARSET", `${field} must not contain '|'`);
+      for (const delimiter of RESERVED_ID_DELIMITERS) {
+        if (draft[field].includes(delimiter)) deny("DENY_ID_CHARSET", `${field} must not contain '${delimiter}'`);
+      }
     }
     for (const field of ["scope", "non_scope", "acceptance_criteria", "allowed_paths", "prohibited_paths", "evidence_obligations"]) {
       if (draft[field].some(isBlank)) deny("DENY_BLANK_SCALAR", `${field} entries must be non-blank strings`);
@@ -375,8 +386,8 @@ export class WorkPackageContractService {
     for (const field of ENVELOPE_REQUIRED_STRINGS) {
       if (isBlank(envelope[field])) deny("DENY_MALFORMED_ENVELOPE", `${field} must be a non-blank string`);
     }
-    if (envelope.projectId.includes("|") || envelope.workPackageId.includes("|")) {
-      deny("DENY_MALFORMED_ENVELOPE", "projectId and workPackageId must not contain '|'");
+    if (RESERVED_ID_DELIMITERS.some((delimiter) => envelope.projectId.includes(delimiter) || envelope.workPackageId.includes(delimiter))) {
+      deny("DENY_MALFORMED_ENVELOPE", "projectId and workPackageId must not contain reserved delimiters ('|', '@')");
     }
     if (envelope.claimedTimestamp !== undefined && isBlank(envelope.claimedTimestamp)) {
       deny("DENY_MALFORMED_ENVELOPE", "claimedTimestamp, when present, must be a non-blank string");

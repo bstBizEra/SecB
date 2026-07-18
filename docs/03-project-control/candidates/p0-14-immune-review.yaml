@@ -122,6 +122,26 @@ review_v002_rounds:
       - "Repository entries should be absolute paths (canonical-form doc) - defensive only, trusted source"
       - "Resolver liveness at transition time - folded into the revocation-lifecycle V-item"
 
+review_delimiter_round:
+  pinned_range: "435b2b3..33cc452 (freeze honored)"
+  verdict: "APPROVE_FOR_MERGE"
+  pre_fix_risk_sized: >
+    Latent lexical ambiguity, not a reachable exploit: the service storage
+    key ('|', already gated) kept records distinct and transitionIds
+    derive from full request fingerprints; the engine objectId is
+    construct-only (nothing in-repo re-parses it). Real hazard was for
+    future objectId-parsing consumers (correlators, audit tooling). The
+    class is now uniformly closed across every caller-controlled
+    composite key.
+  sweep_results:
+    - "work-package-service: both gates covered via RESERVED_ID_DELIMITERS"
+    - "skill-resolver: '@' denied at registration; covered"
+    - "temporal-ledgers: no composite joins; exact-equality lookups; structurally immune"
+    - "authority-engine SoD scope key joins grant fields with '|' unvalidated - FIFTH latent instance, but grants are operator-supplied trusted construction data and the shared engine is out of this commit's scope; folded into the GOV-P011-08 system-wide ratification track (grant-field validation when the constant centralizes)"
+  notes:
+    - "Skill resolver should consume the shared list (deny '|' too) at ratification - cosmetic uniformity"
+    - "ee52803/eb203d0 confirmed docs-only"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"
