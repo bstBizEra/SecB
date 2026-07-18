@@ -1,0 +1,38 @@
+# P0-11 R1 HandoffService - Delivery Record
+# Authority: explicit operator waiver "waive the P0-11 R1 gate" (2026-07-19),
+#   satisfying the recorded R1 merge-gate. Disposition GOV-P011-01..08 adopted
+#   (p0-11-gov-disposition.yaml).
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+delivery:
+  work_package: "P0-11 R1 (HandoffService, receiptResolver absent)"
+  gate_status: "R1 merge-gate WAIVED by operator; R2 flip (receipts mandatory) remains gated on P0-10 R2 - NOT waived"
+  files:
+    - "src/services/non-escalation-comparator.mjs - six-dimension comparator (risk/data-class ordered lattices, '..'-free path containment, glob-prohibited exact subsets, transition subset); incomparable-denies; pure and unit-tested"
+    - "src/services/handoff-service.mjs - authoritative HandoffService composing over injected WorkPackageContractService (resolveEffective + getDecisionLedger, live at offer AND accept) and a nullable receiptResolver"
+    - "tests/handoff-service.test.mjs (15 tests); V-015 conformance activated in tests/conformance-stubs.test.mjs"
+
+invariants_delivered:
+  - "AUTHORITY NEVER TRANSFERS: the envelope confers no grant; the target's capability remains bounded by its own grant (enforced downstream by the WP service) INTERSECT effective contract INTERSECT ceiling; the handoff grants nothing"
+  - "Two-phase offer/accept; string-only idempotency with canonical-fingerprint replay and conflict denial; deep clone/freeze both directions; ledger-derived status"
+  - "Non-escalation comparator: requested ceiling <= bound on every dimension; contract-sourced dimensions (risk, paths) authoritative; contract-silent dimensions (data-class, tools, transitions) bounded by the parent chain when present else source-declared (RISK-P011-01, surfaced as contractSilentDimensions); narrow-only (DENY_ESCALATION), incomparable denies (DENY_ESCALATION_UNCOMPARABLE)"
+  - "Live resolveEffective at offer and accept; version equality; triple baseline equality (asserted == offer-recorded == effective contract)"
+  - "SoD at acceptance for REV/QA/GOV via getDecisionLedger-derived executor/reviewer/qa sets; source actor excluded from independence-bearing roles"
+  - "Reserved delimiters ('|','@') denied on every id field (shared constant); server-recomputed seal (DENY_FINGERPRINT_MISMATCH); single acceptance; deny-on-use expiry = min(offer TTL, valid_until); revoke/decline terminal; chain parent must be ACCEPTED + same WP, depth cap 4, ceiling intersect parent"
+  - "GOV-P011-07 R1: context_receipt_ref present with no resolver -> DENY_RECEIPT_UNVERIFIABLE (the smuggling channel P0-10 closes)"
+
+r1_honesty_notes:
+  - "Target grant verification for destination_role is NOT performed in the handoff service at R1: acceptance confers no authority, so the target's real actions are gated by the WP service's own grant checks. authorityRef is recorded as an asserted claim. This is safe by the authority-never-transfers design test; full grant-binding is a mutation-phase concern"
+  - "Session identity is caller-asserted (RISK-P011-03); source/accept sessionId recorded for audit; self-handoff gate is actor-level"
+  - "V-014 (credential-bounded MCP) and the R2 receipt flip remain blocked on P0-10 R2"
+
+test_result: "205 tests, 183 pass, 0 fail, 22 skipped"
+next: "Pinned Immune review under the freeze rule"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "claude-immune"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
