@@ -191,11 +191,15 @@ export class WorkPackageContractService {
     return deepFreeze({ ...structuredClone(prior.result), replayed: true });
   }
 
-  createWorkPackage(draft, { idempotencyKey } = {}) {
+  createWorkPackage(draft, { idempotencyKey, actorId, authorityRef } = {}) {
     if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
       deny("DENY_MALFORMED_DRAFT", "Work package draft must be an object");
     }
-    const replay = this.#checkIdempotency(idempotencyKey, fingerprint({ op: "CREATE", draft }));
+    if (isBlank(actorId) || isBlank(authorityRef)) {
+      deny("DENY_MALFORMED_DRAFT", "actorId and authorityRef are required to create a work package");
+    }
+    const createFingerprint = fingerprint({ op: "CREATE", draft, actorId, authorityRef });
+    const replay = this.#checkIdempotency(idempotencyKey, createFingerprint);
     if (replay) return replay;
 
     validateContract("workPackage", draft);
@@ -216,6 +220,25 @@ export class WorkPackageContractService {
     if (!Number.isFinite(Date.parse(draft.valid_until))) {
       deny("DENY_INVALID_EXPIRY", "valid_until must be a parseable date-time");
     }
+
+    // Creation gate (Immune V-item): draft registration requires a valid
+    // grant scoped to this identity, closing the identity-squatting path.
+    // ENGIN (producer drafts) or GOV (governance-initiated drafts) qualify.
+    const grant = this.#grants.get(authorityRef);
+    const nowMs = this.#now().getTime();
+    if (
+      !grant ||
+      grant.status !== "ACTIVE" ||
+      grant.actorId !== actorId ||
+      grant.projectId !== draft.project_id ||
+      grant.workPackageId !== draft.work_package_id ||
+      nowMs < Date.parse(grant.validFrom) ||
+      nowMs >= Date.parse(grant.validUntil) ||
+      !grant.roles.some((role) => role === "ENGIN" || role === "GOV")
+    ) {
+      deny("DENY_CREATE_AUTHORITY", "Creation requires an active ENGIN or GOV grant scoped to this work package identity");
+    }
+
     const key = this.#key(draft.project_id, draft.work_package_id, draft.version);
     if (this.#records.has(key)) {
       deny("DENY_DUPLICATE_IDENTITY", `Work package ${draft.work_package_id} version ${draft.version} already exists`);
@@ -231,6 +254,7 @@ export class WorkPackageContractService {
       fingerprint: fingerprint(draft),
       state: "DRAFT",
       revision: 1,
+      cycle: 0,
       executorActorIds: new Set(),
       reviewerActorId: null,
       qaActorId: null,
@@ -244,6 +268,8 @@ export class WorkPackageContractService {
       workPackageId: draft.work_package_id,
       version: draft.version,
       state: "DRAFT",
+      actorId,
+      authorityDecisionId: grant.decisionId,
       fingerprint: record.fingerprint,
       timestamp: createdAt,
       idempotencyKey
@@ -260,7 +286,7 @@ export class WorkPackageContractService {
       createdAt,
       replayed: false
     };
-    this.#idempotency.set(idempotencyKey, { fingerprint: fingerprint({ op: "CREATE", draft }), result });
+    this.#idempotency.set(idempotencyKey, { fingerprint: createFingerprint, result });
     return frozenClone(result);
   }
 
@@ -268,7 +294,8 @@ export class WorkPackageContractService {
     if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
       deny("DENY_MALFORMED_ENVELOPE", "Transition envelope must be an object");
     }
-    const replay = this.#checkIdempotency(envelope.idempotencyKey, fingerprint({ op: "TRANSITION", envelope }));
+    const envelopeFingerprint = fingerprint({ op: "TRANSITION", envelope });
+    const replay = this.#checkIdempotency(envelope.idempotencyKey, envelopeFingerprint);
     if (replay) return replay;
 
     const unknownKeys = Object.keys(envelope).filter((key) => !ENVELOPE_KEYS.includes(key));
@@ -377,9 +404,13 @@ export class WorkPackageContractService {
         obligation: item.obligation ?? null,
         actorId: envelope.actorId,
         recordedAtState: envelope.requestedState,
+        cycle: record.cycle,
         timestamp: engineResult.timestamp
       }));
     }
+    // Immune V-item: entering REWORK opens a new evidence cycle so
+    // pre-rework review/QA evidence cannot satisfy obligations again.
+    if (envelope.requestedState === "REWORK") record.cycle += 1;
     record.ledger.push(deepFreeze({
       seq: record.ledger.length + 1,
       type: "TRANSITION",
@@ -414,18 +445,19 @@ export class WorkPackageContractService {
       replayed: false
     };
     this.#idempotency.set(envelope.idempotencyKey, {
-      fingerprint: fingerprint({ op: "TRANSITION", envelope }),
+      fingerprint: envelopeFingerprint,
       result
     });
     return frozenClone(result);
   }
 
   // GOV-P009-04 + acceptance independence: every declared obligation needs
-  // covering evidence, and unless the obligation is prefixed "self:" at
-  // least one covering item must come from outside the executor set.
+  // covering evidence from the CURRENT rework cycle, and unless the
+  // obligation is prefixed "self:" at least one covering item must come
+  // from outside the executor set.
   #assertObligationsSatisfied(record, envelope) {
     const items = [
-      ...record.evidence,
+      ...record.evidence.filter((item) => item.cycle === record.cycle),
       ...envelope.evidence.map((item) => ({ ...item, obligation: item.obligation ?? null, actorId: envelope.actorId }))
     ];
     for (const obligation of record.contract.evidence_obligations) {

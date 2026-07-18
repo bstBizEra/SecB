@@ -56,7 +56,7 @@ test("V-009 approval: bound approval on work package acceptance", () => {
       prohibited_paths: ["outside"],
       evidence_obligations: ["self:tests", "review-report", "qa-report"],
       valid_until: "2026-08-01T00:00:00Z"
-    }, { idempotencyKey: "v009_create" });
+    }, { idempotencyKey: "v009_create", actorId: "engin", authorityRef: "g_engin" });
     const steps = [
       ["PLANNED", "engin", "g_engin", null],
       ["REVIEWED", "rev", "g_rev", null],

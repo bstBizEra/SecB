@@ -72,6 +72,7 @@ function grants() {
         "WorkPackage:REVIEWED->AUTHORIZED",
         "WorkPackage:QA->GOV_DECISION",
         "WorkPackage:GOV_DECISION->ACCEPTED",
+        "WorkPackage:GOV_DECISION->REWORK",
         "WorkPackage:AUTHORIZED->REVOKED",
         "WorkPackage:AUTHORIZED->CANCELLED"
       ]
@@ -121,8 +122,13 @@ function harness({ start = "2026-07-18T10:00:00Z" } = {}) {
   const service = new WorkPackageContractService({ grants: grants(), now: () => new Date(nowMs) });
   const key = () => `idem_${++seq}`;
   const setNow = (iso) => { nowMs = Date.parse(iso); };
-  const create = (overrides = {}, idempotencyKey = key()) =>
-    service.createWorkPackage(draft(overrides), { idempotencyKey });
+  const create = (overrides = {}, idempotencyKey = key(), authority = {}) =>
+    service.createWorkPackage(draft(overrides), {
+      idempotencyKey,
+      actorId: ENGIN,
+      authorityRef: "grant_engin",
+      ...authority
+    });
   const send = (overrides) => service.submitTransition({
     projectId: PROJECT,
     workPackageId: WP,
@@ -277,6 +283,48 @@ test("creation refuses non-DRAFT status, blank scalars, and duplicate identity",
   denies(() => h.create({ scope: ["src/", "  "] }), "DENY_BLANK_SCALAR");
   h.create();
   denies(() => h.create(), "DENY_DUPLICATE_IDENTITY");
+});
+
+test("creation requires an active, correctly scoped ENGIN or GOV grant", () => {
+  const h = harness();
+  denies(() => h.service.createWorkPackage(draft(), { idempotencyKey: "idem_nogate" }), "DENY_MALFORMED_DRAFT");
+  denies(() => h.create({}, "idem_rev_gate", { actorId: REV, authorityRef: "grant_rev" }), "DENY_CREATE_AUTHORITY");
+  denies(() => h.create({}, "idem_borrowed", { actorId: REV, authorityRef: "grant_engin" }), "DENY_CREATE_AUTHORITY");
+  denies(() => h.create({ work_package_id: "wp_out_of_scope" }, "idem_scope"), "DENY_CREATE_AUTHORITY");
+  const created = h.create();
+  assert.equal(created.state, "DRAFT");
+  const ledger = h.service.getDecisionLedger(PROJECT, WP);
+  assert.equal(ledger[0].actorId, ENGIN);
+  assert.equal(ledger[0].authorityDecisionId, "decision_engin");
+});
+
+test("REWORK opens a new evidence cycle: stale obligations no longer satisfy GOV_DECISION", () => {
+  const h = harness();
+  h.create();
+  advanceTo(h, "GOV_DECISION");
+  h.send({ requestedState: "REWORK", actorId: GOV, authorityRef: "grant_gov" });
+  h.send({ requestedState: "PLANNED", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "REVIEWED", actorId: REV, authorityRef: "grant_rev" });
+  h.send({ requestedState: "AUTHORIZED", actorId: GOV, authorityRef: "grant_gov" });
+  h.send({ requestedState: "READY", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "RUNNING", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "SELF_VERIFIED", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "REVIEW", actorId: REV, authorityRef: "grant_rev" });
+  h.send({ requestedState: "QA", actorId: QA_ACTOR, authorityRef: "grant_qa" });
+  // all obligations were evidenced in cycle 0; none re-evidenced in cycle 1
+  denies(
+    () => h.send({ requestedState: "GOV_DECISION", actorId: GOV, authorityRef: "grant_gov" }),
+    "DENY_EVIDENCE_INSUFFICIENT"
+  );
+});
+
+test("a rework cycle that re-evidences its obligations reaches ACCEPTED", () => {
+  const h = harness();
+  h.create();
+  advanceTo(h, "GOV_DECISION");
+  h.send({ requestedState: "REWORK", actorId: GOV, authorityRef: "grant_gov" });
+  const accepted = advanceTo(h, "ACCEPTED");
+  assert.equal(accepted.state, "ACCEPTED");
 });
 
 test("ids containing the composite-key delimiter are denied at both gates", () => {
