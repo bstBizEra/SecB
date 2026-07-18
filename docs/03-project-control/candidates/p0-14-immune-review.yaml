@@ -79,6 +79,27 @@ review_round_2:
     - "Round-1 note remediation verified faithful (N1-N4)"
     - "Review record round-1 representation confirmed accurate; freeze rule honored"
 
+review_round_3_final:
+  pinned_range: "672ba31..8bece18 (freeze honored)"
+  consolidated_range: "a61861c..8bece18"
+  verdict: "APPROVE_WITH_NOTES - closes the P0-14 + skill delivery review cycle"
+  closure_verified:
+    - "IMM-P014-R2-01 closed: forgery probe denies; duck-type divergence not exploitable (id precedence + equality); GOVERNANCE type check effective; forged-approval regression test wired against a real DecisionLedger"
+    - "'@' charset and REVOCATION-poisoning fixes verified; V-013 claim correction honest; round-2 record representation accurate"
+  disclosed_gap_classification: >
+    Reverted/expired promotion decisions at registration: V-item
+    (IMM-SKILL-V1), not blocking - forgeability was the authority
+    boundary and is closed; temporal freshness is reachable only via the
+    trusted composition. Interim mitigation applied in follow-up commit:
+    lookup contract documented as resolveEffective-based at a trusted
+    instant, and V-013 wiring switched to demonstrate it. Complete fix
+    (resolution-time re-validation/unpublication) folded into the
+    revocation lifecycle V-item.
+  open_v_items:
+    - "IMM-SKILL-V1: promotion temporal validity - resolution-time re-validation with revocation lifecycle"
+    - "Governed revocation/lifecycle transition API for the skill registry"
+    - "Server receipt time alongside caller-claimed temporal-ledger timestamps"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"

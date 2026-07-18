@@ -263,8 +263,10 @@ test("V-013 skill: skill lifecycle through SkillsHub", () => {
     evidence_refs: ["ev_skill_eval"], decided_at: "2026-07-19T00:00:00Z",
     valid_from: "2026-07-19T00:00:00Z", valid_until: "2026-12-31T00:00:00Z"
   }, { expectedSequence: 0, idempotencyKey: "v013_promo" });
+  // strongest lookup contract: resolveEffective at a trusted instant, so
+  // reverted or expired promotion decisions deny registration
   const resolver = new SkillResolver({
-    decisionLookup: (ref) => promotions.read().find((r) => r.entry.entryId === ref) ?? null
+    decisionLookup: (ref) => promotions.resolveEffective(ref, { at: "2026-07-19T12:00:00Z" }).decision
   });
   const manifest = (overrides = {}) => ({
     skill_id: "SKILL-V013",

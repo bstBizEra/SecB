@@ -73,6 +73,31 @@ operator_disposition:
     inferior to) the sequence above. The locked codex-p0-09-integration
     worktree can be released.
 
+# --- Appended 2026-07-19: rework-006 discovery (extend-only) ---
+rework_006_discovery:
+  observed: >
+    New locked Codex worktree on codex/p0/p0-08-rework-006 @ 6152897
+    ([P0-08-REWORK] Close integration REV findings) - an IMPROVED P0-08:
+    fixes window-assertion placement (evaluated inside the transition at
+    a consistent transition time), tightens authority checks, adds 76
+    lines of tests, on top of the same integration wiring.
+  implication: >
+    REC-P009-02 chose bst/p0-08-integration-candidate (which carries the
+    pre-rework 90c84a6 service) as canonical. rework-006 supersedes that
+    service content. Dry-runs: rework-006 conflicts with both the
+    reconciliation branch and the old candidate in src/index.mjs (and
+    MANIFEST) - additive-export overlap, trivially union-resolvable.
+  queued_decision:
+    - id: "REC-P009-03"
+      question: "Adopt codex/p0/p0-08-rework-006 as the canonical P0-08 content (superseding the service files in bst/p0-08-integration-candidate), with a union-merge of the index/MANIFEST wiring?"
+      recommendation: >
+        Adopt - it closes REV findings on the exact code the candidate
+        carries. Runbook step 3 becomes: merge codex/p0/p0-08-rework-006
+        with union resolution of src/index.mjs and MANIFEST.json;
+        bst/p0-08-integration-candidate is then superseded. A rehearsed,
+        conflict-resolved integration branch is prepared as
+        bst/integration-rehearsal-2 for verification.
+
 self_certification:
   agent_id: "claude-code-sarchi"
   peer_agent_id: "codex-cli-motor"

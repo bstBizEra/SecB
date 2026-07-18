@@ -41,9 +41,13 @@ export class SkillResolver {
   #skills = new Map();
   #decisionLookup;
 
-  // decisionLookup is REQUIRED and must be bound to the governed
-  // DecisionLedger (or an equivalent authority source). It is the trust
-  // root for publication: without it, promotion would be self-attested.
+  // decisionLookup is REQUIRED and is the trust root for publication:
+  // without it, promotion would be self-attested. Lookup contract
+  // (IMM-SKILL-V1): it MUST be bound to the governed DecisionLedger and
+  // SHOULD be resolveEffective-based at a trusted instant, so reverted or
+  // expired promotion decisions deny at registration. Resolution-time
+  // re-validation/unpublication is folded into the open revocation
+  // lifecycle V-item.
   constructor({ decisionLookup } = {}) {
     if (typeof decisionLookup !== "function") {
       throw new SkillResolverError("INVALID_RESOLVER_CONFIG", "decisionLookup function is required");
