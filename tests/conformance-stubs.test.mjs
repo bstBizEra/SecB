@@ -8,6 +8,7 @@ import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs
 import { TransitionEngine } from "../src/control/state-machine.mjs";
 import { DecisionLedger, KnowledgeLedger, OutcomeLedger } from "../src/ledger/temporal-ledgers.mjs";
 import { SkillResolver } from "../src/registry/skill-resolver.mjs";
+import { projectEvents } from "../src/ui/report-projections.mjs";
 import { WorkPackageContractService, WorkPackageServiceError } from "../src/services/work-package-service.mjs";
 
 // V-item conformance stubs — BLOCKED pending Codex P0-08/P0-09 and other P0 deliverables.
@@ -205,9 +206,31 @@ test("V-010 terminal: observer role in project-scoped session", { skip: "BLOCKED
   // Negative: observer attempting mutation blocked
 });
 
-test("V-011 redaction: data classification enforcement on events", { skip: "BLOCKED: P0-08 security policy surface" }, () => {
+test("V-011 redaction: data classification enforcement on events (storage plane)", { skip: "BLOCKED: P0-08 security policy surface - storage-plane redaction only; display plane covered below" }, () => {
   // Positive: RESTRICTED data redacted before ledger append
   // Negative: unredacted RESTRICTED data rejected at envelope validation
+});
+
+// V-011 display-plane partial, unblocked by P0-17 (GOV-P017-02/04):
+// display withholding is NOT storage redaction; the storage half above
+// stays blocked and V-011 is NOT done.
+test("V-011 display plane: classification floor withholds above-ceiling and unknown payloads", () => {
+  const record = (classification) => ({
+    sequence: 1,
+    entry: {
+      entryId: "evt_v011", type: "host.observed", actorId: "a", sessionId: "s",
+      timestamp: "2026-07-19T10:00:00Z",
+      payload: { classification, content_hash: "d".repeat(64), observed_fact: { secret: "V011-PAYLOAD" } }
+    }
+  });
+  const [restricted] = projectEvents([record("RESTRICTED")], "INTERNAL");
+  assert.equal(restricted.payloadRendered, false);
+  assert.equal(restricted.withheldReason, "ABOVE_CEILING");
+  assert.equal(restricted.payload, null);
+  const [unknown] = projectEvents([record("internal ")], "INTERNAL");
+  assert.equal(unknown.withheldReason, "UNRECOGNIZED_CLASSIFICATION");
+  const [visible] = projectEvents([record("PUBLIC")], "INTERNAL");
+  assert.equal(visible.payloadRendered, true);
 });
 
 // Audit note 2026-07-18: wave-001 recorded P0-14 as delivered, but only the
