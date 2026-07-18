@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
 
 export const STATE_MACHINES = Object.freeze({
   Project: {
@@ -68,9 +68,29 @@ const requiredFields = [
   "policyDecision",
   "evidenceRefs",
   "idempotencyKey",
-  "timestamp",
   "reasonCode"
 ];
+
+// TE-H1: strict scalar validation. Every required field except
+// objectVersion/evidenceRefs must be a non-blank string; the request is a
+// closed envelope (unknown keys deny). TE-H2: `timestamp` is an OPTIONAL
+// caller claim retained as metadata; authoritative timestamps are
+// server-derived and the claim is excluded from the idempotency
+// fingerprint so replays are not broken by clock drift.
+const requiredStringFields = requiredFields.filter((field) => !["objectVersion", "evidenceRefs"].includes(field));
+
+const allowedRequestKeys = new Set([
+  ...requiredFields,
+  "timestamp",
+  "producerActorId",
+  "reviewerActorId",
+  "qaActorId",
+  "evidenceVerifierActorId"
+]);
+
+function isBlankString(value) {
+  return typeof value !== "string" || value.trim() === "";
+}
 
 export class TransitionDeniedError extends Error {
   constructor(code, message) {
@@ -80,24 +100,17 @@ export class TransitionDeniedError extends Error {
   }
 }
 
-function canonicalize(value) {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
-  }
-  return value;
-}
-
-function fingerprint(request) {
-  return createHash("sha256").update(JSON.stringify(canonicalize(request))).digest("hex");
-}
-
 export class TransitionEngine {
   #authorize;
+  #now;
   #idempotency = new Map();
 
-  constructor({ authorize = () => ({ allowed: false, reason: "authority resolver not configured" }) } = {}) {
+  constructor({
+    authorize = () => ({ allowed: false, reason: "authority resolver not configured" }),
+    now = () => new Date()
+  } = {}) {
     this.#authorize = authorize;
+    this.#now = now;
   }
 
   transition(request) {
@@ -105,15 +118,29 @@ export class TransitionEngine {
       throw new TransitionDeniedError("DENY_MALFORMED_REQUEST", "Transition request must be an object");
     }
 
+    const unknownKeys = Object.keys(request).filter((key) => !allowedRequestKeys.has(key));
+    if (unknownKeys.length > 0) {
+      throw new TransitionDeniedError("DENY_MALFORMED_REQUEST", `Unknown transition fields: ${unknownKeys.join(", ")}`);
+    }
     const missing = requiredFields.filter((field) => request[field] === undefined || request[field] === null || request[field] === "");
     if (missing.length > 0) {
       throw new TransitionDeniedError("DENY_MISSING_FIELDS", `Missing transition fields: ${missing.join(", ")}`);
+    }
+    const malformed = requiredStringFields.filter((field) => isBlankString(request[field]));
+    if (malformed.length > 0) {
+      throw new TransitionDeniedError("DENY_MALFORMED_REQUEST", `Fields must be non-blank strings: ${malformed.join(", ")}`);
+    }
+    if (request.timestamp !== undefined && isBlankString(request.timestamp)) {
+      throw new TransitionDeniedError("DENY_MALFORMED_REQUEST", "timestamp, when present, must be a non-blank string");
     }
     if (!Number.isInteger(request.objectVersion) || request.objectVersion < 1) {
       throw new TransitionDeniedError("DENY_INVALID_VERSION", "objectVersion must be a positive integer");
     }
     if (!Array.isArray(request.evidenceRefs) || request.evidenceRefs.length === 0) {
       throw new TransitionDeniedError("DENY_MISSING_EVIDENCE", "At least one evidence reference is required");
+    }
+    if (request.evidenceRefs.some(isBlankString)) {
+      throw new TransitionDeniedError("DENY_MALFORMED_REQUEST", "evidenceRefs entries must be non-blank strings");
     }
 
     const machine = STATE_MACHINES[request.objectType];
@@ -124,7 +151,10 @@ export class TransitionEngine {
       throw new TransitionDeniedError("DENY_UNKNOWN_STATE", "Current or requested state is unknown");
     }
 
-    const requestFingerprint = fingerprint(request);
+    // TE-H2: the caller timestamp is a claim, excluded from the replay
+    // fingerprint so clock drift cannot break idempotent replays.
+    const { timestamp: claimedTimestamp, ...fingerprintSource } = request;
+    const requestFingerprint = canonicalFingerprint(fingerprintSource);
     const prior = this.#idempotency.get(request.idempotencyKey);
     if (prior) {
       if (prior.fingerprint !== requestFingerprint) {
@@ -135,6 +165,15 @@ export class TransitionEngine {
 
     if (request.policyDecision !== "ALLOW") {
       throw new TransitionDeniedError("DENY_POLICY", "Policy decision does not allow the transition");
+    }
+
+    // TE-H3: edge legality precedes authority resolution — an illegal
+    // edge never exercises the authority layer.
+    if (!machine[request.currentState].includes(request.requestedState)) {
+      throw new TransitionDeniedError(
+        "DENY_UNDEFINED_TRANSITION",
+        `${request.objectType} cannot transition from ${request.currentState} to ${request.requestedState}`
+      );
     }
 
     const authority = this.#authorize({
@@ -155,13 +194,6 @@ export class TransitionEngine {
       throw new TransitionDeniedError("DENY_AUTHORITY", authority?.reason ?? "Effective authority was not established");
     }
 
-    if (!machine[request.currentState].includes(request.requestedState)) {
-      throw new TransitionDeniedError(
-        "DENY_UNDEFINED_TRANSITION",
-        `${request.objectType} cannot transition from ${request.currentState} to ${request.requestedState}`
-      );
-    }
-
     const result = Object.freeze({
       transitionId: `tr_${requestFingerprint.slice(0, 24)}`,
       objectType: request.objectType,
@@ -177,7 +209,8 @@ export class TransitionEngine {
       policyDecision: request.policyDecision,
       evidenceRefs: [...request.evidenceRefs],
       idempotencyKey: request.idempotencyKey,
-      timestamp: request.timestamp,
+      timestamp: this.#now().toISOString(),
+      claimedTimestamp: claimedTimestamp ?? null,
       reasonCode: request.reasonCode,
       replayed: false
     });

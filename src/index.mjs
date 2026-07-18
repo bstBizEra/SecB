@@ -5,6 +5,11 @@ export {
 } from "./contracts/contract-validator.mjs";
 
 export {
+  canonicalFingerprint,
+  canonicalize
+} from "./contracts/canonical-fingerprint.mjs";
+
+export {
   AuthorityConfigurationError,
   AuthorityEngine,
   CONFLICTING_ROLES,

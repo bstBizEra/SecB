@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
+import { TransitionEngine } from "../src/control/state-machine.mjs";
 import { WorkPackageContractService, WorkPackageServiceError } from "../src/services/work-package-service.mjs";
 
 // V-item conformance stubs — BLOCKED pending Codex P0-08/P0-09 and other P0 deliverables.
@@ -189,28 +191,82 @@ test("V-018 outcome: outcome receipt validation", { skip: "BLOCKED: P0-14 Outcom
   // Negative: outcome receipt invalidates and triggers reversion
 });
 
-// TransitionEngine hardening stubs (TE-H1..H4) — BLOCKED pending cross-lane
-// coordination on the shared engine. Spec: docs/03-project-control/candidates/
-// transition-engine-hardening-spec.yaml. Production declaration is gated on
-// these per GOV-P009-02; P0-09 service-side shim compensates until then.
+// TransitionEngine hardening tests (TE-H1..H4) — implemented on the
+// operator-authorized coordination branch (transition-engine-hardening-spec.yaml,
+// operator_disposition). Codex-lane acknowledgement required before merge.
 
-test("TE-H1 engine: strict scalar validation on transition envelopes", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
-  // Negative: non-string objectId/actorId, whitespace-only reasonCode,
-  // non-string idempotencyKey, unknown envelope fields -> typed denial
+const teRequest = (overrides = {}) => ({
+  objectType: "Project",
+  objectId: "prj_te",
+  objectVersion: 1,
+  projectId: "prj_te",
+  workPackageId: "wp_te",
+  currentState: "DRAFT",
+  requestedState: "REVIEW",
+  actorId: "te-actor",
+  authorityRef: "te-grant",
+  policyDecision: "ALLOW",
+  evidenceRefs: ["ev_te"],
+  idempotencyKey: "idem_te",
+  timestamp: "2026-07-18T00:00:00Z",
+  reasonCode: "TE_TEST",
+  ...overrides
 });
 
-test("TE-H2 engine: server-derived result timestamps", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
-  // Positive: result.timestamp from injected now(); caller timestamp kept
-  // as claimed metadata and excluded from the idempotency fingerprint
-  // Negative: backdated caller timestamp does not alter replay identity
+const teEngine = (opts = {}) => new TransitionEngine({
+  authorize: () => ({ allowed: true, decisionId: "d_te" }),
+  now: () => new Date("2026-07-18T12:00:00Z"),
+  ...opts
 });
 
-test("TE-H3 engine: edge legality checked before authority resolution", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
-  // Negative: illegal edge with valid grant ref -> DENY_UNDEFINED_TRANSITION
-  // without invoking the authority resolver (resolver call count = 0)
+test("TE-H1 engine: strict scalar validation on transition envelopes", () => {
+  const denyTE = (overrides, code) => assert.throws(
+    () => teEngine().transition(teRequest(overrides)),
+    (error) => error.name === "TransitionDeniedError" && error.code === code
+  );
+  denyTE({ objectId: 123 }, "DENY_MALFORMED_REQUEST");
+  denyTE({ reasonCode: "   " }, "DENY_MALFORMED_REQUEST");
+  denyTE({ idempotencyKey: 42 }, "DENY_MALFORMED_REQUEST");
+  denyTE({ smuggled: true }, "DENY_MALFORMED_REQUEST");
+  denyTE({ evidenceRefs: ["ok", "  "] }, "DENY_MALFORMED_REQUEST");
+  denyTE({ timestamp: 12345 }, "DENY_MALFORMED_REQUEST");
 });
 
-test("TE-H4 engine: shared canonical fingerprint parity", { skip: "BLOCKED: shared-engine coordination (GOV-P009-02)" }, () => {
-  // Positive: engine, work-package service, and context federation produce
-  // byte-identical fingerprints for identical canonicalized payloads
+test("TE-H2 engine: server-derived timestamps; claimed timestamp excluded from replay identity", () => {
+  const engine = teEngine();
+  const first = engine.transition(teRequest());
+  assert.equal(first.timestamp, "2026-07-18T12:00:00.000Z");
+  assert.equal(first.claimedTimestamp, "2026-07-18T00:00:00Z");
+  // clock-drifted replay: different claimed timestamp, same everything else
+  const replay = engine.transition(teRequest({ timestamp: "2020-01-01T00:00:00Z" }));
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.transitionId, first.transitionId);
+});
+
+test("TE-H3 engine: illegal edge never exercises the authority resolver", () => {
+  let resolverCalls = 0;
+  const engine = new TransitionEngine({
+    authorize: () => { resolverCalls += 1; return { allowed: true, decisionId: "d_te" }; },
+    now: () => new Date("2026-07-18T12:00:00Z")
+  });
+  assert.throws(
+    () => engine.transition(teRequest({ requestedState: "ACTIVE" })),
+    (error) => error.code === "DENY_UNDEFINED_TRANSITION"
+  );
+  assert.equal(resolverCalls, 0);
+});
+
+test("TE-H4 engine: shared canonical fingerprint is order-independent and deterministic", () => {
+  const payload = { b: [2, { z: 1, a: 0 }], a: "x" };
+  const reordered = { a: "x", b: [2, { a: 0, z: 1 }] };
+  assert.equal(canonicalFingerprint(payload), canonicalFingerprint(reordered));
+  assert.match(canonicalFingerprint(payload), /^[0-9a-f]{64}$/);
+  // engine transitionId is derived from the shared fingerprint of the
+  // timestamp-stripped request — property order must not matter
+  const engine = teEngine();
+  const first = engine.transition(teRequest());
+  const reorderedRequest = Object.fromEntries(Object.entries(teRequest()).reverse());
+  const replay = engine.transition(reorderedRequest);
+  assert.equal(replay.transitionId, first.transitionId);
+  assert.equal(replay.replayed, true);
 });

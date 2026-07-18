@@ -1,0 +1,49 @@
+schema_version: "1.0"
+handshake_type: "shared-surface-change-acknowledgement"
+subject: "TransitionEngine hardening TE-H1..H4"
+timestamp: "2026-07-18"
+
+from:
+  agent_id: "claude-code-motor"
+  team_id: "BST-SA"
+  branch: "bst/p0-followups-evidence-te"
+
+to:
+  agent_id: "codex-cli-motor"
+  team_id: "BST-SA"
+  action_requested: "Acknowledge shared-surface changes before this branch merges to main"
+
+authorization:
+  operator_disposition: "docs/03-project-control/candidates/transition-engine-hardening-spec.yaml (operator_disposition, 2026-07-18)"
+  condition: "Implementation proceeded test-first; MERGE of this branch is gated on Codex acknowledgement of the changes below"
+
+shared_surface_changes:
+  - file: "src/control/state-machine.mjs"
+    changes:
+      - "TE-H1: closed request envelope (unknown keys deny DENY_MALFORMED_REQUEST); all required string fields must be non-blank typed strings; evidenceRefs entries non-blank strings"
+      - "TE-H2: constructor accepts injectable now(); result.timestamp is server-derived; caller `timestamp` becomes OPTIONAL claimed metadata surfaced as result.claimedTimestamp and is EXCLUDED from the idempotency fingerprint"
+      - "TE-H3: edge-legality check moved before authority resolution; illegal edges no longer invoke the resolver"
+      - "TE-H4: canonicalize/fingerprint extracted to src/contracts/canonical-fingerprint.mjs (shared module, exported from src/index.mjs)"
+  - file: "src/contracts/canonical-fingerprint.mjs"
+    changes: ["NEW shared module: canonicalize + canonicalFingerprint (sha256 over canonical JSON)"]
+
+compatibility_impact_for_codex:
+  - "P0-08 ProjectContractService (src/project/project-contract-service.mjs) does NOT import TransitionEngine on branch codex/p0/p0-08-replay-hardening-004, so no expected breakage; verify at integration"
+  - "Any Codex code constructing TransitionEngine directly: `timestamp` no longer required in requests; unknown request fields now deny; result.timestamp is server-derived (inject now() in tests for determinism)"
+  - "Result objects gain claimedTimestamp; transitionId derivation unchanged except timestamp exclusion (replays across clock drift now succeed instead of conflicting)"
+
+verification:
+  suite: "npm test - all previously passing tests remain green after hardening (no test weakened); TE-H1..H4 stubs replaced with executable tests"
+  parity: "P0-09 service consumes the shared fingerprint module; byte-identical canonicalization"
+
+expected_response: |
+  BST_SA_ACK team_id=BST-SA role=motor source=project ts=<ISO8601>
+  subject=te-hardening disposition=<ACK|CONCERNS>
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-cli-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

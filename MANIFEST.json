@@ -111,6 +111,8 @@
     "docs/03-project-control/candidates/p0-09-v2-evidence-binding-design.yaml",
     "docs/03-project-control/candidates/transition-engine-hardening-spec.yaml",
     "tests/context-federation-stubs.test.mjs",
+    "src/contracts/canonical-fingerprint.mjs",
+    "docs/03-project-control/candidates/codex-handshake-te-hardening.yaml",
     "src/services/work-package-service.mjs",
     "tests/work-package-service.test.mjs",
     "tests/host-runtime-agent.test.mjs",

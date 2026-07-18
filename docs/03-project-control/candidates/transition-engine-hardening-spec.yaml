@@ -37,6 +37,17 @@ sequencing:
   - "4. P0-09 shim retirement ONLY after parity conformance passes (GOV-P009-02); shim checks become redundant-but-harmless until then"
   - "5. Immune review; production-gate V-items closed"
 
+# --- Appended 2026-07-18: operator disposition (extend-only) ---
+operator_disposition:
+  disposed_at: "2026-07-18"
+  disposed_by: "human-operator"
+  disposition: "AUTHORIZED - coordinated hardening branch"
+  execution_branch: "bst/p0-followups-evidence-te"
+  conditions:
+    - "Codex-lane acknowledgement required before this branch merges to main (handshake packet: codex-handshake-te-hardening.yaml); implementation may proceed test-first meanwhile"
+    - "P0-09 service shim retirement deferred until parity conformance passes and Immune approves (GOV-P009-02 unchanged)"
+    - "All existing tests must remain green; engine changes are behavior-tightening only"
+
 self_certification:
   agent_id: "claude-code-motor"
   peer_agent_id: "codex-motor"
