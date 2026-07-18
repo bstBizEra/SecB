@@ -1,0 +1,48 @@
+# P0-08 Integration Pre-Flight Report
+# Prepared by: Claude (BST-SA motor lane, advisory only)
+# Purpose: de-risk the merge sequence for the two queued branches
+#   (P0-09 bst/p0-09-work-package-auth-6f341f and Codex P0-08
+#   codex/p0/p0-08-replay-hardening-004) before operator execution.
+# Method: git merge-base / diff / merge-tree dry runs; no working-tree
+#   mutation; no branches modified.
+
+preflight_record:
+  prepared_at: "2026-07-18"
+  main_head: "76a7c05"
+  p0_09_branch: "bst/p0-09-work-package-auth-6f341f @ 2a29e9d"
+  p0_08_branch: "codex/p0/p0-08-replay-hardening-004 @ 90c84a6"
+  p0_08_merge_base_with_main: "26e299c (P0-08 plan commit; main is 9 commits ahead)"
+
+findings:
+  - "P0-08 branch changes exactly two files, both new: src/project/project-contract-service.mjs and tests/project-contract-service.test.mjs (23 tests)"
+  - "Zero file overlap between P0-08 and P0-09 branches; zero overlap with main's changes since the merge base"
+  - "Dry-run merge of P0-08 into main: CLEAN (no conflicts)"
+  - "Dry-run merge of P0-08 into the post-P0-09 world: CLEAN (no conflicts)"
+  - "The wave-001 coordination record predicted MANIFEST.json and src/index.mjs collisions; these do not exist because the Codex branch never wired its service into either file - this is an INTEGRATION GAP, not a conflict"
+
+integration_gaps_for_p0_08:
+  - "src/index.mjs carries no export for the project contract service; additive export block required at integration"
+  - "MANIFEST.json does not register src/project/project-contract-service.mjs or its test; additive entries required (validator will fail otherwise)"
+  - "Whether tests/project-contract-service.test.mjs passes against current main/P0-09 shared engines is UNVERIFIED here (test not executed pre-merge; the 90c84a6 baseline predates nine commits of shared-surface evolution on main). Must run before accepting the integration"
+
+recommended_merge_order:
+  - "1. Operator merges P0-09 branch into main (Immune round-4 APPROVE_WITH_NOTES; clean by construction - main has no commits the branch lacks)"
+  - "2. Codex lane (or motor with operator authorization) merges codex/p0/p0-08-replay-hardening-004 into main - dry-run CLEAN"
+  - "3. Same change or immediate follow-up adds the two integration wirings (index export, MANIFEST entries) and runs the full suite including the 23 P0-08 tests"
+  - "4. Immune review of the P0-08 integration; then V-002/V-010 conformance stubs become unblockable"
+
+risks:
+  - id: "PRE-P008-01"
+    statement: "P0-08 tests were written against the 26e299c-era shared engines; nine commits of drift on main (and P0-09's service additions) are unexercised by that branch's CI history"
+    mitigation: "Run the full merged suite before accepting; treat failures as integration rework for the Codex lane, not as P0-09 regressions"
+  - id: "PRE-P008-02"
+    statement: "P0-09's RISK-P009-02 (patterns referenced from an unintegrated P0-08) remains open until step 4 completes"
+    mitigation: "Close it in the P0-08 integration review by confirming the service patterns P0-09 mirrored are unchanged at 90c84a6"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-operator"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

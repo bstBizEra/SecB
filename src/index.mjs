@@ -53,3 +53,10 @@ export {
   ProjectContractService,
   ProjectContractServiceError
 } from "./project/project-contract-service.mjs";
+
+export {
+  EFFECTIVE_STATES,
+  WORK_PACKAGE_SERVICE_ROLE_GATES,
+  WorkPackageContractService,
+  WorkPackageServiceError
+} from "./services/work-package-service.mjs";
