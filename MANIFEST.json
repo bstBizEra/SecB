@@ -116,6 +116,7 @@
     "docs/03-project-control/candidates/p0-followups-immune-review.yaml",
     "docs/03-project-control/candidates/parallel-build-wave-002.coordination.yaml",
     "docs/03-project-control/candidates/secb-auto-approval-sarchi-review.yaml",
+    "docs/03-project-control/candidates/p0-09-integration-reconciliation.yaml",
     "src/services/work-package-service.mjs",
     "tests/work-package-service.test.mjs",
     "tests/host-runtime-agent.test.mjs",
