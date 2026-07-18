@@ -260,3 +260,213 @@ test("src/mcp files declare no dynamic imports of forbidden modules", () => {
     }
   }
 });
+
+// -------------------------------------------------------------------------
+// Transport: JSON-RPC 2.0 stdio framing
+// -------------------------------------------------------------------------
+
+import {
+  buildErrorResponse,
+  buildResponse,
+  createLineReader,
+  createLineWriter,
+  DEFAULT_MAX_MESSAGE_BYTES,
+  ErrorCodes,
+  isNotification,
+  parseLine,
+  PROTOCOL_VERSION,
+  serializeMessage,
+} from "../src/mcp/jsonrpc-stdio.mjs";
+
+test("ErrorCodes are frozen and match JSON-RPC 2.0 spec", () => {
+  assert.equal(Object.isFrozen(ErrorCodes), true);
+  assert.equal(ErrorCodes.ParseError, -32700);
+  assert.equal(ErrorCodes.InvalidRequest, -32600);
+  assert.equal(ErrorCodes.MethodNotFound, -32601);
+  assert.equal(ErrorCodes.InvalidParams, -32602);
+  assert.equal(ErrorCodes.InternalError, -32603);
+  // Implementation-defined server error range: -32000..-32099
+  assert.ok(ErrorCodes.MessageTooLarge <= -32000);
+  assert.ok(ErrorCodes.MessageTooLarge >= -32099);
+});
+
+test("parseLine: valid request round-trips", () => {
+  const line = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/list",
+    params: {},
+  });
+  const result = parseLine(line);
+  assert.ok("request" in result);
+  assert.equal(result.request.method, "tools/list");
+  assert.equal(result.request.id, 1);
+});
+
+test("parseLine: invalid JSON yields ParseError with null id", () => {
+  const result = parseLine("{not valid json");
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.ParseError);
+  assert.equal(result.errorResponse.id, null);
+});
+
+test("parseLine: missing jsonrpc yields InvalidRequest", () => {
+  const line = JSON.stringify({ method: "tools/list", id: 1 });
+  const result = parseLine(line);
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.InvalidRequest);
+  // id preserved when parseable
+  assert.equal(result.errorResponse.id, 1);
+});
+
+test("parseLine: wrong jsonrpc version yields InvalidRequest", () => {
+  const line = JSON.stringify({ jsonrpc: "1.0", method: "tools/list", id: 1 });
+  const result = parseLine(line);
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.InvalidRequest);
+});
+
+test("parseLine: missing method yields InvalidRequest", () => {
+  const line = JSON.stringify({ jsonrpc: "2.0", id: 1 });
+  const result = parseLine(line);
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.InvalidRequest);
+});
+
+test("parseLine: empty method yields InvalidRequest", () => {
+  const line = JSON.stringify({ jsonrpc: "2.0", method: "", id: 1 });
+  const result = parseLine(line);
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.InvalidRequest);
+});
+
+test("parseLine: batch requests rejected as InvalidRequest", () => {
+  const line = JSON.stringify([{ jsonrpc: "2.0", method: "ping", id: 1 }]);
+  const result = parseLine(line);
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.InvalidRequest);
+});
+
+test("parseLine: id may be string, number, or null", () => {
+  for (const id of ["abc", 42, null]) {
+    const line = JSON.stringify({ jsonrpc: "2.0", method: "ping", id });
+    const result = parseLine(line);
+    assert.ok("request" in result, `id=${JSON.stringify(id)} should be valid`);
+    assert.equal(result.request.id, id);
+  }
+});
+
+test("parseLine: id of wrong type (boolean) rejected", () => {
+  const line = JSON.stringify({ jsonrpc: "2.0", method: "ping", id: true });
+  const result = parseLine(line);
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.InvalidRequest);
+});
+
+test("parseLine: notification (no id) parses as request", () => {
+  const line = JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} });
+  const result = parseLine(line);
+  assert.ok("request" in result);
+  assert.equal(isNotification(result.request), true);
+});
+
+test("parseLine: message exceeding max size yields MessageTooLarge", () => {
+  const big = "x".repeat(1000);
+  const line = JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1, params: { data: big } });
+  const result = parseLine(line, 100);
+  assert.ok("errorResponse" in result);
+  assert.equal(result.errorResponse.error.code, ErrorCodes.MessageTooLarge);
+  assert.ok(result.errorResponse.error.data.observed_bytes > 100);
+});
+
+test("parseLine: throws TypeError for non-string input", () => {
+  assert.throws(() => parseLine(null), TypeError);
+  assert.throws(() => parseLine(42), TypeError);
+  assert.throws(() => parseLine({}), TypeError);
+});
+
+test("parseLine: throws TypeError for invalid maxBytes", () => {
+  assert.throws(() => parseLine("{}", 0), TypeError);
+  assert.throws(() => parseLine("{}", -1), TypeError);
+  assert.throws(() => parseLine("{}", "1024"), TypeError);
+});
+
+test("buildResponse: correct shape", () => {
+  const r = buildResponse(1, { ok: true });
+  assert.equal(r.jsonrpc, "2.0");
+  assert.equal(r.id, 1);
+  assert.deepEqual(r.result, { ok: true });
+});
+
+test("buildResponse: id defaults to null", () => {
+  const r = buildResponse(undefined, {});
+  assert.equal(r.id, null);
+});
+
+test("buildErrorResponse: with and without data", () => {
+  const withData = buildErrorResponse(1, ErrorCodes.InternalError, "boom", { detail: "x" });
+  assert.equal(withData.error.code, ErrorCodes.InternalError);
+  assert.equal(withData.error.message, "boom");
+  assert.deepEqual(withData.error.data, { detail: "x" });
+
+  const noData = buildErrorResponse(1, ErrorCodes.InternalError, "boom");
+  assert.equal("data" in noData.error, false);
+});
+
+test("serializeMessage: appends newline exactly once", () => {
+  const s = serializeMessage({ jsonrpc: "2.0", id: 1, result: {} });
+  assert.equal(s.endsWith("\n"), true);
+  assert.equal(s.match(/\n/g).length, 1);
+});
+
+test("serializeMessage: throws for non-object", () => {
+  assert.throws(() => serializeMessage("string"), TypeError);
+  assert.throws(() => serializeMessage(null), TypeError);
+  assert.throws(() => serializeMessage([1, 2]), TypeError);
+});
+
+test("createLineWriter: throws on invalid output stream", () => {
+  assert.throws(() => createLineWriter(null), TypeError);
+  assert.throws(() => createLineWriter({}), TypeError);
+  assert.throws(() => createLineWriter({ write: "not a function" }), TypeError);
+});
+
+test("createLineWriter: writes serialized message to output.write", async () => {
+  const captured = [];
+  const fakeOutput = { write: (s) => captured.push(s) };
+  const writer = createLineWriter(fakeOutput);
+  writer.write(buildResponse(1, { ok: true }));
+  writer.write(buildResponse(2, { ok: false }));
+  assert.equal(captured.length, 2);
+  for (const s of captured) {
+    assert.equal(s.endsWith("\n"), true);
+    JSON.parse(s.trim());
+  }
+});
+
+test("createLineReader: yields parsed messages from a stream", async () => {
+  // Simulate stdin with a PassThrough
+  const { PassThrough } = await import("node:stream");
+  const stream = new PassThrough();
+  const reader = createLineReader(stream);
+  const messages = [];
+  const iterPromise = (async () => {
+    for await (const m of reader) messages.push(m);
+  })();
+  stream.write(JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 }) + "\n");
+  stream.write(JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 2 }) + "\n");
+  stream.write("not valid json\n");
+  stream.end();
+  await iterPromise;
+  assert.equal(messages.length, 3);
+  assert.ok("request" in messages[0]);
+  assert.ok("request" in messages[1]);
+  assert.ok("errorResponse" in messages[2]);
+  assert.equal(messages[2].errorResponse.error.code, ErrorCodes.ParseError);
+});
+
+test("PROTOCOL_VERSION and DEFAULT_MAX_MESSAGE_BYTES are exposed", () => {
+  assert.equal(PROTOCOL_VERSION, "2.0");
+  assert.equal(typeof DEFAULT_MAX_MESSAGE_BYTES, "number");
+  assert.ok(DEFAULT_MAX_MESSAGE_BYTES > 0);
+});
