@@ -29,6 +29,36 @@ r1_honesty_notes:
 test_result: "205 tests, 183 pass, 0 fail, 22 skipped"
 next: "Pinned Immune review under the freeze rule"
 
+# --- Appended 2026-07-19: Immune REQUEST_CHANGES remediation (extend-only) ---
+immune_review_round_1:
+  verdict: "REQUEST_CHANGES"
+  findings_and_disposition:
+    - id: "IMM-P011R1-01 (blocking)"
+      finding: "ProjectContractService + its test appear deleted at the reconciliation-branch tip vs main"
+      root_cause: >
+        Lineage artifact, NOT a deletion by the P0-11 commit. The
+        reconciliation branch descends from merge-base 76a7c05, which
+        predates BOTH main's P0-08 integration (d142322/6152897) and
+        main's .gitignore hardening (90a9dd0). ProjectContractService is
+        PRESENT on main and PRESENT on the actual merge candidate
+        bst/integration-rehearsal-3 (main + folded work). The
+        reconciliation branch is a STAGING lineage; it must never be
+        merged directly to main. Process error acknowledged: the review
+        was pinned to the staging branch instead of rehearsal-3.
+      resolution: "Re-review pinned to bst/integration-rehearsal-3 (the merge candidate that preserves P0-08)"
+    - id: "IMM-P011R1-02 (blocking)"
+      finding: ".gitignore lacks '*.env' vs main; secb.env could be staged"
+      root_cause: "Same lineage divergence (main added '*.env' at 90a9dd0, after the merge-base). Verified: secb.env is NOT present in this worktree and NEVER committed on any branch; no secret was exposed."
+      resolution: "rehearsal-3 carries main's hardened .gitignore; confirmed on the merge candidate"
+    - id: "IMM-P011R1-03 (blocking)"
+      finding: "Raw NUL bytes in the record-map key made handoff-service.mjs a binary/undiffable file, and NUL is an ungated composite-key delimiter"
+      root_cause: "Real defect in the P0-11 commit"
+      resolution: "FIXED: record key is now delimiter-free JSON.stringify([projectId, handoffId]) (IMM-P009-01 structural fix); file verified ASCII text, git-diffable; collision-proof by any character; 15/15 handoff tests green"
+  note_fixes:
+    - "Seal semantics clarified in-code: tamper-evidence for the stored/forwarded envelope, not offer-time source authentication (reviewer note 3)"
+    - "Comparator is FIVE dimensions (risk, data-class, paths, tools, transitions); 'six' in the packet counted destination_role, which is a single declared field not a comparator dimension - naming corrected here, nothing dropped (reviewer note 1)"
+  disclosure_correction: "This commit's file set is: non-escalation-comparator.mjs, handoff-service.mjs, handoff-service.test.mjs, V-015 activation, index/MANIFEST wiring, this record. The reconciliation-branch lineage gap (findings 01/02) is a branch-selection issue, not files this feature commit adds/removes."
+
 self_certification:
   agent_id: "claude-code-motor"
   peer_agent_id: "claude-immune"
