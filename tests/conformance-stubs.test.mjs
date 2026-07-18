@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AuthorityEngine } from "../src/control/authority-engine.mjs";
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { TransitionEngine } from "../src/control/state-machine.mjs";
 import { WorkPackageContractService, WorkPackageServiceError } from "../src/services/work-package-service.mjs";
@@ -26,9 +27,56 @@ test("V-004 context: context receipt federation and retrieval", { skip: "BLOCKED
   //   tampered document fails hash recompute — all typed NONE, fail closed.
 });
 
-test("V-005 SoD: role assignment independence validated", { skip: "BLOCKED: P0-06 Role and SoD engine" }, () => {
-  // Positive: independent actors assigned to producer/reviewer/QA
-  // Negative: same actor assigned conflicting roles rejected
+// V-005 unblocked: the Role/SoD engine (AuthorityEngine) has been delivered
+// since the foundation commits; the stub's blocker was stale.
+test("V-005 SoD: role assignment independence validated", () => {
+  const window = {
+    projectId: "prj_v005",
+    workPackageId: "wp_v005",
+    validFrom: "2026-07-01T00:00:00Z",
+    validUntil: "2026-12-31T00:00:00Z",
+    status: "ACTIVE"
+  };
+  const grant = (id, actorId, roles, allowedTransitions) =>
+    ({ ...window, grantId: id, decisionId: `d_${id}`, actorId, roles, allowedTransitions });
+
+  // Positive: independent actors holding producer/reviewer/QA roles coexist
+  const engine = new AuthorityEngine({
+    grants: [
+      grant("g_engin", "engin", ["ENGIN"], ["WorkPackage:READY->RUNNING"]),
+      grant("g_rev", "rev", ["REV"], ["WorkPackage:SELF_VERIFIED->REVIEW"]),
+      grant("g_qa", "qa", ["QA"], ["WorkPackage:REVIEW->QA"])
+    ],
+    now: () => new Date("2026-07-18T10:00:00Z")
+  });
+  const allowed = engine.authorize({
+    objectType: "WorkPackage", currentState: "SELF_VERIFIED", requestedState: "REVIEW",
+    actorId: "rev", authorityRef: "g_rev",
+    projectId: "prj_v005", workPackageId: "wp_v005",
+    producerActorId: "engin"
+  });
+  assert.equal(allowed.allowed, true);
+  assert.equal(allowed.role, "REV");
+
+  // Negative: one actor holding conflicting roles in the same scope is
+  // rejected at configuration time, before any transition is attempted
+  assert.throws(
+    () => new AuthorityEngine({
+      grants: [grant("g_dual", "dual", ["ENGIN", "REV"], ["WorkPackage:READY->RUNNING"])],
+      now: () => new Date("2026-07-18T10:00:00Z")
+    }),
+    (error) => error.name === "AuthorityConfigurationError" && error.code === "SOD_ROLE_CONFLICT"
+  );
+
+  // Negative: dynamic SoD — a reviewer who produced the work is denied
+  const sod = engine.authorize({
+    objectType: "WorkPackage", currentState: "SELF_VERIFIED", requestedState: "REVIEW",
+    actorId: "rev", authorityRef: "g_rev",
+    projectId: "prj_v005", workPackageId: "wp_v005",
+    producerActorId: "rev"
+  });
+  assert.equal(sod.allowed, false);
+  assert.equal(sod.code, "DENY_SOD");
 });
 
 // V-009 unblocked by P0-09 Work Package service (see p0-09-gov-disposition.yaml).
@@ -156,6 +204,10 @@ test("V-011 redaction: data classification enforcement on events", { skip: "BLOC
   // Negative: unredacted RESTRICTED data rejected at envelope validation
 });
 
+// Audit note 2026-07-18: wave-001 recorded P0-14 as delivered, but only the
+// Event and Evidence ledgers exist in src/ledger/governed-ledgers.mjs; the
+// decision/knowledge/outcome ledgers with temporal claims do not. V-012,
+// V-013, V-017, V-018 remain correctly blocked on that gap.
 test("V-012 memory: memory record temporal boundary", { skip: "BLOCKED: P0-14 Decision/knowledge/outcome ledgers" }, () => {
   // Positive: memory record with valid temporal claim accepted
   // Negative: memory record exceeding retention window pruned
