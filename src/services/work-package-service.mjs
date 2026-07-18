@@ -202,6 +202,11 @@ export class WorkPackageContractService {
     for (const field of ["work_package_id", "project_id", "objective", "risk_class", "status", "baseline", "valid_until"]) {
       if (isBlank(draft[field])) deny("DENY_BLANK_SCALAR", `${field} must be a non-blank string`);
     }
+    // '|' is the composite-key delimiter; allowing it in ids would let two
+    // identities collide into one record and cross-authorize (Immune finding).
+    for (const field of ["work_package_id", "project_id"]) {
+      if (draft[field].includes("|")) deny("DENY_ID_CHARSET", `${field} must not contain '|'`);
+    }
     for (const field of ["scope", "non_scope", "acceptance_criteria", "allowed_paths", "prohibited_paths", "evidence_obligations"]) {
       if (draft[field].some(isBlank)) deny("DENY_BLANK_SCALAR", `${field} entries must be non-blank strings`);
     }
@@ -219,6 +224,9 @@ export class WorkPackageContractService {
     const createdAt = this.#now().toISOString();
     const contract = frozenClone(draft);
     const record = {
+      projectId: draft.project_id,
+      workPackageId: draft.work_package_id,
+      version: draft.version,
       contract,
       fingerprint: fingerprint(draft),
       state: "DRAFT",
@@ -269,6 +277,12 @@ export class WorkPackageContractService {
     }
     for (const field of ENVELOPE_REQUIRED_STRINGS) {
       if (isBlank(envelope[field])) deny("DENY_MALFORMED_ENVELOPE", `${field} must be a non-blank string`);
+    }
+    if (envelope.projectId.includes("|") || envelope.workPackageId.includes("|")) {
+      deny("DENY_MALFORMED_ENVELOPE", "projectId and workPackageId must not contain '|'");
+    }
+    if (envelope.claimedTimestamp !== undefined && isBlank(envelope.claimedTimestamp)) {
+      deny("DENY_MALFORMED_ENVELOPE", "claimedTimestamp, when present, must be a non-blank string");
     }
     if (!Number.isInteger(envelope.version) || envelope.version < 1) {
       deny("DENY_MALFORMED_ENVELOPE", "version must be a positive integer");
@@ -428,10 +442,9 @@ export class WorkPackageContractService {
 
   #versionsOf(projectId, workPackageId) {
     const versions = [];
-    for (const [key, record] of this.#records) {
-      const [project, workPackage, version] = key.split("|");
-      if (project === projectId && workPackage === workPackageId) {
-        versions.push({ version: Number(version), record });
+    for (const record of this.#records.values()) {
+      if (record.projectId === projectId && record.workPackageId === workPackageId) {
+        versions.push({ version: record.version, record });
       }
     }
     return versions.sort((left, right) => right.version - left.version);
@@ -463,18 +476,18 @@ export class WorkPackageContractService {
   // Any failure resolves to NONE — never a fallback to a lower version.
   resolveEffective(projectId, workPackageId, { baseline } = {}) {
     if (isBlank(baseline)) {
-      return { effective: null, code: "DENY_BASELINE_UNBOUND", reason: "Caller must assert the baseline it executes against" };
+      return deepFreeze({ effective: null, code: "DENY_BASELINE_UNBOUND", reason: "Caller must assert the baseline it executes against" });
     }
     const candidate = this.#versionsOf(projectId, workPackageId)
       .find((entry) => EFFECTIVE_STATES.includes(entry.record.state));
     if (!candidate) {
-      return { effective: null, code: "DENY_NO_EFFECTIVE_VERSION", reason: "No version has reached AUTHORIZED or later" };
+      return deepFreeze({ effective: null, code: "DENY_NO_EFFECTIVE_VERSION", reason: "No version has reached AUTHORIZED or later" });
     }
     if (this.#now().getTime() >= Date.parse(candidate.record.contract.valid_until)) {
-      return { effective: null, code: "DENY_EXPIRED", reason: "Effective authorization has expired" };
+      return deepFreeze({ effective: null, code: "DENY_EXPIRED", reason: "Effective authorization has expired" });
     }
     if (candidate.record.contract.baseline !== baseline) {
-      return { effective: null, code: "DENY_BASELINE_MISMATCH", reason: "Asserted baseline does not match the authorized baseline" };
+      return deepFreeze({ effective: null, code: "DENY_BASELINE_MISMATCH", reason: "Asserted baseline does not match the authorized baseline" });
     }
     return frozenClone({
       effective: structuredClone(candidate.record.contract),

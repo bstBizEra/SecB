@@ -1,0 +1,54 @@
+# P0-09 Immune Pre-Merge Review Record
+# Branch: bst/p0-09-work-package-auth-6f341f
+# Reviewed range (initial): 76a7c05..1a5767b
+# Reviewer: claude-immune (BST-SA Immune lane, advisory only)
+
+review_round_1:
+  verdict: "REQUEST_CHANGES"
+  test_result: "146 tests - 134 pass, 0 fail, 12 skipped (pre-existing BLOCKED stubs)"
+  blocking_findings:
+    - id: "IMM-P009-01"
+      location: "src/services/work-package-service.mjs #key / #versionsOf"
+      issue: >
+        Composite storage key joined project_id|work_package_id|version with
+        '|' while ids may contain '|'. Two distinct identities could collide
+        into one key: a grant scoped to (prj, 'alpha|wp1') transitioned a
+        record declaring identity ('prj|alpha', 'wp1'); getWorkPackage
+        misparsed keys via split('|') causing cross-identity read leakage,
+        NaN version sorting, wrong-deny lockout, and identity squatting.
+      severity: "blocking - authority-boundary and identity-integrity defect"
+  non_blocking_notes:
+    - "claimedTimestamp accepted with any type; recommend string-or-absent"
+    - "Evidence accumulates across REWORK cycles within a version; cycle-scoping is a hardening V-item (within adopted GOV-P009-04 minimum because SoD still forces independent re-review)"
+    - "createWorkPackage is ungated; identity squatting possible in future multi-caller exposure (fail-closed downstream today)"
+    - "ENGIN+GOV is not a conflicting pair in shared CONFLICTING_ROLES; an actor could execute and drive planning-side GOV edges for its own work package; acceptance states remain SoD-protected; flagged for engine-hardening V-items"
+    - "resolveEffective denial results were unfrozen (cosmetic)"
+  confirmed_clean:
+    - "Edge parity: every canonical WorkPackage edge gated exactly once across layers"
+    - "Fail-closed on all validation paths; no partial mutation; no version fallback"
+    - "Ledger-derived SoD holds incl. dual-role ENGIN+QA actor; replay cannot double-advance"
+    - "Idempotency: string-only keys, canonical fingerprints, op-tagged, stable replay, conflict denial"
+    - "Immutability both directions; extend-only respected (src/control/*, src/contracts/* untouched)"
+    - "No secrets, network calls, or filesystem writes in the service"
+
+remediation:
+  - finding: "IMM-P009-01"
+    fix: >
+      DENY_ID_CHARSET on '|' in work_package_id/project_id at creation;
+      DENY_MALFORMED_ENVELOPE on '|' in envelope projectId/workPackageId;
+      identity fields stored on the record and #versionsOf no longer
+      reparses storage keys; negative tests added reproducing the
+      collision inputs from the review.
+  - note_fixes: "claimedTimestamp now string-or-absent; resolveEffective denial results frozen"
+  - deferred_as_v_items: "evidence cycle-scoping; CONFLICTING_ROLES pair review (shared engine scope); create-gate for multi-caller exposure"
+
+review_round_2:
+  verdict: "PENDING"
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

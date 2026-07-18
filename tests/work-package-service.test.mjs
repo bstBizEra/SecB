@@ -279,6 +279,18 @@ test("creation refuses non-DRAFT status, blank scalars, and duplicate identity",
   denies(() => h.create(), "DENY_DUPLICATE_IDENTITY");
 });
 
+test("ids containing the composite-key delimiter are denied at both gates", () => {
+  const h = harness();
+  // Immune finding: (prj, "alpha|wp1") and ("prj|alpha", wp1) collided into
+  // one storage key, letting a grant for one identity act on the other.
+  denies(() => h.create({ work_package_id: "alpha|wp1" }), "DENY_ID_CHARSET");
+  denies(() => h.create({ project_id: "prj|alpha" }), "DENY_ID_CHARSET");
+  h.create();
+  denies(() => h.send({ workPackageId: "alpha|wp1" }), "DENY_MALFORMED_ENVELOPE");
+  denies(() => h.send({ projectId: "prj|alpha" }), "DENY_MALFORMED_ENVELOPE");
+  denies(() => h.send({ claimedTimestamp: 12345 }), "DENY_MALFORMED_ENVELOPE");
+});
+
 // --- transition hardening ---
 
 test("unknown work package, unknown state, and closed-envelope violations are denied", () => {
