@@ -43,7 +43,26 @@ remediation:
   - deferred_as_v_items: "evidence cycle-scoping; CONFLICTING_ROLES pair review (shared engine scope); create-gate for multi-caller exposure"
 
 review_round_2:
-  verdict: "PENDING"
+  verdict: "APPROVE_FOR_MERGE"
+  reviewed_range: "76a7c05..3b83775"
+  test_result: "147 tests - 135 pass, 0 fail, 12 skipped (pre-existing BLOCKED stubs)"
+  closure_verification: >
+    IMM-P009-01 empirically verified closed: collision identities denied at
+    creation (DENY_ID_CHARSET) and envelope (DENY_MALFORMED_ENVELOPE) gates;
+    read paths fail closed; #versionsOf no longer reparses storage keys, so
+    the misparse is structurally eliminated in addition to input filtering.
+    Both note fixes (claimedTimestamp typing, frozen denial results)
+    verified. All changes add denials only; no gates weakened; shared
+    engines and schemas untouched.
+  open_v_items:
+    - "Evidence cycle-scoping across REWORK cycles"
+    - "CONFLICTING_ROLES pair review (ENGIN+GOV) - shared engine scope"
+    - "Creation gate for future multi-caller exposure"
+  note: >
+    Merge remains subject to operator authority per protected-branch
+    policy; this verdict is the Immune advisory input to that decision.
+    Operator disposition: proceed instruction recorded 2026-07-18
+    (see p0-09-gov-disposition.yaml).
 
 self_certification:
   agent_id: "claude-immune"
