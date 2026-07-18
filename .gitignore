@@ -6,6 +6,7 @@ coverage/
 # Local environment and secrets
 .env
 .env.*
+*.env
 !.env.example
 
 # Runtime and editor state
