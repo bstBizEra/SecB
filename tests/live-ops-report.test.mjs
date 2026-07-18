@@ -104,8 +104,20 @@ test("tampered and corrupt ledgers yield full-stop failure reports with no conte
     assert.ok(failHtml.includes("LEDGER INTEGRITY FAILURE"));
     assert.ok(!failHtml.includes("evt_1"));
 
-    appendFileSync(h.eventLedgerPath, "not-json\n");
+    // corrupt line carrying a sensitive token: the failure report must
+    // render the typed code ONLY — V8 JSON.parse messages embed input
+    // fragments, which must never reach the distributable artifact
+    appendFileSync(h.eventLedgerPath, '{"classification":"RESTRICTED","secret":EXFILTRATE-ME}\n');
     assert.equal(h.run().code, "LEDGER_CORRUPT");
+    const corruptHtml = readReport(h.outPath);
+    assert.ok(corruptHtml.includes("LEDGER_CORRUPT"));
+    assert.ok(!corruptHtml.includes("EXFILTRATE"));
+    assert.ok(!corruptHtml.includes("RESTRICTED"));
+    // lock-sibling out-path is also refused
+    assert.throws(
+      () => h.run({ outPath: `${h.eventLedgerPath}.lock` }),
+      (error) => error.code === "DENY_OUT_PATH_COLLISION"
+    );
   } finally { h.cleanup(); }
 });
 

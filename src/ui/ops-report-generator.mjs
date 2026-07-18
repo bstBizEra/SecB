@@ -52,8 +52,11 @@ function assertOutPath(outPath, ledgerPaths) {
   const out = resolve(outPath);
   for (const ledgerPath of ledgerPaths) {
     const target = resolve(ledgerPath);
-    if (out === target || out.startsWith(target + sep)) {
-      throw new OpsReportError("DENY_OUT_PATH_COLLISION", "outPath must not be a ledger path");
+    // also protect the DurableLedger writer-lock sibling
+    for (const protectedPath of [target, `${target}.lock`]) {
+      if (out === protectedPath || out.startsWith(protectedPath + sep)) {
+        throw new OpsReportError("DENY_OUT_PATH_COLLISION", "outPath must not be a ledger or ledger-lock path");
+      }
     }
   }
 }
@@ -75,10 +78,13 @@ export function generateReport({ eventLedgerPath, evidenceLedgerPath, outPath, c
     evidence = projectEvidence(evidenceLedger.read(), classificationCeiling);
   } catch (error) {
     if (!(error instanceof LedgerError)) throw error;
-    // Full-stop failure report: typed code only, no entry contents.
+    // Full-stop failure report: typed code and a FIXED sentence only.
+    // Never render error.message — V8 JSON.parse errors embed a fragment
+    // of the offending ledger bytes, which would bypass the
+    // classification floor in a distributable artifact (Immune finding).
     const banner = `<div class="banner"><b>LEDGER INTEGRITY FAILURE</b> · generated ${esc(generatedAt)}</div>`;
-    const body = `<div class="fail"><p>Code: <code>${esc(error.code)}</code></p><p>${esc(error.message)}</p>
-<p>No ledger content is rendered past this point. Resolve the integrity question before acting on any view.</p></div>`;
+    const body = `<div class="fail"><p>Code: <code>${esc(error.code)}</code></p>
+<p>The ledger failed verification. No ledger content is rendered. Resolve the integrity question against the ledger itself before acting on any view.</p></div>`;
     writeFileSync(resolve(outPath), page("SecB Ops Report — INTEGRITY FAILURE", banner, body), "utf8");
     return Object.freeze({ ok: false, code: error.code, generatedAt, outPath: resolve(outPath) });
   }
