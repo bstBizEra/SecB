@@ -10,6 +10,10 @@ export {
 } from "./contracts/canonical-fingerprint.mjs";
 
 export {
+  findReservedDelimiter
+} from "./contracts/reserved-delimiters.mjs";
+
+export {
   AuthorityConfigurationError,
   AuthorityEngine,
   CONFLICTING_ROLES,

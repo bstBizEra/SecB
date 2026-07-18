@@ -142,6 +142,34 @@ review_delimiter_round:
     - "Skill resolver should consume the shared list (deny '|' too) at ratification - cosmetic uniformity"
     - "ee52803/eb203d0 confirmed docs-only"
 
+review_disposition_execution_cycle:
+  round_1:
+    pinned_range: "f2e1b35..f894519 (freeze honored)"
+    verdict: "REQUEST_CHANGES"
+    blocking: >
+      P0-17 failure-path content leak: V8 JSON.parse error messages embed
+      a fragment of the offending ledger bytes; rendering error.message
+      in a LEDGER_CORRUPT failure report bypassed the classification
+      floor in a distributable artifact (probe surfaced RESTRICTED-line
+      content in an INTERNAL-ceiling report).
+  round_2_final:
+    pinned_range: "f894519..3c0130f (freeze honored)"
+    consolidated_range: "f2e1b35..3c0130f"
+    verdict: "APPROVE_FOR_MERGE"
+    closure: >
+      Failure reports render typed code + fixed sentence only (message
+      rendering removed entirely - robust to future error classes);
+      three-form exfiltration probe clean; sensitive-token negative test
+      guards regression; .lock-sibling out-path protected. GOV-P011-08
+      ratification clean (fifth latent instance closed, ACK-disclosed);
+      dispositions transcribe all 15 recommendations faithfully with
+      R-gates preserved.
+  carried_notes:
+    - "Event-envelope classification schema enum - extend-only V-item"
+    - "V-011 storage plane remains skipped (display plane only, honestly labeled)"
+    - "P0-11 R1 gated on P0-09 merge; frozen pre-R1 artifacts await it"
+    - "Future SecB MCP Server code surface will need its own Immune cycle: authentication, tool authority boundaries, instruction-source boundary"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"

