@@ -245,6 +245,19 @@ test("non-string authority decision IDs fail closed", () => {
   );
 });
 
+test("blank and whitespace-only authority decision IDs fail closed", () => {
+  for (const decisionId of ["", "   ", "\t\r\n"]) {
+    const service = createService({
+      authorize: () => ({ allowed: true, decisionId, serverDerived: true })
+    });
+    service.register(candidate());
+    assert.throws(
+      () => service.submitForReview(request({ idempotencyKey: `idem_blank_decision_${decisionId.length}` })),
+      hasCode("DENY_AUTHORITY")
+    );
+  }
+});
+
 test("non-string evidence references fail closed", () => {
   const service = createService();
   service.register(candidate());
@@ -304,6 +317,69 @@ test("transition timestamps are recorded from the server clock", () => {
     idempotencyKey: "idem_server_timestamp"
   }));
   assert.equal(transition.timestamp, new Date(NOW).toISOString());
+});
+
+test("activation uses one authoritative in-window timestamp for validation and recording", () => {
+  const justBeforeExpiry = "2026-07-17T17:59:59.999+07:00";
+  const atExpiry = "2026-07-17T18:00:00.000+07:00";
+  const times = [NOW, NOW, justBeforeExpiry, atExpiry];
+  let clockReads = 0;
+  const service = createService({
+    now: () => new Date(times[clockReads++] ?? atExpiry)
+  });
+  advanceToApproved(service);
+
+  const activation = service.activate(request({ idempotencyKey: "idem_activation_single_time" }));
+
+  assert.equal(activation.timestamp, new Date(justBeforeExpiry).toISOString());
+  assert.equal(clockReads, 3);
+  assert.ok(Date.parse(activation.timestamp) < Date.parse(candidate().valid_until));
+});
+
+test("identical successful activation replay returns its prior disposition after expiry", () => {
+  let currentTime = NOW;
+  const service = createService({ now: () => new Date(currentTime) });
+  advanceToApproved(service);
+  const activationRequest = request({ idempotencyKey: "idem_activation_replay_after_expiry" });
+  const first = service.activate(activationRequest);
+
+  currentTime = "2026-07-17T18:00:00.001+07:00";
+  const replay = service.activate(activationRequest);
+
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.transitionId, first.transitionId);
+  assert.equal(replay.timestamp, first.timestamp);
+  assert.equal(replay.state, "ACTIVE");
+});
+
+test("a new activation at the exact expiry boundary fails closed", () => {
+  const atExpiry = "2026-07-17T18:00:00.000+07:00";
+  const times = [NOW, NOW, atExpiry];
+  let clockReads = 0;
+  const service = createService({
+    now: () => new Date(times[clockReads++] ?? atExpiry)
+  });
+  advanceToApproved(service);
+
+  assert.throws(
+    () => service.activate(request({ idempotencyKey: "idem_activation_at_expiry" })),
+    hasCode("DENY_CONTRACT_EXPIRED")
+  );
+  assert.equal(clockReads, 3);
+});
+
+test("a changed activation replay remains a conflict after expiry", () => {
+  let currentTime = NOW;
+  const service = createService({ now: () => new Date(currentTime) });
+  advanceToApproved(service);
+  const activationRequest = request({ idempotencyKey: "idem_activation_conflict_after_expiry" });
+  service.activate(activationRequest);
+
+  currentTime = "2026-07-17T18:00:00.001+07:00";
+  assert.throws(
+    () => service.activate({ ...activationRequest, reasonCode: "CONFLICT_AFTER_EXPIRY" }),
+    hasCode("DENY_IDEMPOTENCY_CONFLICT")
+  );
 });
 
 test("blank evidence references fail closed", () => {

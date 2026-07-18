@@ -134,8 +134,6 @@ export class ProjectContractService {
   }
 
   activate(request) {
-    const record = this.#find(request);
-    this.#assertWindow(record);
     return this.#transition(request, "ACTIVE");
   }
 
@@ -217,8 +215,8 @@ export class ProjectContractService {
     }
   }
 
-  #assertWindow(record) {
-    const now = this.#serverNow().getTime();
+  #assertWindow(record, transitionTime) {
+    const now = transitionTime.getTime();
     if (now < Date.parse(record.contract.valid_from)) {
       deny("DENY_CONTRACT_NOT_YET_VALID", "Project Contract validity window has not started");
     }
@@ -264,8 +262,7 @@ export class ProjectContractService {
     });
     if (
       !authority?.allowed ||
-      typeof authority.decisionId !== "string" ||
-      authority.decisionId.length === 0 ||
+      !isNonEmptyString(authority.decisionId) ||
       authority.serverDerived !== true
     ) {
       deny("DENY_AUTHORITY", "Server-derived effective authority was not established");
@@ -273,6 +270,9 @@ export class ProjectContractService {
     if (this.#decisionIds.has(authority.decisionId)) {
       deny("DENY_DECISION_REUSE", "A governance decision cannot authorize more than one Project Contract transition");
     }
+
+    const transitionTime = this.#serverNow();
+    if (requestedState === "ACTIVE") this.#assertWindow(record, transitionTime);
 
     const previousState = record.state;
     const previousVersion = record.transitionVersion;
@@ -289,7 +289,7 @@ export class ProjectContractService {
       authorityDecisionId: authority.decisionId,
       evidenceRefs: [...request.evidenceRefs],
       idempotencyKey: request.idempotencyKey,
-      timestamp: this.#serverNow().toISOString(),
+      timestamp: transitionTime.toISOString(),
       reasonCode: request.reasonCode,
       replayed: false
     });
