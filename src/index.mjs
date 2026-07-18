@@ -48,3 +48,8 @@ export {
   HostAgentError,
   HostRuntimeAgent
 } from "./host/host-runtime-agent.mjs";
+
+export {
+  ProjectContractService,
+  ProjectContractServiceError
+} from "./project/project-contract-service.mjs";
