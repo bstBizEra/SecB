@@ -26,6 +26,7 @@
 | P0-18 | Conformance harness | positive/negative/adversarial cases | P0-05–P0-17 |
 | P0-19 | Read-only self-pilot | complete governed execution chain | P0-18 |
 | P0-20 | Governance verdict | residual risk and activation decision | P0-19 |
+| P0-21 | SecB MCP Server | governed read-only MCP tool surface (stdio, alpha) | P0-09, P0-10, P0-11 |
 
 No P0 backlog item grants mutation authority merely by being implemented.
 
