@@ -48,3 +48,10 @@ export {
   HostAgentError,
   HostRuntimeAgent
 } from "./host/host-runtime-agent.mjs";
+
+export {
+  EFFECTIVE_STATES,
+  WORK_PACKAGE_SERVICE_ROLE_GATES,
+  WorkPackageContractService,
+  WorkPackageServiceError
+} from "./services/work-package-service.mjs";
