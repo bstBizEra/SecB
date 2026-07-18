@@ -46,6 +46,21 @@ coordination_record:
     - "V-002/V-010 integration logic (work package scope vs project contract; requires P0-08+P0-09 both effective on main)"
     - "Legacy-obligation grace boundary flip (legacyObligations: 'deny' default) as a governed config change"
 
+# --- Appended 2026-07-19: wave-002 addendum (extend-only) ---
+addendum_2026_07_19:
+  reorganization: >
+    Repo reorganized overnight; old Claude worktree removed; Codex worktree
+    fleet at C:/laragon/www/SecB-worktrees/; main WIP preserved. Operator
+    disposition REC-P009-01/02 supersedes codex/integration/p0-09 and
+    codex/integration/p0-08-005 (see p0-09-integration-reconciliation.yaml).
+  new_deliveries_on_worktree_p0_09_reconciliation:
+    - "P0-14 temporal ledgers (decision/knowledge/outcome) + reverts-suppression fix; V-012/V-017/V-018 executable"
+    - "Skill-manifest contract + fail-closed SkillResolver (SECB-SKILL-001 distribution rule); V-013 executable"
+    - "SARCHI review of SecB Auto Approval Runtime returned to Codex lane with 4 required changes"
+  branch_supersession: "worktree-p0-09-reconciliation supersedes bst/p0-followups-evidence-te in merge step 2 (contains it plus all 2026-07-19 deliveries)"
+  rehearsal: "bst/integration-rehearsal-20260719 refreshed; fully-merged tree verifies at 202 tests, 179 pass, 0 fail, 23 skipped"
+  remaining_skips: "16 CF stubs (P0-10, merge-gated), V-002/V-010 (need P0-08+P0-09 effective on main), V-004/V-011/V-014/V-015/V-016 (P0-10/P0-11)"
+
 self_certification:
   agent_id: "claude-code-sarchi"
   peer_agent_id: "codex-cli-motor"
