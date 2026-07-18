@@ -40,6 +40,14 @@ expected_response: |
   BST_SA_ACK team_id=BST-SA role=motor source=project ts=<ISO8601>
   subject=te-hardening disposition=<ACK|CONCERNS>
 
+# --- Appended 2026-07-18: delivery attempt record (extend-only) ---
+delivery_attempts:
+  - timestamp: "2026-07-18"
+    channel: "codex MCP (mcp__codex__codex, read-only sandbox)"
+    outcome: "FAILED - MCP protocol error -32600 (server output-schema bug, two attempts); no Codex session reachable this cycle"
+    fallback: "Operator to run the acknowledgement task in the Codex IDE/CLI directly; the packet above is the task description"
+ack_status: "PENDING - merge of bst/p0-followups-evidence-te remains gated"
+
 self_certification:
   agent_id: "claude-code-motor"
   peer_agent_id: "codex-cli-motor"

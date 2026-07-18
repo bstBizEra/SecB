@@ -37,6 +37,15 @@ sequencing:
   - "4. P0-09 shim retirement ONLY after parity conformance passes (GOV-P009-02); shim checks become redundant-but-harmless until then"
   - "5. Immune review; production-gate V-items closed"
 
+# --- Appended 2026-07-18: layered replay-semantics divergence (Immune note 3, extend-only) ---
+replay_semantics_divergence:
+  engine: "TE-H2 excludes the caller timestamp claim from the replay fingerprint; drifted-claim replays of an identical request SUCCEED (replayed: true) and return the original recorded claim"
+  work_package_service: "The service envelope fingerprint INCLUDES claimedTimestamp; an altered-claim replay is DENIED as an idempotency conflict (stricter, fail-closed)"
+  ruling: >
+    This divergence is INTENTIONAL and fail-closed at the outer layer.
+    Any future harmonization must tighten the engine toward the service,
+    never weaken the service to match the engine.
+
 # --- Appended 2026-07-18: operator disposition (extend-only) ---
 operator_disposition:
   disposed_at: "2026-07-18"
