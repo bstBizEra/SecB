@@ -118,6 +118,11 @@ test("decision ledger: append, temporal resolution, and reversion fail closed", 
       () => h.decisions.appendDecision(decision({ decision_id: "dec_rev_bad", decision_type: "REVERSION" }), { expectedSequence: 1, idempotencyKey: "idem_dec_3" }),
       "DENY_INCONSISTENT_REVERSION"
     );
+    // reversion authority cannot be smuggled through a non-REVERSION type
+    denies(
+      () => h.decisions.appendDecision(decision({ decision_id: "dec_smuggle", decision_type: "GOVERNANCE", reverts: "dec_p0_14_001" }), { expectedSequence: 1, idempotencyKey: "idem_dec_6" }),
+      "DENY_INCONSISTENT_REVERSION"
+    );
     denies(
       () => h.decisions.appendDecision(decision({ decision_id: "dec_extra", smuggled: true }), { expectedSequence: 1, idempotencyKey: "idem_dec_4" }),
       "DENY_CONTRACT_INVALID",

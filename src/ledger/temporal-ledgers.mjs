@@ -54,6 +54,12 @@ export class DecisionLedger extends DurableLedger {
     if (record.decision_type === "REVERSION" && !record.reverts) {
       throw new LedgerError("DENY_INCONSISTENT_REVERSION", "REVERSION decisions must name the decision they revert");
     }
+    // Only REVERSION decisions may carry reverts — otherwise any decision
+    // append could silently suppress another decision without reversion
+    // authority.
+    if (record.decision_type !== "REVERSION" && record.reverts !== undefined) {
+      throw new LedgerError("DENY_INCONSISTENT_REVERSION", "Only REVERSION decisions may carry a reverts reference");
+    }
     return this.append(
       toEntry(record, { entryId: record.decision_id, type: record.decision_type, timestamp: record.decided_at, idempotencyKey }),
       { expectedSequence }
@@ -71,7 +77,9 @@ export class DecisionLedger extends DurableLedger {
     const match = records.find((record) => record.entry.entryId === decisionId);
     if (!match) return { decision: null, code: "DENY_UNKNOWN_DECISION", reason: `Unknown decision: ${decisionId}` };
     const payload = match.entry.payload;
-    if (records.some((record) => record.entry.payload.reverts === decisionId)) {
+    // Defense in depth: only a REVERSION-typed decision suppresses another
+    // decision, mirroring the append-time constraint.
+    if (records.some((record) => record.entry.payload.decision_type === "REVERSION" && record.entry.payload.reverts === decisionId)) {
       return { decision: null, code: "DENY_REVERTED", reason: "Decision has been reverted" };
     }
     if (instant < Date.parse(payload.valid_from) || instant >= Date.parse(payload.valid_until)) {
