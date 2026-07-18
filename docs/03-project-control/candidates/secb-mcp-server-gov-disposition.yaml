@@ -24,7 +24,7 @@ decisions:
   - id: "GOV-MCP-06"
     adopted: "Invocation ledgering fail-closed: DENY_AUDIT_UNAVAILABLE (withhold results when the invocation record cannot append), dedicated ledger file, one bounded retry"
   - id: "GOV-MCP-07"
-    adopted: "New numbered stream (proposed P0-21 'SecB MCP Server' to avoid collision with P0-19/P0-20; operator to confirm the id), sequenced BEHIND the P0-09 merge and P0-10 R2; baseline on post-merge main"
+    adopted: "New numbered stream P0-21 'SecB MCP Server' (operator-confirmed 2026-07-19; P0-19/P0-20 occupied), sequenced BEHIND the P0-09 merge and P0-10 R2; baseline on post-merge main"
   - id: "GOV-MCP-08"
     adopted: "Server self-registration: the server ships and validates its own registration record (methods=catalog fingerprint, classification, evaluation, lifecycle) and refuses to serve unless it resolves APPROVED+ACTIVE"
   - id: "GOV-MCP-09"
