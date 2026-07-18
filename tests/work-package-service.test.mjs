@@ -516,6 +516,25 @@ test("project-scope binding: creation requires an effective project and approved
     () => resolverFor(effective(["C:/laragon/www/Sec"])).createWorkPackage(draft(), opts("v002_prefix")),
     (error) => error instanceof WorkPackageServiceError && error.code === "DENY_REPOSITORY_SCOPE"
   );
+  // Negative: '..' segments re-target the path and are rejected outright
+  assert.throws(
+    () => resolverFor(effective(["C:/laragon/www/SecB"])).createWorkPackage(
+      draft({ allowed_paths: ["C:/laragon/www/SecB/../SecB-evil"] }), opts("v002_dotdot")),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_REPOSITORY_SCOPE"
+  );
+  assert.throws(
+    () => resolverFor(effective(["C:/laragon/www/SecB"])).createWorkPackage(
+      draft({ allowed_paths: ["C:/laragon/www/SecB/../other/secret"] }), opts("v002_escape")),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_REPOSITORY_SCOPE"
+  );
+  // Negative: blank repository entries cannot act as wildcards
+  assert.throws(
+    () => resolverFor(effective(["C:/laragon/www/SecB", ""])).createWorkPackage(draft(), opts("v002_blankrepo")),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_PROJECT_NOT_EFFECTIVE"
+  );
+  // Positive: a trailing-slash repository declaration still contains its children
+  const trailing = resolverFor(effective(["C:/laragon/www/SecB/"]));
+  assert.equal(trailing.createWorkPackage(draft(), opts("v002_trailing")).state, "DRAFT");
   // Negative: mismatched resolver contract denies
   assert.throws(
     () => resolverFor({ ...effective(["C:/laragon/www/SecB"]), projectId: "prj_other" }).createWorkPackage(draft(), opts("v002_mismatch")),

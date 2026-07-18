@@ -284,11 +284,25 @@ export class WorkPackageContractService {
       if (resolution.projectId !== draft.project_id) {
         deny("DENY_PROJECT_NOT_EFFECTIVE", "Project resolver returned a mismatched contract");
       }
-      const repositories = resolution.contract?.repositories;
-      if (!Array.isArray(repositories) || repositories.length === 0) {
+      // Canonical path form for containment: forward-slash, case-exact,
+      // no '..' segments. Containment is LEXICAL by design (these are
+      // governance declarations, not filesystem operations) — which is
+      // only sound with '..' excluded: a '..' segment re-targets the
+      // path and falsifies any prefix guarantee.
+      const hasParentSegment = (value) => value.split(/[\\/]/).includes("..");
+      const repositories = (resolution.contract?.repositories ?? []).map((repository) => {
+        if (isBlank(repository) || hasParentSegment(repository)) {
+          deny("DENY_PROJECT_NOT_EFFECTIVE", "Effective project contract carries a malformed repository entry");
+        }
+        return repository.replace(/\/+$/, "");
+      });
+      if (repositories.length === 0 || repositories.some(isBlank)) {
         deny("DENY_PROJECT_NOT_EFFECTIVE", "Effective project contract carries no approved repositories");
       }
       for (const path of draft.allowed_paths) {
+        if (hasParentSegment(path)) {
+          deny("DENY_REPOSITORY_SCOPE", `allowed_path must not contain '..' segments: ${path}`);
+        }
         if (!repositories.some((repository) => path === repository || path.startsWith(`${repository}/`))) {
           deny("DENY_REPOSITORY_SCOPE", `allowed_path is outside every approved repository: ${path}`);
         }
