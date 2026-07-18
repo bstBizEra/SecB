@@ -143,10 +143,21 @@ export class WorkPackageContractService {
   // valid in both modes.
   #legacyObligations;
 
-  constructor({ grants = [], now = () => new Date(), legacyObligations = "allow" } = {}) {
+  // projectResolver (V-002, optional): when provided it MUST be bound to
+  // ProjectContractService.resolveEffective. Creation then requires the
+  // draft's project to resolve effective and every allowed_path to sit
+  // inside an approved repository. Absent, the service runs standalone
+  // (pre-integration mode) and creation is gated by grants alone.
+  #projectResolver;
+
+  constructor({ grants = [], now = () => new Date(), legacyObligations = "allow", projectResolver = null } = {}) {
     if (!["allow", "deny"].includes(legacyObligations)) {
       throw new WorkPackageServiceError("DENY_CONFIG", "legacyObligations must be 'allow' or 'deny'");
     }
+    if (projectResolver !== null && typeof projectResolver !== "function") {
+      throw new WorkPackageServiceError("DENY_CONFIG", "projectResolver, when provided, must be a function");
+    }
+    this.#projectResolver = projectResolver;
     this.#legacyObligations = legacyObligations;
     this.#now = now;
     // AuthorityEngine validates grant shape, windows, and SoD role
@@ -260,6 +271,28 @@ export class WorkPackageContractService {
       !grant.roles.some((role) => role === "ENGIN" || role === "GOV")
     ) {
       deny("DENY_CREATE_AUTHORITY", "Creation requires an active ENGIN or GOV grant scoped to this work package identity");
+    }
+
+    // V-002 project-scope binding: with a resolver wired, the project
+    // must be effective NOW and every allowed_path must sit inside an
+    // approved repository of the effective project contract.
+    if (this.#projectResolver) {
+      const resolution = this.#projectResolver(draft.project_id);
+      if (!resolution || resolution.allowed !== true) {
+        deny("DENY_PROJECT_NOT_EFFECTIVE", `Project is not effective: ${resolution?.code ?? "no resolution"}`);
+      }
+      if (resolution.projectId !== draft.project_id) {
+        deny("DENY_PROJECT_NOT_EFFECTIVE", "Project resolver returned a mismatched contract");
+      }
+      const repositories = resolution.contract?.repositories;
+      if (!Array.isArray(repositories) || repositories.length === 0) {
+        deny("DENY_PROJECT_NOT_EFFECTIVE", "Effective project contract carries no approved repositories");
+      }
+      for (const path of draft.allowed_paths) {
+        if (!repositories.some((repository) => path === repository || path.startsWith(`${repository}/`))) {
+          deny("DENY_REPOSITORY_SCOPE", `allowed_path is outside every approved repository: ${path}`);
+        }
+      }
     }
 
     const key = this.#key(draft.project_id, draft.work_package_id, draft.version);

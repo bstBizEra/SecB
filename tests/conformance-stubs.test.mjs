@@ -14,9 +14,10 @@ import { WorkPackageContractService, WorkPackageServiceError } from "../src/serv
 // Each stub documents what it will test and which dependency unblocks it.
 // When a dependency lands, replace the skip with the actual test.
 
-test("V-002 project scope: approved repository enforced", { skip: "BLOCKED: P0-08 Project Contract service" }, () => {
+test("V-002 project scope: approved repository enforced", { skip: "MECHANISM DELIVERED (projectResolver binding, unit-tested with the resolution shape of ProjectContractService.resolveEffective); executable conformance with the real P0-08 service unblocks on the merged tree" }, () => {
   // Positive: work package scoped to approved repository proceeds
   // Negative: work package referencing unapproved repository rejected
+  // Post-merge: wire projectResolver = (id) => projectService.resolveEffective({ projectId: id })
 });
 
 test("V-004 context: context receipt federation and retrieval", { skip: "BLOCKED: P0-10 R2 gated on P0-09 merge (see p0-10-gov-disposition.yaml)" }, () => {
