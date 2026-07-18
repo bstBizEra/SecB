@@ -7,6 +7,7 @@ import { AuthorityEngine } from "../src/control/authority-engine.mjs";
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { TransitionEngine } from "../src/control/state-machine.mjs";
 import { DecisionLedger, KnowledgeLedger, OutcomeLedger } from "../src/ledger/temporal-ledgers.mjs";
+import { SkillResolver } from "../src/registry/skill-resolver.mjs";
 import { WorkPackageContractService, WorkPackageServiceError } from "../src/services/work-package-service.mjs";
 
 // V-item conformance stubs — BLOCKED pending Codex P0-08/P0-09 and other P0 deliverables.
@@ -246,9 +247,54 @@ test("V-012 memory: memory record temporal boundary", () => {
   } finally { h.cleanup(); }
 });
 
-test("V-013 skill: skill lifecycle through SkillsHub", { skip: "BLOCKED: P0-14 + skill resolver" }, () => {
-  // Positive: published skill resolves through capability fabric
-  // Negative: unapproved skill blocked at invocation
+// V-013 unblocked 2026-07-19: P0-14 delivered and the skill resolver
+// implements the SECB-SKILL-001 distribution rule.
+test("V-013 skill: skill lifecycle through SkillsHub", () => {
+  const resolver = new SkillResolver();
+  const manifest = (overrides = {}) => ({
+    skill_id: "SKILL-V013",
+    version: "1.0.0",
+    name: "V-013 conformance skill",
+    status: "PUBLISHED",
+    owner: "stem-lane",
+    source: { repository: "C:/laragon/www/SecB", commit_sha: "a".repeat(40), licence: "internal" },
+    purpose: "conformance",
+    supported_runtimes: ["claude-code"],
+    project_scopes: ["prj_v013"],
+    max_data_classification: "INTERNAL",
+    evidence_refs: ["ev_skill_1"],
+    approval_history: [
+      { decision_id: "d_promo", decision_type: "HUMAN_PROMOTION", approved_by: "human-gov", approved_at: "2026-07-19T00:00:00Z" }
+    ],
+    revocation_conditions: ["regression"],
+    ...overrides
+  });
+
+  // Positive: a published, human-promoted skill resolves in scope
+  resolver.registerSkill(manifest());
+  const resolved = resolver.resolveSkill("SKILL-V013", "1.0.0", {
+    projectId: "prj_v013", runtime: "claude-code", dataClassification: "INTERNAL"
+  });
+  assert.equal(resolved.code, "ALLOW");
+  assert.equal(resolved.skill.skill_id, "SKILL-V013");
+
+  // Negative: unpublished lifecycle states are blocked at invocation
+  resolver.registerSkill(manifest({ skill_id: "SKILL-V013-CAND", status: "CANDIDATE", approval_history: [] }));
+  assert.equal(
+    resolver.resolveSkill("SKILL-V013-CAND", "1.0.0", { projectId: "prj_v013", runtime: "claude-code", dataClassification: "INTERNAL" }).code,
+    "DENY_NOT_PUBLISHED"
+  );
+  // Negative: publication without human promotion is refused at registration
+  assert.throws(
+    () => resolver.registerSkill(manifest({ skill_id: "SKILL-V013-ROGUE", approval_history: [] })),
+    (error) => error.name === "SkillResolverError" && error.code === "DENY_UNAPPROVED_PUBLICATION"
+  );
+  // Negative: out-of-scope project, runtime, and data class all deny
+  assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", { projectId: "prj_other", runtime: "claude-code", dataClassification: "INTERNAL" }).code, "DENY_PROJECT_SCOPE");
+  assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", { projectId: "prj_v013", runtime: "python-runner", dataClassification: "INTERNAL" }).code, "DENY_RUNTIME");
+  assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", { projectId: "prj_v013", runtime: "claude-code", dataClassification: "RESTRICTED" }).code, "DENY_DATA_CLASSIFICATION");
+  assert.equal(resolver.resolveSkill("SKILL-GHOST", "1.0.0", { projectId: "prj_v013", runtime: "claude-code", dataClassification: "INTERNAL" }).code, "DENY_UNKNOWN_SKILL");
+  assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", {}).code, "DENY_UNBOUND_CONTEXT");
 });
 
 test("V-014 MCP: credential-bounded MCP invocation", { skip: "BLOCKED: P0-10 Context federation + P0-11 A2A" }, () => {

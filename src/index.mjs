@@ -61,6 +61,11 @@ export {
 } from "./host/host-runtime-agent.mjs";
 
 export {
+  SkillResolver,
+  SkillResolverError
+} from "./registry/skill-resolver.mjs";
+
+export {
   EFFECTIVE_STATES,
   WORK_PACKAGE_SERVICE_ROLE_GATES,
   WorkPackageContractService,

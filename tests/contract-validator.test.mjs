@@ -18,7 +18,8 @@ const validFixtures = {
   evidenceEnvelope: "valid/evidence-envelope.json",
   decisionRecord: "valid/decision-record.json",
   knowledgeClaim: "valid/knowledge-claim.json",
-  outcomeReceipt: "valid/outcome-receipt.json"
+  outcomeReceipt: "valid/outcome-receipt.json",
+  skillManifest: "valid/skill-manifest.json"
 };
 
 const invalidFixtures = {
@@ -31,7 +32,8 @@ const invalidFixtures = {
   evidenceEnvelope: "invalid/evidence-bad-status.json",
   decisionRecord: "invalid/decision-record-bad-type.json",
   knowledgeClaim: "invalid/knowledge-claim-no-evidence.json",
-  outcomeReceipt: "invalid/outcome-receipt-bad-status.json"
+  outcomeReceipt: "invalid/outcome-receipt-bad-status.json",
+  skillManifest: "invalid/skill-manifest-bad-status.json"
 };
 
 test("all canonical contract kinds have valid fixtures", () => {
