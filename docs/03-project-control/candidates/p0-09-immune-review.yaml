@@ -64,6 +64,28 @@ review_round_2:
     Operator disposition: proceed instruction recorded 2026-07-18
     (see p0-09-gov-disposition.yaml).
 
+review_round_3:
+  verdict: "APPROVE_WITH_NOTES"
+  reviewed_range: "04b7105..5c2396b"
+  test_result: "150 tests - 138 pass, 0 fail, 12 skipped"
+  scope: "Delta review of V-item closures: creation gate (DENY_CREATE_AUTHORITY) and REWORK evidence cycle-scoping"
+  adversarial_probes_confirmed:
+    - "Forged actorId/cycle fields on envelope evidence are inert (field-picking overwrites); executor forging reviewer/QA evidence denied DENY_EVIDENCE_INDEPENDENCE"
+    - "Cycle increment ordering correct: REWORK-entry evidence tagged with closing cycle; replay returns stored result before mutation, no double increment"
+    - "No re-versioning DoS: grants are wp-scoped, version-2 creation succeeds under same grant"
+    - "No existence oracle: authority gate precedes duplicate-identity check; aggregated denial does not distinguish grant failure modes"
+  blocking_findings: []
+  new_v_items:
+    - id: "IMM-P009-V1"
+      statement: "BLOCKED->PLANNED loop did not open a new evidence cycle (same staleness class as the REWORK fix)"
+      status: "REMEDIATED in follow-up commit: cycle now increments on entry to REWORK or BLOCKED; negative test added"
+    - id: "IMM-P009-V2"
+      statement: "Stage/role binding looseness: obligation-tagged evidence is not bound to the producing stage/role; a non-executor actor can satisfy review-report/qa-report obligations from any stage. Compliant with adopted GOV-P009-04 minimum but weakens claim-to-source binding."
+      status: "OPEN - design V-item: bind non-self obligations to producing role/stage plus evidence-after-execution ordering; requires obligation typing decision (see RISK-P009-04)"
+  carried_open_items:
+    - "CONFLICTING_ROLES pair review (ENGIN+GOV) - shared engine scope"
+    - "Creation-gate provisioning: new identities require construction-time grants; revisit if grants become dynamic"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"

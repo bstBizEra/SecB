@@ -37,6 +37,7 @@ function grants() {
       allowedTransitions: [
         "WorkPackage:DRAFT->PLANNED",
         "WorkPackage:REWORK->PLANNED",
+        "WorkPackage:BLOCKED->PLANNED",
         "WorkPackage:AUTHORIZED->READY",
         "WorkPackage:READY->RUNNING",
         "WorkPackage:RUNNING->SELF_VERIFIED"
@@ -60,7 +61,7 @@ function grants() {
       decisionId: "decision_qa",
       actorId: QA_ACTOR,
       roles: ["QA"],
-      allowedTransitions: ["WorkPackage:REVIEW->QA"]
+      allowedTransitions: ["WorkPackage:REVIEW->QA", "WorkPackage:QA->BLOCKED"]
     },
     {
       ...window,
@@ -312,6 +313,25 @@ test("REWORK opens a new evidence cycle: stale obligations no longer satisfy GOV
   h.send({ requestedState: "REVIEW", actorId: REV, authorityRef: "grant_rev" });
   h.send({ requestedState: "QA", actorId: QA_ACTOR, authorityRef: "grant_qa" });
   // all obligations were evidenced in cycle 0; none re-evidenced in cycle 1
+  denies(
+    () => h.send({ requestedState: "GOV_DECISION", actorId: GOV, authorityRef: "grant_gov" }),
+    "DENY_EVIDENCE_INSUFFICIENT"
+  );
+});
+
+test("a BLOCKED re-planning loop also opens a new evidence cycle", () => {
+  const h = harness();
+  h.create();
+  advanceTo(h, "QA");
+  h.send({ requestedState: "BLOCKED", actorId: QA_ACTOR, authorityRef: "grant_qa" });
+  h.send({ requestedState: "PLANNED", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "REVIEWED", actorId: REV, authorityRef: "grant_rev" });
+  h.send({ requestedState: "AUTHORIZED", actorId: GOV, authorityRef: "grant_gov" });
+  h.send({ requestedState: "READY", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "RUNNING", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "SELF_VERIFIED", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "REVIEW", actorId: REV, authorityRef: "grant_rev" });
+  h.send({ requestedState: "QA", actorId: QA_ACTOR, authorityRef: "grant_qa" });
   denies(
     () => h.send({ requestedState: "GOV_DECISION", actorId: GOV, authorityRef: "grant_gov" }),
     "DENY_EVIDENCE_INSUFFICIENT"

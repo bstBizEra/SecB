@@ -408,9 +408,10 @@ export class WorkPackageContractService {
         timestamp: engineResult.timestamp
       }));
     }
-    // Immune V-item: entering REWORK opens a new evidence cycle so
-    // pre-rework review/QA evidence cannot satisfy obligations again.
-    if (envelope.requestedState === "REWORK") record.cycle += 1;
+    // Immune V-item: any backward re-entry toward PLANNED (REWORK or
+    // BLOCKED) opens a new evidence cycle so pre-loop review/QA evidence
+    // cannot satisfy obligations again after re-execution.
+    if (["REWORK", "BLOCKED"].includes(envelope.requestedState)) record.cycle += 1;
     record.ledger.push(deepFreeze({
       seq: record.ledger.length + 1,
       type: "TRANSITION",
