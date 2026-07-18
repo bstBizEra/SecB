@@ -118,6 +118,7 @@
     "docs/03-project-control/candidates/secb-auto-approval-sarchi-review.yaml",
     "docs/03-project-control/candidates/p0-09-integration-reconciliation.yaml",
     "docs/03-project-control/candidates/p0-14-gov-disposition.yaml",
+    "docs/03-project-control/candidates/p0-14-immune-review.yaml",
     "contracts/decision-record.schema.json",
     "contracts/knowledge-claim.schema.json",
     "contracts/outcome-receipt.schema.json",

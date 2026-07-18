@@ -74,10 +74,11 @@ function outcome(overrides = {}) {
 }
 
 const EVIDENCE_STORE = {
-  ev_verified_001: { verification_status: "VERIFIED" },
-  ev_accepted_001: { verification_status: "ACCEPTED" },
-  ev_captured_001: { verification_status: "CAPTURED" },
-  ev_rejected_001: { verification_status: "REJECTED" }
+  ev_verified_001: { evidence_id: "ev_verified_001", verification_status: "VERIFIED" },
+  ev_accepted_001: { evidence_id: "ev_accepted_001", verification_status: "ACCEPTED" },
+  ev_captured_001: { evidence_id: "ev_captured_001", verification_status: "CAPTURED" },
+  ev_rejected_001: { evidence_id: "ev_rejected_001", verification_status: "REJECTED" },
+  ev_miswired_001: { evidence_id: "ev_other_999", verification_status: "VERIFIED" }
 };
 
 function harness() {
@@ -123,6 +124,11 @@ test("decision ledger: append, temporal resolution, and reversion fail closed", 
       () => h.decisions.appendDecision(decision({ decision_id: "dec_smuggle", decision_type: "GOVERNANCE", reverts: "dec_p0_14_001" }), { expectedSequence: 1, idempotencyKey: "idem_dec_6" }),
       "DENY_INCONSISTENT_REVERSION"
     );
+    // no pre-emptive reversion of a decision that does not exist yet
+    denies(
+      () => h.decisions.appendDecision(decision({ decision_id: "dec_preempt", decision_type: "REVERSION", outcome: "REVERT", reverts: "dec_future" }), { expectedSequence: 1, idempotencyKey: "idem_dec_7" }),
+      "DENY_UNKNOWN_DECISION"
+    );
     denies(
       () => h.decisions.appendDecision(decision({ decision_id: "dec_extra", smuggled: true }), { expectedSequence: 1, idempotencyKey: "idem_dec_4" }),
       "DENY_CONTRACT_INVALID",
@@ -165,6 +171,11 @@ test("knowledge ledger: claims require a verified evidence chain", () => {
       () => h.knowledge.appendClaim(claim({ claim_id: "kc_bad_4", truth_status: "definitely" }), { expectedSequence: 2, idempotencyKey: "idem_kc_6" }),
       "DENY_CONTRACT_INVALID",
       ContractValidationError
+    );
+    // a miswired lookup returning the wrong envelope fails loudly
+    denies(
+      () => h.knowledge.appendClaim(claim({ claim_id: "kc_bad_5", evidence_refs: ["ev_miswired_001"] }), { expectedSequence: 2, idempotencyKey: "idem_kc_7" }),
+      "DENY_EVIDENCE_CHAIN"
     );
   } finally {
     h.cleanup();

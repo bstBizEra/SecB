@@ -1,0 +1,53 @@
+# P0-14 Immune Review Record
+# Branch: worktree-p0-09-reconciliation
+# Reviewer: claude-immune (BST-SA Immune lane, advisory only)
+
+review_round_1:
+  instructed_range: "5cbcce0..7d1c8f6"
+  also_verified: "a61861c (on-branch fix landed mid-review)"
+  verdict: "REQUEST_CHANGES at 7d1c8f6; APPROVE_WITH_NOTES at a61861c"
+  test_result: "180 tests - 156 pass, 0 fail, 24 skipped at a61861c; validator exit 0"
+  blocking_findings:
+    - id: "IMM-P014-01"
+      title: "Reverts-suppression gap (covert reversion)"
+      detail: >
+        At 7d1c8f6 a non-REVERSION decision carrying reverts appended
+        successfully and suppressed its target (probe-confirmed),
+        evading policy/audit watching for REVERSION-typed decisions.
+      status: "CLOSED at a61861c (motor pre-empted during review; reviewer verified: append-time denial, type-bound resolver, regression test)"
+  probes_confirmed:
+    - "Lookup trust boundary adequate: constructor-injected, appending caller cannot influence, refs re-resolved server-side"
+    - "No DurableLedger bypass: all appends funnel through lock/chain/OCC/idempotency guards"
+    - "Validator schema-set change is strictly stricter (exact 10-set equality + identity fields)"
+    - "Invalid fixtures exercise schema denial, not lookup denial"
+  notes_remediated_in_followup_commit:
+    - "IMM-P014-N1: evidence lookup identity binding (evidence_id must equal the requested ref) - DENY_EVIDENCE_CHAIN on mismatch"
+    - "IMM-P014-N2: decision lookup identity binding in OutcomeLedger"
+    - "IMM-P014-N3: no pre-emptive reversion - REVERSION target must already exist (DENY_UNKNOWN_DECISION)"
+    - "IMM-P014-N4: documented consumer obligation (caller-supplied resolution instants; enforcing consumers must supply server time) and reversion-of-reversion non-reinstatement semantics"
+  notes_open:
+    - "Server receipt time alongside caller-claimed timestamps (chain sequence is authoritative ordering today) - V-item"
+
+process_integrity:
+  finding: >
+    The review target moved twice during the round (fix commit a61861c
+    and skill-resolver commit d343046 landed on-branch mid-review, with
+    lane WIP present in the same worktree). Reviewer verdicts are pinned
+    to commit hashes, not the worktree; nothing malicious observed, but
+    moving targets undermine review integrity.
+  corrective_rule_adopted: >
+    Motor lane rule, effective immediately: once a review is issued, its
+    target branch is FROZEN until the verdict returns. Fixes discovered
+    mid-review are staged locally and either (a) submitted as a re-issued
+    pinned scope, or (b) committed only after the verdict. Reviews are
+    issued with an explicit pinned tip hash. Recorded also as a memory
+    rule for future sessions.
+  uncovered_commits: "d343046 (skill resolver) + subsequent - pinned review round 2 issued for them"
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

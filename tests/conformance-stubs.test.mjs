@@ -218,7 +218,7 @@ const temporalHarness = () => {
   const decisions = new DecisionLedger({ filePath: join(dir, "d.ndjson") });
   const knowledge = new KnowledgeLedger({
     filePath: join(dir, "k.ndjson"),
-    evidenceLookup: (ref) => (ref === "ev_ok" ? { verification_status: "ACCEPTED" } : ref === "ev_raw" ? { verification_status: "CAPTURED" } : null)
+    evidenceLookup: (ref) => (ref === "ev_ok" ? { evidence_id: "ev_ok", verification_status: "ACCEPTED" } : ref === "ev_raw" ? { evidence_id: "ev_raw", verification_status: "CAPTURED" } : null)
   });
   const outcomes = new OutcomeLedger({
     filePath: join(dir, "o.ndjson"),
