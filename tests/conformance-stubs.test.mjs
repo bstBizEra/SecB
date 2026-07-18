@@ -11,9 +11,17 @@ test("V-002 project scope: approved repository enforced", { skip: "BLOCKED: P0-0
   // Negative: work package referencing unapproved repository rejected
 });
 
-test("V-004 context: context receipt federation and retrieval", { skip: "BLOCKED: P0-10 Context federation" }, () => {
-  // Positive: context receipt retrieved within compaction window
-  // Negative: expired or missing context receipt fails closed
+test("V-004 context: context receipt federation and retrieval", { skip: "BLOCKED: P0-10 R2 gated on P0-09 merge (see p0-10-gov-disposition.yaml)" }, () => {
+  // Executable plan (frozen per GOV-P010-01..07 disposition):
+  // Positive: drive a work package to AUTHORIZED via WorkPackageContractService
+  //   (V-009 pattern), issueReceipt bound to (project, wp version, baseline,
+  //   session), consumeReceipt within validity returns the sealed document;
+  //   after compactReceipt, the chain head consumes and the SUPERSEDED parent
+  //   denies with a chain-head pointer.
+  // Negative: consume after valid_until passes (advance injected now());
+  //   consume a never-issued receipt_id; consume with wrong session_id;
+  //   consume after a newer wp version reaches AUTHORIZED (supersession);
+  //   tampered document fails hash recompute — all typed NONE, fail closed.
 });
 
 test("V-005 SoD: role assignment independence validated", { skip: "BLOCKED: P0-06 Role and SoD engine" }, () => {

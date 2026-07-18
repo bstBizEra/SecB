@@ -106,6 +106,7 @@
     "docs/03-project-control/candidates/p0-09-gov-disposition.yaml",
     "docs/03-project-control/candidates/p0-09-immune-review.yaml",
     "docs/03-project-control/candidates/p0-10-planning-001.cortex-advisory.yaml",
+    "docs/03-project-control/candidates/p0-10-gov-disposition.yaml",
     "src/services/work-package-service.mjs",
     "tests/work-package-service.test.mjs",
     "tests/host-runtime-agent.test.mjs",
