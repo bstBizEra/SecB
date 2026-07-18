@@ -1,0 +1,53 @@
+# P0-11 Plan Disposition Record
+# Disposes: docs/03-project-control/candidates/p0-11-planning-001.cortex-advisory.yaml
+# Authority: explicit operator wording "adopt all P0-11 and P0-17 recommendations"
+#   received 2026-07-19 (satisfies the recorded explicit-wording guard).
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+disposition_record:
+  work_package: "wp_secb_p0_11_planning_001"
+  disposed_at: "2026-07-19"
+  disposed_by: "human-operator"
+  disposition: "ADOPT_ALL_RECOMMENDATIONS"
+
+decisions:
+  - id: "GOV-P011-01"
+    adopted: "Option C - dedicated HandoffService over injected resolveEffective + getDecisionLedger + nullable receiptResolver; live re-resolution at offer and acceptance; either denial denies"
+  - id: "GOV-P011-02"
+    adopted: "AUTHORITY NEVER TRANSFERS - target capability = own-grant INTERSECT effective-contract INTERSECT ceiling; the envelope is never a credential"
+  - id: "GOV-P011-03"
+    adopted: "Six-dimension non-escalation comparator as specified; glob prohibition and incomparable-denies ratified"
+  - id: "GOV-P011-04"
+    adopted: "Ledger-side enforcement for R1/R2 with the JSON schema canonical over the template; schema v2 + template reconciliation one extend-only V-item"
+  - id: "GOV-P011-05"
+    adopted: "Chain ceiling = intersection with parent's recorded ceiling; ACCEPTED same-WP parent; depth cap 4; revisits permitted (monotone ceilings + per-hop SoD)"
+  - id: "GOV-P011-06"
+    adopted: "Source actor or GOV revoke while OFFERED; ACCEPT terminal for the envelope; deny-on-use only, no cascade writer"
+  - id: "GOV-P011-07"
+    adopted: "Deny-if-unverifiable at R1 (context_receipt_ref present without resolver denies); mandatory at the P0-10 R2 flip"
+  - id: "GOV-P011-08"
+    adopted: >
+      Reserved-delimiter set {'|','@'} RATIFIED system-wide as a frozen
+      shared constant denied in every id field of every service from
+      P0-11 forward. Immediate effects executed on this branch:
+      constant centralized to src/contracts/reserved-delimiters.mjs;
+      work-package-service consumes it (its '@' gate landed at 33cc452);
+      skill-resolver consumes it (now also denies '|'); AuthorityEngine
+      grant-field validation (fifth latent instance) applied as
+      ACK-gated shared-engine tightening recorded in the Codex handshake
+      packet.
+
+r1_gate: >
+  Per the adopted sequence step 4, R1 implementation of HandoffService
+  remains gated on the P0-09 merge to main. NOT waived by this
+  disposition. Frozen pre-R1 artifacts: the six-dimension comparator
+  table, ceiling shape, chain rules, ledger-side metadata shape, and the
+  reserved-delimiter constant (now code, see GOV-P011-08).
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-operator"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

@@ -1,0 +1,43 @@
+# P0-17 Plan Disposition Record
+# Disposes: docs/03-project-control/candidates/p0-17-planning-001.cortex-advisory.yaml
+# Authority: explicit operator wording "adopt all P0-11 and P0-17 recommendations"
+#   received 2026-07-19 (satisfies the recorded explicit-wording guard).
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+disposition_record:
+  work_package: "wp_secb_p0_17_planning_001"
+  disposed_at: "2026-07-19"
+  disposed_by: "human-operator"
+  disposition: "ADOPT_ALL_RECOMMENDATIONS"
+
+decisions:
+  - id: "GOV-P017-01"
+    adopted: "Option A - static read-only report generator, zero network surface; B and C explicitly deferred"
+  - id: "GOV-P017-02"
+    adopted: "Classification display floor: PUBLIC<INTERNAL<CONFIDENTIAL<RESTRICTED, default ceiling INTERNAL, exact-match only, unknown -> RESTRICTED fail-closed; above-INTERNAL requires an explicit CLI argument; no config default above INTERNAL"
+  - id: "GOV-P017-03"
+    adopted: "Full-stop integrity failure report (typed code, no content past the break, nonzero exit); no partial render mode"
+  - id: "GOV-P017-04"
+    adopted: "Display-side lattice enforcement now; event-envelope schema enum tracked as an extend-only V-item"
+  - id: "GOV-P017-05"
+    adopted: "Option B NOT pre-authorized; its non-negotiable floor recorded (127.0.0.1 only, per-launch token, Host allowlist, GET-only, stateless, own adversarial packet)"
+  - id: "GOV-P017-06"
+    adopted: "Report is not evidence: never appended, sealed, or citable; the ledger is the evidence; headHash re-verification is the only trusted confirmation"
+  - id: "GOV-P017-07"
+    adopted: "Reports inherit the classification of their effective ceiling, labeled in the banner; default-INTERNAL reports stay in the working area, uncommitted"
+
+implementation_authorization: >
+  P0-17 dependencies (P0-12 event/evidence ledgers, P0-16 host runtime
+  agent) are delivered and on main; the adopted sequence has no merge
+  gate. R2 implementation (projections, generator, CLI, negative matrix,
+  P0-12 integration test, V-011 display-plane extension) is authorized
+  and proceeds tests-first on this branch, followed by pinned Immune
+  review per the freeze rule.
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-operator"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

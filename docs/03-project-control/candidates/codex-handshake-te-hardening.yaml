@@ -45,6 +45,15 @@ additional_changes:
   - file: "src/control/state-machine.mjs"
     change: "Optional SoD context fields (producerActorId, reviewerActorId, qaActorId, evidenceVerifierActorId), when present, must be non-blank strings (DENY_MALFORMED_REQUEST); absent remains valid. Behavior-tightening only."
 
+# --- Appended 2026-07-19: GOV-P011-08 shared-surface tightening (extend-only) ---
+additional_changes_gov_p011_08:
+  - file: "src/contracts/reserved-delimiters.mjs"
+    change: "NEW shared module: RESERVED_ID_DELIMITERS = ['|','@'] + findReservedDelimiter(); ratified system-wide by operator disposition (p0-11-gov-disposition.yaml)"
+  - file: "src/control/authority-engine.mjs"
+    change: "Construction-time validation: grantId/actorId/projectId/workPackageId must not contain reserved delimiters (INVALID_GRANT). Closes the fifth latent delimiter instance (SoD scope key joins these fields with '|'). Deny-only tightening on trusted operator-supplied construction data."
+  - file: "src/registry/skill-resolver.mjs"
+    change: "Consumes the shared list (now denies '|' in addition to '@') - finding-class uniformity"
+
 # --- Appended 2026-07-18: delivery attempt record (extend-only) ---
 delivery_attempts:
   - timestamp: "2026-07-18"

@@ -360,6 +360,15 @@ test("ids containing the composite-key delimiter are denied at both gates", () =
   denies(() => h.send({ workPackageId: "alpha|wp1" }), "DENY_MALFORMED_ENVELOPE");
   denies(() => h.send({ projectId: "prj|alpha" }), "DENY_MALFORMED_ENVELOPE");
   denies(() => h.send({ workPackageId: "wp@v1" }), "DENY_MALFORMED_ENVELOPE");
+  // GOV-P011-08 shared-engine tightening: reserved delimiters in grant
+  // fields are refused at AuthorityEngine construction
+  assert.throws(
+    () => new WorkPackageContractService({
+      grants: [{ ...grants()[0], grantId: "g|bad", actorId: ENGIN }],
+      now: () => new Date("2026-07-18T10:00:00Z")
+    }),
+    (error) => error.name === "AuthorityConfigurationError" && error.code === "INVALID_GRANT"
+  );
   denies(() => h.send({ claimedTimestamp: 12345 }), "DENY_MALFORMED_ENVELOPE");
 });
 

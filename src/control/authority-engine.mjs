@@ -24,6 +24,8 @@ const REQUIRED_ROLE = Object.freeze({
   "Evidence:*->ACCEPTED": "EVIDENCE_ACCEPTOR"
 });
 
+import { findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
+
 const requiredGrantFields = [
   "grantId",
   "decisionId",
@@ -76,6 +78,14 @@ export class AuthorityEngine {
       }
       if (this.#grants.has(grant.grantId)) {
         throw new AuthorityConfigurationError("DUPLICATE_GRANT_ID", `Duplicate grant: ${grant.grantId}`);
+      }
+      // GOV-P011-08: the SoD scope key joins these fields with '|'; a
+      // reserved delimiter inside them could shift or split scopes.
+      for (const field of ["grantId", "actorId", "projectId", "workPackageId"]) {
+        const hit = findReservedDelimiter(grant[field]);
+        if (hit) {
+          throw new AuthorityConfigurationError("INVALID_GRANT", `Grant ${field} must not contain '${hit}'`);
+        }
       }
       const start = Date.parse(grant.validFrom);
       const end = Date.parse(grant.validUntil);

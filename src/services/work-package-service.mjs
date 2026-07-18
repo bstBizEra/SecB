@@ -1,4 +1,5 @@
 import { canonicalFingerprint as fingerprint } from "../contracts/canonical-fingerprint.mjs";
+import { RESERVED_ID_DELIMITERS } from "../contracts/reserved-delimiters.mjs";
 import { validateContract } from "../contracts/contract-validator.mjs";
 import { AuthorityEngine, REQUIRED_ROLE } from "../control/authority-engine.mjs";
 import { STATE_MACHINES, TransitionEngine } from "../control/state-machine.mjs";
@@ -60,11 +61,9 @@ export const EFFECTIVE_STATES = Object.freeze([
 // GOV-P009-03: after expiry only these exits remain reachable.
 const POST_EXPIRY_TARGETS = Object.freeze(["REWORK", "CANCELLED", "REVOKED"]);
 
-// Reserved composite-key delimiters, denied in every id field. Exported
-// so future services extend one list instead of rediscovering the
-// finding class a fifth time (GOV-P011-08 pre-ratification home; moves
-// to a shared module when ratified system-wide).
-export const RESERVED_ID_DELIMITERS = Object.freeze(["|", "@"]);
+// GOV-P011-08 ratified: the reserved-delimiter list lives in the shared
+// module; re-exported here for backward compatibility.
+export { RESERVED_ID_DELIMITERS };
 
 // GOV-P009-07: the obligation prefix (before the first ':') binds an
 // obligation to its producing stage and role. Unprefixed obligations are

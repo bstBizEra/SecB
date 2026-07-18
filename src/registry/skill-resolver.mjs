@@ -1,4 +1,5 @@
 import { validateContract } from "../contracts/contract-validator.mjs";
+import { findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
 
 // V-013 / SECB-SKILL-001 distribution rule: agents receive only skill
 // versions authorized for their project, runtime, and data class, and a
@@ -57,10 +58,11 @@ export class SkillResolver {
 
   registerSkill(manifest) {
     validateContract("skillManifest", manifest);
-    // '@' is the composite-key delimiter (IMM-P009-01 class): two
-    // identities must never collide into one registry key.
-    if (manifest.skill_id.includes("@") || manifest.version.includes("@")) {
-      throw new SkillResolverError("DENY_ID_CHARSET", "skill_id and version must not contain '@'");
+    // GOV-P011-08: system-wide reserved delimiters denied in identity
+    // fields ('@' is this registry's own key delimiter).
+    for (const field of ["skill_id", "version"]) {
+      const hit = findReservedDelimiter(manifest[field]);
+      if (hit) throw new SkillResolverError("DENY_ID_CHARSET", `${field} must not contain '${hit}'`);
     }
     if (manifest.status === "PUBLISHED") {
       const promotions = manifest.approval_history.filter((entry) => entry.decision_type === "HUMAN_PROMOTION");
