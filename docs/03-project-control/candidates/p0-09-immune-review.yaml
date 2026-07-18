@@ -86,6 +86,31 @@ review_round_3:
     - "CONFLICTING_ROLES pair review (ENGIN+GOV) - shared engine scope"
     - "Creation-gate provisioning: new identities require construction-time grants; revisit if grants become dynamic"
 
+review_round_4_final:
+  verdict: "APPROVE_WITH_NOTES"
+  reviewed_range: "76a7c05..800d013"
+  test_result: "151 tests - 139 pass, 0 fail, 12 skipped"
+  scope: "Consolidated final verdict for the whole branch; definitive Immune advisory input for the operator merge decision"
+  v1_remediation_verified: >
+    IMM-P009-V1 empirically closed: the round-3 residual scenario now
+    denies DENY_EVIDENCE_INSUFFICIENT; append-before-increment ordering
+    holds at the BLOCKED entry point (no new-cycle seeding); properly
+    re-evidenced loops still reach ACCEPTED; change is fail-closed only.
+  cumulative_closures:
+    - "IMM-P009-01 composite-key identity collision (blocking) - charset gates + parse-free lookup, probe-verified"
+    - "claimedTimestamp typing; unfrozen denial results"
+    - "Creation gate: identity squatting closed, no existence oracle, no re-versioning DoS"
+    - "Evidence cycle-scoping for REWORK and BLOCKED loops; replay cannot desync; forged evidence fields inert"
+  open_items_non_blocking:
+    - "IMM-P009-V2: stage/role binding of obligation evidence (design V-item, needs obligation typing per RISK-P009-04)"
+    - "CONFLICTING_ROLES pair review (ENGIN+GOV) - shared engine scope"
+    - "Creation-gate provisioning if grants become dynamic"
+    - "TransitionEngine hardening V-items remain the gate before production declaration (GOV-P009-02); this approval is merge-scoped, not production"
+  note: >
+    Extend-only verified across the branch; shared engines and schemas
+    untouched; all governance changes appends. Merge execution remains
+    with the operator under protected-branch policy.
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"
