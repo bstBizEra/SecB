@@ -230,6 +230,8 @@ test("TE-H1 engine: strict scalar validation on transition envelopes", () => {
   denyTE({ smuggled: true }, "DENY_MALFORMED_REQUEST");
   denyTE({ evidenceRefs: ["ok", "  "] }, "DENY_MALFORMED_REQUEST");
   denyTE({ timestamp: 12345 }, "DENY_MALFORMED_REQUEST");
+  denyTE({ producerActorId: 5 }, "DENY_MALFORMED_REQUEST");
+  denyTE({ reviewerActorId: "  " }, "DENY_MALFORMED_REQUEST");
 });
 
 test("TE-H2 engine: server-derived timestamps; claimed timestamp excluded from replay identity", () => {

@@ -485,6 +485,27 @@ test("unknown obligation type prefix is denied at creation", () => {
   denies(() => h.create({ evidence_obligations: ["weird:thing"] }), "DENY_OBLIGATION_TYPE");
 });
 
+test("legacy deny mode enforces the deprecation boundary for unprefixed obligations", () => {
+  const strict = new WorkPackageContractService({
+    grants: grants(),
+    now: () => new Date("2026-07-18T10:00:00Z"),
+    legacyObligations: "deny"
+  });
+  assert.throws(
+    () => strict.createWorkPackage(draft(), { idempotencyKey: "idem_legacy", actorId: ENGIN, authorityRef: "grant_engin" }),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_OBLIGATION_TYPE"
+  );
+  const typed = strict.createWorkPackage(
+    draft({ evidence_obligations: ["self:unit-tests", "any:notes"] }),
+    { idempotencyKey: "idem_typed", actorId: ENGIN, authorityRef: "grant_engin" }
+  );
+  assert.equal(typed.state, "DRAFT");
+  assert.throws(
+    () => new WorkPackageContractService({ grants: grants(), legacyObligations: "sometimes" }),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_CONFIG"
+  );
+});
+
 test("stage lock: typed obligation evidence cannot be attached outside its producing stage", () => {
   const h = harness();
   h.create({ evidence_obligations: TYPED_OBLIGATIONS });

@@ -40,6 +40,11 @@ expected_response: |
   BST_SA_ACK team_id=BST-SA role=motor source=project ts=<ISO8601>
   subject=te-hardening disposition=<ACK|CONCERNS>
 
+# --- Appended 2026-07-18: additional engine tightening (IMM-FU-V2, extend-only) ---
+additional_changes:
+  - file: "src/control/state-machine.mjs"
+    change: "Optional SoD context fields (producerActorId, reviewerActorId, qaActorId, evidenceVerifierActorId), when present, must be non-blank strings (DENY_MALFORMED_REQUEST); absent remains valid. Behavior-tightening only."
+
 # --- Appended 2026-07-18: delivery attempt record (extend-only) ---
 delivery_attempts:
   - timestamp: "2026-07-18"

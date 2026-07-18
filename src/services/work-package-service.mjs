@@ -137,7 +137,17 @@ export class WorkPackageContractService {
   #records = new Map();
   #idempotency = new Map();
 
-  constructor({ grants = [], now = () => new Date() } = {}) {
+  // legacyObligations (IMM-FU-V1): "allow" honors unprefixed obligations
+  // as 'any' during the deprecation grace; "deny" enforces the boundary,
+  // rejecting unprefixed obligations at creation. Explicit "any:" stays
+  // valid in both modes.
+  #legacyObligations;
+
+  constructor({ grants = [], now = () => new Date(), legacyObligations = "allow" } = {}) {
+    if (!["allow", "deny"].includes(legacyObligations)) {
+      throw new WorkPackageServiceError("DENY_CONFIG", "legacyObligations must be 'allow' or 'deny'");
+    }
+    this.#legacyObligations = legacyObligations;
     this.#now = now;
     // AuthorityEngine validates grant shape, windows, and SoD role
     // conflicts at construction; the service keeps its own copy of the
@@ -222,6 +232,9 @@ export class WorkPackageContractService {
     for (const obligation of draft.evidence_obligations) {
       if (!(obligationType(obligation) in OBLIGATION_ATTACH_STAGES)) {
         deny("DENY_OBLIGATION_TYPE", `Unknown obligation type prefix: ${obligation}`);
+      }
+      if (this.#legacyObligations === "deny" && !obligation.includes(":")) {
+        deny("DENY_OBLIGATION_TYPE", `Unprefixed obligations are past the deprecation grace; use a typed prefix: ${obligation}`);
       }
     }
     if (draft.status !== "DRAFT") {

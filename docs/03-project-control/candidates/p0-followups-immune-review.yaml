@@ -28,6 +28,15 @@ review:
       statement: "transitionId derivation changed (timestamp excluded); pre/post-hardening ids are distinct namespaces for any future durable consumer"
       recommendation: "Record in migration notes when stores become durable"
 
+# --- Appended 2026-07-18: V-item remediation (extend-only, motor lane) ---
+v_item_remediation:
+  - id: "IMM-FU-V1"
+    status: "MECHANISM DELIVERED - service option legacyObligations: 'allow'|'deny' (default allow during grace); 'deny' rejects unprefixed obligations at creation. Flipping the default at the declared boundary is a one-line governed config change."
+  - id: "IMM-FU-V2"
+    status: "REMEDIATED - engine optional SoD context fields type-checked when present (non-blank strings); recorded in the Codex handshake packet as additional tightening"
+  - id: "IMM-FU-V3"
+    status: "OPEN - durable-store migration note; no in-memory impact"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"

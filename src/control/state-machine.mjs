@@ -133,6 +133,11 @@ export class TransitionEngine {
     if (request.timestamp !== undefined && isBlankString(request.timestamp)) {
       throw new TransitionDeniedError("DENY_MALFORMED_REQUEST", "timestamp, when present, must be a non-blank string");
     }
+    for (const field of ["producerActorId", "reviewerActorId", "qaActorId", "evidenceVerifierActorId"]) {
+      if (request[field] !== undefined && isBlankString(request[field])) {
+        throw new TransitionDeniedError("DENY_MALFORMED_REQUEST", `${field}, when present, must be a non-blank string`);
+      }
+    }
     if (!Number.isInteger(request.objectVersion) || request.objectVersion < 1) {
       throw new TransitionDeniedError("DENY_INVALID_VERSION", "objectVersion must be a positive integer");
     }
