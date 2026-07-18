@@ -1,0 +1,90 @@
+# SARCHI Review - SecB Auto Approval Runtime Candidates
+# Reviews: SECB-AUTO-APPROVAL-ALPHA-001 (parent sha256 97276a8d3ddf5d59...)
+#          SECB-AUTO-APPROVAL-RUNTIME-PLAN-001
+# Both authored by codex:/root 2026-07-18; located (UNCOMMITTED) in the main
+#   checkout at docs/03-project-control/candidates/.
+# Reviewer: Claude (BST-SA supporting SARCHI, advisory only)
+# Reviewed at: 2026-07-18
+
+review:
+  verdict: "SUPPORT_WITH_REQUIRED_CHANGES"
+  constitutional_assessment: >
+    Compliant with the BST-SA authority model: auto-approval is framed as
+    server-side execution of pre-delegated Human GOV policy, deny-by-default,
+    with an empty initial allowlist, single-use decisions, two-phase
+    enforcement, and a hard prohibition on self-modification. This is not
+    agent self-approval and does not erode operator authority, PROVIDED the
+    delegation chain (signed policy bundles) is real - see finding 2.
+
+  strengths:
+    - "Three-outcome precedence (DENY > REQUIRE_HUMAN_GOV > AUTO_APPROVED) with deny-precedence explicitly stated"
+    - "Two-phase decision/consumption with consume-time revalidation covers TOCTOU, drift, replay, expiry, revocation"
+    - "Empty-allowlist first policy; per-action successors each need Human GOV"
+    - "Engine cannot approve its own code, policy, config, keys, or deployment"
+    - "Evidence-derived constraints correctly import P0-09 workflow lessons (immutable candidates, commit-identity over branch labels, consume-time liveness)"
+
+  blocking_findings:
+    - id: "SARCHI-AA-01"
+      title: "No-bypass property unenforceable at stated privilege level"
+      detail: >
+        PDP/PEP run locally with the same OS privileges as governed agents;
+        proof obligation 7 holds only for cooperative flows. The actual
+        boundary is OS-level (locked worktrees, filesystem permissions,
+        sandboxing). The architecture must state this limitation and define
+        the OS-level controls it depends on, or SEC will review a property
+        the system cannot deliver.
+    - id: "SARCHI-AA-02"
+      title: "Signing lacks any trust infrastructure"
+      detail: >
+        Policy signatures, signers, signing roots, and revocation are load-
+        bearing but undefined: no key management model, storage, rotation,
+        or trust-root spec exists in SecB. 'Signature invalid -> deny' is
+        unevaluable until 'valid signature' is defined. Cross-reference or
+        declare dependency on the docs/08-security credential-broker drafts.
+    - id: "SARCHI-AA-03"
+      title: "Positive-gate facts without sources of truth"
+      detail: >
+        session_effective (no session service; parallels RISK-P010-06),
+        RiskVerdict (no risk service), resource_and_cost_budgets_available
+        (no budget state), and independent evidence acceptance (only Event/
+        Evidence ledgers exist; no acceptance workflow) have no resolver.
+        Map every conjunction fact to an existing or planned component;
+        AA-P0-01..07 currently build none of these four.
+    - id: "SARCHI-AA-04"
+      title: "Composition with delivered services unnamed"
+      detail: >
+        work_package_effective must be defined as injected
+        WorkPackageContractService.resolveEffective ALLOW (GOV-P010-01
+        option-C pattern); hashing must use src/contracts/
+        canonical-fingerprint.mjs; the decision ledger should extend
+        DurableLedger. Absent these bindings the plan seeds a third
+        divergent copy of effectiveness/fingerprint/ledger logic.
+
+  non_blocking_notes:
+    - "AA-003 inconsistency: constitutional boundary prohibits protected-branch merges outright; proof matrix must say hard deny, not 'REQUIRE_HUMAN_GOV or hard deny'"
+    - "REV-P009-02 citation is not resolvable in this repository - claim-to-source binding gap; attach or reference the evidence records"
+    - "Clock authority absent from threat model: local clock manipulation vs expiry/freshness windows; consider ledger-ordering plus monotonic checks"
+    - "Policy lifecycle state machine duplicates shared-engine patterns; evaluate reuse of TransitionEngine + a policy machine entry instead of a parallel implementation"
+    - "Both candidate documents are uncommitted working-tree files; candidates must be committed/content-addressed before any review verdict can bind to them (the evidence plan itself mandates this)"
+    - "Post-execution write-set containment: OutcomeReceipt records changed paths; make 'changed paths within declared write set, else quarantine' an explicit rule"
+
+  sequencing_recommendation: >
+    New capability stream competing with P0-10..P0-20. Recommend entering
+    the roadmap behind the current three-branch merge queue and P0-10 R2
+    unless Human GOV explicitly reprioritizes. M-gate work should baseline
+    on post-merge main, not on 76a7c05.
+
+  required_human_gov_decisions_confirmed: >
+    The plan's own six Human GOV decisions stand; add: (7) prioritization
+    vs P0-10..P0-20, and (8) acceptance of the SARCHI-AA-01 privilege-level
+    limitation statement once added.
+
+  disposition: "RETURN_TO_CODEX_LANE_FOR_REVISION_THEN_ARCHI_SEC_GATE"
+
+self_certification:
+  agent_id: "claude-code-sarchi"
+  peer_agent_id: "codex-root-sarchi"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

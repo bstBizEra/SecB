@@ -1,0 +1,46 @@
+# Immune Review Record - Follow-up Branch (GOV-P009-07 + TE-H1..H4)
+# Branch: bst/p0-followups-evidence-te
+# Reviewed range: 4f08421..96224bc
+# Reviewer: claude-immune (BST-SA Immune lane, advisory only)
+
+review:
+  verdict: "APPROVE_WITH_NOTES"
+  test_result: "174 tests - 146 pass, 0 fail, 28 skipped"
+  blocking_findings: []
+  governance_verified:
+    - "Shared-engine modification covered by operator_disposition (extend-only append); all three conditions intact: tests green, behavior-tightening only, shim not retired"
+    - "Codex handshake packet verified claim-by-claim against the diff, including honest disclosure of both behavior changes (transitionId derivation; drifted-claim replays now succeed)"
+  adversarial_probes_confirmed:
+    - "(a) No legacy-path laundering: exact-string obligation matching; typed and legacy obligations satisfied independently; unknown prefixes deny at creation"
+    - "(b) Role binding safe across REWORK/BLOCKED cycles: at most one REVIEW/QA entry per cycle; stale-cycle and stale-reviewer evidence denied; IMM-P009-V2 genuinely closed for typed obligations"
+    - "(c) No audit forgery via TE-H2: forged timestamp claims on replay are discarded, original claim returned; service layer remains stricter (claimedTimestamp in envelope fingerprint) - divergence is fail-closed"
+    - "(d) TE-H3 reordering has no dependent caller; error-code shift reveals only public state-machine data"
+    - "(e) No shim divergence: both layers consume the same frozen edge data and shared fingerprint module; service denial precedes engine"
+  merge_gate: "OUTSTANDING BY DESIGN - Codex BST_SA_ACK for the shared-engine change must land before this branch merges (operator disposition condition); Immune approval confirms, does not waive, that gate"
+  new_v_items:
+    - id: "IMM-FU-V1"
+      statement: "Legacy unprefixed-obligation grace ('one deprecation cycle') has no enforcement mechanism; 'any' semantics could become permanent"
+      recommendation: "Flip unprefixed obligations to DENY_OBLIGATION_TYPE at the declared boundary (tracked V-item)"
+    - id: "IMM-FU-V2"
+      statement: "Engine optional SoD context fields are accepted but not type-checked when present (trusted-orchestrator fields today)"
+      recommendation: "Tighten if the engine ever fronts untrusted callers"
+    - id: "IMM-FU-V3"
+      statement: "transitionId derivation changed (timestamp excluded); pre/post-hardening ids are distinct namespaces for any future durable consumer"
+      recommendation: "Record in migration notes when stores become durable"
+
+# --- Appended 2026-07-18: V-item remediation (extend-only, motor lane) ---
+v_item_remediation:
+  - id: "IMM-FU-V1"
+    status: "MECHANISM DELIVERED - service option legacyObligations: 'allow'|'deny' (default allow during grace); 'deny' rejects unprefixed obligations at creation. Flipping the default at the declared boundary is a one-line governed config change."
+  - id: "IMM-FU-V2"
+    status: "REMEDIATED - engine optional SoD context fields type-checked when present (non-blank strings); recorded in the Codex handshake packet as additional tightening"
+  - id: "IMM-FU-V3"
+    status: "OPEN - durable-store migration note; no in-memory impact"
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

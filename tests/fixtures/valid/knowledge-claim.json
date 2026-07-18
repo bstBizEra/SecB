@@ -1,0 +1,16 @@
+{
+  "claim_id": "kc_p0_14_fixture",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_14_001",
+  "session_id": "ses_p0_14_001",
+  "actor_id": "hippocampus-actor",
+  "statement": "Composite-key delimiters must be denied at both service gates",
+  "derivation": "Derived from verified Immune probe evidence",
+  "truth_status": "verified_true",
+  "evidence_refs": ["ev_verified_001"],
+  "claimed_at": "2026-07-19T10:00:00Z",
+  "valid_from": "2026-07-19T10:00:00Z",
+  "valid_until": "2026-10-01T00:00:00Z",
+  "retention_policy": "retain-12-months"
+}

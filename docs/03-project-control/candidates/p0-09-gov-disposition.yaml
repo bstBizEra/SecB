@@ -30,6 +30,19 @@ decisions:
   - id: "GOV-P009-06"
     adopted: "Exact-commit baseline binding; resolution denies on any mismatch"
 
+# --- Appended 2026-07-18: GOV-P009-07 disposition (extend-only) ---
+decisions_appended:
+  - id: "GOV-P009-07"
+    disposed_at: "2026-07-18"
+    disposed_by: "human-operator"
+    source: "docs/03-project-control/candidates/p0-09-v2-evidence-binding-design.yaml"
+    adopted: >
+      Obligation prefix convention (self:/review:/qa:/gov:/any:) with
+      stage-locked attachment, role-bound coverage, evidence-after-
+      execution ordering, and one-cycle legacy grace for unprefixed
+      obligations. Implementation on follow-up branch
+      bst/p0-followups-evidence-te (P0-09 merge branch untouched).
+
 implementation_notes:
   - "Canonical AuthorityEngine REQUIRED_ROLE covers only RUNNING/SELF_VERIFIED/REVIEW/QA/GOV_DECISION/ACCEPTED for WorkPackage; planning-side and exit edges are gated by a service-level edge table (data, not code paths) without modifying the shared engine"
   - "Evidence independence convention pending schema typing (RISK-P009-04): obligations prefixed 'self:' may be satisfied by executor-produced evidence; all other obligations require at least one evidence item from an actor other than the executor"

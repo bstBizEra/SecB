@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { canonicalFingerprint as fingerprint } from "../contracts/canonical-fingerprint.mjs";
 import { validateContract } from "../contracts/contract-validator.mjs";
 import { AuthorityEngine, REQUIRED_ROLE } from "../control/authority-engine.mjs";
 import { STATE_MACHINES, TransitionEngine } from "../control/state-machine.mjs";
@@ -60,6 +60,23 @@ export const EFFECTIVE_STATES = Object.freeze([
 // GOV-P009-03: after expiry only these exits remain reachable.
 const POST_EXPIRY_TARGETS = Object.freeze(["REWORK", "CANCELLED", "REVOKED"]);
 
+// GOV-P009-07: the obligation prefix (before the first ':') binds an
+// obligation to its producing stage and role. Unprefixed obligations are
+// legacy and behave as 'any' for one deprecation cycle. A null stage
+// list means attachable at any stage.
+const OBLIGATION_ATTACH_STAGES = Object.freeze({
+  self: Object.freeze(["RUNNING", "SELF_VERIFIED"]),
+  review: Object.freeze(["REVIEW"]),
+  qa: Object.freeze(["QA"]),
+  gov: Object.freeze(["GOV_DECISION"]),
+  any: null
+});
+
+function obligationType(obligation) {
+  const separator = obligation.indexOf(":");
+  return separator === -1 ? "any" : obligation.slice(0, separator);
+}
+
 const ENVELOPE_KEYS = Object.freeze([
   "projectId",
   "workPackageId",
@@ -92,18 +109,6 @@ export class WorkPackageServiceError extends Error {
   }
 }
 
-function canonicalize(value) {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
-  }
-  return value;
-}
-
-function fingerprint(value) {
-  return createHash("sha256").update(JSON.stringify(canonicalize(value))).digest("hex");
-}
-
 function deepFreeze(value) {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);
@@ -132,14 +137,24 @@ export class WorkPackageContractService {
   #records = new Map();
   #idempotency = new Map();
 
-  constructor({ grants = [], now = () => new Date() } = {}) {
+  // legacyObligations (IMM-FU-V1): "allow" honors unprefixed obligations
+  // as 'any' during the deprecation grace; "deny" enforces the boundary,
+  // rejecting unprefixed obligations at creation. Explicit "any:" stays
+  // valid in both modes.
+  #legacyObligations;
+
+  constructor({ grants = [], now = () => new Date(), legacyObligations = "allow" } = {}) {
+    if (!["allow", "deny"].includes(legacyObligations)) {
+      throw new WorkPackageServiceError("DENY_CONFIG", "legacyObligations must be 'allow' or 'deny'");
+    }
+    this.#legacyObligations = legacyObligations;
     this.#now = now;
     // AuthorityEngine validates grant shape, windows, and SoD role
     // conflicts at construction; the service keeps its own copy of the
     // same grants to gate edges the canonical REQUIRED_ROLE map omits.
     this.#authority = new AuthorityEngine({ grants, now });
     for (const grant of grants) this.#grants.set(grant.grantId, structuredClone(grant));
-    this.#engine = new TransitionEngine({ authorize: (context) => this.#resolveAuthority(context) });
+    this.#engine = new TransitionEngine({ authorize: (context) => this.#resolveAuthority(context), now });
   }
 
   #resolveAuthority(context) {
@@ -213,6 +228,14 @@ export class WorkPackageContractService {
     }
     for (const field of ["scope", "non_scope", "acceptance_criteria", "allowed_paths", "prohibited_paths", "evidence_obligations"]) {
       if (draft[field].some(isBlank)) deny("DENY_BLANK_SCALAR", `${field} entries must be non-blank strings`);
+    }
+    for (const obligation of draft.evidence_obligations) {
+      if (!(obligationType(obligation) in OBLIGATION_ATTACH_STAGES)) {
+        deny("DENY_OBLIGATION_TYPE", `Unknown obligation type prefix: ${obligation}`);
+      }
+      if (this.#legacyObligations === "deny" && !obligation.includes(":")) {
+        deny("DENY_OBLIGATION_TYPE", `Unprefixed obligations are past the deprecation grace; use a typed prefix: ${obligation}`);
+      }
     }
     if (draft.status !== "DRAFT") {
       deny("DENY_NOT_DRAFT", "Work packages are created in DRAFT state only");
@@ -339,8 +362,15 @@ export class WorkPackageContractService {
     }
 
     for (const item of envelope.evidence) {
-      if (item.obligation !== undefined && !record.contract.evidence_obligations.includes(item.obligation)) {
+      if (item.obligation === undefined) continue;
+      if (!record.contract.evidence_obligations.includes(item.obligation)) {
         deny("DENY_UNKNOWN_OBLIGATION", `Obligation is not declared on the contract: ${item.obligation}`);
+      }
+      // GOV-P009-07 stage lock: typed obligation evidence may only be
+      // attached while entering its producing stage.
+      const stages = OBLIGATION_ATTACH_STAGES[obligationType(item.obligation)];
+      if (stages && !stages.includes(envelope.requestedState)) {
+        deny("DENY_OBLIGATION_STAGE", `Evidence for ${item.obligation} may only be attached when entering ${stages.join(" or ")}`);
       }
     }
 
@@ -452,22 +482,31 @@ export class WorkPackageContractService {
     return frozenClone(result);
   }
 
-  // GOV-P009-04 + acceptance independence: every declared obligation needs
-  // covering evidence from the CURRENT rework cycle, and unless the
-  // obligation is prefixed "self:" at least one covering item must come
-  // from outside the executor set.
+  // GOV-P009-04 + GOV-P009-07 + acceptance independence: every declared
+  // obligation needs covering evidence from the CURRENT rework cycle,
+  // produced by the role its type prefix binds it to; unless typed
+  // "self:" at least one covering item must come from outside the
+  // executor set.
   #assertObligationsSatisfied(record, envelope) {
     const items = [
       ...record.evidence.filter((item) => item.cycle === record.cycle),
       ...envelope.evidence.map((item) => ({ ...item, obligation: item.obligation ?? null, actorId: envelope.actorId }))
     ];
+    const roleBound = (item, type) => {
+      if (type === "self") return record.executorActorIds.has(item.actorId);
+      if (type === "review") return item.actorId === record.reviewerActorId;
+      if (type === "qa") return item.actorId === record.qaActorId;
+      if (type === "gov") return item.actorId === envelope.actorId;
+      return true;
+    };
     for (const obligation of record.contract.evidence_obligations) {
-      const covering = items.filter((item) => item.obligation === obligation);
+      const type = obligationType(obligation);
+      const covering = items.filter((item) => item.obligation === obligation && roleBound(item, type));
       if (covering.length === 0) {
         deny("DENY_EVIDENCE_INSUFFICIENT", `Evidence obligation is not satisfied: ${obligation}`);
       }
       const independent = covering.some((item) => !record.executorActorIds.has(item.actorId));
-      if (!obligation.startsWith("self:") && !independent) {
+      if (type !== "self" && !independent) {
         deny("DENY_EVIDENCE_INDEPENDENCE", `Evidence obligation lacks independent evidence: ${obligation}`);
       }
     }

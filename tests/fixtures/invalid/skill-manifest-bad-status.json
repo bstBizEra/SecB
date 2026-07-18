@@ -1,0 +1,19 @@
+{
+  "skill_id": "SKILL-BAD-STATUS",
+  "version": "1.0.0",
+  "name": "Skill with unknown lifecycle state",
+  "status": "SELF_PUBLISHED",
+  "owner": "stem-lane",
+  "source": {
+    "repository": "C:/laragon/www/SecB",
+    "commit_sha": "90a9dd0f000000000000000000000000000000ff",
+    "licence": "internal"
+  },
+  "purpose": "Unknown status must fail closed",
+  "supported_runtimes": ["claude-code"],
+  "project_scopes": ["prj_secb_local"],
+  "max_data_classification": "INTERNAL",
+  "evidence_refs": [],
+  "approval_history": [],
+  "revocation_conditions": []
+}

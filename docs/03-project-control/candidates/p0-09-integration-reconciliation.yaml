@@ -1,0 +1,107 @@
+# P0-09 Integration Reconciliation Record
+# Prepared by: Claude (BST-SA SARCHI lane, advisory only)
+# Prepared at: 2026-07-19
+# Trigger: overnight repository reorganization by the operator/Codex lane
+#   (2026-07-19 ~00:21-01:04 local): Claude session worktree removed, new
+#   worktree fleet at C:/laragon/www/SecB-worktrees/, main WIP preserved to
+#   preserve/main-wip-20260719-0021, .gitignore hardened (90a9dd0), and two
+#   Codex integration branches created.
+
+observed_state:
+  main: "90a9dd0 ([GOV] extend .gitignore); none of the wave-002 branches merged"
+  codex_integration_p0_09: "357d861 = merge of bst/p0-09-work-package-auth-6f341f CUT AT 04b7105 (Immune round-2 approval) onto 76a7c05; no content changes beyond the merge; worktree locked"
+  codex_integration_p0_08: "d142322 = main + P0-08 service files + index/MANIFEST wiring (parallel to bst/p0-08-integration-candidate)"
+  preserved: "preserve/main-wip-20260719-0021 holds the former main working-tree docs (Appendix A Phase 1 addendum)"
+
+critical_gap:
+  title: "Round-2 cut excludes later Immune-verified hardening"
+  detail: >
+    The 04b7105 cut is the strictly round-2-approved code. It EXCLUDES
+    commits on the same branch that closed Immune-identified weaknesses
+    and were verified in rounds 3-4 (final consolidated verdict
+    APPROVE_WITH_NOTES at 08dcfa7):
+  excluded_commits_on_p0_09_branch:
+    - "5c2396b - creation authority gate (identity squatting closed) + REWORK evidence cycle-scoping"
+    - "800d013 - BLOCKED->PLANNED loop cycle-scoping (IMM-P009-V1)"
+    - "08dcfa7 - Immune round-4 consolidated verdict record"
+    - "2a29e9d - P0-10 plan disposition + frozen pre-R2 artifacts"
+    - "67e991b / 4f08421 - P0-10 planning packet; pre-flight, V2 design, TE spec, R2 stubs"
+  excluded_followup_branch: "bst/p0-followups-evidence-te (96224bc..f0381f1): GOV-P009-07 obligation typing/stage-lock/role-binding, TE-H1..H4 engine hardening + shared canonical-fingerprint module, IMM-FU-V1/V2 closures, V-005 conformance, wave-002 record, SARCHI auto-approval review"
+  consequence: >
+    If codex/integration/p0-09 is accepted as-is, the integrated service
+    reverts to round-2 behavior: ungated creation (identity squatting),
+    evidence reuse across REWORK/BLOCKED cycles, no obligation stage/role
+    binding, and the unhardened TransitionEngine. All were verified fixes,
+    not speculative changes.
+
+secondary_findings:
+  - "Duplicate P0-08 integrations: codex/integration/p0-08-005 and bst/p0-08-integration-candidate wire the same two files into index/MANIFEST independently; whichever merges second will conflict in those two files. The Codex variant integrates against plain main; the Claude variant additionally verified P0-08's 23 tests against the TE-hardened engines (197-test suite, 0 fail)"
+  - "The former Claude worktree removal orphaned no work: all session output was committed to the three bst/ branches before removal"
+  - "codex-p0-09-integration worktree is locked; no cross-lane write risk from this session (this record is on a separate branch)"
+
+recommended_reconciliation:
+  - "1. Treat codex/integration/p0-09 (round-2 cut) as the CONSERVATIVE base - acceptable for a first main merge if the operator prefers minimal surface"
+  - "2. Immediately follow with a second integration merging 04b7105..4f08421 (the rounds-3/4-approved remainder) so the verified hardening is not lost; alternatively merge bst/p0-09-work-package-auth-6f341f directly, which contains both"
+  - "3. Sequence bst/p0-followups-evidence-te after its Codex ACK gate (unchanged; packet: codex-handshake-te-hardening.yaml)"
+  - "4. Pick ONE P0-08 integration: prefer bst/p0-08-integration-candidate (verified against hardened engines) or re-verify codex/integration/p0-08-005 with the follow-up branch merged; do not merge both"
+  - "5. Update/supersede the wave-002 coordination record once the operator chooses the path"
+
+operator_decision_required:
+  - id: "REC-P009-01"
+    question: "Integrate the full P0-09 branch (rounds 1-4 verified) or the round-2 cut plus a follow-up hardening merge?"
+    recommendation: "Full branch - identical code content, one merge instead of two, and the review record on the branch covers all of it"
+  - id: "REC-P009-02"
+    question: "Which P0-08 integration lineage is canonical?"
+    recommendation: "bst/p0-08-integration-candidate, because its 197-test verification ran against the TE-hardened engines the repo is converging on"
+
+# --- Appended 2026-07-19: operator disposition (extend-only) ---
+operator_disposition:
+  disposed_at: "2026-07-19"
+  disposed_by: "human-operator"
+  decisions:
+    - id: "REC-P009-01"
+      adopted: "Integrate the FULL P0-09 branch (bst/p0-09-work-package-auth-6f341f @ 4f08421, Immune rounds 1-4); codex/integration/p0-09 (round-2 cut) is SUPERSEDED and must not merge to main"
+    - id: "REC-P009-02"
+      adopted: "bst/p0-08-integration-candidate is the canonical P0-08 integration lineage; codex/integration/p0-08-005 is SUPERSEDED and must not merge to main"
+  resulting_merge_sequence:
+    - "1. main <- bst/p0-09-work-package-auth-6f341f (no gate remaining)"
+    - "2. main <- worktree-p0-09-reconciliation (supersedes bst/p0-followups-evidence-te, which it contains; GATED on Codex ACK for TE hardening)"
+    - "3. main <- bst/p0-08-integration-candidate (after 2)"
+  codex_lane_notice: >
+    codex/integration/p0-09 and codex/integration/p0-08-005 are superseded
+    by this disposition; their content is fully contained in (or verified
+    inferior to) the sequence above. The locked codex-p0-09-integration
+    worktree can be released.
+
+# --- Appended 2026-07-19: rework-006 discovery (extend-only) ---
+rework_006_discovery:
+  observed: >
+    New locked Codex worktree on codex/p0/p0-08-rework-006 @ 6152897
+    ([P0-08-REWORK] Close integration REV findings) - an IMPROVED P0-08:
+    fixes window-assertion placement (evaluated inside the transition at
+    a consistent transition time), tightens authority checks, adds 76
+    lines of tests, on top of the same integration wiring.
+  implication: >
+    REC-P009-02 chose bst/p0-08-integration-candidate (which carries the
+    pre-rework 90c84a6 service) as canonical. rework-006 supersedes that
+    service content. Dry-runs: rework-006 conflicts with both the
+    reconciliation branch and the old candidate in src/index.mjs (and
+    MANIFEST) - additive-export overlap, trivially union-resolvable.
+  queued_decision:
+    - id: "REC-P009-03"
+      question: "Adopt codex/p0/p0-08-rework-006 as the canonical P0-08 content (superseding the service files in bst/p0-08-integration-candidate), with a union-merge of the index/MANIFEST wiring?"
+      recommendation: >
+        Adopt - it closes REV findings on the exact code the candidate
+        carries. Runbook step 3 becomes: merge codex/p0/p0-08-rework-006
+        with union resolution of src/index.mjs and MANIFEST.json;
+        bst/p0-08-integration-candidate is then superseded. A rehearsed,
+        conflict-resolved integration branch is prepared as
+        bst/integration-rehearsal-2 for verification.
+
+self_certification:
+  agent_id: "claude-code-sarchi"
+  peer_agent_id: "codex-cli-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

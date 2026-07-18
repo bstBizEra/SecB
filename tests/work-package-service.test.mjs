@@ -476,6 +476,101 @@ test("executor-produced evidence cannot satisfy an independent obligation", () =
   );
 });
 
+// --- GOV-P009-07: obligation typing and stage/role binding ---
+
+const TYPED_OBLIGATIONS = ["self:unit-tests", "review:report", "qa:report"];
+
+test("unknown obligation type prefix is denied at creation", () => {
+  const h = harness();
+  denies(() => h.create({ evidence_obligations: ["weird:thing"] }), "DENY_OBLIGATION_TYPE");
+});
+
+test("legacy deny mode enforces the deprecation boundary for unprefixed obligations", () => {
+  const strict = new WorkPackageContractService({
+    grants: grants(),
+    now: () => new Date("2026-07-18T10:00:00Z"),
+    legacyObligations: "deny"
+  });
+  assert.throws(
+    () => strict.createWorkPackage(draft(), { idempotencyKey: "idem_legacy", actorId: ENGIN, authorityRef: "grant_engin" }),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_OBLIGATION_TYPE"
+  );
+  const typed = strict.createWorkPackage(
+    draft({ evidence_obligations: ["self:unit-tests", "any:notes"] }),
+    { idempotencyKey: "idem_typed", actorId: ENGIN, authorityRef: "grant_engin" }
+  );
+  assert.equal(typed.state, "DRAFT");
+  assert.throws(
+    () => new WorkPackageContractService({ grants: grants(), legacyObligations: "sometimes" }),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_CONFIG"
+  );
+});
+
+test("stage lock: typed obligation evidence cannot be attached outside its producing stage", () => {
+  const h = harness();
+  h.create({ evidence_obligations: TYPED_OBLIGATIONS });
+  // reviewer pre-tagging qa evidence during planning review
+  denies(
+    () => h.send({
+      requestedState: "PLANNED", actorId: ENGIN, authorityRef: "grant_engin",
+      evidence: [{ ref: "ev_pre", obligation: "qa:report" }]
+    }),
+    "DENY_OBLIGATION_STAGE"
+  );
+  h.send({ requestedState: "PLANNED", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "REVIEWED", actorId: REV, authorityRef: "grant_rev" });
+  h.send({ requestedState: "AUTHORIZED", actorId: GOV, authorityRef: "grant_gov" });
+  h.send({ requestedState: "READY", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "RUNNING", actorId: ENGIN, authorityRef: "grant_engin" });
+  // executor smuggling review evidence during self-verification
+  denies(
+    () => h.send({
+      requestedState: "SELF_VERIFIED", actorId: ENGIN, authorityRef: "grant_engin",
+      evidence: [{ ref: "ev_smuggle", obligation: "review:report" }]
+    }),
+    "DENY_OBLIGATION_STAGE"
+  );
+  h.send({
+    requestedState: "SELF_VERIFIED", actorId: ENGIN, authorityRef: "grant_engin",
+    evidence: [{ ref: "ev_self", obligation: "self:unit-tests" }]
+  });
+  h.send({ requestedState: "REVIEW", actorId: REV, authorityRef: "grant_rev" });
+  h.send({ requestedState: "QA", actorId: QA_ACTOR, authorityRef: "grant_qa", evidence: [{ ref: "ev_qa", obligation: "qa:report" }] });
+  // GOV supplying the review artifact at decision time (the round-3 probe)
+  denies(
+    () => h.send({
+      requestedState: "GOV_DECISION", actorId: GOV, authorityRef: "grant_gov",
+      evidence: [{ ref: "ev_gov_review", obligation: "review:report" }]
+    }),
+    "DENY_OBLIGATION_STAGE"
+  );
+});
+
+test("typed obligations: role-bound evidence at each stage reaches ACCEPTED", () => {
+  const h = harness();
+  h.create({ evidence_obligations: TYPED_OBLIGATIONS });
+  h.send({ requestedState: "PLANNED", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "REVIEWED", actorId: REV, authorityRef: "grant_rev" });
+  h.send({ requestedState: "AUTHORIZED", actorId: GOV, authorityRef: "grant_gov" });
+  h.send({ requestedState: "READY", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "RUNNING", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({
+    requestedState: "SELF_VERIFIED", actorId: ENGIN, authorityRef: "grant_engin",
+    evidence: [{ ref: "ev_self", obligation: "self:unit-tests" }]
+  });
+  h.send({
+    requestedState: "REVIEW", actorId: REV, authorityRef: "grant_rev",
+    evidence: [{ ref: "ev_review", obligation: "review:report" }]
+  });
+  h.send({
+    requestedState: "QA", actorId: QA_ACTOR, authorityRef: "grant_qa",
+    evidence: [{ ref: "ev_qa", obligation: "qa:report" }]
+  });
+  h.send({ requestedState: "GOV_DECISION", actorId: GOV, authorityRef: "grant_gov" });
+  const accepted = h.send({ requestedState: "ACCEPTED", actorId: GOV, authorityRef: "grant_gov" });
+  assert.equal(accepted.state, "ACCEPTED");
+});
+
 // --- expiry ---
 
 test("after expiry only REWORK, CANCELLED, and REVOKED remain reachable", () => {

@@ -5,6 +5,11 @@ export {
 } from "./contracts/contract-validator.mjs";
 
 export {
+  canonicalFingerprint,
+  canonicalize
+} from "./contracts/canonical-fingerprint.mjs";
+
+export {
   AuthorityConfigurationError,
   AuthorityEngine,
   CONFLICTING_ROLES,
@@ -27,6 +32,12 @@ export {
   EventLedger,
   EvidenceLedger
 } from "./ledger/governed-ledgers.mjs";
+
+export {
+  DecisionLedger,
+  KnowledgeLedger,
+  OutcomeLedger
+} from "./ledger/temporal-ledgers.mjs";
 
 export {
   AUTHORITY_LEVELS,
@@ -53,6 +64,11 @@ export {
   ProjectContractService,
   ProjectContractServiceError
 } from "./project/project-contract-service.mjs";
+
+export {
+  SkillResolver,
+  SkillResolverError
+} from "./registry/skill-resolver.mjs";
 
 export {
   EFFECTIVE_STATES,
