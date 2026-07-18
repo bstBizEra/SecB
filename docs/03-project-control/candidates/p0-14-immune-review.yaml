@@ -100,6 +100,28 @@ review_round_3_final:
     - "Governed revocation/lifecycle transition API for the skill registry"
     - "Server receipt time alongside caller-claimed temporal-ledger timestamps"
 
+review_v002_rounds:
+  round_1:
+    pinned_range: "8bece18..807ae2c (freeze honored)"
+    verdict: "REQUEST_CHANGES"
+    blocking: "Lexical containment bypassable by '..' segments (SecB/../SecB-evil passed while the direct lookalike was denied) - the advertised invariant was falsifiable"
+    also_confirmed: "IMM-SKILL-V1 mitigation faithful; standalone mode unchanged; resolver-liveness classified V-item (same class as skills)"
+  round_2_final:
+    pinned_range: "807ae2c..435b2b3 (freeze honored)"
+    consolidated_range: "8bece18..435b2b3"
+    verdict: "APPROVE_FOR_MERGE"
+    closure: >
+      Both traversal probes deny; backslash and leading-'..' forms deny;
+      blank-repo wildcard closed; trailing-slash repos contain children.
+      Residual-game probes all safe: '...' and '.' are literal/no-op (no
+      ascent), drive-relative and UNC lookalikes fail closed,
+      separator/case variants fail closed per the documented canonical
+      form.
+    open_v_items_recorded:
+      - "Windows trailing-whitespace/dot segment normalization (e.g. '.. ') - documented contract obligation; cheap segment-trim strengthening deferred to keep the approved cut byte-exact; forbid trailing whitespace/dots in canonical form"
+      - "Repository entries should be absolute paths (canonical-form doc) - defensive only, trusted source"
+      - "Resolver liveness at transition time - folded into the revocation-lifecycle V-item"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"
