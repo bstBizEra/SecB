@@ -2,8 +2,10 @@ import { validateContract } from "../contracts/contract-validator.mjs";
 
 // V-013 / SECB-SKILL-001 distribution rule: agents receive only skill
 // versions authorized for their project, runtime, and data class, and a
-// skill is consumable only in PUBLISHED state backed by a recorded
-// HUMAN_PROMOTION decision. Everything else fails closed.
+// skill is consumable only in PUBLISHED state backed by a HUMAN_PROMOTION
+// decision that resolves in the governed DecisionLedger — approval
+// history in the manifest is caller-supplied data and is never trusted
+// on its own (IMM-P014-R2-01). Everything else fails closed.
 
 const DATA_CLASS_ORDER = Object.freeze(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]);
 
@@ -27,19 +29,51 @@ function isBlank(value) {
   return typeof value !== "string" || value.trim() === "";
 }
 
+function resolvedDecision(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    id: value.entry?.entryId ?? value.decision_id ?? null,
+    type: value.entry?.payload?.decision_type ?? value.decision_type ?? null
+  };
+}
+
 export class SkillResolver {
   #skills = new Map();
+  #decisionLookup;
 
-  // Registration accepts any lifecycle state (the hub tracks candidates
-  // too), but a PUBLISHED manifest must already carry its human promotion
-  // decision and at least one evidence reference — publication without
-  // them is refused rather than resolved-around later.
+  // decisionLookup is REQUIRED and must be bound to the governed
+  // DecisionLedger (or an equivalent authority source). It is the trust
+  // root for publication: without it, promotion would be self-attested.
+  constructor({ decisionLookup } = {}) {
+    if (typeof decisionLookup !== "function") {
+      throw new SkillResolverError("INVALID_RESOLVER_CONFIG", "decisionLookup function is required");
+    }
+    this.#decisionLookup = decisionLookup;
+  }
+
   registerSkill(manifest) {
     validateContract("skillManifest", manifest);
+    // '@' is the composite-key delimiter (IMM-P009-01 class): two
+    // identities must never collide into one registry key.
+    if (manifest.skill_id.includes("@") || manifest.version.includes("@")) {
+      throw new SkillResolverError("DENY_ID_CHARSET", "skill_id and version must not contain '@'");
+    }
     if (manifest.status === "PUBLISHED") {
-      const promoted = manifest.approval_history.some((entry) => entry.decision_type === "HUMAN_PROMOTION");
-      if (!promoted) {
+      const promotions = manifest.approval_history.filter((entry) => entry.decision_type === "HUMAN_PROMOTION");
+      if (promotions.length === 0) {
         throw new SkillResolverError("DENY_UNAPPROVED_PUBLICATION", "PUBLISHED skills must record a HUMAN_PROMOTION decision");
+      }
+      // Every claimed promotion must resolve in the decision ledger,
+      // identity-bound and typed as a governance decision. A fabricated
+      // approval entry is a forgery, not a formality gap.
+      for (const promotion of promotions) {
+        const decision = resolvedDecision(this.#decisionLookup(promotion.decision_id));
+        if (!decision || decision.id !== promotion.decision_id || decision.type !== "GOVERNANCE") {
+          throw new SkillResolverError(
+            "DENY_UNAPPROVED_PUBLICATION",
+            `HUMAN_PROMOTION does not resolve to a governed decision: ${promotion.decision_id}`
+          );
+        }
       }
       if (manifest.evidence_refs.length === 0) {
         throw new SkillResolverError("DENY_UNAPPROVED_PUBLICATION", "PUBLISHED skills must carry evidence references");
@@ -68,6 +102,11 @@ export class SkillResolver {
     }
     if (manifest.status !== "PUBLISHED") {
       return { skill: null, code: "DENY_NOT_PUBLISHED", reason: `Skill is ${manifest.status}, not PUBLISHED` };
+    }
+    // A recorded REVOCATION entry poisons the version even while its
+    // status field still says PUBLISHED (no in-memory transition exists).
+    if (manifest.approval_history.some((entry) => entry.decision_type === "REVOCATION")) {
+      return { skill: null, code: "DENY_REVOKED", reason: "Skill version carries a revocation record" };
     }
     if (!manifest.project_scopes.includes(projectId)) {
       return { skill: null, code: "DENY_PROJECT_SCOPE", reason: "Skill is not scoped to this project" };

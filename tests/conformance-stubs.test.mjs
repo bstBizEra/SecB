@@ -248,9 +248,24 @@ test("V-012 memory: memory record temporal boundary", () => {
 });
 
 // V-013 unblocked 2026-07-19: P0-14 delivered and the skill resolver
-// implements the SECB-SKILL-001 distribution rule.
+// implements the SECB-SKILL-001 distribution rule. Publication requires a
+// HUMAN_PROMOTION entry that RESOLVES in the governed DecisionLedger —
+// self-declared promotion entries are forgeries and are refused
+// (IMM-P014-R2-01).
 test("V-013 skill: skill lifecycle through SkillsHub", () => {
-  const resolver = new SkillResolver();
+  const dir = mkdtempSync(join(tmpdir(), "secb-v013-"));
+  const promotions = new DecisionLedger({ filePath: join(dir, "d.ndjson") });
+  promotions.appendDecision({
+    decision_id: "d_promo", version: 1,
+    project_id: "prj_v013", work_package_id: "wp_v013", session_id: "ses_v013",
+    actor_id: "human-gov", decision_type: "GOVERNANCE", outcome: "PROMOTE_SKILL",
+    rationale: "Skill promotion after independent review", authority_ref: "grant_gov",
+    evidence_refs: ["ev_skill_eval"], decided_at: "2026-07-19T00:00:00Z",
+    valid_from: "2026-07-19T00:00:00Z", valid_until: "2026-12-31T00:00:00Z"
+  }, { expectedSequence: 0, idempotencyKey: "v013_promo" });
+  const resolver = new SkillResolver({
+    decisionLookup: (ref) => promotions.read().find((r) => r.entry.entryId === ref) ?? null
+  });
   const manifest = (overrides = {}) => ({
     skill_id: "SKILL-V013",
     version: "1.0.0",
@@ -289,12 +304,40 @@ test("V-013 skill: skill lifecycle through SkillsHub", () => {
     () => resolver.registerSkill(manifest({ skill_id: "SKILL-V013-ROGUE", approval_history: [] })),
     (error) => error.name === "SkillResolverError" && error.code === "DENY_UNAPPROVED_PUBLICATION"
   );
+  // Negative: a FABRICATED promotion entry (not in the decision ledger)
+  // is a forgery, not a formality — refused at registration
+  assert.throws(
+    () => resolver.registerSkill(manifest({
+      skill_id: "SKILL-V013-FORGED",
+      approval_history: [{ decision_id: "d_forged_999", decision_type: "HUMAN_PROMOTION", approved_by: "attacker-as-human", approved_at: "2026-07-19T00:00:00Z" }]
+    })),
+    (error) => error.name === "SkillResolverError" && error.code === "DENY_UNAPPROVED_PUBLICATION"
+  );
+  // Negative: composite-key delimiter in identity fields is denied
+  assert.throws(
+    () => resolver.registerSkill(manifest({ skill_id: "a@b" })),
+    (error) => error.name === "SkillResolverError" && error.code === "DENY_ID_CHARSET"
+  );
+  // Negative: a recorded REVOCATION entry poisons resolution even while
+  // the status field still reads PUBLISHED
+  resolver.registerSkill(manifest({
+    skill_id: "SKILL-V013-REVOKED",
+    approval_history: [
+      { decision_id: "d_promo", decision_type: "HUMAN_PROMOTION", approved_by: "human-gov", approved_at: "2026-07-19T00:00:00Z" },
+      { decision_id: "d_revoke", decision_type: "REVOCATION", approved_by: "human-gov", approved_at: "2026-07-19T01:00:00Z" }
+    ]
+  }));
+  assert.equal(
+    resolver.resolveSkill("SKILL-V013-REVOKED", "1.0.0", { projectId: "prj_v013", runtime: "claude-code", dataClassification: "INTERNAL" }).code,
+    "DENY_REVOKED"
+  );
   // Negative: out-of-scope project, runtime, and data class all deny
   assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", { projectId: "prj_other", runtime: "claude-code", dataClassification: "INTERNAL" }).code, "DENY_PROJECT_SCOPE");
   assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", { projectId: "prj_v013", runtime: "python-runner", dataClassification: "INTERNAL" }).code, "DENY_RUNTIME");
   assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", { projectId: "prj_v013", runtime: "claude-code", dataClassification: "RESTRICTED" }).code, "DENY_DATA_CLASSIFICATION");
   assert.equal(resolver.resolveSkill("SKILL-GHOST", "1.0.0", { projectId: "prj_v013", runtime: "claude-code", dataClassification: "INTERNAL" }).code, "DENY_UNKNOWN_SKILL");
   assert.equal(resolver.resolveSkill("SKILL-V013", "1.0.0", {}).code, "DENY_UNBOUND_CONTEXT");
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test("V-014 MCP: credential-bounded MCP invocation", { skip: "BLOCKED: P0-10 Context federation + P0-11 A2A" }, () => {

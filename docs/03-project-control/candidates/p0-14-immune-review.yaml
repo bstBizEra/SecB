@@ -44,6 +44,41 @@ process_integrity:
     rule for future sessions.
   uncovered_commits: "d343046 (skill resolver) + subsequent - pinned review round 2 issued for them"
 
+review_round_2:
+  pinned_range: "a61861c..672ba31 (freeze honored; tip stable, worktree clean)"
+  verdict: "REQUEST_CHANGES"
+  test_result: "180 tests - 157 pass, 0 fail, 23 skipped; validator exit 0"
+  blocking_findings:
+    - id: "IMM-P014-R2-01"
+      title: "Skill publication gate was self-attested"
+      detail: >
+        A fabricated HUMAN_PROMOTION entry in caller-supplied
+        approval_history granted full distribution (probe-confirmed):
+        registration checked only that such an entry existed, with no
+        binding to any authority source. Skill promotion is a BST-SA
+        hard governance boundary and forgery yielded the terminal
+        privileged outcome with no downstream gate.
+      status: >
+        REMEDIATED in follow-up commit: SkillResolver now REQUIRES a
+        constructor-injected decisionLookup bound to the governed
+        DecisionLedger; every HUMAN_PROMOTION entry must resolve
+        identity-bound to a GOVERNANCE-typed ledger decision, else
+        DENY_UNAPPROVED_PUBLICATION; forged-approval negative test
+        added; V-013 conformance claim corrected to 'ledger-resolved
+        promotion', not 'self-declared promotion'.
+  notes_remediated_in_followup_commit:
+    - "'@' charset denial in skill_id and version (IMM-P009-01 delimiter class; DENY_ID_CHARSET)"
+    - "REVOCATION approval entries now poison resolution (DENY_REVOKED) even while status reads PUBLISHED"
+  notes_open:
+    - "Governed revocation/lifecycle transition API (or documented registry-rebuild) - V-item; in-memory hub has no kill switch beyond the REVOCATION-entry check"
+    - "Server receipt time alongside caller-claimed ledger timestamps (carried from round 1)"
+  clean_confirmations:
+    - "No latest-version fallback; exact-version resolution only"
+    - "Registered manifests immutable (frozen detached clones); duplicate version denied"
+    - "Data-class ordering correct; unknown classes denied before comparison"
+    - "Round-1 note remediation verified faithful (N1-N4)"
+    - "Review record round-1 representation confirmed accurate; freeze rule honored"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"
