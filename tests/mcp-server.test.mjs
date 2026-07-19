@@ -961,3 +961,336 @@ test("McpServer tools/call: invocation record contains required audit fields", a
   assert.equal(typeof p.duration_ms, "number");
   assert.equal(p.caller_assertion, CALLER_ID);
 });
+
+// -------------------------------------------------------------------------
+// Tool services: makeToolServices() integration
+// -------------------------------------------------------------------------
+
+import { makeToolServices } from "../src/mcp/tool-services.mjs";
+
+// Readable fake ledger: verify() passes unless tampered; read() returns
+// records built from the provided payloads array.
+function makeReadableLedger(payloads = []) {
+  const records = payloads.map((payload) => ({ entry: { payload } }));
+  let tampered = false;
+  return {
+    tamper() { tampered = true; },
+    verify() {
+      if (tampered) {
+        const err = new Error("chain integrity failure");
+        err.code = "LEDGER_INTEGRITY_FAILURE";
+        throw err;
+      }
+      return { headHash: "a".repeat(64), count: records.length };
+    },
+    read() { return records; },
+  };
+}
+
+// Minimal valid event envelope (all required fields from event-envelope.schema.json).
+const MIN_EVENT = Object.freeze({
+  event_id: "evt_test_001",
+  version: 1,
+  project_id: "proj_test",
+  work_package_id: "wp_test_001",
+  session_id: "sess_test_001",
+  actor_id: "actor_test",
+  event_type: "TEST_EVENT",
+  occurred_at: "2026-07-19T00:00:00.000Z",
+  observed_fact: { key: "value" },
+  source: "test-source",
+  idempotency_key: "ik_test_001",
+  classification: "INTERNAL",
+  content_hash: "a".repeat(64),
+});
+
+// -- secb_canonical_fingerprint --
+
+test("secb_canonical_fingerprint: same input yields same fingerprint (determinism)", async () => {
+  const svc = makeToolServices({});
+  const r1 = await svc.secb_canonical_fingerprint({ document: { b: 2, a: 1 } });
+  const r2 = await svc.secb_canonical_fingerprint({ document: { b: 2, a: 1 } });
+  assert.equal(r1.fingerprint, r2.fingerprint);
+  assert.match(r1.fingerprint, /^[a-f0-9]{64}$/);
+});
+
+test("secb_canonical_fingerprint: different inputs yield different fingerprints", async () => {
+  const svc = makeToolServices({});
+  const r1 = await svc.secb_canonical_fingerprint({ document: { a: 1 } });
+  const r2 = await svc.secb_canonical_fingerprint({ document: { a: 2 } });
+  assert.notEqual(r1.fingerprint, r2.fingerprint);
+});
+
+test("secb_canonical_fingerprint: key order is normalized (canonical sort)", async () => {
+  const svc = makeToolServices({});
+  const r1 = await svc.secb_canonical_fingerprint({ document: { a: 1, b: 2 } });
+  const r2 = await svc.secb_canonical_fingerprint({ document: { b: 2, a: 1 } });
+  assert.equal(r1.fingerprint, r2.fingerprint);
+});
+
+// -- secb_contract_validate --
+
+test("secb_contract_validate: valid event-envelope returns {valid:true, errors:[]}", async () => {
+  const svc = makeToolServices({});
+  const result = await svc.secb_contract_validate({
+    kind: "event-envelope",
+    document: { ...MIN_EVENT },
+  });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("secb_contract_validate: missing required field returns {valid:false, errors:[...]}", async () => {
+  const svc = makeToolServices({});
+  const { event_id: _omit, ...incomplete } = { ...MIN_EVENT };
+  const result = await svc.secb_contract_validate({
+    kind: "event-envelope",
+    document: incomplete,
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.length > 0);
+});
+
+test("secb_contract_validate: unknown kind returns {valid:false, unsupported-kind error}", async () => {
+  const svc = makeToolServices({});
+  const result = await svc.secb_contract_validate({
+    kind: "unknown-kind-xyz",
+    document: {},
+  });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors[0].message.includes("Unsupported kind"));
+});
+
+// -- secb_registry_resolve --
+
+test("secb_registry_resolve: APPROVED+ACTIVE agent returns APPROVED_ACTIVE with identity", async () => {
+  const registry = makeRegistry();
+  const svc = makeToolServices({ registry });
+  const result = await svc.secb_registry_resolve({ agent_instance_id: CALLER_ID });
+  assert.equal(result.status, "APPROVED_ACTIVE");
+  assert.equal(result.reason, null);
+  assert.ok(result.identity != null);
+});
+
+test("secb_registry_resolve: unregistered agent returns QUARANTINED", async () => {
+  const registry = makeRegistry();
+  const svc = makeToolServices({ registry });
+  const result = await svc.secb_registry_resolve({ agent_instance_id: "inst_does_not_exist" });
+  assert.equal(result.status, "QUARANTINED");
+  assert.ok(result.reason != null);
+});
+
+// -- secb_ledger_verify_summary --
+
+test("secb_ledger_verify_summary: valid events chain returns verified:true with hash and count", async () => {
+  const eventsLedger = makeReadableLedger([{ ...MIN_EVENT }]);
+  const svc = makeToolServices({ eventsLedger, evidenceLedger: makeReadableLedger() });
+  const result = await svc.secb_ledger_verify_summary({ ledger: "events" });
+  assert.equal(result.verified, true);
+  assert.equal(typeof result.head_hash, "string");
+  assert.equal(result.count, 1);
+});
+
+test("secb_ledger_verify_summary: valid evidence chain returns verified:true with count", async () => {
+  const evidenceLedger = makeReadableLedger([{ classification: "INTERNAL" }]);
+  const svc = makeToolServices({ eventsLedger: makeReadableLedger(), evidenceLedger });
+  const result = await svc.secb_ledger_verify_summary({ ledger: "evidence" });
+  assert.equal(result.verified, true);
+  assert.equal(result.count, 1);
+});
+
+test("secb_ledger_verify_summary: broken events chain returns verified:false, null data", async () => {
+  const eventsLedger = makeReadableLedger();
+  eventsLedger.tamper();
+  const svc = makeToolServices({ eventsLedger, evidenceLedger: makeReadableLedger() });
+  const result = await svc.secb_ledger_verify_summary({ ledger: "events" });
+  assert.equal(result.verified, false);
+  assert.equal(result.head_hash, null);
+  assert.equal(result.count, null);
+  assert.ok(typeof result.reason === "string");
+});
+
+test("secb_ledger_verify_summary: unknown ledger name throws with DENY_SERVICE_UNAVAILABLE", async () => {
+  const svc = makeToolServices({ eventsLedger: makeReadableLedger(), evidenceLedger: makeReadableLedger() });
+  await assert.rejects(
+    () => svc.secb_ledger_verify_summary({ ledger: "durable" }),
+    (e) => e.code === "DENY_SERVICE_UNAVAILABLE"
+  );
+});
+
+// -- secb_events_read --
+
+test("secb_events_read: empty ledger returns empty entries, zero withheld, count=0", async () => {
+  const svc = makeToolServices({ eventsLedger: makeReadableLedger() });
+  const result = await svc.secb_events_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.deepEqual(result.entries, []);
+  assert.equal(result.withheld_count, 0);
+  assert.equal(result.truncated, false);
+  assert.equal(result.count, 0);
+});
+
+test("secb_events_read: PUBLIC event passes through at INTERNAL ceiling", async () => {
+  const envelope = { ...MIN_EVENT, classification: "PUBLIC", event_id: "evt_pub" };
+  const svc = makeToolServices({ eventsLedger: makeReadableLedger([envelope]) });
+  const result = await svc.secb_events_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.withheld_count, 0);
+  assert.equal(result.count, 1);
+});
+
+test("secb_events_read: RESTRICTED event withheld at INTERNAL ceiling", async () => {
+  const envelope = { ...MIN_EVENT, classification: "RESTRICTED", event_id: "evt_restricted" };
+  const svc = makeToolServices({ eventsLedger: makeReadableLedger([envelope]) });
+  const result = await svc.secb_events_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.equal(result.entries.length, 0);
+  assert.equal(result.withheld_count, 1);
+  assert.equal(result.truncated, true);
+  assert.equal(result.count, 1);
+});
+
+test("secb_events_read: unknown classification treated as RESTRICTED (withheld at INTERNAL)", async () => {
+  const envelope = { ...MIN_EVENT, classification: "UNKNOWN_LEVEL", event_id: "evt_unknown" };
+  const svc = makeToolServices({ eventsLedger: makeReadableLedger([envelope]) });
+  const result = await svc.secb_events_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.equal(result.entries.length, 0);
+  assert.equal(result.withheld_count, 1);
+});
+
+test("secb_events_read: tampered chain throws DENY_LEDGER_INTEGRITY_FAILURE (full-stop, no partial)", async () => {
+  const eventsLedger = makeReadableLedger([{ ...MIN_EVENT }]);
+  eventsLedger.tamper();
+  const svc = makeToolServices({ eventsLedger });
+  await assert.rejects(
+    () => svc.secb_events_read({}, { effectiveCeiling: "INTERNAL" }),
+    (e) => e.code === "DENY_LEDGER_INTEGRITY_FAILURE"
+  );
+});
+
+// -- secb_evidence_read --
+
+test("secb_evidence_read: empty ledger returns empty entries", async () => {
+  const svc = makeToolServices({ evidenceLedger: makeReadableLedger() });
+  const result = await svc.secb_evidence_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.deepEqual(result.entries, []);
+  assert.equal(result.count, 0);
+});
+
+test("secb_evidence_read: CONFIDENTIAL evidence withheld at INTERNAL ceiling", async () => {
+  const svc = makeToolServices({
+    evidenceLedger: makeReadableLedger([{ classification: "CONFIDENTIAL" }]),
+  });
+  const result = await svc.secb_evidence_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.equal(result.entries.length, 0);
+  assert.equal(result.withheld_count, 1);
+  assert.equal(result.truncated, true);
+});
+
+test("secb_evidence_read: tampered chain throws DENY_LEDGER_INTEGRITY_FAILURE (full-stop)", async () => {
+  const evidenceLedger = makeReadableLedger([{ classification: "INTERNAL" }]);
+  evidenceLedger.tamper();
+  const svc = makeToolServices({ evidenceLedger });
+  await assert.rejects(
+    () => svc.secb_evidence_read({}, { effectiveCeiling: "INTERNAL" }),
+    (e) => e.code === "DENY_LEDGER_INTEGRITY_FAILURE"
+  );
+});
+
+// -- Ledger byte-identity: read tools must not append to events/evidence ledgers --
+
+test("ledger byte-identity: secb_events_read does not append to events or evidence ledgers", async () => {
+  let eventsAppendCount = 0;
+  let evidenceAppendCount = 0;
+  const eventsBase = makeReadableLedger([{ ...MIN_EVENT, classification: "PUBLIC" }]);
+  const evidenceBase = makeReadableLedger();
+  const eventsLedger = {
+    verify: () => eventsBase.verify(),
+    read: () => eventsBase.read(),
+    append: () => { eventsAppendCount++; },
+  };
+  const evidenceLedger = {
+    verify: () => evidenceBase.verify(),
+    read: () => evidenceBase.read(),
+    append: () => { evidenceAppendCount++; },
+  };
+  const svc = makeToolServices({ eventsLedger, evidenceLedger });
+  await svc.secb_events_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.equal(eventsAppendCount, 0, "events ledger must not be appended by secb_events_read");
+  assert.equal(evidenceAppendCount, 0, "evidence ledger must not be appended by secb_events_read");
+});
+
+test("ledger byte-identity: full alpha sweep — only invocation ledger grows", async () => {
+  let eventsAppendCount = 0;
+  let evidenceAppendCount = 0;
+  const eventsBase = makeReadableLedger([{ ...MIN_EVENT, classification: "PUBLIC" }]);
+  const evidenceBase = makeReadableLedger([{ classification: "PUBLIC", content: "test" }]);
+  const eventsLedger = {
+    verify: () => eventsBase.verify(),
+    read: () => eventsBase.read(),
+    append: () => { eventsAppendCount++; },
+  };
+  const evidenceLedger = {
+    verify: () => evidenceBase.verify(),
+    read: () => evidenceBase.read(),
+    append: () => { evidenceAppendCount++; },
+  };
+  const registry = makeRegistry();
+  const services = makeToolServices({ registry, eventsLedger, evidenceLedger });
+  await services.secb_canonical_fingerprint({ document: { x: 1 } });
+  await services.secb_contract_validate({ kind: "event-envelope", document: { ...MIN_EVENT } });
+  await services.secb_registry_resolve({ agent_instance_id: CALLER_ID });
+  await services.secb_ledger_verify_summary({ ledger: "events" });
+  await services.secb_events_read({}, { effectiveCeiling: "INTERNAL" });
+  await services.secb_evidence_read({}, { effectiveCeiling: "INTERNAL" });
+  assert.equal(eventsAppendCount, 0, "events ledger must not be appended by any alpha read service");
+  assert.equal(evidenceAppendCount, 0, "evidence ledger must not be appended by any alpha read service");
+});
+
+// -- Hostile fixture: data-not-instructions --
+
+// The fixture contains model-directive text in observed_fact. After going
+// through the McpServer dispatch pipeline, the hostile content must be
+// enclosed inside a JSON string value under content_disposition:"data_untrusted"
+// — never emitted as bare text that a consumer could mistake for instructions.
+
+test("hostile fixture: content returned inside JSON string under data_untrusted, never as bare instruction", async () => {
+  const fixturePath = resolve(import.meta.dirname, "fixtures", "hostile", "mcp-result-injection.json");
+  const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
+  const HOSTILE_MARKER = fixture.observed_fact.hostile_marker;
+
+  const eventsLedger = makeReadableLedger([fixture]);
+  const registry = makeRegistry();
+  const invocationLedger = makeFakeLedger();
+  const services = makeToolServices({ registry, eventsLedger, evidenceLedger: makeReadableLedger() });
+  const server = makeServer({ registry, invocationLedger, services });
+
+  await server.handleRequest(
+    makeRequest("initialize", { protocolVersion: PINNED_PROTOCOL_VERSION }, 0)
+  );
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "secb_events_read", arguments: {} })
+  );
+
+  assert.ok("result" in resp, "expected result, got: " + JSON.stringify(resp));
+  assert.equal(resp.result.content[0].type, "text");
+
+  const rawText = resp.result.content[0].text;
+  const parsed = JSON.parse(rawText); // must be valid JSON
+  assert.equal(parsed.content_disposition, "data_untrusted");
+
+  // Hostile content is present in entries (not silently dropped).
+  const serializedEntries = JSON.stringify(parsed.entries);
+  assert.ok(
+    serializedEntries.includes(HOSTILE_MARKER),
+    "hostile marker must be present in returned entries"
+  );
+
+  // Hostile marker appears ONLY inside JSON-encoded string values.
+  // Strip all JSON string literals ("...") and assert the marker is absent
+  // from the remaining structural text (keys, punctuation, numbers).
+  const withoutStrings = rawText.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  assert.equal(
+    withoutStrings.includes(HOSTILE_MARKER),
+    false,
+    "hostile marker must not appear outside a JSON string value in the response text"
+  );
+});
