@@ -65,6 +65,15 @@ export {
 } from "./host/host-runtime-agent.mjs";
 
 export {
+  SecBMcpServer
+} from "./mcp/secb-mcp-server.mjs";
+
+export {
+  PINNED_PROTOCOL_VERSION,
+  TOOL_CATALOG
+} from "./mcp/tool-catalog.mjs";
+
+export {
   ProjectContractService,
   ProjectContractServiceError
 } from "./project/project-contract-service.mjs";
