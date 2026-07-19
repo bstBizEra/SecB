@@ -256,10 +256,10 @@ test("global capacity is reserved before the clock and rejects overflow without 
   let releaseClock;
   const blockedClock = new Promise((resolve) => { releaseClock = resolve; });
   let clockCalls = 0;
-  let auditCalls = 0;
+  const entries = [];
   const core = gateway({
     now: () => { clockCalls += 1; return blockedClock; },
-    invocationLog: () => { auditCalls += 1; },
+    invocationLog: (entry) => entries.push(entry),
     limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
     timeouts: { clock_ms: 1_000, policy_ms: 50, audit_ms: 50, adapter_ms: 50, revocation_ms: 50, result_validator_ms: 50 },
   });
@@ -268,7 +268,11 @@ test("global capacity is reserved before the clock and rejects overflow without 
   const overflow = await core.invoke({ ...context(), session_id: "overflow" });
   assert.equal(overflow.deny_code, "DENY_CONCURRENCY_LIMIT");
   assert.equal(clockCalls, 1);
-  assert.equal(auditCalls, 0);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].disposition, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(entries[0].terminal, true);
+  assert.equal(entries[0].sequence, 1);
+  assert.equal(entries[0].session_id, "overflow");
   releaseClock(new Date("2026-07-19T10:00:00.000Z"));
   assert.equal((await first).ok, true);
 });
@@ -478,7 +482,14 @@ test("policy, revocation, result-validator, and audit timeouts record ordered la
   assert.equal(auditResult.deny_code, "DENY_AUDIT_UNAVAILABLE");
   releaseAudit();
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.equal(auditEntries.at(-1).disposition, "LATE_SETTLEMENT_AUDIT_SUCCESS");
+  assert.deepEqual(auditEntries.map((entry) => entry.disposition), [
+    "ALLOW_DISPATCH",
+    "TIMEOUT_AUDIT_PENDING",
+    "LATE_SETTLEMENT_AUDIT_SUCCESS",
+  ]);
+  assert.deepEqual(auditEntries.map((entry) => entry.sequence), [1, 2, 3]);
+  assert.equal(auditEntries[1].terminal, false);
+  assert.equal(auditEntries[2].terminal, true);
 });
 
 test("synchronous dispatch guard closes the queued-microtask revocation gap", async () => {
@@ -513,4 +524,126 @@ test("async revocation resolution requires a separate synchronous dispatch guard
   }).invoke(context());
   assert.equal(denied.deny_code, "DENY_REVOCATION_UNAVAILABLE");
   assert.equal(adapterCalled, false);
+});
+
+test("dispatch guard return objects are denied without inspecting attacker-controlled then", async () => {
+  let thenReads = 0;
+  let adapterCalled = false;
+  const entries = [];
+  const hostile = Object.create(null, {
+    then: {
+      get() { thenReads += 1; throw new Error("then getter trap"); },
+    },
+  });
+  const result = await gateway({
+    dispatchGuard: () => hostile,
+    invocationLog: (entry) => entries.push(entry),
+    adapter: () => { adapterCalled = true; return { safe: true }; },
+  }).invoke(context());
+  assert.equal(result.deny_code, "DENY_REVOCATION_UNAVAILABLE");
+  assert.equal(thenReads, 0);
+  assert.equal(adapterCalled, false);
+  assert.equal(entries.at(-1).disposition, "DENY_REVOCATION_UNAVAILABLE");
+  assert.equal(entries.at(-1).terminal, true);
+
+  const thrown = await gateway({
+    dispatchGuard: () => { throw new Error("guard trap"); },
+    adapter: () => { adapterCalled = true; return { safe: true }; },
+  }).invoke(context());
+  assert.equal(thrown.deny_code, "DENY_REVOCATION_UNAVAILABLE");
+  assert.equal(adapterCalled, false);
+});
+
+test("original hook late settlement survives timeout-marker audit recovery", async () => {
+  let releasePolicy;
+  const blockedPolicy = new Promise((resolve) => { releasePolicy = resolve; });
+  let releaseAudit;
+  const blockedAudit = new Promise((resolve) => { releaseAudit = resolve; });
+  const entries = [];
+  const core = gateway({
+    policy: { allow: () => blockedPolicy },
+    invocationLog: (entry) => {
+      entries.push(entry);
+      if (entry.disposition === "TIMEOUT_POLICY_PENDING") return blockedAudit;
+      return undefined;
+    },
+    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+    timeouts: {
+      clock_ms: 50,
+      policy_ms: 20,
+      audit_ms: 20,
+      adapter_ms: 50,
+      revocation_ms: 50,
+      result_validator_ms: 50,
+    },
+  });
+  const result = await core.invoke(context());
+  assert.equal(result.deny_code, "DENY_AUDIT_UNAVAILABLE");
+  releasePolicy(true);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(entries.some((entry) => entry.disposition === "LATE_SETTLEMENT_POLICY_SUCCESS"), false);
+  releaseAudit();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(entries.map((entry) => entry.disposition), [
+    "TIMEOUT_POLICY_PENDING",
+    "TIMEOUT_AUDIT_PENDING",
+    "LATE_SETTLEMENT_AUDIT_SUCCESS",
+    "LATE_SETTLEMENT_POLICY_SUCCESS",
+  ]);
+  assert.deepEqual(entries.map((entry) => entry.sequence), [1, 2, 3, 4]);
+  assert.equal((await core.invoke({ ...context(), session_id: "after-audit-recovery" })).ok, true);
+});
+
+test("canonical sizing and returned envelopes ignore object and array prototype toJSON hooks", async () => {
+  const objectToJSON = Object.getOwnPropertyDescriptor(Object.prototype, "toJSON");
+  const arrayToJSON = Object.getOwnPropertyDescriptor(Array.prototype, "toJSON");
+  try {
+    Object.defineProperty(Object.prototype, "toJSON", {
+      value: () => ({}),
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(Array.prototype, "toJSON", {
+      value: () => [],
+      configurable: true,
+      writable: true,
+    });
+
+    let requestAdapterCalled = false;
+    const oversizedRequest = await gateway({
+      adapter: () => { requestAdapterCalled = true; return { safe: true }; },
+      limits: { max_request_bytes: 512, max_response_bytes: 4_096, max_concurrency: 1 },
+    }).invoke(context(), ["x".repeat(5_000)]);
+    assert.equal(oversizedRequest.deny_code, "DENY_REQUEST_INVALID");
+    assert.equal(requestAdapterCalled, false);
+
+    const oversizedObject = await gateway({
+      adapter: () => ({ payload: "x".repeat(5_000) }),
+      limits: { max_request_bytes: 4_096, max_response_bytes: 512, max_concurrency: 1 },
+    }).invoke(context());
+    assert.equal(oversizedObject.deny_code, "DENY_RESULT_INVALID");
+
+    const oversizedArray = await gateway({
+      adapter: () => ["x".repeat(5_000)],
+      limits: { max_request_bytes: 4_096, max_response_bytes: 512, max_concurrency: 1 },
+    }).invoke(context());
+    assert.equal(oversizedArray.deny_code, "DENY_RESULT_INVALID");
+
+    const safe = await gateway({
+      adapter: () => ({ items: [{ public_value: "ok" }] }),
+      limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+    }).invoke(context());
+    assert.equal(safe.ok, true);
+    assert.equal(Object.getPrototypeOf(safe), null);
+    assert.equal(Object.getPrototypeOf(safe.receipt), null);
+    assert.equal(Object.getPrototypeOf(safe.result), null);
+    assert.equal(Object.getPrototypeOf(safe.result.items), null);
+    assert.equal(Object.getPrototypeOf(safe.result.items[0]), null);
+    assert.equal(safe.result.items[0].public_value, "ok");
+  } finally {
+    if (objectToJSON) Object.defineProperty(Object.prototype, "toJSON", objectToJSON);
+    else delete Object.prototype.toJSON;
+    if (arrayToJSON) Object.defineProperty(Array.prototype, "toJSON", arrayToJSON);
+    else delete Array.prototype.toJSON;
+  }
 });

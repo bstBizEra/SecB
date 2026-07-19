@@ -34,9 +34,28 @@ const DANGEROUS_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"])
 const ASCII_OUTPUT_KEY = /^[\x20-\x7e]+$/;
 const SECRET_KEY_NORMALIZED = /(?:apikey|authorization|credential|password|passwd|privatekey|secret|token)/;
 const SECRET_VALUE = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])-[-a-z0-9_]{8,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
+const JSON_STRINGIFY_PRIMITIVE = JSON.stringify.bind(JSON);
 
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
-const deny = (code) => Object.freeze({ ok: false, deny_code: code, message: "request denied" });
+
+function hardenedRecord(entries) {
+  const output = Object.create(null);
+  for (const [key, value] of entries) {
+    Object.defineProperty(output, key, {
+      value,
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    });
+  }
+  return Object.freeze(output);
+}
+
+const deny = (code) => hardenedRecord([
+  ["ok", false],
+  ["deny_code", code],
+  ["message", "request denied"],
+]);
 
 function positiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive safe integer`);
@@ -147,7 +166,25 @@ function normalizeJson(value, { rejectSecrets = false } = {}, seen = new WeakSet
   if (typeof value !== "object" || seen.has(value)) throw new Error("non-JSON value");
   seen.add(value);
   if (Array.isArray(value)) {
-    const output = value.map((entry) => normalizeJson(entry, { rejectSecrets }, seen));
+    const output = [];
+    Object.setPrototypeOf(output, null);
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (!descriptor || !("value" in descriptor)) throw new Error("sparse or accessor array");
+      Object.defineProperty(output, String(index), {
+        value: normalizeJson(descriptor.value, { rejectSecrets }, seen),
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      });
+    }
+    const enumerableKeys = Object.keys(value);
+    if (enumerableKeys.length !== value.length) {
+      throw new Error("non-canonical array properties");
+    }
+    for (let index = 0; index < enumerableKeys.length; index += 1) {
+      if (enumerableKeys[index] !== String(index)) throw new Error("non-canonical array properties");
+    }
     seen.delete(value);
     return Object.freeze(output);
   }
@@ -173,8 +210,37 @@ function cloneJson(value, options) {
   return normalizeJson(structuredClone(value), options);
 }
 
+function canonicalJson(value) {
+  if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") {
+    return JSON_STRINGIFY_PRIMITIVE(value);
+  }
+  if (Array.isArray(value)) {
+    let serialized = "[";
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      if (!descriptor || !("value" in descriptor)) throw new Error("non-canonical array");
+      if (index > 0) serialized += ",";
+      serialized += canonicalJson(descriptor.value);
+    }
+    return `${serialized}]`;
+  }
+  if (value === null || typeof value !== "object" || Object.getPrototypeOf(value) !== null) {
+    throw new Error("non-canonical object");
+  }
+  const keys = Object.keys(value);
+  let serialized = "{";
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor)) throw new Error("non-canonical property");
+    if (index > 0) serialized += ",";
+    serialized += `${JSON_STRINGIFY_PRIMITIVE(key)}:${canonicalJson(descriptor.value)}`;
+  }
+  return `${serialized}}`;
+}
+
 function byteLength(value) {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  return new TextEncoder().encode(canonicalJson(value)).byteLength;
 }
 
 async function boundedCall(operation, timeoutMs) {
@@ -203,6 +269,7 @@ export class McpGatewayCore {
   #limits;
   #timeouts;
   #capacityInUse = 0;
+  #overflowEvidenceTail = Promise.resolve();
 
   constructor({
     capabilityRegistry,
@@ -243,30 +310,46 @@ export class McpGatewayCore {
       || disposition.startsWith("DENY_")
       || disposition.startsWith("FAILURE_")
       || disposition.startsWith("LATE_SETTLEMENT_");
-    return Object.freeze({
-      sequence: reservation.nextSequence++,
-      attempted_at: attemptedAt,
-      disposition,
-      terminal,
-      evidence_disposition: terminal ? "EVIDENCE_CANDIDATE_NOT_ACCEPTED" : null,
-      agent_id: field("agent_id"),
-      harness_id: field("harness_id"),
-      project_id: field("project_id"),
-      work_package_id: field("work_package_id"),
-      workspace_lease_id: field("workspace_lease_id"),
-      session_id: field("session_id"),
-      authorization_id: field("authorization_id"),
-      capability_id: field("capability_id"),
-      adapter_id: isBlank(capability?.adapter_id) ? null : capability.adapter_id,
-      tool: isBlank(capability?.tool) ? null : capability.tool,
-      purpose: field("purpose"),
-    });
+    return hardenedRecord([
+      ["sequence", reservation.nextSequence++],
+      ["attempted_at", attemptedAt],
+      ["disposition", disposition],
+      ["terminal", terminal],
+      ["evidence_disposition", terminal ? "EVIDENCE_CANDIDATE_NOT_ACCEPTED" : null],
+      ["agent_id", field("agent_id")],
+      ["harness_id", field("harness_id")],
+      ["project_id", field("project_id")],
+      ["work_package_id", field("work_package_id")],
+      ["workspace_lease_id", field("workspace_lease_id")],
+      ["session_id", field("session_id")],
+      ["authorization_id", field("authorization_id")],
+      ["capability_id", field("capability_id")],
+      ["adapter_id", isBlank(capability?.adapter_id) ? null : capability.adapter_id],
+      ["tool", isBlank(capability?.tool) ? null : capability.tool],
+      ["purpose", field("purpose")],
+    ]);
+  }
+
+  #newReservation(countsExecution) {
+    let resolveDrained;
+    const drained = new Promise((resolve) => { resolveDrained = resolve; });
+    return {
+      completed: false,
+      pending: new Set(),
+      released: false,
+      nextSequence: 1,
+      countsExecution,
+      auditRecovery: Promise.resolve(),
+      drained,
+      resolveDrained,
+    };
   }
 
   #releaseCapacityIfComplete(reservation) {
     if (reservation.completed && reservation.pending.size === 0 && !reservation.released) {
       reservation.released = true;
-      this.#capacityInUse -= 1;
+      if (reservation.countsExecution) this.#capacityInUse -= 1;
+      reservation.resolveDrained();
     }
   }
 
@@ -293,9 +376,43 @@ export class McpGatewayCore {
       reservation,
     );
     if (trackTimeout && outcome.status === "timeout") {
-      this.#scheduleLateSettlement("AUDIT", outcome, context, capability, attemptedAt, reservation);
+      this.#scheduleAuditTimeout(outcome, context, capability, attemptedAt, reservation);
     }
     return outcome.status === "ok";
+  }
+
+  #scheduleAuditTimeout(outcome, context, capability, attemptedAt, reservation) {
+    const previousRecovery = reservation.auditRecovery;
+    const recovery = previousRecovery.catch(() => {}).then(async () => {
+      const settled = await outcome.settled;
+      const pending = await this.#call(
+        () => this.#invocationLog(this.#auditEntry(
+          context,
+          capability,
+          attemptedAt,
+          "TIMEOUT_AUDIT_PENDING",
+          reservation,
+        )),
+        this.#timeouts.audit_ms,
+        reservation,
+      );
+      if (pending.status === "timeout") await pending.settled;
+      const suffix = settled.status === "ok" ? "SUCCESS" : "FAILURE";
+      const late = await this.#call(
+        () => this.#invocationLog(this.#auditEntry(
+          context,
+          capability,
+          attemptedAt,
+          `LATE_SETTLEMENT_AUDIT_${suffix}`,
+          reservation,
+        )),
+        this.#timeouts.audit_ms,
+        reservation,
+      );
+      if (late.status === "timeout") await late.settled;
+    }).catch(() => {});
+    reservation.auditRecovery = recovery;
+    this.#holdCapacity(reservation, recovery);
   }
 
   async #denyAudited(code, context, capability, attemptedAt, reservation) {
@@ -306,7 +423,9 @@ export class McpGatewayCore {
   }
 
   #scheduleLateSettlement(hook, outcome, context, capability, attemptedAt, reservation) {
+    const auditRecovery = reservation.auditRecovery;
     const evidence = outcome.settled.then(async (settled) => {
+      await auditRecovery.catch(() => {});
       const suffix = settled.status === "ok" ? "SUCCESS" : "FAILURE";
       await this.#audit(
         context,
@@ -314,35 +433,68 @@ export class McpGatewayCore {
         attemptedAt,
         `LATE_SETTLEMENT_${hook}_${suffix}`,
         reservation,
-        false,
       );
     }).catch(() => {});
     this.#holdCapacity(reservation, evidence);
   }
 
   async #denyTimedOut(hook, outcome, code, context, capability, attemptedAt, reservation) {
-    if (!(await this.#audit(context, capability, attemptedAt, `TIMEOUT_${hook}_PENDING`, reservation))) {
-      return deny("DENY_AUDIT_UNAVAILABLE");
-    }
-    const denial = await this.#denyAudited(code, context, capability, attemptedAt, reservation);
+    const pendingRecorded = await this.#audit(
+      context,
+      capability,
+      attemptedAt,
+      `TIMEOUT_${hook}_PENDING`,
+      reservation,
+    );
+    const denial = pendingRecorded
+      ? await this.#denyAudited(code, context, capability, attemptedAt, reservation)
+      : deny("DENY_AUDIT_UNAVAILABLE");
     this.#scheduleLateSettlement(hook, outcome, context, capability, attemptedAt, reservation);
     return denial;
   }
 
+  async #denyConcurrencyAudited(requestContext) {
+    const context = snapshotContext(requestContext);
+    const capability = this.#capabilities.get(context.capability_id) ?? null;
+    const reservation = this.#newReservation(false);
+    const previous = this.#overflowEvidenceTail;
+    let releaseLane;
+    this.#overflowEvidenceTail = new Promise((resolve) => { releaseLane = resolve; });
+
+    const response = previous.then(async () => {
+      try {
+        return await this.#denyAudited(
+          "DENY_CONCURRENCY_LIMIT",
+          context,
+          capability,
+          null,
+          reservation,
+        );
+      } finally {
+        reservation.completed = true;
+        this.#releaseCapacityIfComplete(reservation);
+        reservation.drained.then(releaseLane, releaseLane);
+      }
+    });
+    return response.catch(() => deny("DENY_AUDIT_UNAVAILABLE"));
+  }
+
   async invoke(requestContext, params = {}) {
     if (this.#capacityInUse >= this.#limits.max_concurrency) {
-      return deny("DENY_CONCURRENCY_LIMIT");
+      return this.#denyConcurrencyAudited(requestContext);
     }
     this.#capacityInUse += 1;
-    const reservation = { completed: false, pending: new Set(), released: false, nextSequence: 1 };
+    const reservation = this.#newReservation(true);
 
     try {
       let requestEnvelope;
       try {
+        const evidenceRequired = safeRead(requestContext, "evidence_required");
+        if (!evidenceRequired.ok) throw new Error("invalid request context");
         const contextSource = requestContext !== null
           && typeof requestContext === "object"
           && !Array.isArray(requestContext)
-          && requestContext.evidence_required === undefined
+          && evidenceRequired.value === undefined
           ? Object.fromEntries(Object.entries(requestContext).filter(([key]) => key !== "evidence_required"))
           : requestContext ?? {};
         requestEnvelope = cloneJson({
@@ -495,9 +647,6 @@ export class McpGatewayCore {
         dispatchGuard = null;
       }
       if (dispatchGuard !== false) {
-        if (dispatchGuard && typeof dispatchGuard.then === "function") {
-          Promise.resolve(dispatchGuard).catch(() => {});
-        }
         const code = dispatchGuard === true ? "DENY_REVOKED" : "DENY_REVOCATION_UNAVAILABLE";
         return this.#denyAudited(code, context, capability, attemptedAt, reservation);
       }
@@ -565,22 +714,23 @@ export class McpGatewayCore {
         return deny("DENY_RESULT_INVALID");
       }
 
-      const response = Object.freeze({
-        ok: true,
-        result,
-        receipt: Object.freeze({
-          capability_id: context.capability_id,
-          adapter_id: capability.adapter_id,
-          tool: capability.tool,
-          work_package_id: context.work_package_id,
-          workspace_lease_id: context.workspace_lease_id,
-          session_id: context.session_id,
-          authorization_id: context.authorization_id,
-          attempted_at: attemptedAt,
-          content_disposition: DATA_UNTRUSTED,
-          terminal_disposition: "SUCCESS",
-        }),
-      });
+      const receipt = hardenedRecord([
+        ["capability_id", context.capability_id],
+        ["adapter_id", capability.adapter_id],
+        ["tool", capability.tool],
+        ["work_package_id", context.work_package_id],
+        ["workspace_lease_id", context.workspace_lease_id],
+        ["session_id", context.session_id],
+        ["authorization_id", context.authorization_id],
+        ["attempted_at", attemptedAt],
+        ["content_disposition", DATA_UNTRUSTED],
+        ["terminal_disposition", "SUCCESS"],
+      ]);
+      const response = hardenedRecord([
+        ["ok", true],
+        ["result", result],
+        ["receipt", receipt],
+      ]);
       if (byteLength(response) > this.#limits.max_response_bytes) {
         if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_RESULT", reservation))) {
           return deny("DENY_AUDIT_UNAVAILABLE");
