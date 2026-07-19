@@ -149,7 +149,7 @@ async function boundedCall(operation, timeoutMs) {
   });
   const outcome = await Promise.race([operationPromise, timeoutPromise]);
   clearTimeout(timer);
-  return outcome;
+  return outcome.status === "timeout" ? { ...outcome, settled: operationPromise } : outcome;
 }
 
 export class McpGatewayCore {
@@ -163,6 +163,7 @@ export class McpGatewayCore {
   #limits;
   #timeouts;
   #activeInvocations = 0;
+  #timedOutOperations = 0;
 
   constructor({
     capabilityRegistry,
@@ -216,8 +217,17 @@ export class McpGatewayCore {
     });
   }
 
+  async #call(operation, timeoutMs) {
+    const outcome = await boundedCall(operation, timeoutMs);
+    if (outcome.status === "timeout") {
+      this.#timedOutOperations += 1;
+      outcome.settled.then(() => { this.#timedOutOperations -= 1; });
+    }
+    return outcome;
+  }
+
   async #audit(context, capability, attemptedAt, disposition) {
-    const outcome = await boundedCall(
+    const outcome = await this.#call(
       () => this.#invocationLog(this.#auditEntry(context, capability, attemptedAt, disposition)),
       this.#timeouts.audit_ms,
     );
@@ -233,7 +243,7 @@ export class McpGatewayCore {
 
   async invoke(requestContext, params = {}) {
     const context = snapshotContext(requestContext);
-    const clock = await boundedCall(this.#now, this.#timeouts.clock_ms);
+    const clock = await this.#call(this.#now, this.#timeouts.clock_ms);
     let attemptedAt = null;
     if (clock.status === "ok" && clock.value instanceof Date && !Number.isNaN(clock.value.getTime())) {
       attemptedAt = clock.value.toISOString();
@@ -274,14 +284,14 @@ export class McpGatewayCore {
       return this.#denyAudited("DENY_REQUEST_INVALID", "request exceeds bounds or is not safely serializable", context, capability, attemptedAt);
     }
 
-    if (this.#activeInvocations >= this.#limits.max_concurrency) {
+    if (this.#activeInvocations + this.#timedOutOperations >= this.#limits.max_concurrency) {
       return this.#denyAudited("DENY_CONCURRENCY_LIMIT", "gateway concurrency limit reached; request denied", context, capability, attemptedAt);
     }
     this.#activeInvocations += 1;
 
     try {
       if (this.#policyAllow !== null) {
-        const policy = await boundedCall(() => this.#policyAllow(context, capability), this.#timeouts.policy_ms);
+        const policy = await this.#call(() => this.#policyAllow(context, capability), this.#timeouts.policy_ms);
         if (policy.status !== "ok") {
           return this.#denyAudited("DENY_POLICY_UNAVAILABLE", "authorization policy unavailable; request denied", context, capability, attemptedAt);
         }
@@ -290,7 +300,7 @@ export class McpGatewayCore {
         }
       }
 
-      const revocation = await boundedCall(
+      const revocation = await this.#call(
         () => this.#revocationCheck(context, capability),
         this.#timeouts.revocation_ms,
       );
@@ -305,7 +315,7 @@ export class McpGatewayCore {
         return deny("DENY_AUDIT_UNAVAILABLE", "invocation audit unavailable; request denied");
       }
 
-      const adapterOutcome = await boundedCall(
+      const adapterOutcome = await this.#call(
         () => adapter.invoke(capability.tool, adapterParams, context),
         this.#timeouts.adapter_ms,
       );
@@ -327,7 +337,7 @@ export class McpGatewayCore {
         return deny("DENY_RESULT_INVALID", "adapter result failed output controls");
       }
 
-      const validation = await boundedCall(
+      const validation = await this.#call(
         () => this.#resultValidator(result, context, capability),
         this.#timeouts.result_validator_ms,
       );

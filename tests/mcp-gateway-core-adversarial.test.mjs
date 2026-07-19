@@ -170,8 +170,15 @@ test("policy, audit, and adapter hooks have hard fail-closed timeouts", async ()
   const auditResult = await gateway({ invocationLog: never, timeouts: short }).invoke(context());
   assert.equal(auditResult.deny_code, "DENY_AUDIT_UNAVAILABLE");
 
-  const adapterResult = await gateway({ adapter: never, timeouts: short }).invoke(context());
+  const adapterCore = gateway({
+    adapter: never,
+    timeouts: short,
+    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+  });
+  const adapterResult = await adapterCore.invoke(context());
   assert.equal(adapterResult.deny_code, "DENY_ADAPTER_ERROR");
+  const afterTimedOutAdapter = await adapterCore.invoke({ ...context(), session_id: "session-after-timeout" });
+  assert.equal(afterTimedOutAdapter.deny_code, "DENY_CONCURRENCY_LIMIT");
 });
 
 test("concurrency cap rejects queued work without dispatch", async () => {
