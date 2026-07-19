@@ -1,0 +1,81 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_006_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Claude Sonnet 5 producer verification, following independent gate-002 review (claude/rev/mcp-p0a-gate-002 @ 6a82414)"
+  producer_runtime: "Claude (Anthropic)"
+  producer_actor_id: "claude-sonnet5-motor-mcp-p0a-rework-006"
+  producer_helper: "none"
+  limitations:
+    - "Producer checks are evidence candidates, not independent REV, QA, SEC, evidence acceptance, or governance acceptance."
+    - "This round closes exactly one blocking finding (GATE2-BLOCKING-001) plus its regression coverage. It does not attempt cooperative AbortSignal cancellation (tracked separately per gate-002's recommendation, explicitly out of scope for this round) and does not attempt the late-settlement-retry-for-sync-errors consistency item, judged non-trivial to implement correctly without a genuinely different retry mechanism -- deferred, not silently dropped."
+    - "The abandonment bound (audit_ms * 4) reclaims a capacity reservation on a timer; it does not and cannot force the underlying hung promise itself to settle -- there is no cross-realm cancellation in JS. If the hung operation later does settle, its own late-settlement audit trail (#scheduleLateSettlement / #scheduleAuditTimeout) still fires unchanged; only the shared capacity counter is freed sooner."
+    - "No merge to main, push, transport binding, registry promotion, deployment, evidence acceptance, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-006-PRODUCER-VERIFY"
+  sequence: 6
+  source_role: "PRODUCER"
+  source_agent_instance_id: "claude-sonnet5-motor-mcp-p0a-rework-006"
+  destination_role: "FRESH_INDEPENDENT_REV_QA_SEC_GATE"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  original_target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  prior_lineage_commit: "60bbb6acfd3914728e29add7b8562457a704614a"
+  gate_review_bound: "claude/rev/mcp-p0a-gate-002 @ 6a8241464ec29f4caa54d22140f6287901f0814b"
+  implementation_parent_commit: "60bbb6acfd3914728e29add7b8562457a704614a"
+  branch: "producer/mcp/p0a-gateway-core-rework-006"
+  review_scope_note: "Review the complete implementation diff 60bbb6a..<this round's code commit>. This handoff commit is provenance only and is not part of the frozen implementation target."
+
+  closure_claims:
+    - control_id: "GATE2-BLOCKING-001"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: >-
+        #holdCapacity now races every tracked settlement against a bounded
+        abandonment timer (audit_ms * 4) in addition to its own .finally()
+        handler. If the underlying promise never settles, the pending entry
+        is forcibly removed and #releaseCapacityIfComplete is invoked on the
+        bound. This is the single shared primitive used by #call (raw
+        hook/adapter timeouts), #scheduleAuditTimeout (audit-sink hang
+        recovery), and #scheduleLateSettlement (late-settlement evidence),
+        so the fix closes the gap uniformly at every call site rather than
+        patching #scheduleAuditTimeout's one named await in isolation --
+        that narrower fix would not have released capacity, since the raw
+        hung promise is tracked as its own separate pending entry via #call
+        regardless of what #scheduleAuditTimeout's own internal chain does.
+        Two new regression tests reproduce both consequences independently
+        identified by the gate-002 reviewers: (1) a hung adapter's own
+        capacity reservation is abandoned on the bound rather than held
+        forever (REV's finding), and (2) the shared #overflowEvidenceTail
+        concurrency-overflow lane is not permanently wedged by the same hang
+        (SEC's finding) -- both pass.
+
+  residuals_explicitly_not_addressed_this_round:
+    - id: "GATE2-NONBLOCKING-LATE-RETRY-ASYMMETRY"
+      reason: >-
+        Scheduling late-settlement retry for synchronous/rejected audit
+        failures (not just timeouts) would require a genuinely different
+        retry mechanism than #scheduleAuditTimeout's wait-for-late-settlement
+        pattern, since a rejected outcome carries no .settled promise to
+        wait on -- it already settled, unsuccessfully. Judged non-trivial to
+        implement correctly in a bounded, minimal round; deferred as a
+        tracked follow-up per gate-002's own "if trivial" qualifier.
+    - id: "ABORT_SIGNAL_COOPERATIVE_CANCEL"
+      reason: "Explicitly out of scope for this round per gate-002's recommendation. Tracked as an ordinary follow-up, not an ADR item."
+    - id: "GATE2-RESIDUAL-A-DURABLE-EVIDENCE"
+      reason: "Independently confirmed genuinely design-class by both gate-002 reviewers. Routed to the operator/ADR queue, not producer scope."
+    - id: "GATE2-RESIDUAL-B-FORCED-PREEMPTION"
+      reason: "Independently confirmed genuinely design-class (no cross-realm hard-kill in JS) by both gate-002 reviewers. Routed to the operator/ADR queue, not producer scope."
+
+  final_checks:
+    dependency_restore: "npm ci --offline: 6 packages installed, 0 vulnerabilities"
+    focused_gateway_tests: "45 total, 45 pass, 0 fail, 0 skip (43 at round-5 + 2 new regression tests for GATE2-BLOCKING-001)"
+    full_suite: "197 total, 184 pass, 0 fail, 13 pre-existing blocked skips"
+    foundation_validator: "Not run in this isolated worktree -- shares the parent repo's git config/remotes, so tools/validate-foundation.mjs's git.local-only-derived check trips on the shared 'origin' remote regardless of code correctness (same pre-existing worktree-vs-clone artifact independent QA noted at round-5's gate). Bypassed via direct node --test per that precedent; not a defect in this round's diff."
+    diff_check: "PASS (git diff --check clean against src/gateway/mcp-gateway-core.mjs and tests/mcp-gateway-core-adversarial.test.mjs)"
+    static_scope_check: "PASS: no node:fs, node:net, node:http, node:https, node:child_process, fetch, listen, spawn, exec, or process.env capability in src/gateway/mcp-gateway-core.mjs (unchanged from round-5; this round adds no imports)"
+    new_regression_evidence:
+      - test: "a hung adapter's capacity reservation is abandoned on a bound, not held forever"
+        result: "PASS -- confirms a fresh request after the abandonment window reaches DENY_ADAPTER_TIMEOUT_PENDING again (past the capacity gate), not DENY_CONCURRENCY_LIMIT"
+      - test: "a hung hook does not permanently wedge the shared overflow-audit lane"
+        result: "PASS -- confirms three queued overflow responses complete, and a request issued after the abandonment window still gets answered rather than hanging"
