@@ -19,7 +19,7 @@ const validContext = () => ({
   evidence_required: true,
 });
 
-function build({ log, adapterImpl, policy, revocationCheck = () => false, resultValidator, limits, timeouts } = {}) {
+function build({ log, adapterImpl, policy, revocationCheck = () => false, resultValidator = () => true, limits, timeouts } = {}) {
   const entries = [];
   const capabilityRegistry = new Map([
     ["filesystem.read", { adapter_id: "fs-read", tool: "read_text_file", access: "read" }],
@@ -53,6 +53,15 @@ test("constructor fails closed without registry, adapters, or invocation log", (
   assert.throws(
     () => new McpGatewayCore({ capabilityRegistry: new Map(), adapters: new Map(), invocationLog: () => {} }),
     /revocationCheck/,
+  );
+  assert.throws(
+    () => new McpGatewayCore({
+      capabilityRegistry: new Map(),
+      adapters: new Map(),
+      invocationLog: () => {},
+      revocationCheck: () => false,
+    }),
+    /resultValidator/,
   );
 });
 

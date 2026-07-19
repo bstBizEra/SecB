@@ -21,7 +21,8 @@ function gateway({
   now,
   invocationLog = () => {},
   revocationCheck = () => false,
-  resultValidator,
+  dispatchGuard,
+  resultValidator = () => true,
   limits,
   timeouts,
 } = {}) {
@@ -34,6 +35,7 @@ function gateway({
     policy: policy ?? null,
     now: now ?? (() => new Date("2026-07-19T10:00:00.000Z")),
     revocationCheck,
+    dispatchGuard,
     resultValidator,
     limits,
     timeouts,
@@ -91,6 +93,7 @@ test("narrowing-only policy cannot reroute an approved read capability", async (
       return true;
     } },
     revocationCheck: () => false,
+    resultValidator: () => true,
   });
   const result = await core.invoke(context());
   assert.equal(result.ok, false);
@@ -104,11 +107,15 @@ test("denied attempts are recorded for audit", async () => {
     adapters: new Map(),
     invocationLog: (entry) => entries.push(entry),
     revocationCheck: () => false,
+    resultValidator: () => true,
   });
   const result = await core.invoke({ ...context(), capability_id: "unknown.read" });
   assert.equal(result.ok, false);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].disposition, "DENY_UNKNOWN_CAPABILITY");
+  assert.equal(entries[0].terminal, true);
+  assert.equal(entries[0].evidence_disposition, "EVIDENCE_CANDIDATE_NOT_ACCEPTED");
+  assert.equal(entries[0].sequence, 1);
 });
 
 test("adapter failures do not disclose backend error text", async () => {
@@ -138,6 +145,7 @@ function McGatewayForHostileMetadata(capability, entries) {
     adapters: new Map([["fixture", { invoke: () => ({ ok: true }) }]]),
     invocationLog: (entry) => entries.push(entry),
     revocationCheck: () => false,
+    resultValidator: () => true,
   });
 }
 
@@ -378,11 +386,131 @@ test("adapter timeout remains pending, records late settlement, and never redisp
   });
   const timedOut = await core.invoke(context());
   assert.equal(timedOut.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
-  assert.deepEqual(entries.map((entry) => entry.disposition), ["ALLOW_DISPATCH", "TIMEOUT_ADAPTER_PENDING"]);
-  assert.equal(entries.at(-1).terminal, false);
+  assert.deepEqual(entries.map((entry) => entry.disposition), [
+    "ALLOW_DISPATCH",
+    "TIMEOUT_ADAPTER_PENDING",
+    "DENY_ADAPTER_TIMEOUT_PENDING",
+  ]);
+  assert.equal(entries[1].terminal, false);
+  assert.equal(entries[2].terminal, true);
   assert.equal((await core.invoke({ ...context(), session_id: "held-adapter" })).deny_code, "DENY_CONCURRENCY_LIMIT");
   releaseAdapter({ safe: true });
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(entries.at(-1).disposition, "LATE_SETTLEMENT_ADAPTER_SUCCESS");
   assert.equal(adapterCalls, 1);
+});
+
+test("prototype-control keys cannot bypass request or complete-response byte accounting", async () => {
+  let requestAdapterCalled = false;
+  const requestPayload = JSON.parse(`{"__proto__":{"padding":"${"x".repeat(5_000)}"}}`);
+  const requestResult = await gateway({
+    adapter: () => { requestAdapterCalled = true; return { safe: true }; },
+    limits: { max_request_bytes: 512, max_response_bytes: 4_096, max_concurrency: 1 },
+  }).invoke(context(), requestPayload);
+  assert.equal(requestResult.deny_code, "DENY_REQUEST_INVALID");
+  assert.equal(requestAdapterCalled, false);
+
+  const responsePayload = JSON.parse(`{"__proto__":{"publicPayload":"${"x".repeat(5_000)}"}}`);
+  const responseResult = await gateway({
+    adapter: () => responsePayload,
+    limits: { max_request_bytes: 4_096, max_response_bytes: 512, max_concurrency: 1 },
+  }).invoke(context());
+  assert.equal(responseResult.deny_code, "DENY_RESULT_INVALID");
+});
+
+test("normalized successful results use null prototypes and reject Unicode-confusable keys", async () => {
+  const safe = await gateway({ adapter: () => ({ public_value: "ok" }) }).invoke(context());
+  assert.equal(safe.ok, true);
+  assert.equal(Object.getPrototypeOf(safe.result), null);
+
+  for (const key of ["se\u0441ret", "t\u03bfken", "credentia\u04cf"]) {
+    const result = await gateway({ adapter: () => ({ [key]: "not-for-callers" }) }).invoke(context());
+    assert.equal(result.deny_code, "DENY_RESULT_INVALID", `expected confusable ${key} to be denied`);
+  }
+});
+
+test("policy, revocation, result-validator, and audit timeouts record ordered late settlement", async () => {
+  const short = {
+    clock_ms: 50,
+    policy_ms: 20,
+    audit_ms: 20,
+    adapter_ms: 50,
+    revocation_ms: 20,
+    result_validator_ms: 20,
+  };
+
+  for (const fixture of [
+    { hook: "POLICY", option: "policy", unavailable: "DENY_POLICY_UNAVAILABLE" },
+    { hook: "REVOCATION", option: "revocationCheck", unavailable: "DENY_REVOCATION_UNAVAILABLE" },
+    { hook: "RESULT_VALIDATOR", option: "resultValidator", unavailable: "DENY_RESULT_INVALID" },
+  ]) {
+    let release;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    const entries = [];
+    const options = { invocationLog: (entry) => entries.push(entry), timeouts: short };
+    options[fixture.option] = fixture.option === "policy" ? { allow: () => blocked } : () => blocked;
+    const result = await gateway(options).invoke(context());
+    assert.equal(result.deny_code, fixture.unavailable);
+    assert.ok(entries.some((entry) => entry.disposition === `TIMEOUT_${fixture.hook}_PENDING`));
+    assert.equal(entries.at(-1).disposition, fixture.unavailable);
+    assert.equal(entries.at(-1).terminal, true);
+    release(fixture.hook === "REVOCATION" ? false : true);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(entries.at(-1).disposition, `LATE_SETTLEMENT_${fixture.hook}_SUCCESS`);
+    assert.deepEqual(entries.map((entry) => entry.sequence), entries.map((_entry, index) => index + 1));
+  }
+
+  let releaseAudit;
+  const blockedAudit = new Promise((resolve) => { releaseAudit = resolve; });
+  const auditEntries = [];
+  let firstAudit = true;
+  const auditResult = await gateway({
+    invocationLog: (entry) => {
+      auditEntries.push(entry);
+      if (firstAudit) {
+        firstAudit = false;
+        return blockedAudit;
+      }
+      return undefined;
+    },
+    timeouts: short,
+  }).invoke(context());
+  assert.equal(auditResult.deny_code, "DENY_AUDIT_UNAVAILABLE");
+  releaseAudit();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(auditEntries.at(-1).disposition, "LATE_SETTLEMENT_AUDIT_SUCCESS");
+});
+
+test("synchronous dispatch guard closes the queued-microtask revocation gap", async () => {
+  let checks = 0;
+  let revoked = false;
+  let adapterCalled = false;
+  const result = await gateway({
+    revocationCheck: () => {
+      checks += 1;
+      if (checks === 2) queueMicrotask(() => { revoked = true; });
+      return revoked;
+    },
+    adapter: () => { adapterCalled = true; return { safe: true }; },
+  }).invoke(context());
+  assert.equal(result.deny_code, "DENY_REVOKED");
+  assert.equal(checks, 3);
+  assert.equal(adapterCalled, false);
+});
+
+test("async revocation resolution requires a separate synchronous dispatch guard", async () => {
+  const allowed = await gateway({
+    revocationCheck: async () => false,
+    dispatchGuard: () => false,
+  }).invoke(context());
+  assert.equal(allowed.ok, true);
+
+  let adapterCalled = false;
+  const denied = await gateway({
+    revocationCheck: async () => false,
+    dispatchGuard: async () => false,
+    adapter: () => { adapterCalled = true; return { safe: true }; },
+  }).invoke(context());
+  assert.equal(denied.deny_code, "DENY_REVOCATION_UNAVAILABLE");
+  assert.equal(adapterCalled, false);
 });

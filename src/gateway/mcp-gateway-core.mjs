@@ -30,6 +30,8 @@ const DEFAULT_TIMEOUTS = Object.freeze({
   result_validator_ms: 250,
 });
 const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
+const DANGEROUS_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const ASCII_OUTPUT_KEY = /^[\x20-\x7e]+$/;
 const SECRET_KEY_NORMALIZED = /(?:apikey|authorization|credential|password|passwd|privatekey|secret|token)/;
 const SECRET_VALUE = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])-[-a-z0-9_]{8,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
 
@@ -151,10 +153,17 @@ function normalizeJson(value, { rejectSecrets = false } = {}, seen = new WeakSet
   }
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) throw new Error("non-plain object");
-  const output = {};
+  const output = Object.create(null);
   for (const [key, entry] of Object.entries(value)) {
+    if (DANGEROUS_OBJECT_KEYS.has(key)) throw new Error("dangerous object key");
+    if (rejectSecrets && !ASCII_OUTPUT_KEY.test(key)) throw new Error("non-ASCII output key");
     if (rejectSecrets && isSecretLikeKey(key)) throw new Error("secret-like key");
-    output[key] = normalizeJson(entry, { rejectSecrets }, seen);
+    Object.defineProperty(output, key, {
+      value: normalizeJson(entry, { rejectSecrets }, seen),
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    });
   }
   seen.delete(value);
   return Object.freeze(output);
@@ -189,6 +198,7 @@ export class McpGatewayCore {
   #policyAllow;
   #now;
   #revocationCheck;
+  #dispatchGuard;
   #resultValidator;
   #limits;
   #timeouts;
@@ -201,7 +211,8 @@ export class McpGatewayCore {
     policy = null,
     now = () => new Date(),
     revocationCheck,
-    resultValidator = () => true,
+    dispatchGuard = revocationCheck,
+    resultValidator,
     limits = DEFAULT_LIMITS,
     timeouts = DEFAULT_TIMEOUTS,
   } = {}) {
@@ -211,6 +222,7 @@ export class McpGatewayCore {
     if (policy !== null && typeof policy.allow !== "function") throw new Error("policy, when provided, requires an allow function");
     if (typeof now !== "function") throw new Error("now must be a function");
     if (typeof revocationCheck !== "function") throw new Error("McpGatewayCore requires a revocationCheck function (fail-closed kill switch)");
+    if (typeof dispatchGuard !== "function") throw new Error("dispatchGuard must be a synchronous function");
     if (typeof resultValidator !== "function") throw new Error("resultValidator must be a function");
 
     this.#capabilities = snapshotCapabilities(capabilityRegistry);
@@ -219,17 +231,20 @@ export class McpGatewayCore {
     this.#policyAllow = policy === null ? null : policy.allow.bind(policy);
     this.#now = now;
     this.#revocationCheck = revocationCheck;
+    this.#dispatchGuard = dispatchGuard;
     this.#resultValidator = resultValidator;
     this.#limits = normalizeSettings(limits, DEFAULT_LIMITS, "limits");
     this.#timeouts = normalizeTimeouts(timeouts);
   }
 
-  #auditEntry(context, capability, attemptedAt, disposition) {
+  #auditEntry(context, capability, attemptedAt, disposition, reservation) {
     const field = (name) => isBlank(context?.[name]) ? null : context[name];
     const terminal = disposition === "SUCCESS"
+      || disposition.startsWith("DENY_")
       || disposition.startsWith("FAILURE_")
       || disposition.startsWith("LATE_SETTLEMENT_");
     return Object.freeze({
+      sequence: reservation.nextSequence++,
       attempted_at: attemptedAt,
       disposition,
       terminal,
@@ -271,12 +286,15 @@ export class McpGatewayCore {
     return outcome;
   }
 
-  async #audit(context, capability, attemptedAt, disposition, reservation) {
+  async #audit(context, capability, attemptedAt, disposition, reservation, trackTimeout = true) {
     const outcome = await this.#call(
-      () => this.#invocationLog(this.#auditEntry(context, capability, attemptedAt, disposition)),
+      () => this.#invocationLog(this.#auditEntry(context, capability, attemptedAt, disposition, reservation)),
       this.#timeouts.audit_ms,
       reservation,
     );
+    if (trackTimeout && outcome.status === "timeout") {
+      this.#scheduleLateSettlement("AUDIT", outcome, context, capability, attemptedAt, reservation);
+    }
     return outcome.status === "ok";
   }
 
@@ -296,9 +314,19 @@ export class McpGatewayCore {
         attemptedAt,
         `LATE_SETTLEMENT_${hook}_${suffix}`,
         reservation,
+        false,
       );
     }).catch(() => {});
     this.#holdCapacity(reservation, evidence);
+  }
+
+  async #denyTimedOut(hook, outcome, code, context, capability, attemptedAt, reservation) {
+    if (!(await this.#audit(context, capability, attemptedAt, `TIMEOUT_${hook}_PENDING`, reservation))) {
+      return deny("DENY_AUDIT_UNAVAILABLE");
+    }
+    const denial = await this.#denyAudited(code, context, capability, attemptedAt, reservation);
+    this.#scheduleLateSettlement(hook, outcome, context, capability, attemptedAt, reservation);
+    return denial;
   }
 
   async invoke(requestContext, params = {}) {
@@ -306,7 +334,7 @@ export class McpGatewayCore {
       return deny("DENY_CONCURRENCY_LIMIT");
     }
     this.#capacityInUse += 1;
-    const reservation = { completed: false, pending: new Set(), released: false };
+    const reservation = { completed: false, pending: new Set(), released: false, nextSequence: 1 };
 
     try {
       let requestEnvelope;
@@ -325,6 +353,17 @@ export class McpGatewayCore {
       } catch {
         const fallbackClock = await this.#call(this.#now, this.#timeouts.clock_ms, reservation);
         const fallbackAttemptedAt = fallbackClock.status === "ok" ? normalizeAttemptedAt(fallbackClock.value) : null;
+        if (fallbackClock.status === "timeout") {
+          return this.#denyTimedOut(
+            "CLOCK",
+            fallbackClock,
+            "DENY_REQUEST_INVALID",
+            {},
+            null,
+            null,
+            reservation,
+          );
+        }
         return this.#denyAudited("DENY_REQUEST_INVALID", {}, null, fallbackAttemptedAt, reservation);
       }
 
@@ -334,11 +373,15 @@ export class McpGatewayCore {
       const attemptedAt = clock.status === "ok" ? normalizeAttemptedAt(clock.value) : null;
       if (attemptedAt === null) {
         if (clock.status === "timeout") {
-          if (!(await this.#audit(context, null, null, "TIMEOUT_CLOCK_PENDING", reservation))) {
-            return deny("DENY_AUDIT_UNAVAILABLE");
-          }
-          this.#scheduleLateSettlement("CLOCK", clock, context, null, null, reservation);
-          return deny("DENY_CLOCK_UNAVAILABLE");
+          return this.#denyTimedOut(
+            "CLOCK",
+            clock,
+            "DENY_CLOCK_UNAVAILABLE",
+            context,
+            null,
+            null,
+            reservation,
+          );
         }
         return this.#denyAudited("DENY_CLOCK_UNAVAILABLE", context, null, null, reservation);
       }
@@ -370,6 +413,17 @@ export class McpGatewayCore {
 
       if (this.#policyAllow !== null) {
         const policy = await this.#call(() => this.#policyAllow(context, capability), this.#timeouts.policy_ms, reservation);
+        if (policy.status === "timeout") {
+          return this.#denyTimedOut(
+            "POLICY",
+            policy,
+            "DENY_POLICY_UNAVAILABLE",
+            context,
+            capability,
+            attemptedAt,
+            reservation,
+          );
+        }
         if (policy.status !== "ok") {
           return this.#denyAudited("DENY_POLICY_UNAVAILABLE", context, capability, attemptedAt, reservation);
         }
@@ -383,6 +437,17 @@ export class McpGatewayCore {
         this.#timeouts.revocation_ms,
         reservation,
       );
+      if (revocation.status === "timeout") {
+        return this.#denyTimedOut(
+          "REVOCATION",
+          revocation,
+          "DENY_REVOCATION_UNAVAILABLE",
+          context,
+          capability,
+          attemptedAt,
+          reservation,
+        );
+      }
       if (revocation.status !== "ok") {
         return this.#denyAudited("DENY_REVOCATION_UNAVAILABLE", context, capability, attemptedAt, reservation);
       }
@@ -399,6 +464,17 @@ export class McpGatewayCore {
         this.#timeouts.revocation_ms,
         reservation,
       );
+      if (dispatchRevocation.status === "timeout") {
+        return this.#denyTimedOut(
+          "REVOCATION",
+          dispatchRevocation,
+          "DENY_REVOCATION_UNAVAILABLE",
+          context,
+          capability,
+          attemptedAt,
+          reservation,
+        );
+      }
       if (dispatchRevocation.status !== "ok") {
         if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_REVOCATION", reservation))) {
           return deny("DENY_AUDIT_UNAVAILABLE");
@@ -412,17 +488,42 @@ export class McpGatewayCore {
         return deny("DENY_REVOKED");
       }
 
-      const adapterOutcome = await this.#call(
-        () => adapter.invoke(capability.tool, adapterParams, context),
-        this.#timeouts.adapter_ms,
-        reservation,
-      );
-      if (adapterOutcome.status === "timeout") {
-        if (!(await this.#audit(context, capability, attemptedAt, "TIMEOUT_ADAPTER_PENDING", reservation))) {
+      let dispatchGuard;
+      try {
+        dispatchGuard = this.#dispatchGuard(context, capability);
+      } catch {
+        dispatchGuard = null;
+      }
+      if (dispatchGuard !== false) {
+        if (dispatchGuard && typeof dispatchGuard.then === "function") {
+          Promise.resolve(dispatchGuard).catch(() => {});
+        }
+        const code = dispatchGuard === true ? "DENY_REVOKED" : "DENY_REVOCATION_UNAVAILABLE";
+        return this.#denyAudited(code, context, capability, attemptedAt, reservation);
+      }
+
+      let adapterStarted;
+      try {
+        // The synchronous guard and adapter start deliberately share one call stack.
+        // Revocation after this point remains a cancellation/isolation residual.
+        adapterStarted = adapter.invoke(capability.tool, adapterParams, context);
+      } catch {
+        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_ADAPTER", reservation))) {
           return deny("DENY_AUDIT_UNAVAILABLE");
         }
-        this.#scheduleLateSettlement("ADAPTER", adapterOutcome, context, capability, attemptedAt, reservation);
-        return deny("DENY_ADAPTER_TIMEOUT_PENDING");
+        return deny("DENY_ADAPTER_ERROR");
+      }
+      const adapterOutcome = await this.#call(() => adapterStarted, this.#timeouts.adapter_ms, reservation);
+      if (adapterOutcome.status === "timeout") {
+        return this.#denyTimedOut(
+          "ADAPTER",
+          adapterOutcome,
+          "DENY_ADAPTER_TIMEOUT_PENDING",
+          context,
+          capability,
+          attemptedAt,
+          reservation,
+        );
       }
       if (adapterOutcome.status !== "ok") {
         if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_ADAPTER", reservation))) {
@@ -446,6 +547,17 @@ export class McpGatewayCore {
         this.#timeouts.result_validator_ms,
         reservation,
       );
+      if (validation.status === "timeout") {
+        return this.#denyTimedOut(
+          "RESULT_VALIDATOR",
+          validation,
+          "DENY_RESULT_INVALID",
+          context,
+          capability,
+          attemptedAt,
+          reservation,
+        );
+      }
       if (validation.status !== "ok" || validation.value !== true) {
         if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_RESULT", reservation))) {
           return deny("DENY_AUDIT_UNAVAILABLE");
