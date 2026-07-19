@@ -88,6 +88,15 @@ export {
 } from "./services/handoff-service.mjs";
 
 export {
+  ContextFederationError,
+  ContextFederationService
+} from "./services/context-federation-service.mjs";
+
+export {
+  runRetrieval
+} from "./services/context-retrieval-policy.mjs";
+
+export {
   DATA_CLASS_ORDER,
   RISK_ORDER,
   intersectWithParent,

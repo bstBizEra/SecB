@@ -1,0 +1,41 @@
+# P0-10 R2 ContextFederationService - Delivery Record
+# Authority: explicit operator waiver "waive the P0-10 R2 gate" (2026-07-19).
+#   Disposition GOV-P010-01..07 adopted (p0-10-gov-disposition.yaml).
+# Built on the CORRECT lineage: branch bst/p0-10-r2 from bst/integration-rehearsal-3
+#   (main + P0-08 + folded work), per the merge-candidate guardrail.
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+delivery:
+  work_package: "P0-10 R2 (ContextFederationService, option C)"
+  files:
+    - "src/services/context-retrieval-policy.mjs - the frozen seven-stage subtractive retrieval pipeline (pure): 1 project-scope, 2 authority-filter, 3 temporal, 4 verification, 5 exact-source (all removing), 6 relevance-rank (reorder only), 7 minimum-sufficient (remove only); every stage records exclusions"
+    - "src/services/context-federation-service.mjs - authoritative service composing over injected WorkPackageContractService.resolveEffective (live at issuance AND consumption)"
+    - "tests/context-federation.test.mjs (16 tests, the frozen CF negative matrix); tests/context-federation-stubs.test.mjs collapsed to a closure marker; V-004 conformance activated in conformance-stubs.test.mjs"
+
+invariants_delivered:
+  - "Issuance: closed request; closed-schema context-receipt; reserved-delimiter id gate; server-recomputed seal (DENY_FINGERPRINT_MISMATCH); live resolveEffective + triple baseline equality; authority_scope subset of the effective contract's allowed_paths (DENY_SCOPE_WIDENING); source_references must equal the subtractive retrieval survivors (DENY_SOURCE_MISMATCH - no smuggling); server timestamps; expires_at = min(TTL, wp valid_until); version-1-only; string idempotency with replay + conflict"
+  - "Consumption: fail-closed typed NONE on every failure - unknown/revoked/superseded (with chain-head pointer), seal mismatch, session mismatch, baseline mismatch, expiry, resolveEffective NONE, bound-version supersession; happy path returns the frozen sealed document; ledgered"
+  - "Compaction: chain-and-supersede (version N+1, same identity); subset-only across sources/tools/skills/scope (DENY_COMPACTION_ADDITIVE); successor inherits parent expiry (never extends); re-passes effectiveness; parent -> SUPERSEDED deny-on-use; COMPACT_CHAIN ledger entry records the parent content hash"
+  - "Revocation: GOV-role-gated (asserted, R1-honesty parity); terminal for the entire chain; deny-on-use"
+  - "Composition (GOV-P010-01): resolveEffective ALLOW is necessary but not sufficient; a federation-layer denial (session/seal/scope) denies even with WP ALLOW; a federation pass never overrides resolveEffective NONE (CF-15)"
+  - "Deep clone/freeze both directions; ledger-derived status; no shared-surface modification (import-and-inject only)"
+
+honesty_notes:
+  - "allowed_tools/allowed_skills are contract-silent on this baseline (RISK-P010-01 / RISK-P011-01 parity): authority_scope (paths) is enforced against the contract; tools/skills are caller-declared and subset-enforced only at compaction. A schema-enrichment V-item would make the contract carry them"
+  - "GOV revoke is an asserted role claim (no grant plumbing in the federation service); recorded for audit, parity with the handoff R1 pattern"
+  - "Session identity is caller-asserted (RISK-P010-06)"
+
+conformance:
+  - "V-004 (context receipt federation/retrieval) activated: positive issue+consume, negative session/unknown/expiry"
+  - "V-014 (credential-bounded MCP) still blocked on P0-11 R2 (mutation phase); the receipt allowed_tools half now exists but the invocation half joins at the MCP-server + P0-11 R2 stream"
+
+test_result: "233 tests, 228 pass, 0 fail, 5 skipped"
+next: "Pinned Immune review on the merge candidate (rehearsal-3 after fold)"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "claude-immune"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

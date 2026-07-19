@@ -10,6 +10,7 @@ import { DecisionLedger, KnowledgeLedger, OutcomeLedger } from "../src/ledger/te
 import { SkillResolver } from "../src/registry/skill-resolver.mjs";
 import { projectEvents } from "../src/ui/report-projections.mjs";
 import { HandoffService, HandoffServiceError } from "../src/services/handoff-service.mjs";
+import { ContextFederationService } from "../src/services/context-federation-service.mjs";
 import { WorkPackageContractService, WorkPackageServiceError } from "../src/services/work-package-service.mjs";
 
 // V-item conformance stubs — BLOCKED pending Codex P0-08/P0-09 and other P0 deliverables.
@@ -22,17 +23,53 @@ test("V-002 project scope: approved repository enforced", { skip: "MECHANISM DEL
   // Post-merge: wire projectResolver = (id) => projectService.resolveEffective({ projectId: id })
 });
 
-test("V-004 context: context receipt federation and retrieval", { skip: "BLOCKED: P0-10 R2 gated on P0-09 merge (see p0-10-gov-disposition.yaml)" }, () => {
-  // Executable plan (frozen per GOV-P010-01..07 disposition):
-  // Positive: drive a work package to AUTHORIZED via WorkPackageContractService
-  //   (V-009 pattern), issueReceipt bound to (project, wp version, baseline,
-  //   session), consumeReceipt within validity returns the sealed document;
-  //   after compactReceipt, the chain head consumes and the SUPERSEDED parent
-  //   denies with a chain-head pointer.
-  // Negative: consume after valid_until passes (advance injected now());
-  //   consume a never-issued receipt_id; consume with wrong session_id;
-  //   consume after a newer wp version reaches AUTHORIZED (supersession);
-  //   tampered document fails hash recompute — all typed NONE, fail closed.
+// V-004 unblocked by P0-10 R2 ContextFederationService (gate waived 2026-07-19).
+test("V-004 context: context receipt federation and retrieval", () => {
+  const BASE = "90c84a67e36a25941bc0983a0e687745919eca8c";
+  const win = { projectId: "prj_v004", workPackageId: "wp_v004", validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
+  let nowMs = Date.parse("2026-07-18T10:00:00Z");
+  const clock = () => new Date(nowMs);
+  const wp = new WorkPackageContractService({
+    grants: [
+      { ...win, grantId: "g_e", decisionId: "d_e", actorId: "eng", roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED"] },
+      { ...win, grantId: "g_r", decisionId: "d_r", actorId: "rev", roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
+      { ...win, grantId: "g_g", decisionId: "d_g", actorId: "gov", roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED"] }
+    ], now: clock
+  });
+  wp.createWorkPackage({
+    work_package_id: "wp_v004", version: 1, project_id: "prj_v004", objective: "v004", risk_class: "R2",
+    status: "DRAFT", baseline: BASE, scope: ["src/"], non_scope: ["p"], acceptance_criteria: ["ok"],
+    roles: { producer: "eng" }, allowed_paths: ["src/services"], prohibited_paths: ["o"], evidence_obligations: ["self:t"],
+    valid_until: "2026-08-01T00:00:00Z"
+  }, { idempotencyKey: "v004_c", actorId: "eng", authorityRef: "g_e" });
+  let s = 0;
+  for (const [st, a, g] of [["PLANNED", "eng", "g_e"], ["REVIEWED", "rev", "g_r"], ["AUTHORIZED", "gov", "g_g"]]) {
+    wp.submitTransition({ projectId: "prj_v004", workPackageId: "wp_v004", version: 1, requestedState: st, actorId: a, authorityRef: g, policyDecision: "ALLOW", evidence: [{ ref: `e_${st}` }], idempotencyKey: `v004_t_${++s}`, reasonCode: "S" });
+  }
+  const svc = new ContextFederationService({ workPackageService: wp, now: clock });
+  const src = [{ ref: "src1", projectId: "prj_v004", classification: "INTERNAL", current: true, verified: true, resolvable: true, relevance: 1 }];
+  const doc = (() => {
+    const base = {
+      receipt_id: "v004_rc", version: 1, project_id: "prj_v004", objective_id: "o", work_package_id: "wp_v004",
+      session_id: "v004_ses", assigned_role: "REV", authority_scope: ["src/services"], baseline_version: BASE,
+      acceptance_criteria: ["review"], allowed_tools: [], allowed_skills: [], evidence_obligations: ["r"],
+      freshness_timestamp: "2026-07-18T10:00:00Z", source_references: ["src1"]
+    };
+    return { ...base, content_hash: canonicalFingerprint(base) };
+  })();
+
+  // Positive: issue, then consume within validity returns the sealed document
+  assert.equal(svc.issueReceipt({ document: doc, candidateSources: src, actorId: "eng", authorityRef: "g_e", baseline: BASE, idempotencyKey: "v004_i" }).state, "ISSUED");
+  const consumed = svc.consumeReceipt("prj_v004", "v004_rc", { sessionId: "v004_ses", actorId: "rev", baseline: BASE });
+  assert.equal(consumed.code, "ALLOW");
+  assert.equal(consumed.receipt.receipt_id, "v004_rc");
+
+  // Negative: wrong session, unknown receipt fail closed with typed NONE
+  assert.equal(svc.consumeReceipt("prj_v004", "v004_rc", { sessionId: "other", actorId: "rev", baseline: BASE }).code, "DENY_SESSION_MISMATCH");
+  assert.equal(svc.consumeReceipt("prj_v004", "ghost", { sessionId: "v004_ses", actorId: "rev", baseline: BASE }).code, "DENY_UNKNOWN_RECEIPT");
+  // Negative: after valid_until the receipt fails closed
+  nowMs = Date.parse("2026-07-20T00:00:00Z");
+  assert.equal(svc.consumeReceipt("prj_v004", "v004_rc", { sessionId: "v004_ses", actorId: "rev", baseline: BASE }).code, "DENY_EXPIRED");
 });
 
 // V-005 unblocked: the Role/SoD engine (AuthorityEngine) has been delivered
