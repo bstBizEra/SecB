@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "description": "Example registry seed for local MCP development. Pass this file via SECB_REGISTRY_SEED and set SECB_CALLER_INSTANCE_ID=inst_claude_local_001 when starting the server.",
+  "agents": [
+    {
+      "registration": {
+        "provider_id": "anthropic",
+        "runtime_product_id": "claude-code-cli",
+        "runtime_deployment_id": "local-dev-001",
+        "agent_profile_id": "claude-mcp-caller-alpha",
+        "agent_instance_id": "inst_claude_local_001",
+        "runtime_version": "1.0.0",
+        "deployment_location": "local",
+        "owner": "local-operator",
+        "permitted_roles": ["ENGIN"],
+        "authority_ceiling": "A0",
+        "approved_models": ["claude-sonnet-4-6"],
+        "approved_tools": ["read"],
+        "approved_mcp_methods": ["initialize", "tools/list", "tools/call", "ping"],
+        "approved_skills": [],
+        "repository_scopes": ["secb"],
+        "environment_scopes": ["local"],
+        "max_data_classification": "INTERNAL",
+        "delegation_rights": [],
+        "evidence_obligations": [],
+        "workload_identity_ref": "wl_claude_local_001",
+        "evaluation_status": "CANDIDATE",
+        "lifecycle_state": "PENDING"
+      },
+      "transitions": {
+        "evaluation": "APPROVED",
+        "lifecycle": "ACTIVE"
+      }
+    }
+  ]
+}
