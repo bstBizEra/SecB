@@ -121,9 +121,15 @@ export class ContextFederationService {
     // subtractive retrieval over the candidate pool; the surviving refs must
     // exactly match the sealed document's source_references (no smuggling).
     const retrieval = runRetrieval(candidateSources, { projectId: document.project_id, classificationCeiling, minimumSufficient });
-    const surviving = new Set(retrieval.included);
-    if (document.source_references.some((r) => !surviving.has(r)) || retrieval.included.length !== document.source_references.length) {
-      deny("DENY_SOURCE_MISMATCH", "source_references do not match the subtractive retrieval result");
+    // Set equality (order-independent, duplicate-proof): source_references
+    // must be exactly the survivor set — no unauthorized ref, and no
+    // duplicate under-claim that would drop an authorized one (Immune note 1).
+    const surviving = [...new Set(retrieval.included)].sort();
+    const claimed = [...new Set(document.source_references)].sort();
+    if (claimed.length !== document.source_references.length ||
+        surviving.length !== claimed.length ||
+        surviving.some((ref, i) => ref !== claimed[i])) {
+      deny("DENY_SOURCE_MISMATCH", "source_references must exactly equal the subtractive retrieval survivor set");
     }
 
     const issuedAt = this.#now();

@@ -128,9 +128,12 @@ test("CF-05 idempotency conflict and stable replay", () => {
   denies(() => h.issue({ document: { objective_id: "different" } }), "DENY_IDEMPOTENCY_CONFLICT");
 });
 
-test("CF: source_references must match the subtractive retrieval result", () => {
+test("CF: source_references must equal the retrieval survivor set (no unauthorized, no duplicate under-claim)", () => {
   const h = harness();
+  // unauthorized ref appended
   denies(() => h.issue({ document: { source_references: ["s1", "s_ghost"] } }), "DENY_SOURCE_MISMATCH");
+  // duplicate under-claim: drops s2, repeats s1 (Immune note 1) — must deny
+  denies(() => h.issue({ document: { source_references: ["s1", "s1"] } }), "DENY_SOURCE_MISMATCH");
 });
 
 test("CF-06 consume: wrong session and unknown receipt fail closed", () => {
