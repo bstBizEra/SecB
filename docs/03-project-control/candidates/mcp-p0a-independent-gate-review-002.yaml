@@ -1,0 +1,131 @@
+# MCP P0-A Gateway Core — Independent REV/QA/SEC Gate Review, Round 2
+# Reviewed target: producer/mcp/p0a-gateway-core-rework-005 @ 60bbb6a (rework tip)
+# Requested by: SecB loop coordination note referencing GOV-DEC-OM-MCP-001
+#   addendum 3 (commit 9850029, branch bst/gov-decision-om-mcp-wave),
+#   which recommended stop-and-review at rework-005 and characterized
+#   three residuals as design-class questions rather than producer defects.
+# Reviewers: three independent, freshly-spawned subagents (no shared
+#   context with each other or with the producer), each instructed
+#   explicitly not to accept the "design-class" framing on faith.
+
+original_findings_disposition:
+  # All from round-1 (docs/03-project-control/candidates/mcp-p0a-codex-advisory-review-001.yaml)
+  REV-MCP-P0A-001: {status: CLOSED, verified_by: "independent test execution + code read"}
+  REV-MCP-P0A-002: {status: CLOSED, verified_by: "independent test execution + code read"}
+  REV-MCP-P0A-003: {status: CLOSED, note: "closes via full-call denial (DENY_ADAPTER_ERROR) rather than the sanitize-and-succeed behavior round-1's test scaffold assumed. Stricter, equally valid, but a documentation/expectation gap worth noting — not a security gap."}
+  REV-MCP-P0A-004: {status: CLOSED, verified_by: "enumerated all 34 deny-returning call sites; none bypass invocationLog"}
+  REV-MCP-P0A-005: {status: CLOSED, verified_by: "grep confirms the only response message field is the hardcoded literal 'request denied'"}
+
+independent_test_execution:
+  method: "Isolated git worktree, npm ci --offline --ignore-scripts, node --test run directly (not trusted from commit messages)"
+  focused_suite: "43 tests, 43 pass, 0 fail, 0 skipped"
+  full_tracked_suite: "195 tests, 182 pass, 0 fail, 13 skipped"
+  matches_producer_self_report_at_round_5: true
+  note: "The task brief's cited '163/150/13' figure was traced to round-1's baseline against the original frozen candidate, not round 5's — corrected during review, not a producer discrepancy."
+  test_quality_spot_check: "8 adversarial tests read closely; found substantive (TOCTOU race test, thenable/Proxy trap resistance, prototype-pollution simulation, Unicode-confusable secret detection), not tautological. One cosmetic nit: two vacuous assertions in the receipt-attribution test don't exercise the vulnerability path, though the primary assertion does."
+  no_transport_or_io_claim: "Confirmed independently by grep and full file read — zero imports, zero matches for net/http/fs/child_process/exec/spawn/fetch/WebSocket/listen. Candidate remains provably inert."
+
+blocking_finding:
+  id: "GATE2-BLOCKING-001"
+  title: "Capacity-exhaustion DoS from an unbounded await in the audit-timeout recovery path"
+  discovered_independently_by: ["REV subagent (empirical repro)", "SEC subagent (code-path analysis)"]
+  root_cause: >-
+    #scheduleAuditTimeout's recovery path performs `await outcome.settled`
+    with no timeout wrapper, unlike every other hook/adapter/audit call in
+    the file, which is routed through boundedCall's Promise.race pattern.
+  consequence: >-
+    REV empirically reproduced this: with max_concurrency: 1 and an
+    adapter/hook returning a promise that never settles, the first call
+    correctly times out and denies, but every subsequent call for the
+    process's lifetime returns DENY_CONCURRENCY_LIMIT — the capacity slot
+    never drains because #releaseCapacityIfComplete waits on
+    reservation.pending, which never empties. With the shipped default
+    max_concurrency: 4, four hung hooks permanently wedge the sole
+    enforcement chokepoint shut for ALL callers until process restart.
+  security_characterization: >-
+    Fails closed (denies, does not leak or grant capability), so it is
+    not a confidentiality/integrity break — but it is a full availability
+    break of the project's single policy-enforcement chokepoint, achievable
+    by one uncooperative or buggy hook, with no external attacker needed.
+  disagreement_with_coordination_note: >-
+    GOV-DEC-OM-MCP-001 addendum 3 characterizes "indefinitely unsettled
+    hooks" as design-class, deferring to an outer process/worker
+    supervisor. Both independent reviewers disagree with deferring THIS
+    specific gap: the fix is bounded, ordinary code using the identical
+    boundedCall pattern already applied everywhere else in the file — it
+    is not a new architectural boundary, and does not require an ADR.
+  required_action: >-
+    Apply the same boundedCall/timeout-race pattern to the recovery
+    await in #scheduleAuditTimeout, so a hung audit sink cannot
+    indefinitely retain a capacity-lane reservation.
+
+residual_assessment:
+  - residual: "(a) Durable evidence under an unavailable audit sink"
+    verdict: DESIGN_CLASS_ACCEPTABLE_TO_DEFER
+    agreement: "REV and SEC both agree"
+    reasoning: >-
+      The module has a hard, statically-confirmed no-I/O boundary; any
+      durable evidence store requires I/O, categorically outside this
+      pure in-process file's charter. One narrow, non-blocking asymmetry
+      noted by SEC: late-settlement retry is only scheduled for timeouts,
+      not for synchronous/rejected audit failures — recommend closing for
+      consistency, non-blocking.
+  - residual: "(b) Atomic cancellation"
+    verdict: PARTIALLY_DESIGN_CLASS_OVERSOLD
+    agreement: "REV and SEC both agree, independently"
+    reasoning: >-
+      Forced preemption of an already-started, uncooperative call is
+      genuinely impossible in JS's single-threaded model without external
+      process/worker isolation — that half is legitimately design-class.
+      But cooperative cancellation was never even attempted: zero
+      references to AbortController/AbortSignal anywhere in the file.
+      Threading an AbortSignal into adapter.invoke() so COOPERATING
+      adapters can voluntarily bail is a standard, low-risk Node pattern
+      requiring no ADR. Its total absence is a producer gap, not an
+      architectural limit -- recommend tracking as a normal follow-up,
+      non-blocking for this gate.
+  - residual: "(c) Indefinitely unsettled hooks"
+    verdict: SPLIT_VERDICT_SEE_BLOCKING_FINDING
+    agreement: "REV and SEC both agree, independently, via different methods"
+    reasoning: >-
+      The specific fear posed by this residual -- that a hang could cause
+      fail-open (request proceeds without narrowing ever applying) -- is
+      verified FALSE by both reviewers: every awaited decision-affecting
+      hook is timeout-raced to a bounded deny, and the synchronous
+      dispatchGuard denies on anything other than a literal false return,
+      forecloosing a fail-open-via-hanging-guard attack. But the residual
+      as stated obscures a real, different, producer-fixable defect (see
+      blocking_finding above) rather than being purely architectural.
+
+verdicts:
+  REV: {verdict: REQUEST_CHANGES, blocking_findings: 1}
+  QA: {verdict: PASS_WITH_NOTES, blocking_findings: 0}
+  SEC: {verdict: REQUEST_CHANGES, blocking_findings: 1}
+
+reconciled_disposition: REQUEST_CHANGES_TARGETED_REWORK_REQUIRED
+reconciled_recommendation: >-
+  Do not stop-and-defer-to-ADR as originally proposed for all three
+  residuals. Recommend: (1) one more targeted producer rework round
+  (round-006) closing GATE2-BLOCKING-001 only -- apply boundedCall to the
+  #scheduleAuditTimeout recovery await -- then a fast focused re-gate of
+  just that change; (2) route residual (a) and the force-preemption half
+  of residual (b) to the operator/ADR queue as originally proposed, since
+  both reviewers independently confirm those are genuinely architectural;
+  (3) track cooperative AbortSignal support (the fixable half of residual
+  b) as an ordinary follow-up item, not an ADR blocker.
+
+scope_and_authority: >-
+  This record is an independent review verdict only. It does not apply
+  any code change, does not merge anything, does not activate anything,
+  and does not authorize the recommended round-006 rework -- that
+  authorization, if sought, remains with the producer lane's own
+  governance chain per AMD-002 (prepare on a non-main branch; operator
+  ratifies at merge).
+
+self_certification:
+  agent_id: "Claude-Sonnet5-Motor"
+  peer_agent_id: "codex-operator-root / Claude Fable 5 (producer lane)"
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
