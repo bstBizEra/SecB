@@ -19,7 +19,7 @@ const validContext = () => ({
   evidence_required: true,
 });
 
-function build({ log, adapterImpl, policy } = {}) {
+function build({ log, adapterImpl, policy, revocationCheck = () => false, resultValidator, limits, timeouts } = {}) {
   const entries = [];
   const capabilityRegistry = new Map([
     ["filesystem.read", { adapter_id: "fs-read", tool: "read_text_file", access: "read" }],
@@ -35,6 +35,10 @@ function build({ log, adapterImpl, policy } = {}) {
     invocationLog: log ?? ((e) => entries.push(e)),
     policy: policy ?? null,
     now: FIXED_NOW,
+    revocationCheck,
+    resultValidator,
+    limits,
+    timeouts,
   });
   return { gateway, entries };
 }
@@ -45,6 +49,10 @@ test("constructor fails closed without registry, adapters, or invocation log", (
   assert.throws(
     () => new McpGatewayCore({ capabilityRegistry: new Map(), adapters: new Map() }),
     /invocationLog/,
+  );
+  assert.throws(
+    () => new McpGatewayCore({ capabilityRegistry: new Map(), adapters: new Map(), invocationLog: () => {} }),
+    /revocationCheck/,
   );
 });
 
@@ -119,7 +127,7 @@ test("read-only happy path: audit precedes dispatch, receipt marks data untruste
   });
   const outcome = await gateway.invoke(validContext(), { path: "docs/README.md" });
   assert.equal(outcome.ok, true);
-  assert.deepEqual(calls, ["audit", "adapter"], "invocation log must run before the adapter");
+  assert.deepEqual(calls, ["audit", "adapter", "audit"], "invocation log must bracket the adapter");
   assert.equal(outcome.result.tool, "read_text_file");
   assert.equal(outcome.receipt.content_disposition, "data_untrusted");
   assert.equal(outcome.receipt.capability_id, "filesystem.read");
@@ -129,9 +137,10 @@ test("read-only happy path: audit precedes dispatch, receipt marks data untruste
 test("invocation log entry carries the attribution fields", async () => {
   const { gateway, entries } = build();
   await gateway.invoke(validContext(), { path: "x" });
-  assert.equal(entries.length, 1);
+  assert.equal(entries.length, 2);
   const entry = entries[0];
   for (const key of ["agent_id", "harness_id", "project_id", "work_package_id", "session_id", "authorization_id", "capability_id", "adapter_id", "tool", "purpose", "attempted_at"]) {
     assert.ok(entry[key], `log entry missing ${key}`);
   }
+  assert.equal(entries[1].disposition, "SUCCESS");
 });
