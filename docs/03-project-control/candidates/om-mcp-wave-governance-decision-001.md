@@ -41,3 +41,5 @@
 1. Sign or amend the 013 records in the Codex CLI session (its own queue).
 2. Rule on D1–D3 dispositions above (merge order suggestion: REV records → round-2 fold → PR #3; deployment candidate rides the rehearsal-3 reassessment).
 3. ADR-0008 decision after rev-2 candidate review completes.
+
+**D1 ADDENDUM 2 (2026-07-19 19:01):** the producer lane advanced linearly to `producer/mcp/p0a-gateway-core-rework-003` @ `d4509a1` (rework-002 is its ancestor): closes the full-boundary findings; producer disposition `CLOSED_CANDIDATE_WITH_RESIDUAL` (residuals: atomic cancellation, indefinitely unsettled in-process hooks). The round-2 successor recommendation now points at the rework-003 tip; all other addendum-1 statements stand. Fresh independent REV/QA/SEC still outstanding.
