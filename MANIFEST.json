@@ -162,6 +162,7 @@
     "docs/adr/0005-failure-is-a-learning-transition.md",
     "docs/adr/0006-harness-neutral-authority.md",
     "docs/adr/0007-serialized-integration.md",
+    "docs/adr/0008-root-agents-adoption.md",
     "docs/templates/agent-profile.yaml",
     "docs/templates/failure-evidence-envelope.yaml",
     "docs/templates/goal.yaml",
