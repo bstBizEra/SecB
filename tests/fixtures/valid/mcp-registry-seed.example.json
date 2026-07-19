@@ -1,0 +1,36 @@
+{
+  "seed_version": "1",
+  "example": true,
+  "note": "EXAMPLE ONLY — not an operator-authorized seed. Illustrates the P0-21 SecB MCP registry-seed shape consumed by tools/secb-mcp-server-wiring.mjs. Each registration enters the registry as CANDIDATE/PENDING and is transitioned to APPROVED/ACTIVE per its flags so the seeded identity can resolve as a read-only caller. Replace with real operator-authorized identities before any deployment.",
+  "policy_ceiling": "A0",
+  "registrations": [
+    {
+      "approve": true,
+      "activate": true,
+      "registration": {
+        "provider_id": "anthropic",
+        "runtime_product_id": "claude-code",
+        "runtime_deployment_id": "claude-code-local-alpha",
+        "agent_profile_id": "claude-code-motor",
+        "agent_instance_id": "inst_claude_alpha_ro",
+        "runtime_version": "1.0.0",
+        "deployment_location": "local",
+        "owner": "secb-operator",
+        "permitted_roles": ["ENGIN"],
+        "authority_ceiling": "A0",
+        "approved_models": ["claude-opus-4-6"],
+        "approved_tools": ["read", "grep", "glob"],
+        "approved_mcp_methods": [],
+        "approved_skills": [],
+        "repository_scopes": ["secb"],
+        "environment_scopes": ["local"],
+        "max_data_classification": "INTERNAL",
+        "delegation_rights": [],
+        "evidence_obligations": ["event-envelope"],
+        "workload_identity_ref": "wl_claude_alpha_ro",
+        "evaluation_status": "CANDIDATE",
+        "lifecycle_state": "PENDING"
+      }
+    }
+  ]
+}
