@@ -22,6 +22,29 @@ carried_v_items:
   - "GOV-role revocation + authorityRef/sessionId caller-asserted (mutation-substrate authority work)"
   - "RISK-P011-01 contract-silent dimensions"
 
+review_round_2_final:
+  reviewed_target: "bst/integration-rehearsal-3 @ 810a19a (merge candidate)"
+  range: "281f3f5..810a19a"
+  verdict: "APPROVE_FOR_MERGE"
+  test_result: "238 tests, 233 pass, 0 fail, 5 skipped"
+  confirmed:
+    - "#resolveHead faithful extraction: verify and consume return identical codes/receipts for ALLOW and every deny; consume appends CONSUME only on ALLOW; no check dropped/reordered"
+    - "verifyReceipt side-effect-free and idempotent (two verifies -> 0 CONSUME), returns the receipt document for the binding check"
+    - "R2 gate leaves the receipt ledger CONSUME-free after successful AND denied offers; orphan-CONSUME eliminated"
+    - "Deny-only; no gate weakened; clean verify=provenance / consume=use semantic split"
+  stack_status_immune_advisory: >
+    Reviewed and APPROVE_FOR_MERGE on 810a19a, each on the correct merge
+    candidate: P0-09, P0-14, P0-17, skill resolver, GOV-P011-08
+    delimiter ratification, P0-10 R2, P0-11 R1+R2. SCOPING NOTE: P0-08
+    ProjectContractService was NOT internally re-reviewed in this series
+    (presence/lineage/untouched verified only); its own Immune sign-off
+    belongs to its originating Codex review.
+  open_v_items_none_gating:
+    - "RISK-P011-01 / RISK-P010-01 contract-silent dimensions (schema enrichment)"
+    - "Caller-asserted GOV-role revocation + authorityRef/sessionId (mutation substrate)"
+    - "Source-match multiset-equality (applied for CF; note carried)"
+    - "Optional accept-time receipt re-verification"
+
 self_certification:
   agent_id: "claude-immune"
   peer_agent_id: "claude-code-motor"
