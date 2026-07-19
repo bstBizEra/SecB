@@ -1,0 +1,24 @@
+schema_version: "0.1"
+skill_candidate_id: "SKILL-CAND-"
+name: ""
+purpose: ""
+source_knowledge_refs: []
+scope: []
+inputs: []
+outputs: []
+workflow: []
+permissions:
+  tools: []
+  mcp: []
+  filesystem: []
+  network: []
+  credentials: []
+harness_compatibility: []
+baseline_failure_tests: []
+skill_enabled_tests: []
+adversarial_tests: []
+security_review_ref: ""
+evaluation_refs: []
+known_limitations: []
+promotion_scope: "PROJECT_ONLY"
+state: "CANDIDATE"

@@ -1,29 +1,30 @@
-schema_version: "1.0"
-evidence:
-  evidence_id: "EVD-TBD"
-  evidence_type: "TBD"
-  project_id: "SECB"
-  work_package_id: "WP-TBD"
-  agent_session_id: "ASESSION-TBD"
-  actor_id: "TBD"
-  runtime_deployment_id: "TBD"
-  environment_id: "TBD"
-  source_class: "HOST_OBSERVATION"
-  assertion_type: "OBSERVED_FACT"
-  captured_at: null
-  valid_until: null
-  procedure: "TBD"
-  result:
-    status: "TBD"
-    exit_code: null
-    limitations: []
-  integrity:
-    payload_sha256: "TBD"
-    previous_event_hash: null
-    signature_ref: null
-  verification:
-    status: "PENDING"
-    verifier_id: null
-    method: null
-  classification: "INTERNAL"
-  retention_policy: "TBD"
+schema_version: "0.1"
+evidence_id: "EVID-"
+evidence_type: ""
+correlation:
+  project_id: ""
+  goal_id: ""
+  module_id: ""
+  work_package_id: ""
+  session_id: ""
+actor:
+  agent_instance_id: ""
+  role: ""
+  harness_id: ""
+  model_id: ""
+authority_ref: ""
+context_receipt_ref: ""
+baseline_ref: ""
+observations: []
+commands: []
+artifacts: []
+verification:
+  method: ""
+  result: ""
+  verifier: ""
+limitations: []
+created_at: ""
+integrity:
+  payload_sha256: ""
+  signature_ref: ""
+state: "CANDIDATE"

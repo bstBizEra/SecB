@@ -1,0 +1,11 @@
+schema_version: "0.1"
+agent_profile_id: "AGP-"
+name: ""
+permitted_roles: []
+maximum_authority: "A1"
+maximum_risk_class: "R1"
+capabilities: []
+restrictions: []
+required_independence_level: "I1"
+evaluation_refs: []
+lifecycle_state: "CANDIDATE"

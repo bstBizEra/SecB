@@ -1,0 +1,27 @@
+schema_version: "0.1"
+harness_id: "HARNESS-"
+provider: ""
+product: ""
+version: ""
+deployment_id: ""
+os_support: []
+models: []
+capabilities:
+  filesystem: false
+  git: false
+  shell: false
+  worktree: false
+  mcp: false
+  a2a: false
+  structured_events: false
+  pause_resume: false
+telemetry:
+  channels: []
+  evidence_quality: "UNASSESSED"
+credential_injection: []
+known_limitations: []
+approved_risk_classes: []
+evaluation_refs: []
+owner: ""
+review_by: ""
+state: "CANDIDATE"
