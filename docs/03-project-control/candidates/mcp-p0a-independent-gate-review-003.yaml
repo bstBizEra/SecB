@@ -1,0 +1,133 @@
+# MCP P0-A Gateway Core — Independent REV/QA/SEC Gate Review, Round 3
+# Reviewed target: producer/mcp/p0a-gateway-core-rework-006 @ c2472e5
+#   (code commit 770aebb, handoff commit c2472e5), parent 60bbb6a.
+# Closes: GATE2-BLOCKING-001, recorded at
+#   docs/03-project-control/candidates/mcp-p0a-independent-gate-review-002.yaml
+#   (commit 6a82414, branch claude/rev/mcp-p0a-gate-002).
+# Reviewers: three fresh, independent subagents (no shared context with
+#   each other or with the producer), each told not to trust the
+#   producer's claims and to reproduce results directly.
+
+gate2_blocking_001_disposition: CLOSED
+verification_summary:
+  fix_location: "#holdCapacity (src/gateway/mcp-gateway-core.mjs, single @@ hunk from line 355)"
+  fix_mechanism: "Bounded abandonment timer (audit_ms * 4) races the existing .finally() handler; forcibly removes a never-settling pending entry from reservation.pending and calls #releaseCapacityIfComplete on the bound."
+  necessity_claim_independently_verified: >-
+    Both REV and SEC independently traced the code and confirmed the
+    producer's claim that patching only the originally-named line
+    (#scheduleAuditTimeout's internal await) would NOT have worked: #call
+    tracks the raw hung promise as its own separate pending entry via
+    this.#holdCapacity(reservation, outcome.settled) at every timed-out
+    hook/adapter/audit call site, independently of whatever
+    #scheduleAuditTimeout's own chain does. The shared-primitive fix was
+    necessary, not stylistic.
+  test_results_independently_reproduced:
+    focused_suite: "45 tests, 45 pass, 0 fail, 0 skipped -- reproduced by both REV and QA"
+    full_suite: "197 tests, 184 pass, 0 fail, 13 skipped -- reproduced by both REV and QA"
+  non_tautological_proof: >-
+    QA took the extra step of running the new test file against the OLD
+    (pre-fix, 60bbb6a) source in a separate disposable worktree and
+    confirmed both new tests genuinely FAIL there (actual:
+    DENY_CONCURRENCY_LIMIT, expected: DENY_ADAPTER_TIMEOUT_PENDING) --
+    proving the regression coverage is real, not tautological.
+  no_new_fail_open_path: >-
+    SEC traced and empirically confirmed the security-relevant decision
+    returned to every caller is always finalized as a deny_code strictly
+    before #holdCapacity is ever invoked for that call site -- built an ad
+    hoc probe letting a hung adapter resolve successfully AFTER the caller
+    already received a deny, and confirmed the original response object is
+    immutable and stays a deny. #holdCapacity is purely background
+    capacity/evidence bookkeeping with no path back into an already-
+    returned response.
+  audit_trail_durability_confirmed: >-
+    SEC additionally built an ad hoc probe (not committed, ran only in a
+    disposable worktree) proving that when an abandoned reservation's
+    underlying operation LATER actually settles, its LATE_SETTLEMENT_*
+    audit entry is still correctly written -- abandonment does not
+    silently destroy the eventual audit record.
+  minimal_diff_confirmed: >-
+    git diff 60bbb6a 770aebb --stat: exactly two files
+    (src/gateway/mcp-gateway-core.mjs +16/-0, one hunk only, inside
+    #holdCapacity; tests/mcp-gateway-core-adversarial.test.mjs +68/-0, two
+    new tests). invoke() and every deny-path call site byte-for-byte
+    unchanged. No new I/O/transport/spawn capability (confirmed by grep,
+    independently, by REV and SEC both).
+
+verdicts:
+  REV: {verdict: APPROVE_WITH_NOTES, blocking_findings: 0}
+  QA: {verdict: PASS, blocking_findings: 0}
+  SEC: {verdict: APPROVE_WITH_NOTES, blocking_findings: 0}
+
+new_non_blocking_findings_to_carry_forward:
+  - id: "GATE3-NOTE-001"
+    title: "Latent timer-overflow edge case in audit_ms * 4 arithmetic"
+    found_by: "REV"
+    description: >-
+      #holdCapacity computes audit_ms * 4 with no re-clamp against
+      MAX_NODE_TIMEOUT_MS. normalizeTimeouts only validates audit_ms
+      itself against that ceiling, not the product. An (still-valid)
+      audit_ms above ~536,870,911ms (~6.2 days) makes the product exceed
+      Node's signed-32-bit timer ceiling; Node clamps such setTimeout
+      delays to ~1ms, so abandonment would fire almost immediately
+      instead of after the intended 4x grace window, releasing capacity
+      for a legitimately-slow (not hung) call. Unrealistic at
+      default/typical configs (audit_ms=250ms) but a genuine latent gap
+      in this round's new timer arithmetic.
+    disposition: NON_BLOCKING_TRACKED
+    recommended_fix: "Math.min(audit_ms * 4, MAX_NODE_TIMEOUT_MS), or explicit validation at construction."
+  - id: "GATE3-NOTE-002"
+    title: "Unbounded memory growth under sustained repeated hangs (companion to gate-002 residual b)"
+    found_by: "REV and SEC, independently"
+    description: >-
+      Reclaiming #capacityInUse cannot make the underlying never-settling
+      promise itself settle (no cross-realm cancellation in JS). A hook
+      that hangs repeatedly, once per reclaimed slot, indefinitely, leaks
+      one orphaned promise chain (closure over context/capability/
+      reservation) per hang, for the process's lifetime -- slow,
+      unbounded memory growth even though the INSTANT capacity-wedge DoS
+      (GATE2-BLOCKING-001's literal concern) is fully closed. SEC
+      confirmed via an 8-wave probe that #capacityInUse itself returns
+      cleanly to baseline every time while, by construction, 8 orphaned
+      chains remain live. This is not a regression -- the pre-fix state
+      was strictly worse (capacity itself wedged permanently) -- and it
+      is already implicitly covered by gate-002's residual (b) (forced
+      preemption impossible in JS), but it was not explicitly enumerated
+      as a companion risk until this round's independent review.
+    disposition: NON_BLOCKING_ROUTE_TO_OPERATOR_ADR_QUEUE_ALONGSIDE_RESIDUAL_B
+  - id: "GATE3-NOTE-003"
+    title: "Recommend promoting SEC's ad hoc late-settlement-durability probe to a permanent test"
+    found_by: "SEC"
+    description: >-
+      The shipped test suite does not cover the case where an abandoned
+      reservation's operation LATER actually settles and its
+      LATE_SETTLEMENT_* audit entry must still be written. SEC verified
+      this holds via an ad hoc, uncommitted probe. Recommend the producer
+      add an equivalent permanent regression test in a future round.
+    disposition: NON_BLOCKING_FOLLOW_UP_FOR_NEXT_ROUND
+
+reconciled_disposition: CLOSED_READY_FOR_HAND_OFF
+reconciled_recommendation: >-
+  GATE2-BLOCKING-001 is closed. All three independent gates returned zero
+  blocking findings, with load-bearing claims (fix necessity, test
+  results, no-fail-open, audit durability, diff minimality, no I/O)
+  independently verified by direct trace and live reproduction, not
+  merely accepted. Recommend handing this back to the coordination loop
+  as green. The two new non-blocking findings (timer-overflow edge case,
+  sustained-hang memory growth) should be tracked alongside gate-002's
+  existing residuals (a) durable evidence and (b) forced preemption for
+  the operator/ADR queue -- none of them warrant another producer round
+  before hand-off.
+
+scope_and_authority: >-
+  This record is an independent review verdict only. It does not apply
+  any code change, does not merge anything, does not activate anything,
+  and does not authorize any further rework -- that remains with the
+  producer lane's own governance chain per AMD-002.
+
+self_certification:
+  agent_id: "Claude-Sonnet5-Motor"
+  peer_agent_id: "codex-operator-root / Claude Fable 5 (producer lane)"
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
