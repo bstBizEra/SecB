@@ -27,16 +27,18 @@ function gateway({ adapter, policy, now } = {}) {
   });
 }
 
-test("throwing policy becomes a structured denial", () => {
+test("throwing policy becomes a structured denial", async () => {
   const core = gateway({ policy: { allow: () => { throw new Error("policy backend unavailable"); } } });
-  assert.doesNotThrow(() => core.invoke(context()));
-  assert.equal(core.invoke(context()).ok, false);
+  const result = await core.invoke(context());
+  assert.equal(result.ok, false);
+  assert.equal(result.deny_code, "DENY_POLICY_UNAVAILABLE");
 });
 
-test("throwing clock becomes a structured denial", () => {
+test("throwing clock becomes a structured denial", async () => {
   const core = gateway({ now: () => { throw new Error("clock unavailable"); } });
-  assert.doesNotThrow(() => core.invoke(context()));
-  assert.equal(core.invoke(context()).ok, false);
+  const result = await core.invoke(context());
+  assert.equal(result.ok, false);
+  assert.equal(result.deny_code, "DENY_CLOCK_UNAVAILABLE");
 });
 
 test("async adapter rejection becomes a structured denial", async () => {
@@ -46,19 +48,21 @@ test("async adapter rejection becomes a structured denial", async () => {
   assert.equal(result.deny_code, "DENY_ADAPTER_ERROR");
 });
 
-test("adapter cannot mutate receipt attribution", () => {
+test("adapter cannot mutate receipt attribution", async () => {
   const request = context();
   const core = gateway({ adapter: (_tool, _params, mutableContext) => {
     mutableContext.work_package_id = "forged-work-package";
     mutableContext.session_id = "forged-session";
     return { ok: true };
   } });
-  const result = core.invoke(request);
-  assert.equal(result.receipt.work_package_id, "wp_review");
-  assert.equal(result.receipt.session_id, "session-review");
+  const result = await core.invoke(request);
+  assert.equal(result.ok, false);
+  assert.equal(result.deny_code, "DENY_ADAPTER_ERROR");
+  assert.equal(request.work_package_id, "wp_review");
+  assert.equal(request.session_id, "session-review");
 });
 
-test("narrowing-only policy cannot reroute an approved read capability", () => {
+test("narrowing-only policy cannot reroute an approved read capability", async () => {
   let writeAdapterCalled = false;
   const capability = { adapter_id: "fixture", tool: "read", access: "read" };
   const core = new McpGatewayCore({
@@ -74,27 +78,27 @@ test("narrowing-only policy cannot reroute an approved read capability", () => {
       return true;
     } },
   });
-  const result = core.invoke(context());
+  const result = await core.invoke(context());
   assert.equal(result.ok, false);
   assert.equal(writeAdapterCalled, false);
 });
 
-test("denied attempts are recorded for audit", () => {
+test("denied attempts are recorded for audit", async () => {
   const entries = [];
   const core = new McpGatewayCore({
     capabilityRegistry: new Map(),
     adapters: new Map(),
     invocationLog: (entry) => entries.push(entry),
   });
-  const result = core.invoke({ ...context(), capability_id: "unknown.read" });
+  const result = await core.invoke({ ...context(), capability_id: "unknown.read" });
   assert.equal(result.ok, false);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].disposition, "DENY_UNKNOWN_CAPABILITY");
 });
 
-test("adapter failures do not disclose backend error text", () => {
+test("adapter failures do not disclose backend error text", async () => {
   const core = gateway({ adapter: () => { throw new Error("token=super-secret-value"); } });
-  const result = core.invoke(context());
+  const result = await core.invoke(context());
   assert.equal(result.ok, false);
   assert.doesNotMatch(result.message, /super-secret-value/);
 });

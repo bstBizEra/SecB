@@ -48,76 +48,76 @@ test("constructor fails closed without registry, adapters, or invocation log", (
   );
 });
 
-test("every missing request_context field denies with DENY_CONTEXT", () => {
+test("every missing request_context field denies with DENY_CONTEXT", async () => {
   const { gateway } = build();
   for (const field of REQUIRED_CONTEXT_FIELDS) {
     const context = validContext();
     delete context[field];
-    const outcome = gateway.invoke(context, {});
+    const outcome = await gateway.invoke(context, {});
     assert.equal(outcome.ok, false, `expected denial when ${field} missing`);
     assert.equal(outcome.deny_code, "DENY_CONTEXT");
   }
 });
 
-test("evidence_required must be exactly true", () => {
+test("evidence_required must be exactly true", async () => {
   const { gateway } = build();
   for (const bad of [false, undefined, "true", 1]) {
     const context = { ...validContext(), evidence_required: bad };
-    const outcome = gateway.invoke(context, {});
+    const outcome = await gateway.invoke(context, {});
     assert.equal(outcome.ok, false);
     assert.equal(outcome.deny_code, "DENY_CONTEXT");
   }
 });
 
-test("unknown capability denies (deny-by-default allowlist)", () => {
+test("unknown capability denies (deny-by-default allowlist)", async () => {
   const { gateway } = build();
-  const outcome = gateway.invoke({ ...validContext(), capability_id: "shell.exec" }, {});
+  const outcome = await gateway.invoke({ ...validContext(), capability_id: "shell.exec" }, {});
   assert.equal(outcome.deny_code, "DENY_UNKNOWN_CAPABILITY");
 });
 
-test("non-read capability denies in the P0 profile", () => {
+test("non-read capability denies in the P0 profile", async () => {
   const { gateway } = build();
-  const outcome = gateway.invoke({ ...validContext(), capability_id: "workspace.write" }, {});
+  const outcome = await gateway.invoke({ ...validContext(), capability_id: "workspace.write" }, {});
   assert.equal(outcome.deny_code, "DENY_NON_READ");
 });
 
-test("policy can only narrow: allow() !== true denies", () => {
+test("policy can only narrow: allow() !== true denies", async () => {
   const { gateway } = build({ policy: { allow: () => false } });
-  const outcome = gateway.invoke(validContext(), {});
+  const outcome = await gateway.invoke(validContext(), {});
   assert.equal(outcome.deny_code, "DENY_POLICY");
 });
 
-test("registered capability without a registered adapter denies", () => {
+test("registered capability without a registered adapter denies", async () => {
   const { gateway } = build();
-  const outcome = gateway.invoke({ ...validContext(), capability_id: "orphan.read" }, {});
+  const outcome = await gateway.invoke({ ...validContext(), capability_id: "orphan.read" }, {});
   assert.equal(outcome.deny_code, "DENY_NO_ADAPTER");
 });
 
-test("throwing invocation log denies dispatch (fail-closed audit)", () => {
+test("throwing invocation log denies dispatch (fail-closed audit)", async () => {
   let adapterCalled = false;
   const { gateway } = build({
     log: () => { throw new Error("ledger unavailable"); },
     adapterImpl: () => { adapterCalled = true; return {}; },
   });
-  const outcome = gateway.invoke(validContext(), {});
+  const outcome = await gateway.invoke(validContext(), {});
   assert.equal(outcome.deny_code, "DENY_AUDIT_UNAVAILABLE");
   assert.equal(adapterCalled, false, "adapter must not run when audit fails");
 });
 
-test("adapter throw becomes a structured denial, never an exception", () => {
+test("adapter throw becomes a structured denial, never an exception", async () => {
   const { gateway } = build({ adapterImpl: () => { throw new Error("backend down"); } });
-  const outcome = gateway.invoke(validContext(), {});
+  const outcome = await gateway.invoke(validContext(), {});
   assert.equal(outcome.ok, false);
   assert.equal(outcome.deny_code, "DENY_ADAPTER_ERROR");
 });
 
-test("read-only happy path: audit precedes dispatch, receipt marks data untrusted", () => {
+test("read-only happy path: audit precedes dispatch, receipt marks data untrusted", async () => {
   const calls = [];
   const { gateway } = build({
     log: () => calls.push("audit"),
     adapterImpl: (tool, params) => { calls.push("adapter"); return { tool, path: params.path }; },
   });
-  const outcome = gateway.invoke(validContext(), { path: "docs/README.md" });
+  const outcome = await gateway.invoke(validContext(), { path: "docs/README.md" });
   assert.equal(outcome.ok, true);
   assert.deepEqual(calls, ["audit", "adapter"], "invocation log must run before the adapter");
   assert.equal(outcome.result.tool, "read_text_file");
@@ -126,9 +126,9 @@ test("read-only happy path: audit precedes dispatch, receipt marks data untruste
   assert.equal(outcome.receipt.attempted_at, "2026-07-19T10:00:00.000Z");
 });
 
-test("invocation log entry carries the attribution fields", () => {
+test("invocation log entry carries the attribution fields", async () => {
   const { gateway, entries } = build();
-  gateway.invoke(validContext(), { path: "x" });
+  await gateway.invoke(validContext(), { path: "x" });
   assert.equal(entries.length, 1);
   const entry = entries[0];
   for (const key of ["agent_id", "harness_id", "project_id", "work_package_id", "session_id", "authorization_id", "capability_id", "adapter_id", "tool", "purpose", "attempted_at"]) {
