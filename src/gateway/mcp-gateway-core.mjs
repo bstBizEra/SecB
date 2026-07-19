@@ -355,7 +355,23 @@ export class McpGatewayCore {
 
   #holdCapacity(reservation, settlement) {
     reservation.pending.add(settlement);
+    // Bounded abandonment: a truly-never-settling hook/sink cannot be forced
+    // to resolve (no cross-realm cancellation in JS), so this reservation's
+    // capacity slot must still be reclaimed on a bound, or GATE2-BLOCKING-001
+    // reproduces (a hung hook permanently wedges #capacityInUse, and via
+    // #denyConcurrencyAudited's shared #overflowEvidenceTail, the entire
+    // concurrency-overflow lane). Abandoning the pending entry after a bound
+    // does not stop `settlement` from continuing in the background -- it
+    // only stops counting it against capacity. If it later settles anyway,
+    // the .finally() below still fires and is a safe no-op against an
+    // already-abandoned entry.
+    const abandon = setTimeout(() => {
+      if (reservation.pending.delete(settlement)) {
+        this.#releaseCapacityIfComplete(reservation);
+      }
+    }, this.#timeouts.audit_ms * 4);
     settlement.finally(() => {
+      clearTimeout(abandon);
       reservation.pending.delete(settlement);
       this.#releaseCapacityIfComplete(reservation);
     }).catch(() => {});

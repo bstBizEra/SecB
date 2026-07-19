@@ -647,3 +647,71 @@ test("canonical sizing and returned envelopes ignore object and array prototype 
     else delete Array.prototype.toJSON;
   }
 });
+
+// GATE2-BLOCKING-001: an indefinitely-hung hook must not permanently retain a
+// capacity reservation. Before the fix, #holdCapacity's tracked settlement
+// had no bound of its own, so a truly-never-settling adapter/audit call held
+// its reservation's pending entry forever, #capacityInUse never decremented,
+// and (via #denyConcurrencyAudited's shared #overflowEvidenceTail) the whole
+// concurrency-overflow lane could wedge shut for the process's lifetime.
+test("a hung adapter's capacity reservation is abandoned on a bound, not held forever", async () => {
+  const short = { clock_ms: 20, policy_ms: 20, audit_ms: 20, adapter_ms: 20, revocation_ms: 20, result_validator_ms: 20 };
+  const core = gateway({
+    adapter: () => new Promise(() => {}), // never settles -- the hang under test
+    timeouts: short,
+    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+  });
+
+  const first = await core.invoke(context());
+  assert.equal(first.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+
+  // Immediately after the timeout, the reservation's pending hung-adapter
+  // settlement is still held -- capacity is correctly still exhausted.
+  const immediatelyAfter = await core.invoke({ ...context(), session_id: "session-immediately-after" });
+  assert.equal(immediatelyAfter.deny_code, "DENY_CONCURRENCY_LIMIT");
+
+  // Past the abandonment bound (audit_ms * 4 = 80ms here), the reservation
+  // must be reclaimed even though the original adapter promise never settled
+  // (and, per boundedCall/#call, never will -- there is no cross-realm
+  // cancellation in JS). A fresh, unrelated request must be able to proceed
+  // normally, not hang and not be denied for a capacity reason.
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const afterAbandonment = await core.invoke({ ...context(), session_id: "session-after-abandonment" });
+  // Reaching the adapter timeout again (rather than DENY_CONCURRENCY_LIMIT)
+  // proves the request got PAST the capacity gate -- the slot was reclaimed.
+  assert.equal(afterAbandonment.ok, false);
+  assert.equal(afterAbandonment.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+});
+
+// The same abandonment bound must also unblock the shared overflow-audit
+// lane (#overflowEvidenceTail), not just the plain #capacityInUse counter --
+// this is the specific mechanism the independent SEC review (GATE2-BLOCKING-001)
+// identified as the more severe consequence: a stuck lane denies ALL future
+// concurrency-limit responses, not just the one reservation that hung.
+test("a hung hook does not permanently wedge the shared overflow-audit lane", async () => {
+  const short = { clock_ms: 20, policy_ms: 20, audit_ms: 20, adapter_ms: 20, revocation_ms: 20, result_validator_ms: 20 };
+  const core = gateway({
+    adapter: () => new Promise(() => {}),
+    timeouts: short,
+    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+  });
+
+  await core.invoke(context()); // times out, holds the sole capacity slot
+
+  // Queue several concurrency-limit responses while capacity is exhausted;
+  // each traverses #denyConcurrencyAudited and the shared #overflowEvidenceTail.
+  const overflowResults = await Promise.all([
+    core.invoke({ ...context(), session_id: "overflow-1" }),
+    core.invoke({ ...context(), session_id: "overflow-2" }),
+    core.invoke({ ...context(), session_id: "overflow-3" }),
+  ]);
+  for (const result of overflowResults) {
+    assert.equal(result.deny_code, "DENY_CONCURRENCY_LIMIT");
+  }
+
+  // Past the abandonment bound, the lane must still accept and answer new
+  // work -- it must not have wedged shut from the earlier hang.
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const laneStillLive = await core.invoke({ ...context(), session_id: "session-lane-still-live" });
+  assert.equal(laneStillLive.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+});
