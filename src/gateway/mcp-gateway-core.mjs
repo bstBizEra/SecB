@@ -29,11 +29,12 @@ const DEFAULT_TIMEOUTS = Object.freeze({
   revocation_ms: 250,
   result_validator_ms: 250,
 });
-const SECRET_KEY = /(?:^|_)(?:api_?key|authorization|credential|password|passwd|private_?key|secret|token)(?:$|_)/i;
+const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
+const SECRET_KEY_NORMALIZED = /(?:apikey|authorization|credential|password|passwd|privatekey|secret|token)/;
 const SECRET_VALUE = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])-[-a-z0-9_]{8,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
 
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
-const deny = (code, message) => Object.freeze({ ok: false, deny_code: code, message });
+const deny = (code) => Object.freeze({ ok: false, deny_code: code, message: "request denied" });
 
 function positiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive safe integer`);
@@ -49,6 +50,16 @@ function normalizeSettings(candidate, defaults, name) {
     normalized[key] = positiveInteger(candidate[key] ?? fallback, `${name}.${key}`);
   }
   return Object.freeze(normalized);
+}
+
+function normalizeTimeouts(candidate) {
+  const normalized = normalizeSettings(candidate, DEFAULT_TIMEOUTS, "timeouts");
+  for (const [key, value] of Object.entries(normalized)) {
+    if (value > MAX_NODE_TIMEOUT_MS) {
+      throw new Error(`timeouts.${key} must not exceed ${MAX_NODE_TIMEOUT_MS}`);
+    }
+  }
+  return normalized;
 }
 
 function safeRead(source, field) {
@@ -68,6 +79,25 @@ function snapshotContext(requestContext) {
     snapshot[field] = observed.value;
   }
   return Object.freeze(snapshot);
+}
+
+function normalizeAttemptedAt(value) {
+  try {
+    const epochMs = Date.prototype.getTime.call(value);
+    if (!Number.isFinite(epochMs)) return null;
+    return new Date(epochMs).toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function isSecretLikeKey(key) {
+  try {
+    const normalized = key.normalize("NFKC").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    return SECRET_KEY_NORMALIZED.test(normalized);
+  } catch {
+    return true;
+  }
 }
 
 function snapshotCapabilities(registry) {
@@ -123,7 +153,7 @@ function normalizeJson(value, { rejectSecrets = false } = {}, seen = new WeakSet
   if (prototype !== Object.prototype && prototype !== null) throw new Error("non-plain object");
   const output = {};
   for (const [key, entry] of Object.entries(value)) {
-    if (rejectSecrets && SECRET_KEY.test(key)) throw new Error("secret-like key");
+    if (rejectSecrets && isSecretLikeKey(key)) throw new Error("secret-like key");
     output[key] = normalizeJson(entry, { rejectSecrets }, seen);
   }
   seen.delete(value);
@@ -162,8 +192,7 @@ export class McpGatewayCore {
   #resultValidator;
   #limits;
   #timeouts;
-  #activeInvocations = 0;
-  #timedOutOperations = 0;
+  #capacityInUse = 0;
 
   constructor({
     capabilityRegistry,
@@ -192,12 +221,14 @@ export class McpGatewayCore {
     this.#revocationCheck = revocationCheck;
     this.#resultValidator = resultValidator;
     this.#limits = normalizeSettings(limits, DEFAULT_LIMITS, "limits");
-    this.#timeouts = normalizeSettings(timeouts, DEFAULT_TIMEOUTS, "timeouts");
+    this.#timeouts = normalizeTimeouts(timeouts);
   }
 
   #auditEntry(context, capability, attemptedAt, disposition) {
     const field = (name) => isBlank(context?.[name]) ? null : context[name];
-    const terminal = disposition === "SUCCESS" || disposition.startsWith("FAILURE_");
+    const terminal = disposition === "SUCCESS"
+      || disposition.startsWith("FAILURE_")
+      || disposition.startsWith("LATE_SETTLEMENT_");
     return Object.freeze({
       attempted_at: attemptedAt,
       disposition,
@@ -217,142 +248,212 @@ export class McpGatewayCore {
     });
   }
 
-  async #call(operation, timeoutMs) {
+  #releaseCapacityIfComplete(reservation) {
+    if (reservation.completed && reservation.pending.size === 0 && !reservation.released) {
+      reservation.released = true;
+      this.#capacityInUse -= 1;
+    }
+  }
+
+  #holdCapacity(reservation, settlement) {
+    reservation.pending.add(settlement);
+    settlement.finally(() => {
+      reservation.pending.delete(settlement);
+      this.#releaseCapacityIfComplete(reservation);
+    }).catch(() => {});
+  }
+
+  async #call(operation, timeoutMs, reservation) {
     const outcome = await boundedCall(operation, timeoutMs);
     if (outcome.status === "timeout") {
-      this.#timedOutOperations += 1;
-      outcome.settled.then(() => { this.#timedOutOperations -= 1; });
+      this.#holdCapacity(reservation, outcome.settled);
     }
     return outcome;
   }
 
-  async #audit(context, capability, attemptedAt, disposition) {
+  async #audit(context, capability, attemptedAt, disposition, reservation) {
     const outcome = await this.#call(
       () => this.#invocationLog(this.#auditEntry(context, capability, attemptedAt, disposition)),
       this.#timeouts.audit_ms,
+      reservation,
     );
     return outcome.status === "ok";
   }
 
-  async #denyAudited(code, message, context, capability, attemptedAt) {
-    if (!(await this.#audit(context, capability, attemptedAt, code))) {
-      return deny("DENY_AUDIT_UNAVAILABLE", "invocation audit unavailable; request denied");
+  async #denyAudited(code, context, capability, attemptedAt, reservation) {
+    if (!(await this.#audit(context, capability, attemptedAt, code, reservation))) {
+      return deny("DENY_AUDIT_UNAVAILABLE");
     }
-    return deny(code, message);
+    return deny(code);
+  }
+
+  #scheduleLateSettlement(hook, outcome, context, capability, attemptedAt, reservation) {
+    const evidence = outcome.settled.then(async (settled) => {
+      const suffix = settled.status === "ok" ? "SUCCESS" : "FAILURE";
+      await this.#audit(
+        context,
+        capability,
+        attemptedAt,
+        `LATE_SETTLEMENT_${hook}_${suffix}`,
+        reservation,
+      );
+    }).catch(() => {});
+    this.#holdCapacity(reservation, evidence);
   }
 
   async invoke(requestContext, params = {}) {
-    const context = snapshotContext(requestContext);
-    const clock = await this.#call(this.#now, this.#timeouts.clock_ms);
-    let attemptedAt = null;
-    if (clock.status === "ok" && clock.value instanceof Date && !Number.isNaN(clock.value.getTime())) {
-      attemptedAt = clock.value.toISOString();
-    } else {
-      return this.#denyAudited("DENY_CLOCK_UNAVAILABLE", "gateway clock unavailable; request denied", context, null, null);
+    if (this.#capacityInUse >= this.#limits.max_concurrency) {
+      return deny("DENY_CONCURRENCY_LIMIT");
     }
+    this.#capacityInUse += 1;
+    const reservation = { completed: false, pending: new Set(), released: false };
 
-    for (const field of REQUIRED_CONTEXT_FIELDS) {
-      if (isBlank(context[field])) {
-        return this.#denyAudited("DENY_CONTEXT", `request_context.${field} is required`, context, null, attemptedAt);
+    try {
+      let requestEnvelope;
+      try {
+        const contextSource = requestContext !== null
+          && typeof requestContext === "object"
+          && !Array.isArray(requestContext)
+          && requestContext.evidence_required === undefined
+          ? Object.fromEntries(Object.entries(requestContext).filter(([key]) => key !== "evidence_required"))
+          : requestContext ?? {};
+        requestEnvelope = cloneJson({
+          request_context: contextSource,
+          params: params ?? {},
+        });
+        if (byteLength(requestEnvelope) > this.#limits.max_request_bytes) throw new Error("request too large");
+      } catch {
+        const fallbackClock = await this.#call(this.#now, this.#timeouts.clock_ms, reservation);
+        const fallbackAttemptedAt = fallbackClock.status === "ok" ? normalizeAttemptedAt(fallbackClock.value) : null;
+        return this.#denyAudited("DENY_REQUEST_INVALID", {}, null, fallbackAttemptedAt, reservation);
       }
-    }
-    if (context.evidence_required !== true) {
-      return this.#denyAudited("DENY_CONTEXT", "request_context.evidence_required must be true in P0", context, null, attemptedAt);
-    }
 
-    const capability = this.#capabilities.get(context.capability_id);
-    if (!capability) {
-      return this.#denyAudited("DENY_UNKNOWN_CAPABILITY", `capability not in allowlist: ${context.capability_id}`, context, null, attemptedAt);
-    }
-    if (!capability.snapshot_valid || isBlank(capability.adapter_id) || isBlank(capability.tool) || typeof capability.access !== "string") {
-      return this.#denyAudited("DENY_INVALID_CAPABILITY", "capability routing record is invalid", context, capability, attemptedAt);
-    }
-    if (capability.access !== "read") {
-      return this.#denyAudited("DENY_NON_READ", "P0 gateway profile is read-only", context, capability, attemptedAt);
-    }
+      const context = snapshotContext(requestEnvelope.request_context);
+      const adapterParams = requestEnvelope.params;
+      const clock = await this.#call(this.#now, this.#timeouts.clock_ms, reservation);
+      const attemptedAt = clock.status === "ok" ? normalizeAttemptedAt(clock.value) : null;
+      if (attemptedAt === null) {
+        if (clock.status === "timeout") {
+          if (!(await this.#audit(context, null, null, "TIMEOUT_CLOCK_PENDING", reservation))) {
+            return deny("DENY_AUDIT_UNAVAILABLE");
+          }
+          this.#scheduleLateSettlement("CLOCK", clock, context, null, null, reservation);
+          return deny("DENY_CLOCK_UNAVAILABLE");
+        }
+        return this.#denyAudited("DENY_CLOCK_UNAVAILABLE", context, null, null, reservation);
+      }
 
-    const adapter = this.#adapters.get(capability.adapter_id);
-    if (!adapter) {
-      return this.#denyAudited("DENY_NO_ADAPTER", `no registered adapter for: ${capability.adapter_id}`, context, capability, attemptedAt);
-    }
+      for (const field of REQUIRED_CONTEXT_FIELDS) {
+        if (isBlank(context[field])) {
+          return this.#denyAudited("DENY_CONTEXT", context, null, attemptedAt, reservation);
+        }
+      }
+      if (context.evidence_required !== true) {
+        return this.#denyAudited("DENY_CONTEXT", context, null, attemptedAt, reservation);
+      }
 
-    let adapterParams;
-    try {
-      adapterParams = cloneJson(params ?? {});
-      if (byteLength({ request_context: context, params: adapterParams }) > this.#limits.max_request_bytes) throw new Error("request too large");
-    } catch {
-      return this.#denyAudited("DENY_REQUEST_INVALID", "request exceeds bounds or is not safely serializable", context, capability, attemptedAt);
-    }
+      const capability = this.#capabilities.get(context.capability_id);
+      if (!capability) {
+        return this.#denyAudited("DENY_UNKNOWN_CAPABILITY", context, null, attemptedAt, reservation);
+      }
+      if (!capability.snapshot_valid || isBlank(capability.adapter_id) || isBlank(capability.tool) || typeof capability.access !== "string") {
+        return this.#denyAudited("DENY_INVALID_CAPABILITY", context, capability, attemptedAt, reservation);
+      }
+      if (capability.access !== "read") {
+        return this.#denyAudited("DENY_NON_READ", context, capability, attemptedAt, reservation);
+      }
 
-    if (this.#activeInvocations + this.#timedOutOperations >= this.#limits.max_concurrency) {
-      return this.#denyAudited("DENY_CONCURRENCY_LIMIT", "gateway concurrency limit reached; request denied", context, capability, attemptedAt);
-    }
-    this.#activeInvocations += 1;
+      const adapter = this.#adapters.get(capability.adapter_id);
+      if (!adapter) {
+        return this.#denyAudited("DENY_NO_ADAPTER", context, capability, attemptedAt, reservation);
+      }
 
-    try {
       if (this.#policyAllow !== null) {
-        const policy = await this.#call(() => this.#policyAllow(context, capability), this.#timeouts.policy_ms);
+        const policy = await this.#call(() => this.#policyAllow(context, capability), this.#timeouts.policy_ms, reservation);
         if (policy.status !== "ok") {
-          return this.#denyAudited("DENY_POLICY_UNAVAILABLE", "authorization policy unavailable; request denied", context, capability, attemptedAt);
+          return this.#denyAudited("DENY_POLICY_UNAVAILABLE", context, capability, attemptedAt, reservation);
         }
         if (policy.value !== true) {
-          return this.#denyAudited("DENY_POLICY", `authorization policy denied capability: ${context.capability_id}`, context, capability, attemptedAt);
+          return this.#denyAudited("DENY_POLICY", context, capability, attemptedAt, reservation);
         }
       }
 
       const revocation = await this.#call(
         () => this.#revocationCheck(context, capability),
         this.#timeouts.revocation_ms,
+        reservation,
       );
       if (revocation.status !== "ok") {
-        return this.#denyAudited("DENY_REVOCATION_UNAVAILABLE", "revocation control unavailable; request denied", context, capability, attemptedAt);
+        return this.#denyAudited("DENY_REVOCATION_UNAVAILABLE", context, capability, attemptedAt, reservation);
       }
       if (revocation.value !== false) {
-        return this.#denyAudited("DENY_REVOKED", "authorization or gateway capability is revoked; request denied", context, capability, attemptedAt);
+        return this.#denyAudited("DENY_REVOKED", context, capability, attemptedAt, reservation);
       }
 
-      if (!(await this.#audit(context, capability, attemptedAt, "ALLOW_DISPATCH"))) {
-        return deny("DENY_AUDIT_UNAVAILABLE", "invocation audit unavailable; request denied");
+      if (!(await this.#audit(context, capability, attemptedAt, "ALLOW_DISPATCH", reservation))) {
+        return deny("DENY_AUDIT_UNAVAILABLE");
+      }
+
+      const dispatchRevocation = await this.#call(
+        () => this.#revocationCheck(context, capability),
+        this.#timeouts.revocation_ms,
+        reservation,
+      );
+      if (dispatchRevocation.status !== "ok") {
+        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_REVOCATION", reservation))) {
+          return deny("DENY_AUDIT_UNAVAILABLE");
+        }
+        return deny("DENY_REVOCATION_UNAVAILABLE");
+      }
+      if (dispatchRevocation.value !== false) {
+        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_REVOKED", reservation))) {
+          return deny("DENY_AUDIT_UNAVAILABLE");
+        }
+        return deny("DENY_REVOKED");
       }
 
       const adapterOutcome = await this.#call(
         () => adapter.invoke(capability.tool, adapterParams, context),
         this.#timeouts.adapter_ms,
+        reservation,
       );
-      if (adapterOutcome.status !== "ok") {
-        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_ADAPTER"))) {
-          return deny("DENY_AUDIT_UNAVAILABLE", "invocation audit unavailable; request denied");
+      if (adapterOutcome.status === "timeout") {
+        if (!(await this.#audit(context, capability, attemptedAt, "TIMEOUT_ADAPTER_PENDING", reservation))) {
+          return deny("DENY_AUDIT_UNAVAILABLE");
         }
-        return deny("DENY_ADAPTER_ERROR", "adapter invocation failed");
+        this.#scheduleLateSettlement("ADAPTER", adapterOutcome, context, capability, attemptedAt, reservation);
+        return deny("DENY_ADAPTER_TIMEOUT_PENDING");
+      }
+      if (adapterOutcome.status !== "ok") {
+        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_ADAPTER", reservation))) {
+          return deny("DENY_AUDIT_UNAVAILABLE");
+        }
+        return deny("DENY_ADAPTER_ERROR");
       }
 
       let result;
       try {
         result = cloneJson(adapterOutcome.value, { rejectSecrets: true });
-        if (byteLength(result) > this.#limits.max_response_bytes) throw new Error("response too large");
       } catch {
-        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_RESULT"))) {
-          return deny("DENY_AUDIT_UNAVAILABLE", "invocation audit unavailable; request denied");
+        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_RESULT", reservation))) {
+          return deny("DENY_AUDIT_UNAVAILABLE");
         }
-        return deny("DENY_RESULT_INVALID", "adapter result failed output controls");
+        return deny("DENY_RESULT_INVALID");
       }
 
       const validation = await this.#call(
         () => this.#resultValidator(result, context, capability),
         this.#timeouts.result_validator_ms,
+        reservation,
       );
       if (validation.status !== "ok" || validation.value !== true) {
-        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_RESULT"))) {
-          return deny("DENY_AUDIT_UNAVAILABLE", "invocation audit unavailable; request denied");
+        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_RESULT", reservation))) {
+          return deny("DENY_AUDIT_UNAVAILABLE");
         }
-        return deny("DENY_RESULT_INVALID", "adapter result failed output controls");
+        return deny("DENY_RESULT_INVALID");
       }
 
-      if (!(await this.#audit(context, capability, attemptedAt, "SUCCESS"))) {
-        return deny("DENY_AUDIT_UNAVAILABLE", "terminal invocation audit unavailable; result withheld");
-      }
-
-      return Object.freeze({
+      const response = Object.freeze({
         ok: true,
         result,
         receipt: Object.freeze({
@@ -368,8 +469,21 @@ export class McpGatewayCore {
           terminal_disposition: "SUCCESS",
         }),
       });
+      if (byteLength(response) > this.#limits.max_response_bytes) {
+        if (!(await this.#audit(context, capability, attemptedAt, "FAILURE_RESULT", reservation))) {
+          return deny("DENY_AUDIT_UNAVAILABLE");
+        }
+        return deny("DENY_RESULT_INVALID");
+      }
+
+      if (!(await this.#audit(context, capability, attemptedAt, "SUCCESS", reservation))) {
+        return deny("DENY_AUDIT_UNAVAILABLE");
+      }
+
+      return response;
     } finally {
-      this.#activeInvocations -= 1;
+      reservation.completed = true;
+      this.#releaseCapacityIfComplete(reservation);
     }
   }
 }

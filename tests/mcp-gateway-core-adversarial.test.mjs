@@ -176,7 +176,7 @@ test("policy, audit, and adapter hooks have hard fail-closed timeouts", async ()
     limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
   });
   const adapterResult = await adapterCore.invoke(context());
-  assert.equal(adapterResult.deny_code, "DENY_ADAPTER_ERROR");
+  assert.equal(adapterResult.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
   const afterTimedOutAdapter = await adapterCore.invoke({ ...context(), session_id: "session-after-timeout" });
   assert.equal(afterTimedOutAdapter.deny_code, "DENY_CONCURRENCY_LIMIT");
 });
@@ -242,4 +242,147 @@ test("revocation and kill-switch check runs before dispatch and fails closed", a
 
   const unavailable = await gateway({ revocationCheck: () => { throw new Error("control offline"); } }).invoke(context());
   assert.equal(unavailable.deny_code, "DENY_REVOCATION_UNAVAILABLE");
+});
+
+test("global capacity is reserved before the clock and rejects overflow without running hooks", async () => {
+  let releaseClock;
+  const blockedClock = new Promise((resolve) => { releaseClock = resolve; });
+  let clockCalls = 0;
+  let auditCalls = 0;
+  const core = gateway({
+    now: () => { clockCalls += 1; return blockedClock; },
+    invocationLog: () => { auditCalls += 1; },
+    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+    timeouts: { clock_ms: 1_000, policy_ms: 50, audit_ms: 50, adapter_ms: 50, revocation_ms: 50, result_validator_ms: 50 },
+  });
+  const first = core.invoke(context());
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const overflow = await core.invoke({ ...context(), session_id: "overflow" });
+  assert.equal(overflow.deny_code, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(clockCalls, 1);
+  assert.equal(auditCalls, 0);
+  releaseClock(new Date("2026-07-19T10:00:00.000Z"));
+  assert.equal((await first).ok, true);
+});
+
+test("timed-out clock retains capacity until settlement and records late evidence", async () => {
+  let releaseClock;
+  const blockedClock = new Promise((resolve) => { releaseClock = resolve; });
+  const entries = [];
+  const core = gateway({
+    now: () => blockedClock,
+    invocationLog: (entry) => entries.push(entry),
+    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+    timeouts: { clock_ms: 20, policy_ms: 50, audit_ms: 50, adapter_ms: 50, revocation_ms: 50, result_validator_ms: 50 },
+  });
+  const timedOut = await core.invoke(context());
+  assert.equal(timedOut.deny_code, "DENY_CLOCK_UNAVAILABLE");
+  assert.equal(entries[0].disposition, "TIMEOUT_CLOCK_PENDING");
+  assert.equal(entries[0].terminal, false);
+  assert.equal((await core.invoke({ ...context(), session_id: "held" })).deny_code, "DENY_CONCURRENCY_LIMIT");
+  releaseClock(new Date("2026-07-19T10:00:00.000Z"));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(entries.at(-1).disposition, "LATE_SETTLEMENT_CLOCK_SUCCESS");
+  assert.equal(entries.at(-1).terminal, true);
+  assert.equal((await core.invoke({ ...context(), session_id: "released" })).ok, true);
+});
+
+test("timeouts above the Node timer maximum are rejected at construction", () => {
+  assert.throws(
+    () => gateway({
+      timeouts: {
+        clock_ms: 2_147_483_648,
+        policy_ms: 50,
+        audit_ms: 50,
+        adapter_ms: 50,
+        revocation_ms: 50,
+        result_validator_ms: 50,
+      },
+    }),
+    /must not exceed 2147483647/,
+  );
+});
+
+test("proxied and hostile clock values deny without escaping", async () => {
+  const proxiedDate = new Proxy(new Date("2026-07-19T10:00:00.000Z"), {
+    get() { throw new Error("clock metadata trap"); },
+    getPrototypeOf() { throw new Error("clock prototype trap"); },
+  });
+  const result = await gateway({ now: () => proxiedDate }).invoke(context());
+  assert.equal(result.deny_code, "DENY_CLOCK_UNAVAILABLE");
+});
+
+test("request budget covers the complete caller context and params before dispatch", async () => {
+  let adapterCalled = false;
+  const result = await gateway({
+    adapter: () => { adapterCalled = true; return { safe: true }; },
+    limits: { max_request_bytes: 512, max_response_bytes: 4_096, max_concurrency: 1 },
+  }).invoke({ ...context(), ignoredCallerMetadata: "x".repeat(2_048) }, { small: true });
+  assert.equal(result.deny_code, "DENY_REQUEST_INVALID");
+  assert.equal(adapterCalled, false);
+});
+
+test("response budget covers result plus the complete receipt envelope", async () => {
+  const result = await gateway({
+    adapter: () => ({ ok: true }),
+    limits: { max_request_bytes: 4_096, max_response_bytes: 64, max_concurrency: 1 },
+  }).invoke(context());
+  assert.equal(result.deny_code, "DENY_RESULT_INVALID");
+});
+
+test("normalized camelCase and punctuation variants of secret-like keys are denied", async () => {
+  for (const key of ["apiToken", "private-Key", "clientSecret", "access.token", "AUTHORIZATION"]) {
+    const result = await gateway({ adapter: () => ({ [key]: "redacted" }) }).invoke(context());
+    assert.equal(result.deny_code, "DENY_RESULT_INVALID", `expected ${key} to be denied`);
+  }
+});
+
+test("public denial messages never echo caller or internal routing identifiers", async () => {
+  const callerCapability = "caller-private-capability";
+  const unknown = await gateway().invoke({ ...context(), capability_id: callerCapability });
+  assert.equal(unknown.message, "request denied");
+  assert.doesNotMatch(unknown.message, /caller-private-capability|fixture|read/);
+
+  const adapterFailure = await gateway({
+    adapter: () => { throw new Error("internal-adapter-id secret-detail"); },
+  }).invoke(context());
+  assert.equal(adapterFailure.message, "request denied");
+  assert.doesNotMatch(adapterFailure.message, /internal-adapter-id|secret-detail|fixture/);
+});
+
+test("revocation is rechecked after the allow audit immediately before adapter dispatch", async () => {
+  let checks = 0;
+  let adapterCalled = false;
+  const entries = [];
+  const result = await gateway({
+    revocationCheck: () => { checks += 1; return checks === 2; },
+    invocationLog: (entry) => entries.push(entry),
+    adapter: () => { adapterCalled = true; return { safe: true }; },
+  }).invoke(context());
+  assert.equal(result.deny_code, "DENY_REVOKED");
+  assert.equal(checks, 2);
+  assert.equal(adapterCalled, false);
+  assert.deepEqual(entries.map((entry) => entry.disposition), ["ALLOW_DISPATCH", "FAILURE_REVOKED"]);
+});
+
+test("adapter timeout remains pending, records late settlement, and never redispatches", async () => {
+  let releaseAdapter;
+  const blockedAdapter = new Promise((resolve) => { releaseAdapter = resolve; });
+  let adapterCalls = 0;
+  const entries = [];
+  const core = gateway({
+    adapter: () => { adapterCalls += 1; return blockedAdapter; },
+    invocationLog: (entry) => entries.push(entry),
+    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
+    timeouts: { clock_ms: 50, policy_ms: 50, audit_ms: 50, adapter_ms: 20, revocation_ms: 50, result_validator_ms: 50 },
+  });
+  const timedOut = await core.invoke(context());
+  assert.equal(timedOut.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+  assert.deepEqual(entries.map((entry) => entry.disposition), ["ALLOW_DISPATCH", "TIMEOUT_ADAPTER_PENDING"]);
+  assert.equal(entries.at(-1).terminal, false);
+  assert.equal((await core.invoke({ ...context(), session_id: "held-adapter" })).deny_code, "DENY_CONCURRENCY_LIMIT");
+  releaseAdapter({ safe: true });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(entries.at(-1).disposition, "LATE_SETTLEMENT_ADAPTER_SUCCESS");
+  assert.equal(adapterCalls, 1);
 });
