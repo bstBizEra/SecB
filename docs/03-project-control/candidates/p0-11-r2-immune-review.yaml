@@ -1,0 +1,31 @@
+# P0-11 R2 Immune Review Record
+# Reviewed target: bst/integration-rehearsal-3 @ 281f3f5 (merge candidate)
+# Reviewer: claude-immune (advisory only)
+
+review_round_1:
+  verdict: "APPROVE_FOR_MERGE"
+  blocking_findings: []
+  test_result: "238 tests, 233 pass, 0 fail, 5 skipped"
+  probes_confirmed:
+    - "Four-field binding (project/wp/session/baseline) runs on the resolver's server-stored receipt; CLOSES the wp gap consumeReceipt leaves open (different-wp receipt that resolves ALLOW -> DENY_RECEIPT_BINDING, probe-confirmed)"
+    - "All four R1/R2 mode combinations handled (null+present -> UNVERIFIABLE, null+absent -> proceed R1, wired+absent -> RECEIPT_REQUIRED, wired+present -> verify)"
+    - "Field mapping correct (baseline_version<->baseline, session_id<->source_session_id); verification runs after schema+seal+resolveEffective (real binding)"
+    - "Deny-only; R1 unchanged (15 R1 tests green); shared surfaces untouched; lineage intact"
+  honest_gap_flagged_by_motor: "resolver called consumeReceipt during offer validation -> a CONSUME ledger entry could orphan if the offer later denied on ceiling/chain. Reviewer read: acceptable (no double-spend, no exhaustion, no authority leak, fail-closed), audit-fidelity only. Primary non-blocking recommendation: verify read-only during validation, consume only on commit."
+
+remediation_applied:
+  commit_after_verdict: "adds ContextFederationService.verifyReceipt (read-only resolution sharing the fail-closed check chain with consumeReceipt via #resolveHead); the P0-11 R2 resolver now uses verifyReceipt so NO CONSUME entry is ever written during offer validation. Test asserts the receipt ledger carries no CONSUME after an offer. consumeReceipt semantics unchanged (verify + append)."
+  status: "Immune note 1 CLOSED at the source; re-review pinned to the new tip"
+
+carried_v_items:
+  - "Re-verify receipt binding (read-only) at accept time - optional hardening if offered-context provenance must remain valid through acceptance"
+  - "GOV-role revocation + authorityRef/sessionId caller-asserted (mutation-substrate authority work)"
+  - "RISK-P011-01 contract-silent dimensions"
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

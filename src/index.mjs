@@ -91,6 +91,9 @@ export {
   ContextFederationError,
   ContextFederationService
 } from "./services/context-federation-service.mjs";
+// note: ContextFederationService exposes verifyReceipt (read-only) and
+// consumeReceipt (ledgers a CONSUME); composing services use verifyReceipt
+// for offer-time provenance gates.
 
 export {
   runRetrieval

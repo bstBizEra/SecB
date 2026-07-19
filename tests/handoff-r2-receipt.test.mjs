@@ -58,8 +58,10 @@ function harness() {
   const cfs = new ContextFederationService({ workPackageService: wp, now: clock });
   const src = [{ ref: "s1", projectId: PROJ, classification: "INTERNAL", current: true, verified: true, resolvable: true, relevance: 1 }];
   cfs.issueReceipt({ document: sealDoc(), candidateSources: src, actorId: ENGIN, authorityRef: "g_e", baseline: BASE, idempotencyKey: "iss" });
-  // resolver adapter: ContextFederationService.consumeReceipt-shaped
-  const receiptResolver = (ref, ctx) => cfs.consumeReceipt(ctx.projectId, ref.receipt_id, { sessionId: ctx.sessionId, actorId: ctx.actorId, baseline: ctx.baseline });
+  // resolver adapter: READ-ONLY verifyReceipt (Immune note 1) — the
+  // offer-time provenance gate must not mark the receipt CONSUMEd for an
+  // offer that may still deny downstream.
+  const receiptResolver = (ref, ctx) => cfs.verifyReceipt(ctx.projectId, ref.receipt_id, { sessionId: ctx.sessionId, actorId: ctx.actorId, baseline: ctx.baseline });
   const handoff = new HandoffService({ workPackageService: wp, receiptResolver, now: clock });
   return { wp, cfs, handoff, clock, setNow: (iso) => { nowMs = Date.parse(iso); } };
 }
@@ -72,12 +74,15 @@ const offer = (h, over = {}) => h.handoff.offerHandoff({
 
 function denies(fn, code) { assert.throws(fn, (e) => e instanceof HandoffServiceError && e.code === code); }
 
-test("R2: a valid bound context receipt admits the handoff offer", () => {
+test("R2: a valid bound context receipt admits the handoff offer (read-only verify, no CONSUME orphan)", () => {
   const h = harness();
   const r = offer(h, { contextReceiptRef: { receipt_id: "rc_r2" } });
   assert.equal(r.state, "OFFERED");
   const led = h.handoff.getHandoffLedger(PROJ, "ho_r2");
   assert.equal(led[0].contextReceiptId, "rc_r2");
+  // the offer-time gate is read-only: the receipt ledger carries no CONSUME
+  const rcLed = h.cfs.getReceiptLedger(PROJ, "rc_r2");
+  assert.ok(!rcLed.some((e) => e.type === "CONSUME"));
 });
 
 test("R2: context_receipt_ref is mandatory once a resolver is wired", () => {

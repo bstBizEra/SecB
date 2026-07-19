@@ -149,29 +149,41 @@ export class ContextFederationService {
     return frozenClone(result);
   }
 
-  // Fail-closed consumption: any failure resolves to a typed NONE result
-  // (never a throw for the resolution outcomes; malformed input throws).
-  consumeReceipt(projectId, receiptId, { sessionId, actorId, baseline } = {}) {
+  // Fail-closed resolution (shared by verify and consume): any failure
+  // returns a typed NONE result; malformed input throws. Returns the head
+  // record on ALLOW (internal; callers clone/freeze what they expose).
+  #resolveHead(projectId, receiptId, { sessionId, actorId, baseline }) {
     for (const [n, v] of [["projectId", projectId], ["receiptId", receiptId], ["sessionId", sessionId], ["actorId", actorId], ["baseline", baseline]]) {
       if (isBlank(v)) deny("DENY_MALFORMED_REQUEST", `${n} must be a non-blank string`);
     }
     const head = this.#chainHead(projectId, receiptId);
-    if (!head) return deepFreeze({ receipt: null, code: "DENY_UNKNOWN_RECEIPT", reason: `Unknown receipt: ${receiptId}` });
-    if (head.status === "REVOKED") return deepFreeze({ receipt: null, code: "DENY_REVOKED", reason: "Receipt chain is revoked" });
-    if (head.status === "SUPERSEDED") return deepFreeze({ receipt: null, code: "DENY_SUPERSEDED", reason: "Consume the chain head", chainHeadVersion: this.#versions(projectId, receiptId).length });
-
-    if (this.#seal(head.document) !== head.contentHash) return deepFreeze({ receipt: null, code: "DENY_FINGERPRINT_MISMATCH", reason: "Stored document failed seal re-verification" });
-    if (head.sessionId !== sessionId) return deepFreeze({ receipt: null, code: "DENY_SESSION_MISMATCH", reason: "Receipt is bound to another session" });
-    if (head.baseline !== baseline) return deepFreeze({ receipt: null, code: "DENY_BASELINE_MISMATCH", reason: "Asserted baseline does not match the receipt" });
-    if (this.#now().getTime() >= Date.parse(head.expiresAt)) return deepFreeze({ receipt: null, code: "DENY_EXPIRED", reason: "Receipt has expired" });
-
+    if (!head) return { head: null, out: { receipt: null, code: "DENY_UNKNOWN_RECEIPT", reason: `Unknown receipt: ${receiptId}` } };
+    if (head.status === "REVOKED") return { head: null, out: { receipt: null, code: "DENY_REVOKED", reason: "Receipt chain is revoked" } };
+    if (head.status === "SUPERSEDED") return { head: null, out: { receipt: null, code: "DENY_SUPERSEDED", reason: "Consume the chain head", chainHeadVersion: this.#versions(projectId, receiptId).length } };
+    if (this.#seal(head.document) !== head.contentHash) return { head: null, out: { receipt: null, code: "DENY_FINGERPRINT_MISMATCH", reason: "Stored document failed seal re-verification" } };
+    if (head.sessionId !== sessionId) return { head: null, out: { receipt: null, code: "DENY_SESSION_MISMATCH", reason: "Receipt is bound to another session" } };
+    if (head.baseline !== baseline) return { head: null, out: { receipt: null, code: "DENY_BASELINE_MISMATCH", reason: "Asserted baseline does not match the receipt" } };
+    if (this.#now().getTime() >= Date.parse(head.expiresAt)) return { head: null, out: { receipt: null, code: "DENY_EXPIRED", reason: "Receipt has expired" } };
     const resolution = this.#wp.resolveEffective(projectId, head.workPackageId, { baseline });
-    if (!resolution || resolution.code !== "ALLOW") return deepFreeze({ receipt: null, code: "DENY_WORK_PACKAGE_NOT_EFFECTIVE", reason: resolution?.code ?? "no resolution" });
-    if (resolution.version !== head.boundWpVersion) return deepFreeze({ receipt: null, code: "DENY_VERSION_SUPERSEDED", reason: "Effective work package version changed since issuance" });
-    if (resolution.effective.baseline !== baseline) return deepFreeze({ receipt: null, code: "DENY_BASELINE_MISMATCH", reason: "Effective contract baseline changed" });
+    if (!resolution || resolution.code !== "ALLOW") return { head: null, out: { receipt: null, code: "DENY_WORK_PACKAGE_NOT_EFFECTIVE", reason: resolution?.code ?? "no resolution" } };
+    if (resolution.version !== head.boundWpVersion) return { head: null, out: { receipt: null, code: "DENY_VERSION_SUPERSEDED", reason: "Effective work package version changed since issuance" } };
+    if (resolution.effective.baseline !== baseline) return { head: null, out: { receipt: null, code: "DENY_BASELINE_MISMATCH", reason: "Effective contract baseline changed" } };
+    return { head, out: { receipt: structuredClone(head.document), version: head.version, code: "ALLOW" } };
+  }
 
-    head.ledger.push(deepFreeze({ seq: head.ledger.length + 1, type: "CONSUME", version: head.version, actorId, sessionId, timestamp: this.#now().toISOString() }));
-    return frozenClone({ receipt: structuredClone(head.document), version: head.version, code: "ALLOW" });
+  // READ-ONLY provenance check: same fail-closed resolution as consume but
+  // NO ledger mutation. Used as the offer-time gate by composing services
+  // (P0-11 R2) so a receipt is never marked CONSUMEd for an operation that
+  // may still deny downstream (Immune note 1).
+  verifyReceipt(projectId, receiptId, ctx = {}) {
+    return deepFreeze(this.#resolveHead(projectId, receiptId, ctx).out);
+  }
+
+  // Consumption: verify, then on ALLOW append a CONSUME ledger entry.
+  consumeReceipt(projectId, receiptId, ctx = {}) {
+    const { head, out } = this.#resolveHead(projectId, receiptId, ctx);
+    if (head) head.ledger.push(deepFreeze({ seq: head.ledger.length + 1, type: "CONSUME", version: head.version, actorId: ctx.actorId, sessionId: ctx.sessionId, timestamp: this.#now().toISOString() }));
+    return deepFreeze(out);
   }
 
   // Chain-and-supersede compaction: version N+1, subset-only, expires_at <=
