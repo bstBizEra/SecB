@@ -470,3 +470,494 @@ test("PROTOCOL_VERSION and DEFAULT_MAX_MESSAGE_BYTES are exposed", () => {
   assert.equal(typeof DEFAULT_MAX_MESSAGE_BYTES, "number");
   assert.ok(DEFAULT_MAX_MESSAGE_BYTES > 0);
 });
+
+// -------------------------------------------------------------------------
+// Dispatch pipeline: McpServer
+// -------------------------------------------------------------------------
+
+import {
+  McpServer,
+  McpServerError,
+  PINNED_PROTOCOL_VERSION,
+} from "../src/mcp/secb-mcp-server.mjs";
+import { RuntimeRegistry } from "../src/registry/runtime-registry.mjs";
+
+const CALLER_ID = "inst_test_mcp_001";
+
+function makeRegistry({ approved = true, active = true } = {}) {
+  const registry = new RuntimeRegistry({ policyCeiling: "A5" });
+  registry.register({
+    provider_id: "test-provider",
+    runtime_product_id: "test-product",
+    runtime_deployment_id: "test-deployment-001",
+    agent_profile_id: "test-profile",
+    agent_instance_id: CALLER_ID,
+    runtime_version: "1.0.0",
+    deployment_location: "local",
+    owner: "test-owner",
+    permitted_roles: ["ENGIN"],
+    authority_ceiling: "A0",
+    approved_models: ["test-model"],
+    approved_tools: ["read"],
+    approved_mcp_methods: [],
+    approved_skills: [],
+    repository_scopes: ["secb"],
+    environment_scopes: ["local"],
+    max_data_classification: "INTERNAL",
+    delegation_rights: [],
+    evidence_obligations: [],
+    workload_identity_ref: "wl_test_001",
+    evaluation_status: "CANDIDATE",
+    lifecycle_state: "PENDING",
+  });
+  if (approved) registry.transitionEvaluation(CALLER_ID, "APPROVED");
+  if (active) registry.transitionLifecycle(CALLER_ID, "ACTIVE");
+  return registry;
+}
+
+function makeFakeLedger() {
+  const records = [];
+  return {
+    records,
+    verify() {
+      return { valid: true, ledgerId: "fake", count: records.length, headHash: "0".repeat(64) };
+    },
+    append(entry, { expectedSequence }) {
+      if (records.length !== expectedSequence) {
+        const err = new Error("sequence conflict");
+        err.code = "DENY_SEQUENCE_CONFLICT";
+        throw err;
+      }
+      records.push(JSON.parse(JSON.stringify(entry)));
+      return { sequence: records.length, replayed: false };
+    },
+  };
+}
+
+function makeAlwaysBusyLedger() {
+  return {
+    verify() { return { count: 0 }; },
+    append() {
+      const err = new Error("ledger locked");
+      err.code = "LEDGER_BUSY";
+      throw err;
+    },
+  };
+}
+
+function makeServer(overrides = {}) {
+  return new McpServer({
+    registry: makeRegistry(),
+    invocationLedger: makeFakeLedger(),
+    callerInstanceId: CALLER_ID,
+    sessionId: "test-sess-001",
+    now: () => "2026-07-19T00:00:00.000Z",
+    ...overrides,
+  });
+}
+
+function makeRequest(method, params, id = 1) {
+  return { jsonrpc: "2.0", id, method, params };
+}
+
+function makeNotification(method, params) {
+  return { jsonrpc: "2.0", method, params };
+}
+
+// -- Construction --
+
+test("McpServer: throws on missing registry", () => {
+  assert.throws(
+    () => new McpServer({ invocationLedger: makeFakeLedger(), callerInstanceId: CALLER_ID }),
+    (e) => e instanceof McpServerError && e.code === "MISSING_REGISTRY"
+  );
+});
+
+test("McpServer: throws on missing invocation ledger", () => {
+  assert.throws(
+    () => new McpServer({ registry: makeRegistry(), callerInstanceId: CALLER_ID }),
+    (e) => e instanceof McpServerError && e.code === "MISSING_LEDGER"
+  );
+});
+
+test("McpServer: throws on missing callerInstanceId", () => {
+  assert.throws(
+    () => new McpServer({ registry: makeRegistry(), invocationLedger: makeFakeLedger() }),
+    (e) => e instanceof McpServerError && e.code === "MISSING_CALLER_ID"
+  );
+});
+
+test("McpServer: throws on invalid serverCeiling", () => {
+  assert.throws(
+    () => makeServer({ serverCeiling: "TOP_SECRET" }),
+    (e) => e instanceof McpServerError && e.code === "INVALID_CEILING"
+  );
+});
+
+test("McpServer: constructs with valid required params", () => {
+  assert.ok(makeServer() instanceof McpServer);
+});
+
+// -- Deny-by-default method routing --
+
+test("McpServer: unknown method returns MethodNotFound", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(makeRequest("unknown/method", {}));
+  assert.equal(resp.error.code, ErrorCodes.MethodNotFound);
+});
+
+test("McpServer: resources/list returns MethodNotFound (not in alpha subset)", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(makeRequest("resources/list", {}));
+  assert.equal(resp.error.code, ErrorCodes.MethodNotFound);
+});
+
+// -- Notifications --
+
+test("McpServer: notifications/initialized notification returns null", async () => {
+  const server = makeServer();
+  const result = await server.handleRequest(makeNotification("notifications/initialized", {}));
+  assert.equal(result, null);
+});
+
+test("McpServer: any notification (no id) returns null", async () => {
+  const server = makeServer();
+  assert.equal(await server.handleRequest(makeNotification("unknown/notify", {})), null);
+});
+
+// -- ping --
+
+test("McpServer: ping returns empty result", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(makeRequest("ping", {}));
+  assert.ok("result" in resp);
+  assert.deepEqual(resp.result, {});
+});
+
+// -- initialize --
+
+test("McpServer: initialize with pinned version succeeds", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(
+    makeRequest("initialize", { protocolVersion: PINNED_PROTOCOL_VERSION, capabilities: {} })
+  );
+  assert.ok("result" in resp);
+  assert.equal(resp.result.protocolVersion, PINNED_PROTOCOL_VERSION);
+  assert.ok("capabilities" in resp.result);
+  assert.ok("serverInfo" in resp.result);
+});
+
+test("McpServer: initialize with wrong version returns DENY_PROTOCOL_VERSION", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(
+    makeRequest("initialize", { protocolVersion: "1999-01-01" })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_PROTOCOL_VERSION");
+  assert.equal(resp.error.data.supported, PINNED_PROTOCOL_VERSION);
+  assert.equal(resp.error.data.requested, "1999-01-01");
+});
+
+test("McpServer: initialize with missing protocolVersion returns DENY_PROTOCOL_VERSION", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(makeRequest("initialize", {}));
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_PROTOCOL_VERSION");
+  assert.equal(resp.error.data.requested, null);
+});
+
+// -- tools/list --
+
+test("McpServer: tools/list returns all 9 catalog tools", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(makeRequest("tools/list", {}));
+  assert.ok("result" in resp);
+  assert.equal(resp.result.tools.length, TOOL_CATALOG.length);
+});
+
+test("McpServer: tools/list projection matches frozen catalog names", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(makeRequest("tools/list", {}));
+  const names = resp.result.tools.map((t) => t.name);
+  const catalogNames = TOOL_CATALOG.map((t) => t.name);
+  assert.deepEqual(names, catalogNames);
+});
+
+// -- tools/call: DENY_UNKNOWN_TOOL --
+
+test("McpServer tools/call: unknown tool name returns DENY_UNKNOWN_TOOL", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({ invocationLedger: ledger });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "secb_nonexistent_tool", arguments: {} })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_UNKNOWN_TOOL");
+  // Denial is ledgered.
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].decision_code ?? ledger.records[0].payload?.decision_code, "DENY_UNKNOWN_TOOL");
+});
+
+// -- tools/call: DENY_CALLER_QUARANTINED --
+
+test("McpServer tools/call: unknown caller instance returns DENY_CALLER_QUARANTINED", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({
+    invocationLedger: ledger,
+    callerInstanceId: "inst_does_not_exist",
+  });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "secb_canonical_fingerprint", arguments: { document: { x: 1 } } })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_CALLER_QUARANTINED");
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].payload.decision_code, "DENY_CALLER_QUARANTINED");
+});
+
+test("McpServer tools/call: CANDIDATE (not APPROVED) caller returns DENY_CALLER_QUARANTINED", async () => {
+  const server = makeServer({ registry: makeRegistry({ approved: false, active: false }) });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "secb_canonical_fingerprint", arguments: { document: {} } })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_CALLER_QUARANTINED");
+});
+
+test("McpServer tools/call: APPROVED but not ACTIVE caller returns DENY_CALLER_QUARANTINED", async () => {
+  const server = makeServer({ registry: makeRegistry({ approved: true, active: false }) });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "secb_canonical_fingerprint", arguments: { document: {} } })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_CALLER_QUARANTINED");
+});
+
+// -- tools/call: DENY_INVALID_PARAMS --
+
+test("McpServer tools/call: missing required param returns DENY_INVALID_PARAMS", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({ invocationLedger: ledger });
+  // secb_canonical_fingerprint requires "document"
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "secb_canonical_fingerprint", arguments: {} })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_INVALID_PARAMS");
+  assert.ok(Array.isArray(resp.error.data.errors));
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].payload.decision_code, "DENY_INVALID_PARAMS");
+});
+
+test("McpServer tools/call: empty string for NON_EMPTY_STRING param returns DENY_INVALID_PARAMS", async () => {
+  const server = makeServer();
+  // secb_registry_resolve requires agent_instance_id (non-empty string)
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "secb_registry_resolve", arguments: { agent_instance_id: "" } })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_INVALID_PARAMS");
+});
+
+// -- tools/call: DENY_RESERVED_DELIMITER (GOV-P011-08) --
+
+test("McpServer tools/call: pipe | in project_id returns DENY_RESERVED_DELIMITER", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({ invocationLedger: ledger });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_project_resolve_effective",
+      arguments: { project_id: "proj|injected" },
+    })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_RESERVED_DELIMITER");
+  assert.equal(resp.error.data.delimiter, "|");
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].payload.decision_code, "DENY_RESERVED_DELIMITER");
+});
+
+test("McpServer tools/call: at-sign @ in work_package_id returns DENY_RESERVED_DELIMITER", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_work_package_resolve_effective",
+      arguments: { project_id: "p1", work_package_id: "wp@injected" },
+    })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_RESERVED_DELIMITER");
+  assert.equal(resp.error.data.delimiter, "@");
+});
+
+test("McpServer tools/call: pipe | in agent_instance_id returns DENY_RESERVED_DELIMITER", async () => {
+  const server = makeServer();
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_registry_resolve",
+      arguments: { agent_instance_id: "inst|injected" },
+    })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_RESERVED_DELIMITER");
+});
+
+// -- tools/call: DENY_SERVICE_UNAVAILABLE --
+
+test("McpServer tools/call: no service handler returns DENY_SERVICE_UNAVAILABLE", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({ invocationLedger: ledger, services: {} });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_canonical_fingerprint",
+      arguments: { document: { a: 1 } },
+    })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_SERVICE_UNAVAILABLE");
+  assert.equal(resp.error.data.result.content_disposition, "data_untrusted");
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].payload.decision_code, "DENY_SERVICE_UNAVAILABLE");
+});
+
+// -- tools/call: ALLOW with data_untrusted --
+
+test("McpServer tools/call: successful invocation carries data_untrusted marker", async () => {
+  const ledger = makeFakeLedger();
+  const serviceResult = { fingerprint: "abcd1234", canonical: true };
+  const services = {
+    secb_canonical_fingerprint: async () => serviceResult,
+  };
+  const server = makeServer({ invocationLedger: ledger, services });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_canonical_fingerprint",
+      arguments: { document: { key: "value" } },
+    })
+  );
+  assert.ok("result" in resp, "expected result, got: " + JSON.stringify(resp));
+  assert.equal(resp.result.content.length, 1);
+  assert.equal(resp.result.content[0].type, "text");
+  const parsed = JSON.parse(resp.result.content[0].text);
+  assert.equal(parsed.content_disposition, "data_untrusted");
+  assert.equal(parsed.fingerprint, "abcd1234");
+  // Allowed call is also ledgered.
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].payload.decision_code, "ALLOW");
+});
+
+// -- tools/call: service receives effectiveCeiling --
+
+test("McpServer tools/call: service handler receives effectiveCeiling = min(server, caller)", async () => {
+  let capturedCtx;
+  const services = {
+    secb_canonical_fingerprint: async (_params, ctx) => {
+      capturedCtx = ctx;
+      return { fingerprint: "x" };
+    },
+  };
+  // Server ceiling INTERNAL, caller max_data_classification INTERNAL → min = INTERNAL
+  const server = makeServer({ services, serverCeiling: "INTERNAL" });
+  await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_canonical_fingerprint",
+      arguments: { document: {} },
+    })
+  );
+  assert.equal(capturedCtx.effectiveCeiling, "INTERNAL");
+});
+
+// -- tools/call: session-scoped idempotent replay --
+
+test("McpServer tools/call: identical request twice returns replayed:true on second", async () => {
+  let callCount = 0;
+  const services = {
+    secb_canonical_fingerprint: async () => {
+      callCount++;
+      return { fingerprint: "fp1" };
+    },
+  };
+  const server = makeServer({ services });
+  const req = makeRequest("tools/call", {
+    name: "secb_canonical_fingerprint",
+    arguments: { document: { x: 1 } },
+  });
+  const first = await server.handleRequest(req);
+  const second = await server.handleRequest({ ...req });
+  assert.ok(!("replayed" in first) || first.replayed !== true, "first should not be replayed");
+  assert.equal(second.replayed, true, "second should be replayed");
+  assert.equal(callCount, 1, "service should be invoked exactly once");
+});
+
+// -- tools/call: all denials are ledgered --
+
+test("McpServer tools/call: DENY_RESERVED_DELIMITER is ledgered", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({ invocationLedger: ledger });
+  await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_project_resolve_effective",
+      arguments: { project_id: "p|bad" },
+    })
+  );
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].payload.decision_code, "DENY_RESERVED_DELIMITER");
+});
+
+test("McpServer tools/call: DENY_INVALID_PARAMS is ledgered", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({ invocationLedger: ledger });
+  await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_contract_validate",
+      arguments: {},  // missing required "kind" and "document"
+    })
+  );
+  assert.equal(ledger.records.length, 1);
+  assert.equal(ledger.records[0].payload.decision_code, "DENY_INVALID_PARAMS");
+});
+
+// -- DENY_AUDIT_UNAVAILABLE (GOV-MCP-06: fail-closed) --
+
+test("McpServer tools/call: always-busy invocation ledger returns DENY_AUDIT_UNAVAILABLE", async () => {
+  const server = makeServer({ invocationLedger: makeAlwaysBusyLedger() });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_canonical_fingerprint",
+      arguments: { document: { a: 1 } },
+    })
+  );
+  assert.ok("error" in resp);
+  assert.equal(resp.error.data.code, "DENY_AUDIT_UNAVAILABLE");
+});
+
+test("McpServer tools/call: DENY_AUDIT_UNAVAILABLE supersedes DENY_UNKNOWN_TOOL", async () => {
+  const server = makeServer({ invocationLedger: makeAlwaysBusyLedger() });
+  const resp = await server.handleRequest(
+    makeRequest("tools/call", { name: "nonexistent_tool", arguments: {} })
+  );
+  assert.ok("error" in resp);
+  // The audit unavailable error takes precedence over the tool-not-found error.
+  assert.equal(resp.error.data.code, "DENY_AUDIT_UNAVAILABLE");
+});
+
+// -- Ledger contains tool, fingerprint, decision_code, and ceiling --
+
+test("McpServer tools/call: invocation record contains required audit fields", async () => {
+  const ledger = makeFakeLedger();
+  const server = makeServer({ invocationLedger: ledger });
+  await server.handleRequest(
+    makeRequest("tools/call", {
+      name: "secb_canonical_fingerprint",
+      arguments: { document: { x: 1 } },
+    })
+  );
+  const record = ledger.records[0];
+  const p = record.payload;
+  assert.equal(p.tool, "secb_canonical_fingerprint");
+  assert.equal(typeof p.fingerprint, "string");
+  assert.equal(p.decision_code, "DENY_SERVICE_UNAVAILABLE");
+  assert.equal(typeof p.effective_ceiling, "string");
+  assert.equal(typeof p.duration_ms, "number");
+  assert.equal(p.caller_assertion, CALLER_ID);
+});
