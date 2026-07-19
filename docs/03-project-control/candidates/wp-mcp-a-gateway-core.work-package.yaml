@@ -1,0 +1,56 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "work_package_wp_secb_mcp_a_gateway_core_001_v1_candidate"
+  record_status: "DRAFT_NOT_AUTHORIZED"
+  source_template: "docs/templates/work-package.yaml"
+  source: "Advise-and-proceed candidate preparation (AMD-002) following SECB-MCP-P0-001 recording, 2026-07-19"
+  instantiated_at: "2026-07-19T17:37:20+07:00"
+  producer_runtime: "Claude"
+  producer_actor_id: null
+  limitations:
+    - "SECB-MCP-P0-001 is a DRAFT candidate; this work package must not be treated as authorized until that control document passes REV/QA/SEC and operator acceptance."
+    - "The gateway core skeleton prepared alongside this record is a candidate implementation only; it binds no transport, opens no port, and activates nothing."
+    - "Role assignments (producer, REV, QA, SEC, GOV) require governance resolution."
+work_package:
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  project_id: "prj_secb_local"
+  project_contract_ref: "docs/03-project-control/candidates/secb-local-v2-r2.project-contract.yaml#version=1"
+  objective_id: "obj_secb_mcp_p0_a_control_plane"
+  version: 1
+  status: "DRAFT"
+  risk_class: "R1"
+  problem_statement: "SECB-MCP-P0-001 mandates a SecB-owned MCP Gateway as the single path between harnesses and MCP adapters, but no gateway dispatch core exists."
+  desired_outcome: "A pure, fail-closed gateway dispatch core (request_context validation, capability allowlist, adapter registry, audit-first invocation, receipt emission) with unit tests, ready for transport binding only under a later operator-authorized deployment step."
+  scope:
+    - "Implement src/gateway/mcp-gateway-core.mjs as a pure dispatch core with no I/O, no transport, no port, and no process spawning."
+    - "Enforce the SECB-MCP-P0-001 request_context binding: all ten fields required, fail-closed."
+    - "Deny-by-default: unknown capability, non-read capability (P0 is read-only), missing adapter, policy denial, and audit-log failure all deny."
+    - "Record every invocation attempt through an injected invocation log before dispatch (fail-closed audit, same pattern as the P0-21 server)."
+    - "Mark all adapter output data_untrusted in the emitted receipt."
+    - "Unit tests covering every deny path and the read-only happy path."
+    - "MANIFEST.json maintenance in the same commit."
+  non_scope:
+    - "Transport binding (stdio/HTTP), port listening, or any activation."
+    - "Adapter implementations (Filesystem, Git, Gitea, Semgrep, Context7, Document Intake, Recall)."
+    - "Credential brokering implementation (interface stub only)."
+    - "Private registry persistence; the capability registry is injected in-memory."
+    - "Any change to effective governance documents."
+  dependencies:
+    - "SECB-MCP-P0-001 acceptance (exit gate N-6) before any transport binding or adapter intake."
+    - "Operator-authorized deployment step for wiring (same boundary as P0-21 run-secb-mcp-server skeleton)."
+  baseline:
+    repository_id: "repo_secb_local"
+    repository_path: "C:/laragon/www/SecB"
+    branch: "bst/secb-mcp-p0-001-candidate"
+    commit_sha: "7799dcc118e713637f83372a004543f78d01a73c"
+    working_tree_required: "CLEAN_EXCEPT_UNRELATED_SESSION_FILES"
+  acceptance_criteria:
+    - "node tools/validate-foundation.mjs exits 0."
+    - "node --test tests/mcp-gateway-core.test.mjs passes with zero failures."
+    - "The core exposes no network, filesystem, or process capability of its own."
+    - "Every deny path returns a structured deny code; no throw escapes invoke()."
+    - "Invocation log is called before adapter dispatch on every attempt, and a throwing log denies the call."
+  proof_methods:
+    - "Unit tests under node:test."
+    - "Foundation validator run."
+    - "Independent REV/QA reading of the diff against SECB-MCP-P0-001 rules N-1..N-3."

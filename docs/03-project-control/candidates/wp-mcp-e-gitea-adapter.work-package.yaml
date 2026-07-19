@@ -1,0 +1,53 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "work_package_wp_secb_mcp_e_gitea_adapter_001_v1_candidate"
+  record_status: "DRAFT_NOT_AUTHORIZED"
+  source_template: "docs/templates/work-package.yaml"
+  source: "Advise-and-proceed candidate preparation (AMD-002) following SECB-MCP-P0-001 recording, 2026-07-19"
+  instantiated_at: "2026-07-19T17:37:20+07:00"
+  producer_runtime: "Claude"
+  producer_actor_id: null
+  limitations:
+    - "SECB-MCP-P0-001 is a DRAFT candidate; this work package must not be treated as authorized until that control document passes REV/QA/SEC and operator acceptance."
+    - "This record intentionally contains planning only; no adapter code is prepared until the gateway core (wp_secb_mcp_a_gateway_core_001) has an accepted review."
+    - "The Gitea service-account token model depends on a SecB Credential Broker that does not exist yet; the token must never reach an agent runtime."
+work_package:
+  work_package_id: "wp_secb_mcp_e_gitea_adapter_001"
+  project_id: "prj_secb_local"
+  project_contract_ref: "docs/03-project-control/candidates/secb-local-v2-r2.project-contract.yaml#version=1"
+  objective_id: "obj_secb_mcp_p0_e_gitea_provider"
+  version: 1
+  status: "DRAFT"
+  risk_class: "R2"
+  problem_statement: "SecB's primary repository provider is a local Gitea instance, but no governed read-only MCP adapter exposes it; forcing GitHub semantics or direct API access would bypass the gateway boundary."
+  desired_outcome: "A SecB-native, read-only Gitea adapter behind the SecB MCP Gateway exposing only the fourteen approved read tools, authenticated via a broker-held minimal-scope service-account token."
+  scope:
+    - "Adapter facade over the Gitea REST API exposing exactly the SECB-MCP-P0-001 P0 Gitea tool list (repository, branch, commit, PR, issue, workflow, webhook-metadata, permission reads)."
+    - "Token resolved via credential-broker handle inside the adapter process only."
+    - "Normalized responses with provenance (instance URL, API version, query time) marked data_untrusted."
+    - "Request/response size limits and timeouts per gateway policy."
+    - "Negative tests: mutation endpoints absent, token never echoed, path/parameter injection denied."
+  non_scope:
+    - "All mutating Gitea operations (create/update/push/merge/webhook/token/collaborator/protection/workflow-trigger/delete)."
+    - "GitHub provider support (separate conditional work package)."
+    - "Gateway transport activation; adapter registration happens only through the private-registry intake gates."
+  dependencies:
+    - "wp_secb_mcp_a_gateway_core_001 accepted."
+    - "SecB Credential Broker design decision (minimum: sealed handle resolution for adapter processes)."
+    - "Dedicated read-scope Gitea service account created by the operator."
+    - "SECB-MCP-P0-001 acceptance (exit gate N-6)."
+  baseline:
+    repository_id: "repo_secb_local"
+    repository_path: "C:/laragon/www/SecB"
+    branch: "bst/secb-mcp-p0-001-candidate"
+    commit_sha: "7799dcc118e713637f83372a004543f78d01a73c"
+    working_tree_required: "CLEAN_EXCEPT_UNRELATED_SESSION_FILES"
+  acceptance_criteria:
+    - "Tool inventory equals the approved fourteen read tools; nothing else is reachable."
+    - "All calls carry gateway request_context; adapter refuses direct invocation without it."
+    - "Token absent from logs, receipts, errors, and responses under test."
+    - "Intake gates from SECB-MCP-P0-001 N-5 satisfied with evidence before registry promotion."
+  proof_methods:
+    - "Unit and negative tests against a Gitea API fixture."
+    - "MCP Inspector conformance run at intake."
+    - "Independent REV/QA + SEC review."
