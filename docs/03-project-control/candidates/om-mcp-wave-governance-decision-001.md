@@ -15,6 +15,8 @@
 - Round-2 fix candidate READY: `bst/mcp-gateway-round2-prep` @ `4861c75` (4 fixes + 4 tests; 15/15 targeted, 167-suite 0 fail; branch predates the validator-remotes fix so `npm test`'s validate gate fails there benignly — inherited on merge).
 - **Requested disposition:** when the Codex verdict record lands, fold round 2 into the PR #3 branch as a new pinned round (or merge sequentially), rerun QA, then operator merge.
 
+**D1 ADDENDUM (2026-07-19, reconciliation):** the Codex producer lane independently delivered `producer/mcp/p0a-gateway-core-rework-002` @ `f42b110` (same frozen base `7576a29`): an on-branch REV round (REQUEST_CHANGES → rework → rework-002) plus a substantially hardened core (revocation, concurrency limits, request/result output controls, error-text non-disclosure, frozen context/capability/adapter snapshots) with a dedicated adversarial suite and a producer-verification handoff pinning `1f4465d..daaa4ac`. Cross-check confirms it **subsumes all four fixes** in `bst/mcp-gateway-round2-prep` @ `4861c75` (clock/policy throws, async-adapter rejection, receipt-attribution immunity — each covered by an adversarial test). **Reconciliation recommendation:** adopt `producer/mcp/p0a-gateway-core-rework-002` as the single round-2 successor; mark `bst/mcp-gateway-round2-prep` SUPERSEDED (retain as convergence evidence; do not delete without operator instruction). The producer handoff's mandated fresh independent REV/QA/SEC remains outstanding.
+
 ### D2 — Operating Model v0.1 acceptance track
 
 - Import fidelity REV: **APPROVE_WITH_NOTES** @ `b98fb28` (`bst/om-v0.1-import-rev-001`) — 56/56 source hashes verified; 1 LOW (regenerated `docs/README.md` not in import-map), 1 INFO (CRLF); 0 high/critical.
