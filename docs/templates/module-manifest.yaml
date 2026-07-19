@@ -1,0 +1,23 @@
+schema_version: "0.1"
+module_id: "MOD-"
+name: ""
+product_id: ""
+purpose: ""
+owners:
+  business: ""
+  technical: ""
+boundaries:
+  in_scope: []
+  out_of_scope: []
+dependencies: []
+interfaces: []
+data_classification: "INTERNAL"
+primary_harness: ""
+secondary_harness: ""
+required_roles: []
+acceptance_criteria: []
+evidence_obligations: []
+release_authority: ""
+rollback_owner: ""
+knowledge_policy: "PROJECT_SCOPED"
+skill_publication_policy: "REVIEW_REQUIRED"

@@ -1,0 +1,15 @@
+schema_version: "0.1"
+research_task_id: "RES-"
+trigger_ref: ""
+question: ""
+scope: ""
+required_source_types: []
+freshness_requirement: ""
+known_facts: []
+assumptions: []
+contradictions_to_resolve: []
+expected_output: "EVIDENCE_PACK|OPTIONS|ROOT_CAUSE|RECOMMENDATION"
+assigned_role: "RESEARCH"
+due_at: ""
+evidence_destination: ""
+status: "DRAFT"

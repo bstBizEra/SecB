@@ -1,0 +1,12 @@
+{
+  "artifact": "SECB-GOV-001",
+  "version": "0.1",
+  "files": 56,
+  "markdown_files": 40,
+  "yaml_files": 15,
+  "controlled_lines": 2129,
+  "yaml_validation": "PASS",
+  "markdown_link_validation": "PASS",
+  "errors": [],
+  "link_errors": []
+}

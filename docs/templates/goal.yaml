@@ -1,0 +1,23 @@
+schema_version: "0.1"
+goal_id: "GOAL-"
+parent_id: ""
+level: "PORTFOLIO|PRODUCT|MODULE|WORK_PACKAGE"
+title: ""
+outcome: ""
+beneficiary: ""
+baseline: ""
+target:
+  metric: ""
+  value: ""
+  due_at: ""
+owners:
+  accountable: ""
+  governance: ""
+constraints: []
+non_goals: []
+assumptions: []
+dependencies: []
+leading_indicators: []
+evidence_required: []
+review_triggers: []
+status: "DRAFT"
