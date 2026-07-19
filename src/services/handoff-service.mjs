@@ -129,8 +129,15 @@ export class HandoffService {
 
     // R1: receipts are not verifiable (no resolver). A reference present
     // without a resolver is exactly the smuggling channel P0-10 closes.
-    if (contextReceiptRef !== undefined && this.#receiptResolver === null) {
+    // R2 (GOV-P011-07): with a resolver wired, context_receipt_ref is
+    // MANDATORY and must resolve; the verification happens after the
+    // envelope is schema-valid and the work package is confirmed
+    // effective (below), so the receipt is checked against a real binding.
+    if (this.#receiptResolver === null && contextReceiptRef !== undefined) {
       deny("DENY_RECEIPT_UNVERIFIABLE", "context_receipt_ref cannot be verified until P0-10 R2 (R1 denies when present)");
+    }
+    if (this.#receiptResolver !== null && contextReceiptRef === undefined) {
+      deny("DENY_RECEIPT_REQUIRED", "context_receipt_ref is required once a receipt resolver is configured (R2)");
     }
 
     validateContract("handoffEnvelope", envelope);
@@ -158,6 +165,29 @@ export class HandoffService {
     }
     const contract = resolution.effective;
     if (contract.baseline !== baseline) deny("DENY_BASELINE_MISMATCH", "Asserted baseline does not match the effective contract");
+
+    // R2 receipt verification: the referenced context receipt must resolve
+    // ALLOW through the injected resolver AND bind the same (project, work
+    // package, session, baseline) as this handoff. This closes the context
+    // smuggling channel: no envelope ships context whose provenance the
+    // system cannot check against the live federation service.
+    if (this.#receiptResolver !== null) {
+      if (!contextReceiptRef || typeof contextReceiptRef !== "object" || isBlank(contextReceiptRef.receipt_id)) {
+        deny("DENY_MALFORMED_REQUEST", "context_receipt_ref must be an object with a non-blank receipt_id");
+      }
+      const resolved = this.#receiptResolver(contextReceiptRef, {
+        projectId: envelope.project_id, workPackageId: envelope.work_package_id,
+        sessionId: envelope.source_session_id, actorId, baseline
+      });
+      if (!resolved || resolved.code !== "ALLOW" || !resolved.receipt) {
+        deny("DENY_RECEIPT_NOT_EFFECTIVE", `context receipt did not resolve ALLOW: ${resolved?.code ?? "no resolution"}`);
+      }
+      const r = resolved.receipt;
+      if (r.project_id !== envelope.project_id || r.work_package_id !== envelope.work_package_id ||
+          r.session_id !== envelope.source_session_id || r.baseline_version !== baseline) {
+        deny("DENY_RECEIPT_BINDING", "context receipt binds a different project/work package/session/baseline");
+      }
+    }
 
     // server-derived bound: contract-sourced dimensions (risk, paths) are
     // authoritative; contract-silent dimensions (data class, tools,
@@ -198,7 +228,8 @@ export class HandoffService {
       depth,
       expiresAt,
       envelope: frozenClone(envelope),
-      ledger: [deepFreeze({ seq: 1, type: "OFFER", state: "OFFERED", actorId, timestamp: offeredAt.toISOString() })]
+      contextReceiptId: contextReceiptRef?.receipt_id ?? null,
+      ledger: [deepFreeze({ seq: 1, type: "OFFER", state: "OFFERED", actorId, contextReceiptId: contextReceiptRef?.receipt_id ?? null, timestamp: offeredAt.toISOString() })]
     };
     this.#records.set(key, record);
 

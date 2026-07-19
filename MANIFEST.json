@@ -135,6 +135,7 @@
     "src/services/handoff-service.mjs",
     "src/services/non-escalation-comparator.mjs",
     "tests/handoff-service.test.mjs",
+    "tests/handoff-r2-receipt.test.mjs",
     "src/services/context-federation-service.mjs",
     "src/services/context-retrieval-policy.mjs",
     "tests/context-federation.test.mjs",
