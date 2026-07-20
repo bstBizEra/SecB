@@ -46,8 +46,9 @@ for (const file of docsManifest.files) {
 
 const schemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"));
 // 7 canonical bootstrap schemas plus governed extensions (P0-14 temporal
-// ledgers). Set equality keeps this fail-closed: an unexpected schema
-// addition or a missing canonical schema both fail.
+// ledgers, skill resolver, MOD-MCP capability registry). Set equality keeps
+// this fail-closed: an unexpected schema addition or a missing canonical
+// schema both fail.
 const expectedSchemas = [
   "contracts/agent-registration.schema.json",
   "contracts/context-receipt.schema.json",
@@ -59,12 +60,13 @@ const expectedSchemas = [
   "contracts/decision-record.schema.json",
   "contracts/knowledge-claim.schema.json",
   "contracts/outcome-receipt.schema.json",
-  "contracts/skill-manifest.schema.json"
+  "contracts/skill-manifest.schema.json",
+  "contracts/capability-record.schema.json"
 ];
 assert(
   schemaFiles.length === expectedSchemas.length && expectedSchemas.every((file) => schemaFiles.includes(file)),
   "schemas.count",
-  "7 canonical bootstrap schemas + 4 governed extensions (P0-14, skill resolver)"
+  "7 canonical bootstrap schemas + 5 governed extensions (P0-14, skill resolver, capability record)"
 );
 const mandatoryIdentityFields = {
   "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_instance_id", "evaluation_status", "lifecycle_state"],
@@ -74,6 +76,7 @@ const mandatoryIdentityFields = {
   "contracts/handoff-envelope.schema.json": ["handoff_id", "version", "project_id", "work_package_id", "source_session_id", "content_hash"],
   "contracts/event-envelope.schema.json": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "idempotency_key", "content_hash"],
   "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "content_hash", "verification_status"],
+  "contracts/capability-record.schema.json": ["capability_id", "version", "adapter_id", "tool", "access", "status"],
   "contracts/decision-record.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_type", "valid_from", "valid_until"],
   "contracts/knowledge-claim.schema.json": ["claim_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "truth_status", "evidence_refs", "valid_from", "valid_until"],
   "contracts/outcome-receipt.schema.json": ["outcome_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_ref", "outcome_status", "reversion_required"],

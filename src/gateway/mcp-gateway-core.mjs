@@ -33,7 +33,21 @@ const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
 const DANGEROUS_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const ASCII_OUTPUT_KEY = /^[\x20-\x7e]+$/;
 const SECRET_KEY_NORMALIZED = /(?:apikey|authorization|credential|password|passwd|privatekey|secret|token)/;
-const SECRET_VALUE = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])-[-a-z0-9_]{8,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
+// Value screen. The provider-token alternative uses a [-_] separator (matching
+// the broker's SECRET_MATERIAL) so underscore-delimited tokens (ghp_,
+// github_pat_, sk_) are caught, not just hyphen forms (FU-2 / Gap C). The AWS
+// access-key id (AKIA + 16 upper-alnum) is distinctive enough to screen at the
+// value level regardless of field name (FU-3 / A-FIND-2).
+const SECRET_VALUE = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])[-_][-a-z0-9_]{8,}|\bAKIA[0-9A-Z]{16}\b|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
+// AWS secret access keys are 40 base64-ish chars with NO distinctive prefix, so
+// they are indistinguishable from ordinary base64/hex hashes. Screening every
+// 40-char value would cause false-positive explosions, so this heuristic fires
+// ONLY when the field name itself signals AWS access-key/secret material
+// (AWS_SECRET_FIELD). Fields already matching SECRET_KEY_NORMALIZED are rejected
+// wholesale by the key screen; this narrows the residual gap where an AWS secret
+// hides under an aws/access-key-named field that the key screen does not cover.
+const AWS_SECRET_VALUE = /(?<![A-Za-z0-9/+])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])/;
+const AWS_SECRET_FIELD = /(?:awssecret|accesskey|secretaccesskey)/;
 const JSON_STRINGIFY_PRIMITIVE = JSON.stringify.bind(JSON);
 
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -51,10 +65,11 @@ function hardenedRecord(entries) {
   return Object.freeze(output);
 }
 
-const deny = (code) => hardenedRecord([
+const deny = (code, evidenceStatus = null) => hardenedRecord([
   ["ok", false],
   ["deny_code", code],
   ["message", "request denied"],
+  ...(evidenceStatus === null ? [] : [["evidence_status", evidenceStatus]]),
 ]);
 
 function positiveInteger(value, name) {
@@ -116,6 +131,17 @@ function isSecretLikeKey(key) {
   try {
     const normalized = key.normalize("NFKC").replace(/[^a-z0-9]/gi, "").toLowerCase();
     return SECRET_KEY_NORMALIZED.test(normalized);
+  } catch {
+    return true;
+  }
+}
+
+// Field-name gate for the AWS secret-key value heuristic (see AWS_SECRET_VALUE).
+// Fail-closed to true on any error, matching isSecretLikeKey.
+function isAwsSecretField(key) {
+  try {
+    const normalized = key.normalize("NFKC").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    return AWS_SECRET_FIELD.test(normalized);
   } catch {
     return true;
   }
@@ -195,6 +221,9 @@ function normalizeJson(value, { rejectSecrets = false } = {}, seen = new WeakSet
     if (DANGEROUS_OBJECT_KEYS.has(key)) throw new Error("dangerous object key");
     if (rejectSecrets && !ASCII_OUTPUT_KEY.test(key)) throw new Error("non-ASCII output key");
     if (rejectSecrets && isSecretLikeKey(key)) throw new Error("secret-like key");
+    if (rejectSecrets && isAwsSecretField(key) && typeof entry === "string" && AWS_SECRET_VALUE.test(entry)) {
+      throw new Error("aws secret-key-shaped value");
+    }
     Object.defineProperty(output, key, {
       value: normalizeJson(entry, { rejectSecrets }, seen),
       enumerable: true,
@@ -269,7 +298,7 @@ export class McpGatewayCore {
   #limits;
   #timeouts;
   #capacityInUse = 0;
-  #overflowEvidenceTail = Promise.resolve();
+  #overflowEvidenceBusy = false;
 
   constructor({
     capabilityRegistry,
@@ -355,16 +384,18 @@ export class McpGatewayCore {
 
   #holdCapacity(reservation, settlement) {
     reservation.pending.add(settlement);
-    // Bounded abandonment: a truly-never-settling hook/sink cannot be forced
-    // to resolve (no cross-realm cancellation in JS), so this reservation's
-    // capacity slot must still be reclaimed on a bound, or GATE2-BLOCKING-001
-    // reproduces (a hung hook permanently wedges #capacityInUse, and via
-    // #denyConcurrencyAudited's shared #overflowEvidenceTail, the entire
-    // concurrency-overflow lane). Abandoning the pending entry after a bound
-    // does not stop `settlement` from continuing in the background -- it
-    // only stops counting it against capacity. If it later settles anyway,
-    // the .finally() below still fires and is a safe no-op against an
-    // already-abandoned entry.
+    // Bounded abandonment (GATE2-BLOCKING-001): a truly-never-settling
+    // hook/sink cannot be forced to resolve (no cross-realm cancellation in
+    // JS), so this reservation's capacity slot must still be reclaimed on a
+    // bound, or a hung hook permanently wedges #capacityInUse. This applies
+    // only to settlements that already TIMED OUT and were handed here by
+    // #call -- still-active work within its own timeout budget is never
+    // released early (the overflow-evidence lane itself is separately
+    // bounded via #overflowEvidenceBusy backpressure and cannot wedge).
+    // Abandoning the pending entry after a bound does not stop `settlement`
+    // from continuing in the background -- it only stops counting it against
+    // capacity. If it later settles anyway, the .finally() below still fires
+    // and is a safe no-op against an already-abandoned entry.
     const abandon = setTimeout(() => {
       if (reservation.pending.delete(settlement)) {
         this.#releaseCapacityIfComplete(reservation);
@@ -470,29 +501,39 @@ export class McpGatewayCore {
   }
 
   async #denyConcurrencyAudited(requestContext) {
+    if (this.#overflowEvidenceBusy) {
+      return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_NOT_RECORDED_BACKPRESSURE");
+    }
+    this.#overflowEvidenceBusy = true;
     const context = snapshotContext(requestContext);
     const capability = this.#capabilities.get(context.capability_id) ?? null;
-    const reservation = this.#newReservation(false);
-    const previous = this.#overflowEvidenceTail;
-    let releaseLane;
-    this.#overflowEvidenceTail = new Promise((resolve) => { releaseLane = resolve; });
+    const evidenceSequence = { nextSequence: 1 };
+    const outcome = await boundedCall(
+      () => this.#invocationLog(this.#auditEntry(
+        context,
+        capability,
+        null,
+        "DENY_CONCURRENCY_LIMIT",
+        evidenceSequence,
+      )),
+      this.#timeouts.audit_ms,
+    );
 
-    const response = previous.then(async () => {
-      try {
-        return await this.#denyAudited(
-          "DENY_CONCURRENCY_LIMIT",
-          context,
-          capability,
-          null,
-          reservation,
-        );
-      } finally {
-        reservation.completed = true;
-        this.#releaseCapacityIfComplete(reservation);
-        reservation.drained.then(releaseLane, releaseLane);
-      }
-    });
-    return response.catch(() => deny("DENY_AUDIT_UNAVAILABLE"));
+    if (outcome.status === "timeout") {
+      // The caller is bounded, but the single evidence slot remains occupied
+      // until the underlying callback actually settles. Later overflow calls
+      // receive explicit backpressure instead of joining an unbounded queue.
+      outcome.settled.finally(() => {
+        this.#overflowEvidenceBusy = false;
+      }).catch(() => {});
+      return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_RECORDING_TIMEOUT_UNCONFIRMED");
+    }
+
+    this.#overflowEvidenceBusy = false;
+    if (outcome.status === "ok") {
+      return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_CANDIDATE_RECORDED_NOT_ACCEPTED");
+    }
+    return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_RECORDING_FAILED");
   }
 
   async invoke(requestContext, params = {}) {
