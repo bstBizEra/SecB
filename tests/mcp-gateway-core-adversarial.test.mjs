@@ -267,6 +267,7 @@ test("global capacity is reserved before the clock and rejects overflow without 
   await new Promise((resolve) => setTimeout(resolve, 10));
   const overflow = await core.invoke({ ...context(), session_id: "overflow" });
   assert.equal(overflow.deny_code, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(overflow.evidence_status, "EVIDENCE_CANDIDATE_RECORDED_NOT_ACCEPTED");
   assert.equal(clockCalls, 1);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].disposition, "DENY_CONCURRENCY_LIMIT");
@@ -648,70 +649,91 @@ test("canonical sizing and returned envelopes ignore object and array prototype 
   }
 });
 
-// GATE2-BLOCKING-001: an indefinitely-hung hook must not permanently retain a
-// capacity reservation. Before the fix, #holdCapacity's tracked settlement
-// had no bound of its own, so a truly-never-settling adapter/audit call held
-// its reservation's pending entry forever, #capacityInUse never decremented,
-// and (via #denyConcurrencyAudited's shared #overflowEvidenceTail) the whole
-// concurrency-overflow lane could wedge shut for the process's lifetime.
-test("a hung adapter's capacity reservation is abandoned on a bound, not held forever", async () => {
-  const short = { clock_ms: 20, policy_ms: 20, audit_ms: 20, adapter_ms: 20, revocation_ms: 20, result_validator_ms: 20 };
+test("overflow evidence uses bounded non-blocking backpressure without releasing active work", async () => {
+  let releaseClock;
+  const blockedClock = new Promise((resolve) => { releaseClock = resolve; });
+  let releaseFirstEvidence;
+  const blockedEvidence = new Promise((resolve) => { releaseFirstEvidence = resolve; });
+  const entries = [];
+  let loggerCalls = 0;
+  let clockCalls = 0;
+  const short = {
+    clock_ms: 1_000,
+    policy_ms: 20,
+    audit_ms: 20,
+    adapter_ms: 20,
+    revocation_ms: 20,
+    result_validator_ms: 20,
+  };
   const core = gateway({
-    adapter: () => new Promise(() => {}), // never settles -- the hang under test
-    timeouts: short,
+    now: () => { clockCalls += 1; return blockedClock; },
+    invocationLog: (entry) => {
+      loggerCalls += 1;
+      entries.push(entry);
+      if (loggerCalls === 1) return blockedEvidence;
+      return undefined;
+    },
     limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
-  });
-
-  const first = await core.invoke(context());
-  assert.equal(first.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
-
-  // Immediately after the timeout, the reservation's pending hung-adapter
-  // settlement is still held -- capacity is correctly still exhausted.
-  const immediatelyAfter = await core.invoke({ ...context(), session_id: "session-immediately-after" });
-  assert.equal(immediatelyAfter.deny_code, "DENY_CONCURRENCY_LIMIT");
-
-  // Past the abandonment bound (audit_ms * 4 = 80ms here), the reservation
-  // must be reclaimed even though the original adapter promise never settled
-  // (and, per boundedCall/#call, never will -- there is no cross-realm
-  // cancellation in JS). A fresh, unrelated request must be able to proceed
-  // normally, not hang and not be denied for a capacity reason.
-  await new Promise((resolve) => setTimeout(resolve, 120));
-  const afterAbandonment = await core.invoke({ ...context(), session_id: "session-after-abandonment" });
-  // Reaching the adapter timeout again (rather than DENY_CONCURRENCY_LIMIT)
-  // proves the request got PAST the capacity gate -- the slot was reclaimed.
-  assert.equal(afterAbandonment.ok, false);
-  assert.equal(afterAbandonment.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
-});
-
-// The same abandonment bound must also unblock the shared overflow-audit
-// lane (#overflowEvidenceTail), not just the plain #capacityInUse counter --
-// this is the specific mechanism the independent SEC review (GATE2-BLOCKING-001)
-// identified as the more severe consequence: a stuck lane denies ALL future
-// concurrency-limit responses, not just the one reservation that hung.
-test("a hung hook does not permanently wedge the shared overflow-audit lane", async () => {
-  const short = { clock_ms: 20, policy_ms: 20, audit_ms: 20, adapter_ms: 20, revocation_ms: 20, result_validator_ms: 20 };
-  const core = gateway({
-    adapter: () => new Promise(() => {}),
     timeouts: short,
-    limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
   });
-
-  await core.invoke(context()); // times out, holds the sole capacity slot
-
-  // Queue several concurrency-limit responses while capacity is exhausted;
-  // each traverses #denyConcurrencyAudited and the shared #overflowEvidenceTail.
-  const overflowResults = await Promise.all([
-    core.invoke({ ...context(), session_id: "overflow-1" }),
-    core.invoke({ ...context(), session_id: "overflow-2" }),
-    core.invoke({ ...context(), session_id: "overflow-3" }),
+  const within = (promise, milliseconds) => Promise.race([
+    promise,
+    new Promise((_resolve, reject) => setTimeout(
+      () => reject(new Error(`operation exceeded ${milliseconds}ms bound`)),
+      milliseconds,
+    )),
   ]);
-  for (const result of overflowResults) {
-    assert.equal(result.deny_code, "DENY_CONCURRENCY_LIMIT");
-  }
 
-  // Past the abandonment bound, the lane must still accept and answer new
-  // work -- it must not have wedged shut from the earlier hang.
+  const base = core.invoke(context());
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  const firstOverflow = await within(
+    core.invoke({ ...context(), session_id: "overflow-recording-timeout" }),
+    250,
+  );
+  assert.equal(firstOverflow.deny_code, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(firstOverflow.evidence_status, "EVIDENCE_RECORDING_TIMEOUT_UNCONFIRMED");
+  assert.equal(loggerCalls, 1);
+
+  const laterOverflow = await within(Promise.all(
+    Array.from({ length: 64 }, (_entry, index) => core.invoke({
+      ...context(),
+      session_id: `overflow-backpressure-${index}`,
+    })),
+  ), 100);
+  for (const result of laterOverflow) {
+    assert.equal(result.deny_code, "DENY_CONCURRENCY_LIMIT");
+    assert.equal(result.evidence_status, "EVIDENCE_NOT_RECORDED_BACKPRESSURE");
+  }
+  assert.equal(loggerCalls, 1, "backpressured calls must not start or queue logger work");
+
   await new Promise((resolve) => setTimeout(resolve, 120));
-  const laneStillLive = await core.invoke({ ...context(), session_id: "session-lane-still-live" });
-  assert.equal(laneStillLive.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+  const stillSaturated = await within(
+    core.invoke({ ...context(), session_id: "overflow-still-active" }),
+    100,
+  );
+  assert.equal(stillSaturated.deny_code, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(stillSaturated.evidence_status, "EVIDENCE_NOT_RECORDED_BACKPRESSURE");
+  assert.equal(clockCalls, 1, "elapsed time must not release still-active base work");
+  assert.equal(loggerCalls, 1);
+
+  releaseFirstEvidence();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const recovered = await within(
+    core.invoke({ ...context(), session_id: "overflow-after-recovery" }),
+    100,
+  );
+  assert.equal(recovered.deny_code, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(recovered.evidence_status, "EVIDENCE_CANDIDATE_RECORDED_NOT_ACCEPTED");
+  assert.equal(loggerCalls, 2);
+  assert.deepEqual(entries.map((entry) => entry.session_id), [
+    "overflow-recording-timeout",
+    "overflow-after-recovery",
+  ]);
+  assert.deepEqual(entries.map((entry) => entry.sequence), [1, 1]);
+  assert.ok(entries.every((entry) => entry.disposition === "DENY_CONCURRENCY_LIMIT"));
+  assert.ok(entries.every((entry) => entry.terminal === true));
+
+  releaseClock(new Date("2026-07-20T00:00:00.000Z"));
+  assert.equal((await base).ok, true);
 });
