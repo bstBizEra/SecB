@@ -78,7 +78,8 @@ const MINT_KEYS = Object.freeze([
   "receipt_id", "project_id", "objective_id", "work_package_id", "session_id",
   "assigned_role", "authority_scope", "baseline_version", "acceptance_criteria",
   "allowed_tools", "allowed_skills", "evidence_obligations", "freshness_timestamp",
-  "candidateSources", "classificationCeiling", "minimumSufficient"
+  "candidateSources", "classificationCeiling", "minimumSufficient",
+  "include_exclusions_digest" // MOD-CONTEXT S2 opt-in flag; see mint below
 ]);
 
 // MOD-CONTEXT S1 (closes gap G1, verifier-not-minter): pure construction of
@@ -93,8 +94,11 @@ export function mintReceiptDocument(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) deny("DENY_MALFORMED_REQUEST", "Mint input must be an object");
   const unknown = Object.keys(input).filter((k) => !MINT_KEYS.includes(k));
   if (unknown.length) deny("DENY_MALFORMED_REQUEST", `Unknown mint fields: ${unknown.join(", ")}`);
-  const { candidateSources = [], classificationCeiling = "INTERNAL", minimumSufficient, ...intent } = input;
+  const { candidateSources = [], classificationCeiling = "INTERNAL", minimumSufficient, include_exclusions_digest, ...intent } = input;
   if (!CLASS_ORDER.includes(classificationCeiling)) deny("DENY_MALFORMED_REQUEST", `Unknown classificationCeiling: ${classificationCeiling}`);
+  if (include_exclusions_digest !== undefined && typeof include_exclusions_digest !== "boolean") {
+    deny("DENY_MALFORMED_REQUEST", "include_exclusions_digest must be a boolean when present");
+  }
 
   const retrieval = runRetrieval(candidateSources, { projectId: intent.project_id, classificationCeiling, minimumSufficient });
   const body = {
@@ -117,7 +121,28 @@ export function mintReceiptDocument(input) {
   const document = { ...body, content_hash: sealBody(body) };
   validateContract("contextReceipt", document);
   assertIdCharset(document);
-  return deepFreeze({ document, exclusions: structuredClone(retrieval.exclusions) });
+  const exclusions = structuredClone(retrieval.exclusions);
+  if (include_exclusions_digest !== true) {
+    // opt-out path: byte-identical to the pre-S2 return shape.
+    return deepFreeze({ document, exclusions });
+  }
+  // MOD-CONTEXT S2 (gap G3, exclusions provenance) — SIBLING-ARTIFACT
+  // PLACEMENT, chosen after reading contracts/context-receipt.schema.json
+  // first-hand: the contextReceipt contract is a CLOSED object
+  // (additionalProperties: false, 16 exact fields) with no free-form /
+  // metadata field, so the digest CANNOT ride inside the sealed body
+  // without a schema change. Recording that honestly: sealing the digest
+  // into the document requires SCHEMA EVOLUTION (an optional
+  // exclusions_digest property on contextReceipt), which is an R3
+  // contract change and is FLAGGED FOR THE OPERATOR — not made here.
+  // Until then the digest is a verifiable sibling: canonicalFingerprint
+  // over the normalized exclusions list, checkable by any holder via
+  // canonicalFingerprint(exclusions) === exclusions_digest. It binds the
+  // subtractive-exclusion account to this mint result; it does NOT yet
+  // travel inside the receipt seal, so a forwarded bare document still
+  // lacks it (exactly gap G3's residual, closed only by the schema
+  // evolution above).
+  return deepFreeze({ document, exclusions, exclusions_digest: fingerprint(exclusions) });
 }
 
 export class ContextFederationService {
