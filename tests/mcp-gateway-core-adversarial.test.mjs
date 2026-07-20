@@ -772,54 +772,49 @@ test("overflow evidence uses bounded non-blocking backpressure without releasing
   assert.equal((await base).ok, true);
 });
 
-// GATE2-BLOCKING-001: an indefinitely-hung hook must not permanently retain a
-// capacity reservation. Before the fix, #holdCapacity's tracked settlement
-// had no bound of its own, so a truly-never-settling adapter/audit call held
-// its reservation's pending entry forever and #capacityInUse never
-// decremented. This bound applies only to settlements that already timed out;
-// still-active work inside its own timeout budget is never released early
-// (see "overflow evidence uses bounded non-blocking backpressure" above).
-test("a hung adapter's capacity reservation is abandoned on a bound, not held forever", async () => {
+test("a timed-out clock retains capacity until actual settlement, then releases it", async () => {
+  let releaseClock;
+  const blockedClock = new Promise((resolve) => { releaseClock = resolve; });
+  let clockCalls = 0;
   const short = { clock_ms: 20, policy_ms: 20, audit_ms: 20, adapter_ms: 20, revocation_ms: 20, result_validator_ms: 20 };
   const core = gateway({
-    adapter: () => new Promise(() => {}), // never settles -- the hang under test
+    now: () => { clockCalls += 1; return blockedClock; },
     timeouts: short,
     limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
   });
 
-  const first = await core.invoke(context());
-  assert.equal(first.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+  const first = core.invoke(context());
+  await new Promise((resolve) => setTimeout(resolve, 30));
 
-  // Immediately after the timeout, the reservation's pending hung-adapter
-  // settlement is still held -- capacity is correctly still exhausted.
   const immediatelyAfter = await core.invoke({ ...context(), session_id: "session-immediately-after" });
   assert.equal(immediatelyAfter.deny_code, "DENY_CONCURRENCY_LIMIT");
 
-  // Past the abandonment bound (audit_ms * 4 = 80ms here), the reservation
-  // must be reclaimed even though the original adapter promise never settled
-  // (and, per boundedCall/#call, never will -- there is no cross-realm
-  // cancellation in JS). A fresh, unrelated request must be able to proceed
-  // normally, not hang and not be denied for a capacity reason.
   await new Promise((resolve) => setTimeout(resolve, 120));
-  const afterAbandonment = await core.invoke({ ...context(), session_id: "session-after-abandonment" });
-  // Reaching the adapter timeout again (rather than DENY_CONCURRENCY_LIMIT)
-  // proves the request got PAST the capacity gate -- the slot was reclaimed.
-  assert.equal(afterAbandonment.ok, false);
-  assert.equal(afterAbandonment.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+  const stillHeld = await core.invoke({ ...context(), session_id: "session-still-held" });
+  assert.equal(stillHeld.deny_code, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(clockCalls, 1, "elapsed time must not release active work");
+
+  releaseClock(new Date("2026-07-20T00:00:00.000Z"));
+  await first;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const recovered = await core.invoke({ ...context(), session_id: "session-after-settlement" });
+  assert.equal(recovered.ok, true);
+  assert.equal(clockCalls, 2, "actual settlement releases capacity");
 });
 
-// The same abandonment bound must also keep the concurrency-overflow lane
-// live -- this is the specific consequence the independent SEC review
-// (GATE2-BLOCKING-001) identified as the more severe one: a stuck lane denies
-// ALL future concurrency-limit responses, not just the one reservation that
-// hung. Under the bounded-evidence design the overflow lane itself cannot
-// wedge (busy-flag backpressure replaces the old shared promise tail); this
-// test now proves the composed behavior: overflow responses stay bounded
-// while capacity is exhausted, and abandonment still reclaims the slot.
-test("a hung hook does not permanently wedge the shared overflow-audit lane", async () => {
+// The bounded-evidence lane remains live while actual execution capacity is
+// exhausted: busy-flag backpressure answers overflow calls without a queue,
+// while the active reservation remains charged until its operation settles.
+test("a hung hook keeps execution capacity charged while overflow remains bounded", async () => {
   const short = { clock_ms: 20, policy_ms: 20, audit_ms: 20, adapter_ms: 20, revocation_ms: 20, result_validator_ms: 20 };
+  let releaseAdapter;
+  let adapterCalls = 0;
   const core = gateway({
-    adapter: () => new Promise(() => {}),
+    adapter: () => {
+      adapterCalls += 1;
+      if (adapterCalls === 1) return new Promise((resolve) => { releaseAdapter = resolve; });
+      return { ok: true };
+    },
     timeouts: short,
     limits: { max_request_bytes: 4_096, max_response_bytes: 4_096, max_concurrency: 1 },
   });
@@ -837,9 +832,15 @@ test("a hung hook does not permanently wedge the shared overflow-audit lane", as
     assert.equal(result.deny_code, "DENY_CONCURRENCY_LIMIT");
   }
 
-  // Past the abandonment bound, the lane must still accept and answer new
-  // work -- it must not have wedged shut from the earlier hang.
+  // Elapsed time must not release the still-active adapter reservation.
   await new Promise((resolve) => setTimeout(resolve, 120));
   const laneStillLive = await core.invoke({ ...context(), session_id: "session-lane-still-live" });
-  assert.equal(laneStillLive.deny_code, "DENY_ADAPTER_TIMEOUT_PENDING");
+  assert.equal(laneStillLive.deny_code, "DENY_CONCURRENCY_LIMIT");
+  assert.equal(adapterCalls, 1);
+
+  releaseAdapter({ ok: true });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const recovered = await core.invoke({ ...context(), session_id: "session-lane-after-settlement" });
+  assert.equal(recovered.ok, true);
+  assert.equal(adapterCalls, 2);
 });
