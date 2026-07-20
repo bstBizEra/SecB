@@ -1,0 +1,120 @@
+# P0-09 Immune Pre-Merge Review Record
+# Branch: bst/p0-09-work-package-auth-6f341f
+# Reviewed range (initial): 76a7c05..1a5767b
+# Reviewer: claude-immune (BST-SA Immune lane, advisory only)
+
+review_round_1:
+  verdict: "REQUEST_CHANGES"
+  test_result: "146 tests - 134 pass, 0 fail, 12 skipped (pre-existing BLOCKED stubs)"
+  blocking_findings:
+    - id: "IMM-P009-01"
+      location: "src/services/work-package-service.mjs #key / #versionsOf"
+      issue: >
+        Composite storage key joined project_id|work_package_id|version with
+        '|' while ids may contain '|'. Two distinct identities could collide
+        into one key: a grant scoped to (prj, 'alpha|wp1') transitioned a
+        record declaring identity ('prj|alpha', 'wp1'); getWorkPackage
+        misparsed keys via split('|') causing cross-identity read leakage,
+        NaN version sorting, wrong-deny lockout, and identity squatting.
+      severity: "blocking - authority-boundary and identity-integrity defect"
+  non_blocking_notes:
+    - "claimedTimestamp accepted with any type; recommend string-or-absent"
+    - "Evidence accumulates across REWORK cycles within a version; cycle-scoping is a hardening V-item (within adopted GOV-P009-04 minimum because SoD still forces independent re-review)"
+    - "createWorkPackage is ungated; identity squatting possible in future multi-caller exposure (fail-closed downstream today)"
+    - "ENGIN+GOV is not a conflicting pair in shared CONFLICTING_ROLES; an actor could execute and drive planning-side GOV edges for its own work package; acceptance states remain SoD-protected; flagged for engine-hardening V-items"
+    - "resolveEffective denial results were unfrozen (cosmetic)"
+  confirmed_clean:
+    - "Edge parity: every canonical WorkPackage edge gated exactly once across layers"
+    - "Fail-closed on all validation paths; no partial mutation; no version fallback"
+    - "Ledger-derived SoD holds incl. dual-role ENGIN+QA actor; replay cannot double-advance"
+    - "Idempotency: string-only keys, canonical fingerprints, op-tagged, stable replay, conflict denial"
+    - "Immutability both directions; extend-only respected (src/control/*, src/contracts/* untouched)"
+    - "No secrets, network calls, or filesystem writes in the service"
+
+remediation:
+  - finding: "IMM-P009-01"
+    fix: >
+      DENY_ID_CHARSET on '|' in work_package_id/project_id at creation;
+      DENY_MALFORMED_ENVELOPE on '|' in envelope projectId/workPackageId;
+      identity fields stored on the record and #versionsOf no longer
+      reparses storage keys; negative tests added reproducing the
+      collision inputs from the review.
+  - note_fixes: "claimedTimestamp now string-or-absent; resolveEffective denial results frozen"
+  - deferred_as_v_items: "evidence cycle-scoping; CONFLICTING_ROLES pair review (shared engine scope); create-gate for multi-caller exposure"
+
+review_round_2:
+  verdict: "APPROVE_FOR_MERGE"
+  reviewed_range: "76a7c05..3b83775"
+  test_result: "147 tests - 135 pass, 0 fail, 12 skipped (pre-existing BLOCKED stubs)"
+  closure_verification: >
+    IMM-P009-01 empirically verified closed: collision identities denied at
+    creation (DENY_ID_CHARSET) and envelope (DENY_MALFORMED_ENVELOPE) gates;
+    read paths fail closed; #versionsOf no longer reparses storage keys, so
+    the misparse is structurally eliminated in addition to input filtering.
+    Both note fixes (claimedTimestamp typing, frozen denial results)
+    verified. All changes add denials only; no gates weakened; shared
+    engines and schemas untouched.
+  open_v_items:
+    - "Evidence cycle-scoping across REWORK cycles"
+    - "CONFLICTING_ROLES pair review (ENGIN+GOV) - shared engine scope"
+    - "Creation gate for future multi-caller exposure"
+  note: >
+    Merge remains subject to operator authority per protected-branch
+    policy; this verdict is the Immune advisory input to that decision.
+    Operator disposition: proceed instruction recorded 2026-07-18
+    (see p0-09-gov-disposition.yaml).
+
+review_round_3:
+  verdict: "APPROVE_WITH_NOTES"
+  reviewed_range: "04b7105..5c2396b"
+  test_result: "150 tests - 138 pass, 0 fail, 12 skipped"
+  scope: "Delta review of V-item closures: creation gate (DENY_CREATE_AUTHORITY) and REWORK evidence cycle-scoping"
+  adversarial_probes_confirmed:
+    - "Forged actorId/cycle fields on envelope evidence are inert (field-picking overwrites); executor forging reviewer/QA evidence denied DENY_EVIDENCE_INDEPENDENCE"
+    - "Cycle increment ordering correct: REWORK-entry evidence tagged with closing cycle; replay returns stored result before mutation, no double increment"
+    - "No re-versioning DoS: grants are wp-scoped, version-2 creation succeeds under same grant"
+    - "No existence oracle: authority gate precedes duplicate-identity check; aggregated denial does not distinguish grant failure modes"
+  blocking_findings: []
+  new_v_items:
+    - id: "IMM-P009-V1"
+      statement: "BLOCKED->PLANNED loop did not open a new evidence cycle (same staleness class as the REWORK fix)"
+      status: "REMEDIATED in follow-up commit: cycle now increments on entry to REWORK or BLOCKED; negative test added"
+    - id: "IMM-P009-V2"
+      statement: "Stage/role binding looseness: obligation-tagged evidence is not bound to the producing stage/role; a non-executor actor can satisfy review-report/qa-report obligations from any stage. Compliant with adopted GOV-P009-04 minimum but weakens claim-to-source binding."
+      status: "OPEN - design V-item: bind non-self obligations to producing role/stage plus evidence-after-execution ordering; requires obligation typing decision (see RISK-P009-04)"
+  carried_open_items:
+    - "CONFLICTING_ROLES pair review (ENGIN+GOV) - shared engine scope"
+    - "Creation-gate provisioning: new identities require construction-time grants; revisit if grants become dynamic"
+
+review_round_4_final:
+  verdict: "APPROVE_WITH_NOTES"
+  reviewed_range: "76a7c05..800d013"
+  test_result: "151 tests - 139 pass, 0 fail, 12 skipped"
+  scope: "Consolidated final verdict for the whole branch; definitive Immune advisory input for the operator merge decision"
+  v1_remediation_verified: >
+    IMM-P009-V1 empirically closed: the round-3 residual scenario now
+    denies DENY_EVIDENCE_INSUFFICIENT; append-before-increment ordering
+    holds at the BLOCKED entry point (no new-cycle seeding); properly
+    re-evidenced loops still reach ACCEPTED; change is fail-closed only.
+  cumulative_closures:
+    - "IMM-P009-01 composite-key identity collision (blocking) - charset gates + parse-free lookup, probe-verified"
+    - "claimedTimestamp typing; unfrozen denial results"
+    - "Creation gate: identity squatting closed, no existence oracle, no re-versioning DoS"
+    - "Evidence cycle-scoping for REWORK and BLOCKED loops; replay cannot desync; forged evidence fields inert"
+  open_items_non_blocking:
+    - "IMM-P009-V2: stage/role binding of obligation evidence (design V-item, needs obligation typing per RISK-P009-04)"
+    - "CONFLICTING_ROLES pair review (ENGIN+GOV) - shared engine scope"
+    - "Creation-gate provisioning if grants become dynamic"
+    - "TransitionEngine hardening V-items remain the gate before production declaration (GOV-P009-02); this approval is merge-scoped, not production"
+  note: >
+    Extend-only verified across the branch; shared engines and schemas
+    untouched; all governance changes appends. Merge execution remains
+    with the operator under protected-branch policy.
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

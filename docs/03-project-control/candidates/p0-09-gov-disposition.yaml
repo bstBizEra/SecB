@@ -1,0 +1,56 @@
+# P0-09 Plan Disposition Record
+# Disposes: docs/03-project-control/candidates/p0-09-planning-005.claude-advisory.yaml
+# Authority: Human operator instruction ("proceed to build") received 2026-07-18
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+disposition_record:
+  work_package: "wp_secb_p0_09_planning_005"
+  planning_packet: "docs/03-project-control/candidates/p0-09-planning-005.claude-advisory.yaml"
+  disposed_at: "2026-07-18"
+  disposed_by: "human-operator"
+  disposition: "PROCEED_TO_BUILD"
+  interpretation: >
+    Operator instruction "proceed to build as follow" is recorded as adoption of
+    the planning packet's recommended answers for all six blocking decisions.
+    If the operator intended different answers for any GOV-P009 item, this
+    record must be superseded by an appended correction, and the affected
+    implementation re-reviewed.
+
+decisions:
+  - id: "GOV-P009-01"
+    adopted: "Option C - dedicated WorkPackageContractService as sole authoritative boundary; TransitionEngine result is necessary but not sufficient; service denial always wins"
+  - id: "GOV-P009-02"
+    adopted: "Shim-compensated R2 implementation permitted now; TransitionEngine hardening remains a tracked V-item gate before any production declaration"
+  - id: "GOV-P009-03"
+    adopted: "Expiry is deny-on-use, evaluated at transition and resolution time against server clock; no timer-driven state mutation"
+  - id: "GOV-P009-04"
+    adopted: "SoD binding minimum: executor excluded from REVIEW, QA, GOV; REVIEW/QA/GOV actors pairwise distinct"
+  - id: "GOV-P009-05"
+    adopted: "Implicit supersession - at most one effective version per work package; highest authorized-or-later version wins"
+  - id: "GOV-P009-06"
+    adopted: "Exact-commit baseline binding; resolution denies on any mismatch"
+
+# --- Appended 2026-07-18: GOV-P009-07 disposition (extend-only) ---
+decisions_appended:
+  - id: "GOV-P009-07"
+    disposed_at: "2026-07-18"
+    disposed_by: "human-operator"
+    source: "docs/03-project-control/candidates/p0-09-v2-evidence-binding-design.yaml"
+    adopted: >
+      Obligation prefix convention (self:/review:/qa:/gov:/any:) with
+      stage-locked attachment, role-bound coverage, evidence-after-
+      execution ordering, and one-cycle legacy grace for unprefixed
+      obligations. Implementation on follow-up branch
+      bst/p0-followups-evidence-te (P0-09 merge branch untouched).
+
+implementation_notes:
+  - "Canonical AuthorityEngine REQUIRED_ROLE covers only RUNNING/SELF_VERIFIED/REVIEW/QA/GOV_DECISION/ACCEPTED for WorkPackage; planning-side and exit edges are gated by a service-level edge table (data, not code paths) without modifying the shared engine"
+  - "Evidence independence convention pending schema typing (RISK-P009-04): obligations prefixed 'self:' may be satisfied by executor-produced evidence; all other obligations require at least one evidence item from an actor other than the executor"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-operator"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

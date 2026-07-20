@@ -1,0 +1,22 @@
+{
+  "skill_id": "SKILL-SECB-VALIDATE",
+  "version": "1.0.0",
+  "name": "SecB governance validation",
+  "status": "PUBLISHED",
+  "owner": "stem-lane",
+  "source": {
+    "repository": "C:/laragon/www/SecB",
+    "commit_sha": "90a9dd0f000000000000000000000000000000ff",
+    "licence": "internal"
+  },
+  "purpose": "Run the governed validation suite in a locked worktree",
+  "supported_runtimes": ["claude-code", "codex-cli"],
+  "project_scopes": ["prj_secb_local"],
+  "max_data_classification": "INTERNAL",
+  "evidence_refs": ["ev_skill_eval_001"],
+  "approval_history": [
+    {"decision_id": "d_skill_rev", "decision_type": "INDEPENDENT_REV", "approved_by": "rev-actor", "approved_at": "2026-07-18T00:00:00Z"},
+    {"decision_id": "d_skill_promo", "decision_type": "HUMAN_PROMOTION", "approved_by": "human-gov", "approved_at": "2026-07-19T00:00:00Z"}
+  ],
+  "revocation_conditions": ["evaluation regression", "security finding"]
+}

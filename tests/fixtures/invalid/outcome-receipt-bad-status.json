@@ -1,0 +1,16 @@
+{
+  "outcome_id": "out_bad_status",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_14_001",
+  "session_id": "ses_p0_14_001",
+  "actor_id": "business-actor",
+  "decision_ref": "dec_p0_14_fixture",
+  "knowledge_refs": [],
+  "skill_refs": [],
+  "outcome_status": "MAYBE",
+  "details": "Unknown outcome status must fail closed",
+  "evidence_refs": ["ev_outcome_001"],
+  "observed_at": "2026-07-19T11:00:00Z",
+  "reversion_required": false
+}

@@ -1,0 +1,30 @@
+# P0-10 R2 Immune Review Record
+# Reviewed target: bst/integration-rehearsal-3 @ 42c4703 (the merge candidate)
+# Reviewer: claude-immune (BST-SA Immune lane, advisory only)
+
+review:
+  verdict: "APPROVE_FOR_MERGE"
+  blocking_findings: []
+  test_result: "233 tests, 228 pass, 0 fail, 5 skipped"
+  lineage_verified: "6152897 (main P0-08) ancestor; ProjectContractService + tests present, '*.env' present - guardrails intact"
+  probes_confirmed:
+    - "(a) Anti-smuggling source_references: unauthorized ref denied whether appended or length-preserving-swapped; empty candidates + non-empty refs denied"
+    - "(b) Compaction subset-only: additive tools/sources deny; successor expiresAt hard-set to parent's (never extends); transitively bounded child<=parent<=issuance"
+    - "(c) Consume fail-closed complete: every non-ALLOW returns frozen typed NONE; consume targets chain head so a SUPERSEDED parent's wider content is unreachable; stored-doc seal re-verification is genuine tamper-evidence"
+    - "(d) Composition strict-AND: resolveEffective ALLOW and every federation check must pass; NONE denies before ALLOW reachable; ALLOW never short-circuits federation checks"
+    - "(e) Contract-silent tools/skills: V-item not a hole - paths contract-bound, tools/skills self-declared with no consumer treating them as authorization until V-014 (P0-11 R2 + MCP); honestly disclosed"
+    - "(f) Deny-only, shared surfaces untouched, delimiter-free JSON key, lineage/regression guardrails intact"
+  note_fixes_applied:
+    - "Immune note 1 (source-match fidelity): source_references now compared to the survivor SET (order-independent, duplicate-proof); duplicate-under-claim ['s1','s1'] now denies DENY_SOURCE_MISMATCH; negative test added"
+  open_v_items_none_gating:
+    - "RISK-P010-01 schema-enrichment: WP contract to carry allowed_tools/allowed_skills so issuance can bound them (enforcement half lands with V-014 at P0-11 R2 + MCP server) - track together"
+    - "Compaction version-drift earlier-denial hardening (currently caught fail-closed at consume via DENY_VERSION_SUPERSEDED) - optional"
+    - "GOV-role revocation caller-asserted; folds into the mutation-substrate authority work (P0-11 R1/R2 honesty parity)"
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

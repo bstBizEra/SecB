@@ -1,0 +1,74 @@
+# P0 Wave-2 Delivery Evidence Summary
+# Purpose: consolidated evidence trail for the operator's eventual P0-20
+#   governance verdict. Every claim below binds to a commit hash and a
+#   review record in docs/03-project-control/candidates/.
+# Prepared by: Claude (BST-SA SARCHI lane, advisory only)
+# Prepared: 2026-07-19; covers 2026-07-18..19
+# Baseline anchors: main 76a7c05 (wave start) -> 6152897 (P0-08 integrated)
+
+deliveries:
+  - item: "P0-09 WorkPackageContractService"
+    branch: "bst/p0-09-work-package-auth-6f341f @ 4f08421"
+    review: "p0-09-immune-review.yaml - rounds 1-4, final APPROVE_WITH_NOTES; IMM-P009-01 (composite-key collision) closed"
+    disposition: "p0-09-gov-disposition.yaml (GOV-P009-01..07 adopted)"
+  - item: "TE-H1..H4 shared-engine hardening + shared canonical-fingerprint module + GOV-P009-07 obligation typing"
+    commits: "96224bc..7c4127b on the reconciliation lineage"
+    review: "p0-followups-immune-review.yaml - APPROVE_WITH_NOTES; IMM-FU-V1/V2 closed"
+    gate: "Codex ACK outstanding (codex-handshake-te-hardening.yaml)"
+  - item: "P0-14 decision/knowledge/outcome temporal ledgers"
+    commits: "7d1c8f6, a61861c, 672ba31"
+    review: "p0-14-immune-review.yaml rounds 1-3 - APPROVE_WITH_NOTES; IMM-P014-01 (covert reversion) closed; lookup identity binding, pre-emptive reversion closed"
+  - item: "Skill-manifest contract + SkillResolver (SECB-SKILL-001 distribution rule)"
+    commits: "d343046, 8bece18"
+    review: "p0-14-immune-review.yaml rounds 2-3 - IMM-P014-R2-01 (self-attested publication) closed: promotions must resolve in the DecisionLedger"
+  - item: "V-002 project-scope binding mechanism"
+    commits: "807ae2c, 435b2b3"
+    review: "p0-14-immune-review.yaml review_v002_rounds - APPROVE_FOR_MERGE at 435b2b3; '..'-traversal containment bypass closed"
+  - item: "P0-10 planning + disposition (R2 pre-authorized, gated on P0-09 merge)"
+    records: "p0-10-planning-001.cortex-advisory.yaml, p0-10-gov-disposition.yaml; 16 CF conformance stubs frozen"
+  - item: "Conformance stubs turned executable"
+    detail: "V-005 (SoD), V-009 (bound approval), V-012 (temporal boundary), V-013 (skill lifecycle), V-017 (knowledge derivation), V-018 (outcome/reversion); V-002 mechanism delivered pending merged-tree wiring"
+
+security_findings_closed_with_regression_tests:
+  - "Composite-key delimiter collisions: '|' in work-package identity (IMM-P009-01), '@' in skill identity - both denied at all gates; named finding class"
+  - "Covert reversion via untyped reverts field (IMM-P014-01)"
+  - "Self-attested skill publication / forged HUMAN_PROMOTION (IMM-P014-R2-01)"
+  - "Evidence staleness across REWORK and BLOCKED cycles"
+  - "Identity squatting via ungated creation"
+  - "'..' path-traversal defeating repository containment (V-002 rounds)"
+
+open_v_items_none_gating:
+  - "Skill revocation lifecycle API incl. IMM-SKILL-V1 (promotion temporal re-validation)"
+  - "Resolver liveness at transition time (projects) - folded with the above"
+  - "Server receipt time on temporal-ledger appends"
+  - "Windows trailing-dot/space segment normalization; absolute-path repository entries (canonical-form doc)"
+  - "Legacy-obligation grace flip (legacyObligations 'deny' default)"
+  - "CONFLICTING_ROLES ENGIN+GOV pair review (shared engine)"
+  - "IMM-FU-V3 transitionId namespacing for future durable stores"
+
+process_rules_institutionalized:
+  - "Review-freeze rule: pinned tip hashes, frozen targets, no mid-review pushes (p0-14-immune-review.yaml process_integrity; honored in all subsequent pinned rounds)"
+  - "Extend-only governance records with per-round appends; operator dispositions recorded with interpretation notes"
+
+current_verified_integration_path:
+  rehearsal: "bst/integration-rehearsal-3 @ 83565e8 - full tree from main 6152897; 208 tests, 185 pass, 0 fail, 23 skipped"
+  operator_runbook:
+    - "1. git merge 828fd43 (P0-09 onto main, ungated, unions pre-resolved) -> P0-10 R2 auto-starts"
+    - "2. Codex ACK -> git merge bst/integration-rehearsal-3 (everything else)"
+  superseded: "codex/integration/p0-09, codex/integration/p0-08-005, bst/p0-08-integration-candidate, rehearsals 1-2"
+
+# --- Appended 2026-07-19 (closing): final review outcomes (extend-only) ---
+closing_append:
+  - "V-002 project-scope binding + '..' containment fix: APPROVE_FOR_MERGE at 435b2b3 (review_v002_rounds in p0-14-immune-review.yaml)"
+  - "Fourth delimiter-class instance ('@' in work-package ids): closed at 33cc452, APPROVE_FOR_MERGE; pre-fix risk sized as latent parse ambiguity, no reachable exploit; RESERVED_ID_DELIMITERS exported as the GOV-P011-08 pre-ratification constant"
+  - "FIFTH latent instance discovered by the closing sweep: AuthorityEngine SoD scope key joins grant fields with '|' unvalidated - trusted operator-supplied construction data, shared-engine scope; folded into the GOV-P011-08 ratification track"
+  - "P0-11 and P0-17 planning packets recorded (eb203d0); 15 GOV decisions queued awaiting explicit operator wording"
+  - "ALL ELEVEN REVIEW ROUNDS OF THE WAVE CLOSED IN APPROVAL; final verified tree bst/integration-rehearsal-3 @ cb06283: 208 tests, 185 pass, 0 fail, 23 skipped"
+
+self_certification:
+  agent_id: "claude-code-sarchi"
+  peer_agent_id: "claude-immune"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
