@@ -290,6 +290,7 @@
     "src/services/goal-graph-service.mjs",
     "tests/goal-graph-service.test.mjs",
     "src/ui/goal-rollup-projection.mjs",
-    "tests/goal-rollup-projection.test.mjs"
+    "tests/goal-rollup-projection.test.mjs",
+    "docs/03-project-control/candidates/mod-work-completion-rev-001.md"
   ]
 }
