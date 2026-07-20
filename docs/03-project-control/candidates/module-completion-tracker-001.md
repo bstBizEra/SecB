@@ -77,3 +77,4 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 - 2026-07-20: MOD-KNOW S1 PRODUCED @ 8b550c8 (bst/mod-know-s1-claims): claim-lifecycle facade — verbatim learning-boundary passthrough proven against the REAL KnowledgeLedger (source-tagged, never re-coded), kernel SoD config-only, audit-first, byte-identity guard. 559/554/0 fail/5 skip. S1 REV dispatched.
 - 2026-07-20: MOD-SKILL S1 PRODUCED @ a629325 (bst/mod-skill-s1-intake): skill-candidate schema #14 (promotion states absent by design — invalid fixture proves PUBLISHED rejected), intake registry (register/withdraw only, config-only governance actors), resolver+sod byte-identity guarded. 559/554/0 fail/5 skip. S1 REV dispatched.
 - 2026-07-20: MOD-KNOW S1 REV: APPROVE_FOR_OPERATOR_MERGE @ a9d10ec; staged as PR #17.
+- 2026-07-20: PR #17 MERGED — MOD-KNOW S1 ratified on main.
