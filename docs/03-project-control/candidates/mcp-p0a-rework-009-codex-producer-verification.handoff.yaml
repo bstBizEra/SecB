@@ -1,0 +1,100 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_009_codex_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_FRESH_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Codex ENGIN producer verification, 2026-07-20T15:50:12.1078118+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: "codex-engin-mcp-p0a-rework-009"
+  risk_class: "R2"
+  mutation_class: "M3"
+  limitations:
+    - "Producer checks are evidence candidates, not independent REV, QA, SEC, evidence acceptance, governance acceptance, or integration authority."
+    - "This round removes only timer-based capacity abandonment. It intentionally leaves an uncooperative operation charged indefinitely until actual settlement, because elapsed time cannot prove that work stopped."
+    - "No push, merge to main, transport binding, registry promotion, deployment, evidence acceptance, release, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-009-CODEX-PRODUCER-VERIFY"
+  sequence: 10
+  source_role: "ENGIN_PRODUCER"
+  source_agent_instance_id: "codex-engin-mcp-p0a-rework-009"
+  destination_role: "FRESH_INDEPENDENT_REV"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  current_main_parent_commit: "f04dee6cfafaae0213d92dc0da13300b14707f5e"
+  implementation_parent_commit: "f04dee6cfafaae0213d92dc0da13300b14707f5e"
+  implementation_commit: "007da0e1221f066d908e1265be6859cb1af2c635"
+  rework_target_commit: "007da0e1221f066d908e1265be6859cb1af2c635"
+  branch: "producer/codex/mcp/p0a-gateway-core-rework-009"
+  review_scope_note: "Review the complete implementation diff f04dee6..007da0e. Current-main credential-broker, capability-registry, secret-screening, SoD, governance-completion, and request-boundary changes are preserved. This later handoff commit is provenance only and is not part of the frozen implementation target."
+
+  advisory_decision:
+    verified_problem: "#holdCapacity released a timed-out reservation after audit_ms * 4 while the underlying operation continued. With max_concurrency=1, a second call could pass after elapsed time even though clock or adapter work was still active."
+    selected_option: "Remove only the abandonment timer and retain every timed-out settlement in reservation.pending until its actual settlement callback removes it. Keep the separate overflow busy flag and truthful backpressure statuses."
+    rejected_option: "Keep elapsed-time release. It bounds capacity occupancy but can admit concurrent underlying work beyond the configured max_concurrency and falsifies active-work accounting."
+    truth_status: "PRODUCER_RECOMMENDATION_PENDING_FRESH_REV_QA_SEC_GOV"
+
+  closure_claims:
+    - control_id: "MCP-R9-ACTUAL-CAPACITY-ACCOUNTING"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "A never-settling clock times out, immediate and delayed overflow calls remain DENY_CONCURRENCY_LIMIT with clockCalls=1, and only explicit clock settlement allows the next call to run with clockCalls=2."
+    - control_id: "MCP-R9-OVERFLOW-LIVENESS"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "The bounded one-slot overflow evidence lane continues to answer overflow calls without a queue while actual execution capacity remains charged."
+    - control_id: "MCP-R9-SETTLEMENT-RELEASE"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "A controlled adapter settlement releases the charged reservation and permits one recovered invocation; adapterCalls remains one before settlement and becomes two only after recovery."
+    - control_id: "MCP-R9-INTEGRATION-PRESERVATION"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Implementation parent is exact f04dee6 and the source change removes only #holdCapacity's timer and associated test assumptions; current-main integrations remain intact."
+    - control_id: "MCP-R9-NO-IO"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Static scan found no fetch, HTTP URL, networking, child-process, spawn, or exec capability in changed gateway source or regression test."
+
+  final_checks:
+    dependency_restore: "npm ci --offline: 6 packages installed, 0 vulnerabilities"
+    focused_gateway_tests: "50 total, 50 pass, 0 fail, 0 skip"
+    full_suite: "435 total, 430 pass, 0 fail, 5 pre-existing blocked skips"
+    foundation_validator: "PASS from a clean clone with no remotes configured; pre-handoff manifest has 281 unique paths and final handoff is expected at 282"
+    diff_check: "PASS"
+    static_scope_check: "PASS: no fetch, axios, HTTP URL, node networking, child_process, spawn, or exec capability in changed gateway source and regression test"
+
+  implementation_changed_files:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core-adversarial.test.mjs"
+
+  retained_residuals:
+    - id: "MCP-R9-INDEFINITE-ACTIVE-WORK"
+      detail: "A never-settling clock, adapter, audit, or evidence callback can retain its reservation indefinitely. Process/worker isolation and cancellation are required for eventual recovery."
+    - id: "MCP-R9-OVERFLOW-EVIDENCE-SLOT"
+      detail: "One in-memory overflow evidence callback may remain pending indefinitely; later overflow calls remain bounded and truthfully report backpressure without an internal queue."
+    - id: "N-3-PROJECT-REPOSITORY-BRANCH"
+      detail: "Effective project path, approved repository identity, protected branch policy, and workspace-path binding remain external integration controls."
+    - id: "N-3-HUMAN-AUTHORITY-LEASE-FRESHNESS"
+      detail: "Human authority decisions and authoritative lease freshness/revocation are not issued or persisted by this gateway core."
+    - id: "N-3-EGRESS"
+      detail: "Destination allowlists, network isolation, proxy enforcement, and runtime egress observation remain external."
+    - id: "N-3-CREDENTIAL-HANDLES"
+      detail: "Credential-handle issuance, scope, rotation, revocation, and non-exportability remain external despite current-main broker integration."
+    - id: "N-3-DURABLE-EVIDENCE"
+      detail: "Durable append, accepted sequence/signature authority, retention, corroboration, and evidence acceptance remain external."
+    - id: "N-3-DLP-DATA-CLASS"
+      detail: "Current output screening is bounded and not complete DLP, data classification, redaction, residency, or retention enforcement."
+    - id: "N-3-ACTIVATION"
+      detail: "Integration, release, deployment, and production activation remain denied pending independent REV, QA, SEC, evidence acceptance, and human authority."
+
+  requested_review:
+    - "A fresh reviewer reruns focused and full tests from immutable target 007da0e1221f066d908e1265be6859cb1af2c635 against parent f04dee6cfafaae0213d92dc0da13300b14707f5e."
+    - "REV challenges never-settling clock and adapter behavior, immediate and delayed overflow denial, actual settlement release, bounded evidence backpressure, and preservation of current-main integrations."
+    - "QA and SEC independently verify the indefinite-work and N-3 residual boundaries; producer evidence is not acceptance."
+
+self_certification:
+  producer_id: "codex-engin-mcp-p0a-rework-009"
+  producer_verified: true
+  independent_review: false
+  qa_acceptance: false
+  sec_acceptance: false
+  evidence_acceptance: false
+  governance_acceptance: false
+  integration_authority: false
+  merge_authority: false
+  activation_authority: false
