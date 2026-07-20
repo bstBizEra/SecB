@@ -33,3 +33,4 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 ## Iteration log (append-only)
 
 - 2026-07-20: Tracker created. Iteration 1 (reconciliation candidate) dispatched to Claude motor subagent; Codex notified of module queue and its lead assignments.
+- 2026-07-20: Iteration 1 PRODUCED — bst/reconcile-main-x-rehearsal3 @ 76d59e2 (merge) + 4349e51 (record): 0 textual conflicts, MANIFEST union 237 entries script-verified, validator 482/0, tests 248/243/0 fail/5 skip, no dropped files or behavior. Independent REV dispatched. NOTE for operator merge ordering: src/gateway lives only on the PR #3 branch (neither parent lineage) — after either of PR #3 / reconciliation merges to main, the other needs one trivial main re-merge (disjoint files, MANIFEST union) before its merge.
