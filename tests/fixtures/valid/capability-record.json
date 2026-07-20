@@ -1,0 +1,31 @@
+{
+  "capability_id": "filesystem.read",
+  "version": "1.0.0",
+  "adapter_id": "fs-read",
+  "tool": "read_text_file",
+  "access": "read",
+  "status": "CANDIDATE",
+  "source_identity": {
+    "maintainer": "modelcontextprotocol",
+    "repository": "https://github.com/modelcontextprotocol/servers",
+    "namespace": "@modelcontextprotocol/server-filesystem"
+  },
+  "immutable_version": {
+    "commit": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+    "tag_or_digest": "sha256:aa11bb22cc33dd44ee55ff667788990011223344556677889900aabbccddeeff"
+  },
+  "integrity": {
+    "sha256": "aa11bb22cc33dd44ee55ff667788990011223344556677889900aabbccddeeff"
+  },
+  "tool_inventory": ["read_text_file", "read_multiple_files", "list_directory"],
+  "filesystem_boundary": "workspace-lease-root-read-only",
+  "network_boundary": "none",
+  "credential_handle": null,
+  "intake_evidence_refs": ["evidence:intake:fs-read:0001"],
+  "approvals": [],
+  "revocation": {
+    "revoked": false,
+    "reason": null,
+    "known_bad_versions": []
+  }
+}

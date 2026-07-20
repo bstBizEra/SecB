@@ -11,6 +11,7 @@ const schemaPaths = {
   eventEnvelope: "event-envelope.schema.json",
   evidenceEnvelope: "evidence-envelope.schema.json",
   agentRegistration: "agent-registration.schema.json",
+  capabilityRecord: "capability-record.schema.json",
   decisionRecord: "decision-record.schema.json",
   knowledgeClaim: "knowledge-claim.schema.json",
   outcomeReceipt: "outcome-receipt.schema.json",
