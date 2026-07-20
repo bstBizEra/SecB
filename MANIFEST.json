@@ -168,6 +168,8 @@
     "src/services/non-escalation-comparator.mjs",
     "src/control/risk-registry.mjs",
     "tests/risk-registry.test.mjs",
+    "src/control/policy-decision-point.mjs",
+    "tests/policy-decision-point.test.mjs",
     "tests/handoff-service.test.mjs",
     "tests/handoff-r2-receipt.test.mjs",
     "src/services/context-federation-service.mjs",
