@@ -286,6 +286,8 @@
     "docs/03-project-control/candidates/module-completion-tracker-001.md",
     "tests/context-receipt-mint.test.mjs",
     "src/services/candidate-source-port.mjs",
-    "tests/candidate-source-port.test.mjs"
+    "tests/candidate-source-port.test.mjs",
+    "docs/03-project-control/candidates/context-receipt-shape-convergence-001.md",
+    "tests/context-federation-lifecycle-facets.test.mjs"
   ]
 }

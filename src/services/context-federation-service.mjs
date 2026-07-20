@@ -331,12 +331,40 @@ export class ContextFederationService {
     return frozenClone({ receiptId, projectId, state: "REVOKED" });
   }
 
+  // MOD-CONTEXT S3 (gap G6): derive the lifecycle facets the stored status
+  // omits, from state that IS reachable in-service — the record's expiry and
+  // its head ledger. Pure over (record, now); no mutation, no I/O. EXPIRED is
+  // computed from the SAME `now >= expiresAt` boundary the resolve-time
+  // DENY_EXPIRED gate uses; CONSUMED is true iff a CONSUME entry exists on the
+  // ledger (consumeReceipt appends it to the in-service head ledger, so it is
+  // reachable — not an external/unreachable signal). Precedence mirrors the
+  // fail-closed deny order in #resolveHead: REVOKED > SUPERSEDED > EXPIRED >
+  // CONSUMED > ISSUED. EXPIRED outranks CONSUMED because expiry is a hard
+  // deny-on-use gate while CONSUME is a non-terminal usage marker.
+  #lifecycleFacets(record) {
+    const expired = this.#now().getTime() >= Date.parse(record.expiresAt);
+    const consumed = record.ledger.some((entry) => entry.type === "CONSUME");
+    let effectiveStatus = record.status; // ISSUED | SUPERSEDED | REVOKED
+    if (record.status === "ISSUED") {
+      if (expired) effectiveStatus = "EXPIRED";
+      else if (consumed) effectiveStatus = "CONSUMED";
+    }
+    return { effective_status: effectiveStatus, expired, consumed };
+  }
+
   getReceipt(projectId, receiptId, version) {
     const versions = this.#versions(projectId, receiptId);
     if (!versions.length) deny("DENY_UNKNOWN_RECEIPT", `Unknown receipt: ${receiptId}`);
     const match = version === undefined ? versions[versions.length - 1] : versions.find((v) => v.version === version);
     if (!match) deny("DENY_UNKNOWN_RECEIPT", `Unknown receipt version: ${version}`);
-    return frozenClone({ receiptId, projectId, version: match.version, state: match.status, document: structuredClone(match.document), exclusions: match.exclusions });
+    // Existing projection fields are unchanged and byte-identical; the S3
+    // lifecycle facets are OPTIONAL ADDITIONS to the RETURNED object only
+    // (the sealed document is never touched).
+    return frozenClone({
+      receiptId, projectId, version: match.version, state: match.status,
+      document: structuredClone(match.document), exclusions: match.exclusions,
+      ...this.#lifecycleFacets(match)
+    });
   }
 
   getReceiptLedger(projectId, receiptId) {
