@@ -79,3 +79,4 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 - 2026-07-20: MOD-KNOW S1 REV: APPROVE_FOR_OPERATOR_MERGE @ a9d10ec; staged as PR #17.
 - 2026-07-20: PR #17 MERGED — MOD-KNOW S1 ratified on main.
 - 2026-07-20: MOD-SKILL S1 REV: APPROVE_FOR_OPERATOR_MERGE @ eb2dd4b; folded onto main 4fef2f1; staged as PR #18.
+- 2026-07-20: PR #18 MERGED — MOD-SKILL S1 ratified on main.
