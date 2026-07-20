@@ -147,6 +147,7 @@
     "docs/03-project-control/candidates/p0-11-r2-immune-review.yaml",
     "docs/03-project-control/candidates/p0-21-mcp-server-delivery.yaml",
     "docs/03-project-control/candidates/p0-21-mcp-server-immune-review.yaml",
+    "docs/03-project-control/candidates/p0-09-unified-retarget-rev-001.md",
     "src/mcp/tool-catalog.mjs",
     "src/mcp/secb-mcp-server.mjs",
     "src/mcp/jsonrpc-stdio.mjs",
