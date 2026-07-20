@@ -103,3 +103,4 @@ Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch
 - 2026-07-20: MOD-KNOW S2 REV: APPROVE_WITH_NOTES @ bbf649b (1 LOW: walker cross-project-edge symmetry, tracked); staged as PR #19. S3 dispatch next.
 - 2026-07-20: PR #19 MERGED — MOD-KNOW S2 ratified on main.
 - 2026-07-20: MOD-KNOW S3 PRODUCED @ ce9957f (bst/mod-know-s3-provider): pure knowledge→CandidateSource mapper — honest verified/contested/classification semantics, real-stack feed-forward proof (port zero-exclusion + mint seal + supersession-aware). 632/627/0 fail/5 skip. Module completion review dispatched.
+- 2026-07-20: **MOD-KNOW FINISHED_WITH_TRACKED_FOLLOWUPS** — completion REV @ ac3379f: zero adversarial escapes, G1-G4+G6 closed, G5 latent on EVID ladder (operator-gated), G7 partial. Staged as PR #20.
