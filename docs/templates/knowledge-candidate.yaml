@@ -1,0 +1,20 @@
+schema_version: "0.1"
+knowledge_candidate_id: "KNOW-CAND-"
+claim: ""
+claim_type: "FACT|PATTERN|DECISION|LESSON|CONSTRAINT|RECOMMENDATION"
+scope:
+  project_ids: []
+  module_ids: []
+  domains: []
+source_evidence_refs: []
+confidence: ""
+uncertainty: []
+temporal:
+  valid_from: ""
+  review_by: ""
+  valid_until: ""
+status_type: "CURRENT|HISTORICAL|TRANSITIONAL"
+contradictions: []
+supersedes: []
+reviewers: []
+admission_state: "CANDIDATE"

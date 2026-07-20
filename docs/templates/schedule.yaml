@@ -1,0 +1,13 @@
+schema_version: "0.1"
+schedule_id: "SCH-"
+timezone: "Asia/Ho_Chi_Minh"
+scope_ref: ""
+cadence:
+  type: "EVENT|DAILY|WEEKLY|MONTHLY|QUARTERLY"
+  trigger: ""
+  recurrence: ""
+owner: ""
+required_inputs: []
+required_outputs: []
+escalation_on_miss: ""
+status: "ACTIVE"

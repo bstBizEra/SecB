@@ -1,33 +1,27 @@
-schema_version: "1.0"
-project_contract:
-  project_id: "SECB"
-  namespace: "bizera/secb"
-  version: 1
-  status: "DRAFT"
-  profile_id: "software-engineering"
-  owners:
-    business: "TBD"
-    technical: "TBD"
-    security: "TBD"
-    governance: "TBD"
-  repositories: []
-  environments: []
-  security_classification: "INTERNAL"
-  applicable_policies: []
-  approved_runtime_deployments: []
-  approved_agents: []
-  approved_models: []
-  approved_tools: []
-  approved_mcp_methods: []
-  approved_skills: []
-  evidence_destination: "TBD"
-  memory_policy:
-    project_memory: false
-    cross_project_publication: false
-  release_authority: "HUMAN_GOV_REQUIRED"
-  data_residency: ["TBD"]
-  retention_policy: "TBD"
-  required_exit_gates: []
-  effective_from: null
-  expires_at: null
-  approvals: []
+schema_version: "0.1"
+project_id: "PRJ-SECB"
+name: "SecB"
+portfolio_id: "PORT-BIZERA"
+product_ids: ["PROD-SECB-PLATFORM"]
+owners:
+  business: ""
+  technical: ""
+  security: ""
+classification:
+  risk_default: "R2"
+  data: "INTERNAL"
+repositories: []
+environments: []
+approved_harnesses: []
+approved_models: []
+approved_tools: []
+approved_mcp_servers: []
+evidence_destination: ""
+knowledge_policy:
+  project_admission: "REVIEW_REQUIRED"
+  cross_project_publication: "HUMAN_APPROVAL_REQUIRED"
+skill_policy:
+  consume_scopes: []
+  publish: "EVALUATION_AND_APPROVAL_REQUIRED"
+release_authority: "A5"
+retention_policy: ""

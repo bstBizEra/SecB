@@ -39,3 +39,33 @@ The controlled documentation tree is rooted at [`docs/`](docs/). Before beginnin
 Changes under `docs/**` also follow [`docs/AGENTS.md`](docs/AGENTS.md). The repository-level [`MANIFEST.json`](MANIFEST.json) is the canonical local build inventory; [`docs/MANIFEST.json`](docs/MANIFEST.json) inventories the imported documentation pack.
 
 The new documentation pack is `DRAFT / NOT EFFECTIVE`. Its presence satisfies required-reading availability but does not create an effective Project Contract, authorize a Work Package, assign a server-derived identity, accept evidence, or activate SecB. Those require their own governed records and independent decisions.
+
+## Implementation authorization amendment — 2026-07-19
+
+**Amendment ID:** SECB-AGENTS-AMD-002 (revision 2)
+**Requested by:** Operator, 2026-07-19
+**Status:** DRAFT until merged to `main` by the operator; EFFECTIVE thereafter
+**Scope:** Local repository work only. This amendment extends the working rules above.
+
+### Standing implementation authorization
+
+For worker agents (Codex, Claude) operating in this repository:
+
+1. **Pre-authorized implementation paths.** Bounded slices that create or modify files under `src/**`, `tests/**`, `tools/**`, and `contracts/**` are pre-authorized and need no per-step operator approval, provided the slice declares its scope and acceptance checks, runs the checks after the final change with exact results reported (working rule 6), and stays on a non-`main` branch.
+2. **Manifest maintenance right.** Agents must keep [`MANIFEST.json`](MANIFEST.json) accurate for files they add, rename, or delete within a slice, updating it in the same commit. Updates to [`docs/MANIFEST.json`](docs/MANIFEST.json) are likewise authorized when a slice legitimately changes `docs/**` under [`docs/AGENTS.md`](docs/AGENTS.md).
+
+### Advise-and-proceed decision rule
+
+Agents do not halt work to wait for human GOV, except at the retained hard gates below.
+
+1. At a decision point inside a pre-authorized slice, the agent (a) records an advisory decision — options considered, rationale, risk class, truth status — in the commit message or slice notes, (b) implements the recommended option immediately, and (c) marks the decision for asynchronous GOV ratification.
+2. Ratification happens at merge review: the operator-only merge to `main` ratifies the advisory decisions carried by the branch. Rejecting one is ordinary revert/rework, not an incident.
+3. For matters that still require GOV/SEC pre-approval (R3/R4, authority model, separation of duties, release gates, evidence acceptance, memory admission, skill promotion), agents do not activate anything — but they **do not idle either**: they prepare the candidate implementation and an advisory packet on a branch, so the human decision arrives with the work already done and only ratification pending.
+4. Working rule 8 (fail closed) is narrowed to: unknown identity, authority mutation, evidence acceptance, remote/external actions, and security-boundary changes. All other ambiguity is resolved by advise-and-proceed with the smallest reversible step.
+
+### Retained hard gates (unchanged)
+
+- No remote configure, push, publish, deploy, or activation without explicit operator authorization (working rule 5).
+- No agent merges to `main`; no self-declared completion or production status.
+- R3/R4 and authority-affecting changes activate only after the reviews required by [`docs/AGENTS.md`](docs/AGENTS.md) — but candidate preparation for them is authorized per the advise-and-proceed rule.
+- The Phase 0 documentation pack remains `DRAFT / NOT EFFECTIVE` per the bootstrap boundary above.

@@ -1,0 +1,28 @@
+schema_version: "0.1"
+failure_id: "FAIL-"
+correlation:
+  project_id: ""
+  module_id: ""
+  work_package_id: ""
+  session_id: ""
+execution_disposition: "ERROR|DENIED_BY_POLICY|BLOCKED_BY_DEPENDENCY|REJECTED_BY_REVIEW|QUARANTINED|PARTIAL"
+work_disposition: "RESEARCH_REQUIRED|REPLAN_REQUIRED|AUTHORITY_CORRECTION_REQUIRED|DEPENDENCY_RESOLUTION_REQUIRED|INCIDENT_RESPONSE_REQUIRED|RISK_ACCEPTANCE_REQUIRED"
+classification: "F-AUTH|F-TECH|F-DEP|F-EVID|F-QUAL|F-SEC|F-OPS|F-OUT|F-KNOW|F-SKILL"
+severity: "LOW|MEDIUM|HIGH|CRITICAL"
+observed_behavior: ""
+expected_behavior: ""
+containment_actions: []
+reproduction:
+  status: "NOT_ATTEMPTED"
+  steps: []
+  evidence_refs: []
+root_cause:
+  hypothesis: ""
+  confidence: ""
+  unknowns: []
+research_task_ref: ""
+corrective_decision_ref: ""
+retry_budget: 0
+experience_candidate_ref: ""
+created_at: ""
+integrity_sha256: ""
