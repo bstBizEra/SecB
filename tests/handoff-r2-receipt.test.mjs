@@ -13,7 +13,7 @@ const PROJ = "prj_r2", WP = "wp_r2", BASE = "90c84a67e36a25941bc0983a0e687745919
 const ENGIN = "eng", REV = "rev", GOV = "gov", SESSION = "ses_src";
 
 function grants() {
-  const w = { projectId: PROJ, workPackageId: WP, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
+  const w = { projectId: PROJ, workPackageId: WP, workPackageVersion: 1, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
   return [
     { ...w, grantId: "g_e", decisionId: "d_e", actorId: ENGIN, roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED", "WorkPackage:AUTHORIZED->READY", "WorkPackage:READY->RUNNING"] },
     { ...w, grantId: "g_r", decisionId: "d_r", actorId: REV, roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
@@ -44,7 +44,8 @@ function handoffEnvelope(over = {}) {
 function harness() {
   let nowMs = Date.parse("2026-07-18T10:00:00Z");
   const clock = () => new Date(nowMs);
-  const wp = new WorkPackageContractService({ grants: grants(), now: clock });
+  const grantSet = grants();
+  const wp = new WorkPackageContractService({ grants: grantSet, authoritySource: () => grantSet, now: clock });
   wp.createWorkPackage({
     work_package_id: WP, version: 1, project_id: PROJ, objective: "r2", risk_class: "R2", status: "DRAFT",
     baseline: BASE, scope: ["src/"], non_scope: ["p"], acceptance_criteria: ["ok"], roles: { producer: ENGIN },
