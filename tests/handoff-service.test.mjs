@@ -14,7 +14,7 @@ const REV2 = "rev-actor-2";
 const GOV = "gov-actor";
 
 function grants() {
-  const window = { projectId: PROJECT, workPackageId: WP, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
+  const window = { projectId: PROJECT, workPackageId: WP, workPackageVersion: 1, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
   return [
     { ...window, grantId: "g_engin", decisionId: "d_engin", actorId: ENGIN, roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED", "WorkPackage:AUTHORIZED->READY", "WorkPackage:READY->RUNNING"] },
     { ...window, grantId: "g_rev", decisionId: "d_rev", actorId: REV, roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
@@ -53,7 +53,8 @@ function envelope(overrides = {}) {
 function harness({ start = "2026-07-18T10:00:00Z" } = {}) {
   let nowMs = Date.parse(start);
   const clock = () => new Date(nowMs);
-  const wp = new WorkPackageContractService({ grants: grants(), now: clock });
+  const grantSet = grants();
+  const wp = new WorkPackageContractService({ grants: grantSet, authoritySource: () => grantSet, now: clock });
   // drive the work package to RUNNING under ENGIN (effective; executor=ENGIN)
   wp.createWorkPackage(draft(), { idempotencyKey: "c1", actorId: ENGIN, authorityRef: "g_engin" });
   const steps = [

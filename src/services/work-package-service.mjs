@@ -135,9 +135,10 @@ function deny(code, message) {
 }
 
 export class WorkPackageContractService {
-  #authority;
+  #authoritySource;
   #engine;
-  #grants = new Map();
+  #engineDecisionTime;
+  #hasExplicitAuthoritySource;
   #now;
   #records = new Map();
   #idempotency = new Map();
@@ -155,7 +156,7 @@ export class WorkPackageContractService {
   // (pre-integration mode) and creation is gated by grants alone.
   #projectResolver;
 
-  constructor({ grants = [], now = () => new Date(), legacyObligations = "allow", projectResolver = null } = {}) {
+  constructor({ grants = [], authoritySource, now = () => new Date(), legacyObligations = "allow", projectResolver = null } = {}) {
     if (!["allow", "deny"].includes(legacyObligations)) {
       throw new WorkPackageServiceError("DENY_CONFIG", "legacyObligations must be 'allow' or 'deny'");
     }
@@ -165,35 +166,113 @@ export class WorkPackageContractService {
     this.#projectResolver = projectResolver;
     this.#legacyObligations = legacyObligations;
     this.#now = now;
-    // AuthorityEngine validates grant shape, windows, and SoD role
-    // conflicts at construction; the service keeps its own copy of the
-    // same grants to gate edges the canonical REQUIRED_ROLE map omits.
-    this.#authority = new AuthorityEngine({ grants, now });
-    for (const grant of grants) this.#grants.set(grant.grantId, structuredClone(grant));
-    this.#engine = new TransitionEngine({ authorize: (context) => this.#resolveAuthority(context), now });
+    this.#hasExplicitAuthoritySource = authoritySource !== undefined;
+    const seededGrants = structuredClone(grants);
+    this.#authoritySource = authoritySource ?? (() => structuredClone(seededGrants));
+    if (typeof this.#authoritySource !== "function") {
+      deny("DENY_AUTHORITY_SOURCE", "authoritySource must be a function");
+    }
+    this.#readAuthoritySnapshot(new Date(0));
+    this.#engine = new TransitionEngine({
+      authorize: (context) => this.#resolveAuthority(context),
+      now: () => {
+        if (!this.#engineDecisionTime) deny("DENY_AUTHORITY_TIME", "Transition decision time was not captured");
+        return this.#engineDecisionTime;
+      }
+    });
+  }
+
+  #captureDecisionTime() {
+    try {
+      const candidate = this.#now();
+      if (!(candidate instanceof Date)) {
+        throw new TypeError("Authoritative server time is not a Date");
+      }
+      const timeMs = candidate.getTime();
+      if (!Number.isFinite(timeMs)) {
+        throw new RangeError("Authoritative server time is not finite");
+      }
+      const copiedDate = new Date(timeMs);
+      if (!Number.isFinite(copiedDate.getTime())) {
+        throw new RangeError("Authoritative server time is outside the supported Date range");
+      }
+      return copiedDate;
+    } catch {
+      deny("DENY_AUTHORITY_TIME", "Authoritative server time is unavailable or invalid");
+    }
+  }
+
+  #readAuthoritySnapshot(decisionTime) {
+    const grants = this.#authoritySource();
+    if (!Array.isArray(grants)) {
+      deny("DENY_AUTHORITY_SOURCE", "Authoritative grant source must return an array");
+    }
+    const copied = structuredClone(grants);
+    const engine = new AuthorityEngine({ grants: copied, now: () => decisionTime });
+    return {
+      engine,
+      grants: new Map(copied.map((grant) => [grant.grantId, grant]))
+    };
   }
 
   #resolveAuthority(context) {
-    if (REQUIRED_ROLE[`WorkPackage:*->${context.requestedState}`]) {
-      return this.#authority.authorize(context);
+    const decisionTime = context.authorityDecisionTime;
+    if (!(decisionTime instanceof Date) || !Number.isFinite(decisionTime.getTime())) {
+      return { allowed: false, code: "DENY_AUTHORITY_TIME", reason: "Authoritative decision time is invalid or unavailable" };
     }
-    return this.#serviceAuthorize(context);
+    let authority;
+    try {
+      authority = this.#readAuthoritySnapshot(decisionTime);
+    } catch {
+      return { allowed: false, code: "DENY_AUTHORITY_SOURCE", reason: "Authoritative grant state is unavailable or invalid" };
+    }
+    const versionAuthority = this.#authorizeVersionScope(context, authority.grants);
+    if (versionAuthority) return versionAuthority;
+    if (REQUIRED_ROLE[`WorkPackage:*->${context.requestedState}`]) {
+      return authority.engine.authorize(context);
+    }
+    return this.#serviceAuthorize(context, decisionTime, authority.grants);
+  }
+
+  #authorizeVersionScope(context, authoritativeGrants) {
+    const grant = authoritativeGrants.get(context.authorityRef);
+    if (!grant) return null;
+    if (!Number.isInteger(context.authorityScopeVersion) || context.authorityScopeVersion < 1) {
+      return { allowed: false, code: "DENY_AUTHORITY_VERSION_UNBOUND", reason: "Work Package authority requires an exact contract version" };
+    }
+    if (!Number.isInteger(grant.workPackageVersion) || grant.workPackageVersion < 1) {
+      return { allowed: false, code: "DENY_AUTHORITY_VERSION_UNBOUND", reason: "Authority grant is not bound to a Work Package version" };
+    }
+    if (grant.workPackageVersion !== context.authorityScopeVersion) {
+      return { allowed: false, code: "DENY_AUTHORITY_VERSION_MISMATCH", reason: "Authority grant is bound to another Work Package version" };
+    }
+    return null;
   }
 
   // Mirror of AuthorityEngine.authorize for service-gated edges. Kept in
   // lockstep by the edge-parity conformance test (RISK-P009-01).
-  #serviceAuthorize(context) {
+  #serviceAuthorize(context, decisionTime, authoritativeGrants) {
     const role = WORK_PACKAGE_SERVICE_ROLE_GATES[`${context.currentState}->${context.requestedState}`];
     if (!role) return { allowed: false, code: "DENY_ROLE_RULE_MISSING", reason: "No authority rule exists for this transition" };
 
-    const grant = this.#grants.get(context.authorityRef);
+    let currentGrants = authoritativeGrants;
+    if (!currentGrants) {
+      try {
+        currentGrants = this.#readAuthoritySnapshot(decisionTime).grants;
+      } catch {
+        return { allowed: false, code: "DENY_AUTHORITY_SOURCE", reason: "Authoritative grant state is unavailable or invalid" };
+      }
+    }
+    const grant = currentGrants.get(context.authorityRef);
     if (!grant) return { allowed: false, reason: "Authority grant was not found" };
+    const versionAuthority = this.#authorizeVersionScope(context, currentGrants);
+    if (versionAuthority) return versionAuthority;
     if (grant.status !== "ACTIVE") return { allowed: false, reason: "Authority grant is not active" };
     if (grant.actorId !== context.actorId) return { allowed: false, reason: "Authority grant belongs to another actor" };
     if (grant.projectId !== context.projectId || grant.workPackageId !== context.workPackageId) {
       return { allowed: false, reason: "Authority grant scope does not match the governed object" };
     }
-    const now = this.#now().getTime();
+    const now = decisionTime.getTime();
     if (now < Date.parse(grant.validFrom) || now >= Date.parse(grant.validUntil)) {
       return { allowed: false, reason: "Authority grant is outside its validity window" };
     }
@@ -264,18 +343,25 @@ export class WorkPackageContractService {
     if (!Number.isFinite(Date.parse(draft.valid_until))) {
       deny("DENY_INVALID_EXPIRY", "valid_until must be a parseable date-time");
     }
+    const decisionTime = this.#captureDecisionTime();
 
     // Creation gate (Immune V-item): draft registration requires a valid
     // grant scoped to this identity, closing the identity-squatting path.
     // ENGIN (producer drafts) or GOV (governance-initiated drafts) qualify.
-    const grant = this.#grants.get(authorityRef);
-    const nowMs = this.#now().getTime();
+    let grant;
+    try {
+      grant = this.#readAuthoritySnapshot(decisionTime).grants.get(authorityRef);
+    } catch {
+      deny("DENY_CREATE_AUTHORITY", "Creation requires available and valid authoritative grant state");
+    }
+    const nowMs = decisionTime.getTime();
     if (
       !grant ||
       grant.status !== "ACTIVE" ||
       grant.actorId !== actorId ||
       grant.projectId !== draft.project_id ||
       grant.workPackageId !== draft.work_package_id ||
+      grant.workPackageVersion !== draft.version ||
       nowMs < Date.parse(grant.validFrom) ||
       nowMs >= Date.parse(grant.validUntil) ||
       !grant.roles.some((role) => role === "ENGIN" || role === "GOV")
@@ -324,7 +410,7 @@ export class WorkPackageContractService {
       deny("DENY_DUPLICATE_IDENTITY", `Work package ${draft.work_package_id} version ${draft.version} already exists`);
     }
 
-    const createdAt = this.#now().toISOString();
+    const createdAt = decisionTime.toISOString();
     const contract = frozenClone(draft);
     const record = {
       projectId: draft.project_id,
@@ -338,6 +424,8 @@ export class WorkPackageContractService {
       executorActorIds: new Set(),
       reviewerActorId: null,
       qaActorId: null,
+      everAuthorized: false,
+      effectiveAuthority: null,
       evidence: [],
       ledger: []
     };
@@ -410,6 +498,11 @@ export class WorkPackageContractService {
     if (!record) {
       deny("DENY_UNKNOWN_WORK_PACKAGE", "Work package version is not registered");
     }
+    const governingVersion = this.#versionsOf(envelope.projectId, envelope.workPackageId)
+      .find((entry) => entry.record.everAuthorized);
+    if (governingVersion && governingVersion.version > record.version) {
+      deny("DENY_SUPERSEDED_VERSION", "A higher Work Package version has governed; lower versions are immutable");
+    }
     const machine = STATE_MACHINES.WorkPackage;
     if (!(envelope.requestedState in machine)) {
       deny("DENY_UNKNOWN_STATE", `Unknown work package state: ${envelope.requestedState}`);
@@ -431,7 +524,7 @@ export class WorkPackageContractService {
       }
     }
 
-    const serverNow = this.#now();
+    const serverNow = this.#captureDecisionTime();
     if (serverNow.getTime() >= Date.parse(record.contract.valid_until) && !POST_EXPIRY_TARGETS.includes(envelope.requestedState)) {
       deny("DENY_EXPIRED", "Work package authorization has expired; only REWORK, CANCELLED, or REVOKED remain reachable");
     }
@@ -454,31 +547,48 @@ export class WorkPackageContractService {
     }
 
     if (envelope.requestedState === "GOV_DECISION") {
-      this.#assertObligationsSatisfied(record, envelope);
+      this.#assertObligationsSatisfied(record);
     }
 
     const [runningExecutor] = record.executorActorIds;
-    const engineResult = this.#engine.transition({
-      objectType: "WorkPackage",
-      objectId: `${envelope.workPackageId}@v${envelope.version}`,
-      objectVersion: record.revision,
-      projectId: envelope.projectId,
-      workPackageId: envelope.workPackageId,
-      currentState: record.state,
-      requestedState: envelope.requestedState,
-      actorId: envelope.actorId,
-      authorityRef: envelope.authorityRef,
-      policyDecision: envelope.policyDecision,
-      evidenceRefs: envelope.evidence.map((item) => item.ref),
-      idempotencyKey: envelope.idempotencyKey,
-      timestamp: serverNow.toISOString(),
-      reasonCode: envelope.reasonCode,
-      producerActorId: runningExecutor,
-      reviewerActorId: record.reviewerActorId ?? undefined,
-      qaActorId: record.qaActorId ?? undefined
-    });
+    this.#engineDecisionTime = serverNow;
+    let engineResult;
+    try {
+      engineResult = this.#engine.transition({
+        objectType: "WorkPackage",
+        objectId: `${envelope.workPackageId}@v${envelope.version}`,
+        objectVersion: record.revision,
+        authorityScopeVersion: envelope.version,
+        authorityDecisionTime: serverNow,
+        projectId: envelope.projectId,
+        workPackageId: envelope.workPackageId,
+        currentState: record.state,
+        requestedState: envelope.requestedState,
+        actorId: envelope.actorId,
+        authorityRef: envelope.authorityRef,
+        policyDecision: envelope.policyDecision,
+        evidenceRefs: envelope.evidence.map((item) => item.ref),
+        idempotencyKey: envelope.idempotencyKey,
+        timestamp: serverNow.toISOString(),
+        reasonCode: envelope.reasonCode,
+        producerActorId: runningExecutor,
+        reviewerActorId: record.reviewerActorId ?? undefined,
+        qaActorId: record.qaActorId ?? undefined
+      });
+    } finally {
+      this.#engineDecisionTime = undefined;
+    }
 
     const previousState = record.state;
+    if (envelope.requestedState === "AUTHORIZED") {
+      record.everAuthorized = true;
+      record.effectiveAuthority = deepFreeze({
+        authorityRef: envelope.authorityRef,
+        authorityDecisionId: engineResult.authorityDecisionId,
+        actorId: envelope.actorId,
+        workPackageVersion: envelope.version
+      });
+    }
     record.state = envelope.requestedState;
     record.revision = engineResult.objectVersion;
     if (["RUNNING", "SELF_VERIFIED"].includes(envelope.requestedState)) record.executorActorIds.add(envelope.actorId);
@@ -539,31 +649,37 @@ export class WorkPackageContractService {
     return frozenClone(result);
   }
 
-  // GOV-P009-04 + GOV-P009-07 + acceptance independence: every declared
-  // obligation needs covering evidence from the CURRENT rework cycle,
-  // produced by the role its type prefix binds it to; unless typed
-  // "self:" at least one covering item must come from outside the
-  // executor set.
-  #assertObligationsSatisfied(record, envelope) {
-    const items = [
-      ...record.evidence.filter((item) => item.cycle === record.cycle),
-      ...envelope.evidence.map((item) => ({ ...item, obligation: item.obligation ?? null, actorId: envelope.actorId }))
-    ];
-    const roleBound = (item, type) => {
-      if (type === "self") return record.executorActorIds.has(item.actorId);
-      if (type === "review") return item.actorId === record.reviewerActorId;
-      if (type === "qa") return item.actorId === record.qaActorId;
-      if (type === "gov") return item.actorId === envelope.actorId;
-      return true;
-    };
+  // GOV-P009-04 + acceptance independence: every declared obligation needs
+  // covering evidence from the CURRENT rework cycle and a role-aligned
+  // producer stage. The deciding GOV envelope is intentionally excluded:
+  // an acceptance authority cannot manufacture the evidence it decides.
+  #assertObligationsSatisfied(record) {
+    const currentCycleItems = record.evidence.filter((item) => item.cycle === record.cycle);
+    const items = currentCycleItems.filter((item) => {
+      if (item.recordedAtState === "SELF_VERIFIED") return record.executorActorIds.has(item.actorId);
+      if (item.recordedAtState === "REVIEW") return item.actorId === record.reviewerActorId;
+      if (item.recordedAtState === "QA") return item.actorId === record.qaActorId;
+      return false;
+    });
     for (const obligation of record.contract.evidence_obligations) {
-      const type = obligationType(obligation);
-      const covering = items.filter((item) => item.obligation === obligation && roleBound(item, type));
+      const normalized = obligation.toLowerCase();
+      const requiredStage = obligation.startsWith("self:")
+        ? "SELF_VERIFIED"
+        : normalized.startsWith("review")
+          ? "REVIEW"
+          : normalized.startsWith("qa")
+            ? "QA"
+            : null;
+      const covering = items.filter((item) =>
+        item.obligation === obligation && (!requiredStage || item.recordedAtState === requiredStage));
       if (covering.length === 0) {
+        if (currentCycleItems.some((item) => item.obligation === obligation)) {
+          deny("DENY_EVIDENCE_ROLE_MISMATCH", `Evidence obligation was recorded outside its required role stage: ${obligation}`);
+        }
         deny("DENY_EVIDENCE_INSUFFICIENT", `Evidence obligation is not satisfied: ${obligation}`);
       }
       const independent = covering.some((item) => !record.executorActorIds.has(item.actorId));
-      if (type !== "self" && !independent) {
+      if (!obligation.startsWith("self:") && !independent) {
         deny("DENY_EVIDENCE_INDEPENDENCE", `Evidence obligation lacks independent evidence: ${obligation}`);
       }
     }
@@ -607,16 +723,59 @@ export class WorkPackageContractService {
     if (isBlank(baseline)) {
       return deepFreeze({ effective: null, code: "DENY_BASELINE_UNBOUND", reason: "Caller must assert the baseline it executes against" });
     }
+    if (!this.#hasExplicitAuthoritySource) {
+      return deepFreeze({
+        effective: null,
+        code: "DENY_AUTHORITY_INEFFECTIVE",
+        reason: "Effective resolution requires an explicit authoritative current-state source"
+      });
+    }
+    let resolutionTime;
+    try {
+      resolutionTime = this.#captureDecisionTime();
+    } catch (error) {
+      if (error instanceof WorkPackageServiceError && error.code === "DENY_AUTHORITY_TIME") {
+        return deepFreeze({ effective: null, code: error.code, reason: error.message });
+      }
+      throw error;
+    }
     const candidate = this.#versionsOf(projectId, workPackageId)
-      .find((entry) => EFFECTIVE_STATES.includes(entry.record.state));
+      .find((entry) => entry.record.everAuthorized);
     if (!candidate) {
       return deepFreeze({ effective: null, code: "DENY_NO_EFFECTIVE_VERSION", reason: "No version has reached AUTHORIZED or later" });
     }
-    if (this.#now().getTime() >= Date.parse(candidate.record.contract.valid_until)) {
+    if (!EFFECTIVE_STATES.includes(candidate.record.state)) {
+      return deepFreeze({
+        effective: null,
+        code: "DENY_GOVERNING_VERSION_INEFFECTIVE",
+        reason: "The highest governing version is no longer effective; fallback is prohibited"
+      });
+    }
+    if (resolutionTime.getTime() >= Date.parse(candidate.record.contract.valid_until)) {
       return deepFreeze({ effective: null, code: "DENY_EXPIRED", reason: "Effective authorization has expired" });
     }
     if (candidate.record.contract.baseline !== baseline) {
       return deepFreeze({ effective: null, code: "DENY_BASELINE_MISMATCH", reason: "Asserted baseline does not match the authorized baseline" });
+    }
+    const boundAuthority = candidate.record.effectiveAuthority;
+    if (!boundAuthority) {
+      return deepFreeze({ effective: null, code: "DENY_AUTHORITY_INEFFECTIVE", reason: "Effective authorization provenance is not bound" });
+    }
+    const liveAuthority = this.#serviceAuthorize({
+      authorityRef: boundAuthority.authorityRef,
+      actorId: boundAuthority.actorId,
+      projectId,
+      workPackageId,
+      authorityScopeVersion: candidate.version,
+      currentState: "REVIEWED",
+      requestedState: "AUTHORIZED"
+    }, resolutionTime);
+    if (
+      !liveAuthority.allowed ||
+      liveAuthority.grantId !== boundAuthority.authorityRef ||
+      liveAuthority.decisionId !== boundAuthority.authorityDecisionId
+    ) {
+      return deepFreeze({ effective: null, code: "DENY_AUTHORITY_INEFFECTIVE", reason: "Bound authorization grant is no longer effective" });
     }
     return frozenClone({
       effective: structuredClone(candidate.record.contract),

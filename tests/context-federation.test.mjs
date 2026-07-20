@@ -11,14 +11,17 @@ const WP = "wp_ctx";
 const BASE = "90c84a67e36a25941bc0983a0e687745919eca8c";
 const ENGIN = "eng", REV = "rev", GOV = "gov";
 
-function grants() {
-  const w = { projectId: PROJECT, workPackageId: WP, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
+function grantsForVersion(version) {
+  const suffix = version === 1 ? "" : `_v${version}`;
+  const w = { projectId: PROJECT, workPackageId: WP, workPackageVersion: version, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
   return [
-    { ...w, grantId: "g_e", decisionId: "d_e", actorId: ENGIN, roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED"] },
-    { ...w, grantId: "g_r", decisionId: "d_r", actorId: REV, roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
-    { ...w, grantId: "g_g", decisionId: "d_g", actorId: GOV, roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED"] }
+    { ...w, grantId: `g_e${suffix}`, decisionId: `d_e${suffix}`, actorId: ENGIN, roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED"] },
+    { ...w, grantId: `g_r${suffix}`, decisionId: `d_r${suffix}`, actorId: REV, roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
+    { ...w, grantId: `g_g${suffix}`, decisionId: `d_g${suffix}`, actorId: GOV, roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED"] }
   ];
 }
+
+function grants() { return [...grantsForVersion(1), ...grantsForVersion(2)]; }
 
 function wpDraft(version = 1) {
   return {
@@ -52,12 +55,14 @@ const SOURCES = [
 function harness({ start = "2026-07-18T10:00:00Z" } = {}) {
   let nowMs = Date.parse(start);
   const clock = () => new Date(nowMs);
-  const wp = new WorkPackageContractService({ grants: grants(), now: clock });
+  const grantSet = grants();
+  const wp = new WorkPackageContractService({ grants: grantSet, authoritySource: () => grantSet, now: clock });
   const drive = (version) => {
-    wp.createWorkPackage(wpDraft(version), { idempotencyKey: `c${version}`, actorId: ENGIN, authorityRef: "g_e" });
+    const suffix = version === 1 ? "" : `_v${version}`;
+    wp.createWorkPackage(wpDraft(version), { idempotencyKey: `c${version}`, actorId: ENGIN, authorityRef: `g_e${suffix}` });
     let s = 0;
     for (const [st, a, g] of [["PLANNED", ENGIN, "g_e"], ["REVIEWED", REV, "g_r"], ["AUTHORIZED", GOV, "g_g"]]) {
-      wp.submitTransition({ projectId: PROJECT, workPackageId: WP, version, requestedState: st, actorId: a, authorityRef: g, policyDecision: "ALLOW", evidence: [{ ref: `e_${version}_${st}` }], idempotencyKey: `t_${version}_${++s}`, reasonCode: "S" });
+      wp.submitTransition({ projectId: PROJECT, workPackageId: WP, version, requestedState: st, actorId: a, authorityRef: `${g}${suffix}`, policyDecision: "ALLOW", evidence: [{ ref: `e_${version}_${st}` }], idempotencyKey: `t_${version}_${++s}`, reasonCode: "S" });
     }
   };
   drive(1);

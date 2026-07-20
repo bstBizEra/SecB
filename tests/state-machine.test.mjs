@@ -39,6 +39,19 @@ test("an authorized defined transition increments version and records authority"
   assert.equal(result.replayed, false);
 });
 
+test("the exact authoritative decision instant is forwarded to the resolver", () => {
+  const decisionTime = new Date("2026-07-17T05:30:00.000Z");
+  let observed;
+  const engine = new TransitionEngine({
+    authorize: (context) => {
+      observed = context.authorityDecisionTime;
+      return { allowed: true, decisionId: "decision_time_001" };
+    }
+  });
+  engine.transition(request({ authorityDecisionTime: decisionTime }));
+  assert.strictEqual(observed, decisionTime);
+});
+
 test("an identical idempotent replay returns the original disposition", () => {
   const engine = authorizedEngine();
   const first = engine.transition(request());

@@ -82,6 +82,8 @@ const requiredStringFields = requiredFields.filter((field) => !["objectVersion",
 const allowedRequestKeys = new Set([
   ...requiredFields,
   "timestamp",
+  "authorityScopeVersion",
+  "authorityDecisionTime",
   "producerActorId",
   "reviewerActorId",
   "qaActorId",
@@ -188,6 +190,8 @@ export class TransitionEngine {
       workPackageId: request.workPackageId,
       objectType: request.objectType,
       objectId: request.objectId,
+      authorityScopeVersion: request.authorityScopeVersion,
+      authorityDecisionTime: request.authorityDecisionTime,
       currentState: request.currentState,
       requestedState: request.requestedState,
       producerActorId: request.producerActorId,
@@ -196,7 +200,7 @@ export class TransitionEngine {
       evidenceVerifierActorId: request.evidenceVerifierActorId
     });
     if (!authority?.allowed || !authority.decisionId) {
-      throw new TransitionDeniedError("DENY_AUTHORITY", authority?.reason ?? "Effective authority was not established");
+      throw new TransitionDeniedError(authority?.code ?? "DENY_AUTHORITY", authority?.reason ?? "Effective authority was not established");
     }
 
     const result = Object.freeze({

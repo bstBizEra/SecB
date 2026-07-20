@@ -26,15 +26,16 @@ test("V-002 project scope: approved repository enforced", { skip: "MECHANISM DEL
 // V-004 unblocked by P0-10 R2 ContextFederationService (gate waived 2026-07-19).
 test("V-004 context: context receipt federation and retrieval", () => {
   const BASE = "90c84a67e36a25941bc0983a0e687745919eca8c";
-  const win = { projectId: "prj_v004", workPackageId: "wp_v004", validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
+  const win = { projectId: "prj_v004", workPackageId: "wp_v004", workPackageVersion: 1, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
   let nowMs = Date.parse("2026-07-18T10:00:00Z");
   const clock = () => new Date(nowMs);
-  const wp = new WorkPackageContractService({
-    grants: [
+  const grantSet = [
       { ...win, grantId: "g_e", decisionId: "d_e", actorId: "eng", roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED"] },
       { ...win, grantId: "g_r", decisionId: "d_r", actorId: "rev", roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
       { ...win, grantId: "g_g", decisionId: "d_g", actorId: "gov", roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED"] }
-    ], now: clock
+  ];
+  const wp = new WorkPackageContractService({
+    grants: grantSet, authoritySource: () => grantSet, now: clock
   });
   wp.createWorkPackage({
     work_package_id: "wp_v004", version: 1, project_id: "prj_v004", objective: "v004", risk_class: "R2",
@@ -133,33 +134,31 @@ test("V-009 approval: bound approval on work package acceptance", () => {
     validUntil: "2026-12-31T00:00:00Z",
     status: "ACTIVE"
   };
+  const grantsForVersion = (version) => {
+    const suffix = version === 1 ? "" : `_v${version}`;
+    return [
+      { ...window, workPackageVersion: version, grantId: `g_engin${suffix}`, decisionId: `d_engin${suffix}`, actorId: "engin", roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED", "WorkPackage:AUTHORIZED->READY", "WorkPackage:READY->RUNNING", "WorkPackage:RUNNING->SELF_VERIFIED"] },
+      { ...window, workPackageVersion: version, grantId: `g_rev${suffix}`, decisionId: `d_rev${suffix}`, actorId: "rev", roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED", "WorkPackage:SELF_VERIFIED->REVIEW"] },
+      { ...window, workPackageVersion: version, grantId: `g_qa${suffix}`, decisionId: `d_qa${suffix}`, actorId: "qa", roles: ["QA"], allowedTransitions: ["WorkPackage:REVIEW->QA"] },
+      { ...window, workPackageVersion: version, grantId: `g_gov${suffix}`, decisionId: `d_gov${suffix}`, actorId: "gov", roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED", "WorkPackage:QA->GOV_DECISION", "WorkPackage:GOV_DECISION->ACCEPTED"] }
+    ];
+  };
+  const grantSet = [...grantsForVersion(1), ...grantsForVersion(2)];
   const makeService = () => new WorkPackageContractService({
-    grants: [
-      { ...window, grantId: "g_engin", decisionId: "d_engin", actorId: "engin", roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED", "WorkPackage:AUTHORIZED->READY", "WorkPackage:READY->RUNNING", "WorkPackage:RUNNING->SELF_VERIFIED"] },
-      { ...window, grantId: "g_rev", decisionId: "d_rev", actorId: "rev", roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED", "WorkPackage:SELF_VERIFIED->REVIEW"] },
-      { ...window, grantId: "g_qa", decisionId: "d_qa", actorId: "qa", roles: ["QA"], allowedTransitions: ["WorkPackage:REVIEW->QA"] },
-      { ...window, grantId: "g_gov", decisionId: "d_gov", actorId: "gov", roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED", "WorkPackage:QA->GOV_DECISION", "WorkPackage:GOV_DECISION->ACCEPTED"] }
-    ],
+    grants: grantSet,
+    authoritySource: () => grantSet,
     now: () => new Date("2026-07-18T10:00:00Z")
   });
+  const workPackage = (version = 1) => ({
+    work_package_id: "wp_v009", version, project_id: "prj_v009",
+    objective: "V-009 bound approval conformance", risk_class: "R2", status: "DRAFT",
+    baseline: "6152897bf498754ee51b4546b58a644ce28d55dd", scope: ["src/"], non_scope: ["production"],
+    acceptance_criteria: ["approval is bound"], roles: { producer: "engin" },
+    allowed_paths: ["C:/laragon/www/SecB"], prohibited_paths: ["outside"],
+    evidence_obligations: ["self:tests", "review-report", "qa-report"], valid_until: "2026-08-01T00:00:00Z"
+  });
   const drive = (service, throughState) => {
-    service.createWorkPackage({
-      work_package_id: "wp_v009",
-      version: 1,
-      project_id: "prj_v009",
-      objective: "V-009 bound approval conformance",
-      risk_class: "R2",
-      status: "DRAFT",
-      baseline: "90c84a67e36a25941bc0983a0e687745919eca8c",
-      scope: ["src/"],
-      non_scope: ["production"],
-      acceptance_criteria: ["approval is bound"],
-      roles: { producer: "engin" },
-      allowed_paths: ["C:/laragon/www/SecB"],
-      prohibited_paths: ["outside"],
-      evidence_obligations: ["self:tests", "review-report", "qa-report"],
-      valid_until: "2026-08-01T00:00:00Z"
-    }, { idempotencyKey: "v009_create", actorId: "engin", authorityRef: "g_engin" });
+    service.createWorkPackage(workPackage(), { idempotencyKey: "v009_create", actorId: "engin", authorityRef: "g_engin" });
     const steps = [
       ["PLANNED", "engin", "g_engin", null],
       ["REVIEWED", "rev", "g_rev", null],
@@ -236,6 +235,76 @@ test("V-009 approval: bound approval on work package acceptance", () => {
       idempotencyKey: "v009_gov_bare", reasonCode: "V009"
     }),
     (error) => error instanceof WorkPackageServiceError && error.code === "DENY_EVIDENCE_INSUFFICIENT"
+  );
+
+  // Negative: GOV cannot manufacture missing lifecycle evidence in its decision envelope.
+  assert.throws(
+    () => bareService.submitTransition({
+      projectId: "prj_v009", workPackageId: "wp_v009", version: 1,
+      requestedState: "GOV_DECISION", actorId: "gov", authorityRef: "g_gov",
+      policyDecision: "ALLOW",
+      evidence: [
+        { ref: "ev_gov_self", obligation: "self:tests" },
+        { ref: "ev_gov_review", obligation: "review-report" },
+        { ref: "ev_gov_qa", obligation: "qa-report" }
+      ],
+      idempotencyKey: "v009_gov_manufacture", reasonCode: "V009"
+    }),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_OBLIGATION_STAGE"
+  );
+
+  // Negative: a grant for v2 cannot authorize v1.
+  const wrongVersion = makeService();
+  wrongVersion.createWorkPackage(workPackage(), { idempotencyKey: "v009_wrong_create", actorId: "engin", authorityRef: "g_engin" });
+  assert.throws(
+    () => wrongVersion.submitTransition({
+      projectId: "prj_v009", workPackageId: "wp_v009", version: 1,
+      requestedState: "PLANNED", actorId: "engin", authorityRef: "g_engin_v2",
+      policyDecision: "ALLOW", evidence: [{ ref: "ev_wrong_version" }],
+      idempotencyKey: "v009_wrong_version", reasonCode: "V009"
+    }),
+    (error) => error.code === "DENY_AUTHORITY_VERSION_MISMATCH"
+  );
+
+  // Negative: once v2 governs, v1 cannot continue execution.
+  const superseded = drive(makeService(), "READY").service;
+  superseded.createWorkPackage(workPackage(2), { idempotencyKey: "v009_create_v2", actorId: "engin", authorityRef: "g_engin_v2" });
+  for (const [state, actorId, authorityRef] of [
+    ["PLANNED", "engin", "g_engin_v2"],
+    ["REVIEWED", "rev", "g_rev_v2"],
+    ["AUTHORIZED", "gov", "g_gov_v2"]
+  ]) {
+    superseded.submitTransition({
+      projectId: "prj_v009", workPackageId: "wp_v009", version: 2,
+      requestedState: state, actorId, authorityRef, policyDecision: "ALLOW",
+      evidence: [{ ref: `ev_v2_${state}` }], idempotencyKey: `v009_v2_${state}`, reasonCode: "V009"
+    });
+  }
+  assert.throws(
+    () => superseded.submitTransition({
+      projectId: "prj_v009", workPackageId: "wp_v009", version: 1,
+      requestedState: "RUNNING", actorId: "engin", authorityRef: "g_engin",
+      policyDecision: "ALLOW", evidence: [{ ref: "ev_superseded" }],
+      idempotencyKey: "v009_superseded", reasonCode: "V009"
+    }),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_SUPERSEDED_VERSION"
+  );
+
+  // Replay: identical approval is stable; the same key on another version conflicts.
+  const replayService = drive(makeService(), "GOV_DECISION").service;
+  const acceptance = {
+    projectId: "prj_v009", workPackageId: "wp_v009", version: 1,
+    requestedState: "ACCEPTED", actorId: "gov", authorityRef: "g_gov",
+    policyDecision: "ALLOW", evidence: [{ ref: "ev_accept_replay" }],
+    idempotencyKey: "v009_accept_replay", reasonCode: "V009"
+  };
+  const firstAcceptance = replayService.submitTransition(acceptance);
+  const replayedAcceptance = replayService.submitTransition(structuredClone(acceptance));
+  assert.equal(replayedAcceptance.replayed, true);
+  assert.equal(replayedAcceptance.transitionId, firstAcceptance.transitionId);
+  assert.throws(
+    () => replayService.submitTransition({ ...acceptance, version: 2 }),
+    (error) => error instanceof WorkPackageServiceError && error.code === "DENY_IDEMPOTENCY_CONFLICT"
   );
 });
 
@@ -412,13 +481,15 @@ test("V-014 MCP: credential-bounded MCP invocation", { skip: "BLOCKED: P0-10 Con
 // V-015 unblocked by P0-11 HandoffService R1 (gate waived 2026-07-19).
 test("V-015 A2A: structured handoff non-escalation", () => {
   const BASE = "90c84a67e36a25941bc0983a0e687745919eca8c";
-  const win = { projectId: "prj_v015", workPackageId: "wp_v015", validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
-  const wp = new WorkPackageContractService({
-    grants: [
+  const win = { projectId: "prj_v015", workPackageId: "wp_v015", workPackageVersion: 1, validFrom: "2026-07-01T00:00:00Z", validUntil: "2026-12-31T00:00:00Z", status: "ACTIVE" };
+  const grantSet = [
       { ...win, grantId: "g_e", decisionId: "d_e", actorId: "eng", roles: ["ENGIN"], allowedTransitions: ["WorkPackage:DRAFT->PLANNED", "WorkPackage:AUTHORIZED->READY", "WorkPackage:READY->RUNNING"] },
       { ...win, grantId: "g_r", decisionId: "d_r", actorId: "rev", roles: ["REV"], allowedTransitions: ["WorkPackage:PLANNED->REVIEWED"] },
       { ...win, grantId: "g_g", decisionId: "d_g", actorId: "gov", roles: ["GOV"], allowedTransitions: ["WorkPackage:REVIEWED->AUTHORIZED"] }
-    ],
+  ];
+  const wp = new WorkPackageContractService({
+    grants: grantSet,
+    authoritySource: () => grantSet,
     now: () => new Date("2026-07-18T10:00:00Z")
   });
   wp.createWorkPackage({
