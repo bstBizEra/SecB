@@ -80,3 +80,22 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 - 2026-07-20: PR #17 MERGED — MOD-KNOW S1 ratified on main.
 - 2026-07-20: MOD-SKILL S1 REV: APPROVE_FOR_OPERATOR_MERGE @ eb2dd4b; folded onto main 4fef2f1; staged as PR #18.
 - 2026-07-20: PR #18 MERGED — MOD-SKILL S1 ratified on main.
+
+## Status snapshot — 2026-07-20 night (append-only refresh of the queue table)
+
+| Module | Status |
+|--------|--------|
+| MOD-INTEG (reconciliation) | DONE — unified base merged (PR #5) |
+| MOD-MCP | RATIFIED on main (+ 008-010 hardening; deployment activation switch pending) |
+| MOD-GOV | RATIFIED (K-12 issuance + K-13/14/15 wiring tracked) |
+| MOD-WORK | RATIFIED (WP-index adoption R3 tracked) |
+| MOD-CONTEXT | RATIFIED (OP-1..4 schema decisions tracked) |
+| MOD-EVID | S1 RATIFIED; S2 ladder R4 = operator-gated CRITICAL PATH for knowledge lane; S3 R3 |
+| MOD-MEM | S1 RATIFIED; S2 contract R3, S3 provider R3 |
+| MOD-KNOW | S1 RATIFIED; S2 sidecar IN FLIGHT; S3 behind S2 |
+| MOD-SKILL | S1 RATIFIED; S2 promotion R3+, S3 revocation/IMM-SKILL-V1 R3 |
+| MOD-REG | Triple-approved @ 09d686c; Codex module closure pending |
+| MOD-RUNTIME | Assessment started (bst/mod-runtime-assessment, external lane) |
+| MOD-WSPACE / MOD-LIVE / MOD-OPS / MOD-UI / MOD-A2A / MOD-INTEG-service | QUEUED (Codex-lead or unstarted) |
+
+Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch); EVID-S2 R4; SKILL S2/S3; MEM S2/S3; OP-1..4; WP-index adoption; ADR-0008; K-12 design; P0-21 activation.
