@@ -285,6 +285,7 @@
     "docs/03-project-control/candidates/om-mcp-wave-governance-decision-001.md",
     "docs/03-project-control/candidates/module-completion-tracker-001.md",
     "src/services/memory-gateway-service.mjs",
-    "tests/memory-gateway-service.test.mjs"
+    "tests/memory-gateway-service.test.mjs",
+    "docs/03-project-control/candidates/mod-mem-s1-rev-001.md"
   ]
 }
