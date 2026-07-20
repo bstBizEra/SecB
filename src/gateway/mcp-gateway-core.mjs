@@ -519,6 +519,25 @@ export class McpGatewayCore {
   }
 
   async invoke(requestContext, params = {}) {
+    let preflightEnvelope;
+    let preflightError = false;
+    try {
+      const evidenceRequired = safeRead(requestContext, "evidence_required");
+      if (!evidenceRequired.ok) throw new Error("invalid request context");
+      const contextSource = requestContext !== null
+        && typeof requestContext === "object"
+        && !Array.isArray(requestContext)
+        && evidenceRequired.value === undefined
+        ? Object.fromEntries(Object.entries(requestContext).filter(([key]) => key !== "evidence_required"))
+        : requestContext ?? {};
+      preflightEnvelope = cloneJson({ request_context: contextSource, params: params ?? {} });
+      if (byteLength(preflightEnvelope) > this.#limits.max_request_bytes) throw new Error("request too large");
+    } catch {
+      preflightError = true;
+    }
+    if (preflightError && this.#capacityInUse >= this.#limits.max_concurrency) {
+      return deny("DENY_REQUEST_INVALID");
+    }
     if (this.#capacityInUse >= this.#limits.max_concurrency) {
       return this.#denyConcurrencyAudited(requestContext);
     }

@@ -802,6 +802,27 @@ test("a timed-out clock retains capacity until actual settlement, then releases 
   assert.equal(clockCalls, 2, "actual settlement releases capacity");
 });
 
+test("saturated overflow rejects oversized canonical requests before evidence logging", async () => {
+  let releaseClock;
+  const blocked = new Promise((resolve) => { releaseClock = resolve; });
+  let loggerCalls = 0;
+  const core = gateway({
+    now: () => blocked,
+    invocationLog: () => { loggerCalls += 1; },
+    limits: { max_request_bytes: 512, max_response_bytes: 4_096, max_concurrency: 1 },
+    timeouts: { clock_ms: 1_000, policy_ms: 50, audit_ms: 50, adapter_ms: 50, revocation_ms: 50, result_validator_ms: 50 },
+  });
+  const compact = { agent_id: "a", harness_id: "h", project_id: "p", work_package_id: "w", workspace_lease_id: "l", session_id: "s", authorization_id: "z", capability_id: "fixture.read", purpose: "p", evidence_required: true };
+  const first = core.invoke(compact);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const oversized = await core.invoke({ ...context(), purpose: "x".repeat(1_000_000) }, { payload: "x".repeat(1_000_000) });
+  assert.equal(oversized.deny_code, "DENY_REQUEST_INVALID");
+  assert.equal(loggerCalls, 0);
+  assert.equal((await core.invoke({ ...compact, session_id: "t" })).deny_code, "DENY_CONCURRENCY_LIMIT");
+  releaseClock(new Date("2026-07-19T10:00:00.000Z"));
+  assert.equal((await first).ok, true);
+});
+
 // The bounded-evidence lane remains live while actual execution capacity is
 // exhausted: busy-flag backpressure answers overflow calls without a queue,
 // while the active reservation remains charged until its operation settles.
