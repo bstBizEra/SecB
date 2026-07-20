@@ -1,0 +1,46 @@
+# P0-21 MCP Server Immune Review Record
+# Reviewed target: bst/integration-rehearsal-3 @ b3eda2d (merge candidate)
+# Reviewer: claude-immune (advisory only)
+
+review:
+  verdict: "APPROVE_FOR_MERGE"
+  blocking_findings: []
+  test_result: "248 tests, 243 pass, 0 fail, 5 skipped (node --test); see git-guard finding re: npm run validate"
+  lineage_verified: "6152897 ancestor; PCS+tests present, *.env present; shared surfaces untouched (only new src/mcp/ + additive index/MANIFEST)"
+  probes_confirmed:
+    - "(a) Authentication honesty: SARCHI-AA-01 stated correctly; unresolved/quarantined caller denied BEFORE tool lookup and dispatch; unknown caller-max -> PUBLIC"
+    - "(b) Tool authority boundary: all nine handlers query-only; grep for mutation verbs (transition/append/issue/offer/compact/revoke/consume/register/create/submit) returns nothing; server adds only denials"
+    - "(c) Instruction-source boundary: frozen static descriptions; data_untrusted marker; ledger content only inside JSON string values; no imperative server text"
+    - "(d) Classification floor: min(server, caller) with unknown->PUBLIC; tool-error path emits error.code NOT error.message (P0-17 LEDGER_CORRUPT leak NOT reachable via MCP); registry_resolve identity-minimized"
+    - "(e) Audit fail-closed: every tools/call path (6 denies + ALLOW) audits BEFORE serve; DENY_AUDIT_UNAVAILABLE withholds; dispatch side-effect-free so withheld = no trace; audit entry stores no payload"
+    - "(f) Deny-by-default routing; -32600/-32700 malformed handling; protocol pin -32602; stdio-only no network; deployment entry refuses bare start"
+    - "(g) Deny-only, additive, shared surfaces untouched, lineage intact"
+
+git_local_only_finding:
+  severity: "operator-decision (environmental/config, NOT a P0-21 delta defect)"
+  detail: >
+    tools/validate-foundation.mjs asserts git.local-only ('no remotes
+    configured'). The repository now has an 'origin' remote
+    (github.com/bstBizEra/SecB.git), so `npm run validate` and therefore
+    `npm test` FAIL on that assertion on EVERY branch, independent of any
+    delta. `node --test tests/*.test.mjs` passes 243/0. The remote is not
+    in the P0-21 diff (validate-foundation is untouched); it was
+    configured on the shared repo (worktrees share remotes).
+  requires_operator_decision:
+    - "If the remote is intentional (push to GitHub): the git.local-only guard is now stale and needs a governance-approved update"
+    - "If the remote is unintended: remove it to restore local-only"
+    - "Not changed by this session: removing a remote or weakening a governance guard are both operator/governance acts, not agent-clearable"
+
+non_blocking_v_items:
+  - "IMM-MCP-V1: per-tool ajv-compiled param schemas (currently explicit required+non-blank+id-charset checks)"
+  - "IMM-MCP-V2: registry_resolve reflect resolved lifecycle rather than hardcode 'ACTIVE'; consider ceiling-gating cross-instance max_data_classification exposure"
+  - "IMM-MCP-V3: transport -32603 last-resort catch emit a generic message (consistency with the code-only leak hardening)"
+  - "IMM-MCP-V4: V-014 credential-bounded MCP invocation - joins at a mutation phase (bounded credentials); alpha claims none"
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

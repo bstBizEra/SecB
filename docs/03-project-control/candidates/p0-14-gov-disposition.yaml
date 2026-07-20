@@ -1,0 +1,38 @@
+# P0-14 Temporal Ledgers - Disposition and Delivery Record
+# Authority: operator instruction "proceed the next steps on your call"
+#   (2026-07-19) - discretion over WHICH lane-assigned backlog item to
+#   execute next, exercised in favor of P0-14. NO gate waivers were
+#   exercised: the P0-10 R2 gate (P0-09 merge) remains intact and unwaived.
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+disposition_record:
+  work_package: "P0-14 decision/knowledge/outcome ledgers"
+  backlog_ref: "docs/09-delivery/backlog-p0.md P0-14 (depends P0-13, delivered)"
+  basis: >
+    Wave-001 recorded P0-14 as delivered; the 2026-07-18 stub audit showed
+    only Event/Evidence ledgers existed. This delivery completes the item
+    per the original lane assignment. Selected because it is the only
+    remaining substantive backlog item requiring no operator gate.
+
+delivery:
+  contracts:
+    - "contracts/decision-record.schema.json - closed; GOVERNANCE/AUTHORITY/DISPOSITION/REVERSION types; temporal window; REVERSION must name reverts"
+    - "contracts/knowledge-claim.schema.json - closed; truth_status enum aligned to BST-SA truth vocabulary; evidence_refs required; temporal window + retention_policy"
+    - "contracts/outcome-receipt.schema.json - closed; VALIDATED/INVALIDATED; decision_ref required; reversion_required consistency enforced"
+  ledgers: "src/ledger/temporal-ledgers.mjs - DecisionLedger/KnowledgeLedger/OutcomeLedger extend hash-chained DurableLedger; injected evidence/decision lookups (option-C composition); deny-on-use temporal resolution (GOV-P009-03 parity); learning boundary = claims only from VERIFIED/ACCEPTED evidence"
+  conformance: "V-012, V-017, V-018 stubs replaced with executable tests; V-013 remains blocked on the skill resolver"
+  validator: "contract-validator schemaPaths additively extended (decisionRecord, knowledgeClaim, outcomeReceipt)"
+
+invariants:
+  - "Temporal resolution is fail-closed: unknown, out-of-window, reverted, or invalid-instant resolves to typed NONE; no pruning writer, no timer mutation"
+  - "Knowledge learning boundary: every evidence_ref must resolve via the injected lookup with verification_status VERIFIED or ACCEPTED; raw/captured/rejected evidence denies"
+  - "Reversion consistency: INVALIDATED outcomes must carry reversion_required=true (and vice versa); REVERSION decisions must name their target; a reverted decision never resolves effective"
+  - "All appends inherit DurableLedger hash-chain integrity, OCC expectedSequence, entry-id uniqueness, and idempotent replay with conflict denial"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "claude-immune"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

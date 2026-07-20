@@ -1,0 +1,90 @@
+# P0-11 R1 HandoffService - Delivery Record
+# Authority: explicit operator waiver "waive the P0-11 R1 gate" (2026-07-19),
+#   satisfying the recorded R1 merge-gate. Disposition GOV-P011-01..08 adopted
+#   (p0-11-gov-disposition.yaml).
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+delivery:
+  work_package: "P0-11 R1 (HandoffService, receiptResolver absent)"
+  gate_status: "R1 merge-gate WAIVED by operator; R2 flip (receipts mandatory) remains gated on P0-10 R2 - NOT waived"
+  files:
+    - "src/services/non-escalation-comparator.mjs - six-dimension comparator (risk/data-class ordered lattices, '..'-free path containment, glob-prohibited exact subsets, transition subset); incomparable-denies; pure and unit-tested"
+    - "src/services/handoff-service.mjs - authoritative HandoffService composing over injected WorkPackageContractService (resolveEffective + getDecisionLedger, live at offer AND accept) and a nullable receiptResolver"
+    - "tests/handoff-service.test.mjs (15 tests); V-015 conformance activated in tests/conformance-stubs.test.mjs"
+
+invariants_delivered:
+  - "AUTHORITY NEVER TRANSFERS: the envelope confers no grant; the target's capability remains bounded by its own grant (enforced downstream by the WP service) INTERSECT effective contract INTERSECT ceiling; the handoff grants nothing"
+  - "Two-phase offer/accept; string-only idempotency with canonical-fingerprint replay and conflict denial; deep clone/freeze both directions; ledger-derived status"
+  - "Non-escalation comparator: requested ceiling <= bound on every dimension; contract-sourced dimensions (risk, paths) authoritative; contract-silent dimensions (data-class, tools, transitions) bounded by the parent chain when present else source-declared (RISK-P011-01, surfaced as contractSilentDimensions); narrow-only (DENY_ESCALATION), incomparable denies (DENY_ESCALATION_UNCOMPARABLE)"
+  - "Live resolveEffective at offer and accept; version equality; triple baseline equality (asserted == offer-recorded == effective contract)"
+  - "SoD at acceptance for REV/QA/GOV via getDecisionLedger-derived executor/reviewer/qa sets; source actor excluded from independence-bearing roles"
+  - "Reserved delimiters ('|','@') denied on every id field (shared constant); server-recomputed seal (DENY_FINGERPRINT_MISMATCH); single acceptance; deny-on-use expiry = min(offer TTL, valid_until); revoke/decline terminal; chain parent must be ACCEPTED + same WP, depth cap 4, ceiling intersect parent"
+  - "GOV-P011-07 R1: context_receipt_ref present with no resolver -> DENY_RECEIPT_UNVERIFIABLE (the smuggling channel P0-10 closes)"
+
+r1_honesty_notes:
+  - "Target grant verification for destination_role is NOT performed in the handoff service at R1: acceptance confers no authority, so the target's real actions are gated by the WP service's own grant checks. authorityRef is recorded as an asserted claim. This is safe by the authority-never-transfers design test; full grant-binding is a mutation-phase concern"
+  - "Session identity is caller-asserted (RISK-P011-03); source/accept sessionId recorded for audit; self-handoff gate is actor-level"
+  - "V-014 (credential-bounded MCP) and the R2 receipt flip remain blocked on P0-10 R2"
+
+test_result: "205 tests, 183 pass, 0 fail, 22 skipped"
+next: "Pinned Immune review under the freeze rule"
+
+# --- Appended 2026-07-19: Immune REQUEST_CHANGES remediation (extend-only) ---
+immune_review_round_1:
+  verdict: "REQUEST_CHANGES"
+  findings_and_disposition:
+    - id: "IMM-P011R1-01 (blocking)"
+      finding: "ProjectContractService + its test appear deleted at the reconciliation-branch tip vs main"
+      root_cause: >
+        Lineage artifact, NOT a deletion by the P0-11 commit. The
+        reconciliation branch descends from merge-base 76a7c05, which
+        predates BOTH main's P0-08 integration (d142322/6152897) and
+        main's .gitignore hardening (90a9dd0). ProjectContractService is
+        PRESENT on main and PRESENT on the actual merge candidate
+        bst/integration-rehearsal-3 (main + folded work). The
+        reconciliation branch is a STAGING lineage; it must never be
+        merged directly to main. Process error acknowledged: the review
+        was pinned to the staging branch instead of rehearsal-3.
+      resolution: "Re-review pinned to bst/integration-rehearsal-3 (the merge candidate that preserves P0-08)"
+    - id: "IMM-P011R1-02 (blocking)"
+      finding: ".gitignore lacks '*.env' vs main; secb.env could be staged"
+      root_cause: "Same lineage divergence (main added '*.env' at 90a9dd0, after the merge-base). Verified: secb.env is NOT present in this worktree and NEVER committed on any branch; no secret was exposed."
+      resolution: "rehearsal-3 carries main's hardened .gitignore; confirmed on the merge candidate"
+    - id: "IMM-P011R1-03 (blocking)"
+      finding: "Raw NUL bytes in the record-map key made handoff-service.mjs a binary/undiffable file, and NUL is an ungated composite-key delimiter"
+      root_cause: "Real defect in the P0-11 commit"
+      resolution: "FIXED: record key is now delimiter-free JSON.stringify([projectId, handoffId]) (IMM-P009-01 structural fix); file verified ASCII text, git-diffable; collision-proof by any character; 15/15 handoff tests green"
+  note_fixes:
+    - "Seal semantics clarified in-code: tamper-evidence for the stored/forwarded envelope, not offer-time source authentication (reviewer note 3)"
+    - "Comparator is FIVE dimensions (risk, data-class, paths, tools, transitions); 'six' in the packet counted destination_role, which is a single declared field not a comparator dimension - naming corrected here, nothing dropped (reviewer note 1)"
+  disclosure_correction: "This commit's file set is: non-escalation-comparator.mjs, handoff-service.mjs, handoff-service.test.mjs, V-015 activation, index/MANIFEST wiring, this record. The reconciliation-branch lineage gap (findings 01/02) is a branch-selection issue, not files this feature commit adds/removes."
+
+immune_review_round_2_final:
+  reviewed_target: "bst/integration-rehearsal-3 @ db85cde (the correct merge candidate; 6152897 confirmed ancestor)"
+  verdict: "APPROVE_FOR_MERGE"
+  test_result: "232 tests, 210 pass, 0 fail, 22 skipped"
+  resolutions:
+    - "IMM-P011R1-01 WITHDRAWN (lineage artifact; ProjectContractService + test present on the merge candidate; extend-only intact)"
+    - "IMM-P011R1-02 WITHDRAWN (lineage artifact; '*.env' present; secb.env ignored, absent, never tracked - no secret exposed)"
+    - "IMM-P011R1-03 FIXED (JSON-array key proven collision-proof against the old NUL and quote-injection inputs; file ASCII text, git-diffable)"
+  feature_integrity: "Confirmed unchanged by the clean rewrite: live-both-phases composition, fail-closed comparator, ledger-derived SoD, chain scoping, reserved-delimiter gate, seal honesty note, authority-never-transfers"
+  standing_guardrail_adopted: >
+    Reviews MUST be pinned to the actual merge candidate
+    (bst/integration-rehearsal-3), carrying tip hash + branch name; Immune
+    confirms merge-base lineage whenever a deletion or .gitignore/secret
+    surface change appears (that check distinguished artifact from
+    regression here). The pre-P0-08 reconciliation branch is STAGING-ONLY
+    and must never merge to main directly.
+  open_v_items_none_gating:
+    - "RISK-P011-01 contract-silent dimensions -> contract-carried (P0-10 R2 / schema-enrichment track)"
+    - "R2 receipt flip + V-014 gated on P0-10 R2 (not waived)"
+    - "Target destination_role grant verification deferred to downstream WP gate (authority-never-transfers); asserted claims recorded"
+    - "Shared SoD-derivation helper to prevent HandoffService/WP drift (minor)"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "claude-immune"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

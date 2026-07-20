@@ -1,0 +1,179 @@
+# P0-14 Immune Review Record
+# Branch: worktree-p0-09-reconciliation
+# Reviewer: claude-immune (BST-SA Immune lane, advisory only)
+
+review_round_1:
+  instructed_range: "5cbcce0..7d1c8f6"
+  also_verified: "a61861c (on-branch fix landed mid-review)"
+  verdict: "REQUEST_CHANGES at 7d1c8f6; APPROVE_WITH_NOTES at a61861c"
+  test_result: "180 tests - 156 pass, 0 fail, 24 skipped at a61861c; validator exit 0"
+  blocking_findings:
+    - id: "IMM-P014-01"
+      title: "Reverts-suppression gap (covert reversion)"
+      detail: >
+        At 7d1c8f6 a non-REVERSION decision carrying reverts appended
+        successfully and suppressed its target (probe-confirmed),
+        evading policy/audit watching for REVERSION-typed decisions.
+      status: "CLOSED at a61861c (motor pre-empted during review; reviewer verified: append-time denial, type-bound resolver, regression test)"
+  probes_confirmed:
+    - "Lookup trust boundary adequate: constructor-injected, appending caller cannot influence, refs re-resolved server-side"
+    - "No DurableLedger bypass: all appends funnel through lock/chain/OCC/idempotency guards"
+    - "Validator schema-set change is strictly stricter (exact 10-set equality + identity fields)"
+    - "Invalid fixtures exercise schema denial, not lookup denial"
+  notes_remediated_in_followup_commit:
+    - "IMM-P014-N1: evidence lookup identity binding (evidence_id must equal the requested ref) - DENY_EVIDENCE_CHAIN on mismatch"
+    - "IMM-P014-N2: decision lookup identity binding in OutcomeLedger"
+    - "IMM-P014-N3: no pre-emptive reversion - REVERSION target must already exist (DENY_UNKNOWN_DECISION)"
+    - "IMM-P014-N4: documented consumer obligation (caller-supplied resolution instants; enforcing consumers must supply server time) and reversion-of-reversion non-reinstatement semantics"
+  notes_open:
+    - "Server receipt time alongside caller-claimed timestamps (chain sequence is authoritative ordering today) - V-item"
+
+process_integrity:
+  finding: >
+    The review target moved twice during the round (fix commit a61861c
+    and skill-resolver commit d343046 landed on-branch mid-review, with
+    lane WIP present in the same worktree). Reviewer verdicts are pinned
+    to commit hashes, not the worktree; nothing malicious observed, but
+    moving targets undermine review integrity.
+  corrective_rule_adopted: >
+    Motor lane rule, effective immediately: once a review is issued, its
+    target branch is FROZEN until the verdict returns. Fixes discovered
+    mid-review are staged locally and either (a) submitted as a re-issued
+    pinned scope, or (b) committed only after the verdict. Reviews are
+    issued with an explicit pinned tip hash. Recorded also as a memory
+    rule for future sessions.
+  uncovered_commits: "d343046 (skill resolver) + subsequent - pinned review round 2 issued for them"
+
+review_round_2:
+  pinned_range: "a61861c..672ba31 (freeze honored; tip stable, worktree clean)"
+  verdict: "REQUEST_CHANGES"
+  test_result: "180 tests - 157 pass, 0 fail, 23 skipped; validator exit 0"
+  blocking_findings:
+    - id: "IMM-P014-R2-01"
+      title: "Skill publication gate was self-attested"
+      detail: >
+        A fabricated HUMAN_PROMOTION entry in caller-supplied
+        approval_history granted full distribution (probe-confirmed):
+        registration checked only that such an entry existed, with no
+        binding to any authority source. Skill promotion is a BST-SA
+        hard governance boundary and forgery yielded the terminal
+        privileged outcome with no downstream gate.
+      status: >
+        REMEDIATED in follow-up commit: SkillResolver now REQUIRES a
+        constructor-injected decisionLookup bound to the governed
+        DecisionLedger; every HUMAN_PROMOTION entry must resolve
+        identity-bound to a GOVERNANCE-typed ledger decision, else
+        DENY_UNAPPROVED_PUBLICATION; forged-approval negative test
+        added; V-013 conformance claim corrected to 'ledger-resolved
+        promotion', not 'self-declared promotion'.
+  notes_remediated_in_followup_commit:
+    - "'@' charset denial in skill_id and version (IMM-P009-01 delimiter class; DENY_ID_CHARSET)"
+    - "REVOCATION approval entries now poison resolution (DENY_REVOKED) even while status reads PUBLISHED"
+  notes_open:
+    - "Governed revocation/lifecycle transition API (or documented registry-rebuild) - V-item; in-memory hub has no kill switch beyond the REVOCATION-entry check"
+    - "Server receipt time alongside caller-claimed ledger timestamps (carried from round 1)"
+  clean_confirmations:
+    - "No latest-version fallback; exact-version resolution only"
+    - "Registered manifests immutable (frozen detached clones); duplicate version denied"
+    - "Data-class ordering correct; unknown classes denied before comparison"
+    - "Round-1 note remediation verified faithful (N1-N4)"
+    - "Review record round-1 representation confirmed accurate; freeze rule honored"
+
+review_round_3_final:
+  pinned_range: "672ba31..8bece18 (freeze honored)"
+  consolidated_range: "a61861c..8bece18"
+  verdict: "APPROVE_WITH_NOTES - closes the P0-14 + skill delivery review cycle"
+  closure_verified:
+    - "IMM-P014-R2-01 closed: forgery probe denies; duck-type divergence not exploitable (id precedence + equality); GOVERNANCE type check effective; forged-approval regression test wired against a real DecisionLedger"
+    - "'@' charset and REVOCATION-poisoning fixes verified; V-013 claim correction honest; round-2 record representation accurate"
+  disclosed_gap_classification: >
+    Reverted/expired promotion decisions at registration: V-item
+    (IMM-SKILL-V1), not blocking - forgeability was the authority
+    boundary and is closed; temporal freshness is reachable only via the
+    trusted composition. Interim mitigation applied in follow-up commit:
+    lookup contract documented as resolveEffective-based at a trusted
+    instant, and V-013 wiring switched to demonstrate it. Complete fix
+    (resolution-time re-validation/unpublication) folded into the
+    revocation lifecycle V-item.
+  open_v_items:
+    - "IMM-SKILL-V1: promotion temporal validity - resolution-time re-validation with revocation lifecycle"
+    - "Governed revocation/lifecycle transition API for the skill registry"
+    - "Server receipt time alongside caller-claimed temporal-ledger timestamps"
+
+review_v002_rounds:
+  round_1:
+    pinned_range: "8bece18..807ae2c (freeze honored)"
+    verdict: "REQUEST_CHANGES"
+    blocking: "Lexical containment bypassable by '..' segments (SecB/../SecB-evil passed while the direct lookalike was denied) - the advertised invariant was falsifiable"
+    also_confirmed: "IMM-SKILL-V1 mitigation faithful; standalone mode unchanged; resolver-liveness classified V-item (same class as skills)"
+  round_2_final:
+    pinned_range: "807ae2c..435b2b3 (freeze honored)"
+    consolidated_range: "8bece18..435b2b3"
+    verdict: "APPROVE_FOR_MERGE"
+    closure: >
+      Both traversal probes deny; backslash and leading-'..' forms deny;
+      blank-repo wildcard closed; trailing-slash repos contain children.
+      Residual-game probes all safe: '...' and '.' are literal/no-op (no
+      ascent), drive-relative and UNC lookalikes fail closed,
+      separator/case variants fail closed per the documented canonical
+      form.
+    open_v_items_recorded:
+      - "Windows trailing-whitespace/dot segment normalization (e.g. '.. ') - documented contract obligation; cheap segment-trim strengthening deferred to keep the approved cut byte-exact; forbid trailing whitespace/dots in canonical form"
+      - "Repository entries should be absolute paths (canonical-form doc) - defensive only, trusted source"
+      - "Resolver liveness at transition time - folded into the revocation-lifecycle V-item"
+
+review_delimiter_round:
+  pinned_range: "435b2b3..33cc452 (freeze honored)"
+  verdict: "APPROVE_FOR_MERGE"
+  pre_fix_risk_sized: >
+    Latent lexical ambiguity, not a reachable exploit: the service storage
+    key ('|', already gated) kept records distinct and transitionIds
+    derive from full request fingerprints; the engine objectId is
+    construct-only (nothing in-repo re-parses it). Real hazard was for
+    future objectId-parsing consumers (correlators, audit tooling). The
+    class is now uniformly closed across every caller-controlled
+    composite key.
+  sweep_results:
+    - "work-package-service: both gates covered via RESERVED_ID_DELIMITERS"
+    - "skill-resolver: '@' denied at registration; covered"
+    - "temporal-ledgers: no composite joins; exact-equality lookups; structurally immune"
+    - "authority-engine SoD scope key joins grant fields with '|' unvalidated - FIFTH latent instance, but grants are operator-supplied trusted construction data and the shared engine is out of this commit's scope; folded into the GOV-P011-08 system-wide ratification track (grant-field validation when the constant centralizes)"
+  notes:
+    - "Skill resolver should consume the shared list (deny '|' too) at ratification - cosmetic uniformity"
+    - "ee52803/eb203d0 confirmed docs-only"
+
+review_disposition_execution_cycle:
+  round_1:
+    pinned_range: "f2e1b35..f894519 (freeze honored)"
+    verdict: "REQUEST_CHANGES"
+    blocking: >
+      P0-17 failure-path content leak: V8 JSON.parse error messages embed
+      a fragment of the offending ledger bytes; rendering error.message
+      in a LEDGER_CORRUPT failure report bypassed the classification
+      floor in a distributable artifact (probe surfaced RESTRICTED-line
+      content in an INTERNAL-ceiling report).
+  round_2_final:
+    pinned_range: "f894519..3c0130f (freeze honored)"
+    consolidated_range: "f2e1b35..3c0130f"
+    verdict: "APPROVE_FOR_MERGE"
+    closure: >
+      Failure reports render typed code + fixed sentence only (message
+      rendering removed entirely - robust to future error classes);
+      three-form exfiltration probe clean; sensitive-token negative test
+      guards regression; .lock-sibling out-path protected. GOV-P011-08
+      ratification clean (fifth latent instance closed, ACK-disclosed);
+      dispositions transcribe all 15 recommendations faithfully with
+      R-gates preserved.
+  carried_notes:
+    - "Event-envelope classification schema enum - extend-only V-item"
+    - "V-011 storage plane remains skipped (display plane only, honestly labeled)"
+    - "P0-11 R1 gated on P0-09 merge; frozen pre-R1 artifacts await it"
+    - "Future SecB MCP Server code surface will need its own Immune cycle: authentication, tool authority boundaries, instruction-source boundary"
+
+self_certification:
+  agent_id: "claude-immune"
+  peer_agent_id: "claude-code-motor"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
