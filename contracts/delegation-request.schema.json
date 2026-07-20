@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/delegation-request.schema.json",
+  "title": "SecB Delegation Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["delegation_id", "version", "project_id", "work_package_id", "session_id", "source_actor_id", "destination_role", "objective", "inputs", "expected_output", "acceptance_criteria", "ceiling", "skills", "budget", "due_condition", "escalation_route", "evidence_obligations", "created_at", "content_hash"],
+  "properties": {
+    "delegation_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "source_actor_id": {"type": "string", "minLength": 1},
+    "destination_role": {"type": "string", "minLength": 1},
+    "objective": {"type": "string", "minLength": 1},
+    "inputs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "expected_output": {"type": "string", "minLength": 1},
+    "acceptance_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "ceiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["riskClass", "dataClassification", "paths", "tools", "transitions"],
+      "properties": {
+        "riskClass": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
+        "dataClassification": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]},
+        "paths": {"type": "array", "items": {"type": "string"}},
+        "tools": {"type": "array", "items": {"type": "string"}},
+        "transitions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "skills": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount", "unit"],
+      "properties": {
+        "amount": {"type": "number", "minimum": 0},
+        "unit": {"type": "string", "minLength": 1}
+      }
+    },
+    "due_condition": {"type": "string", "minLength": 1},
+    "escalation_route": {"type": "string", "minLength": 1},
+    "evidence_obligations": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "created_at": {"type": "string", "format": "date-time"},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "delegation_id": "del_p0_test_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_test_001",
+  "session_id": "ses_local_test_001",
+  "source_actor_id": "claude-motor-moda2a-s1",
+  "destination_role": "ENGIN",
+  "objective": "Implement the bounded MOD-A2A S1 delegation-request contract and ledger",
+  "inputs": ["opaque://docs/07-capabilities/mcp-a2a-governance.md"],
+  "expected_output": "A merged, tested DelegationLedger primitive and delegation-request schema",
+  "acceptance_criteria": ["npm test green", "validate-foundation exit 0", "no live wiring"],
+  "ceiling": {
+    "riskClass": "R2",
+    "dataClassification": "INTERNAL",
+    "paths": ["src/ledger", "contracts", "tests"],
+    "tools": ["fs-read", "fs-write"],
+    "transitions": ["DRAFT_TO_CANDIDATE"]
+  },
+  "skills": ["nodejs", "json-schema"],
+  "budget": {"amount": 4, "unit": "hours"},
+  "due_condition": "before the next module-completion tracker review",
+  "escalation_route": "GOV",
+  "evidence_obligations": ["npm-test-output", "producer-verification-record"],
+  "created_at": "2026-07-20T18:00:00+07:00",
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

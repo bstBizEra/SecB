@@ -317,6 +317,12 @@
     "tests/fixtures/valid/skill-candidate.json",
     "tests/fixtures/invalid/skill-candidate-bad-status.json",
     "docs/03-project-control/candidates/mod-skill-s1-rev-001.md",
-    "docs/03-project-control/candidates/mod-know-s1-rev-001.md"
+    "docs/03-project-control/candidates/mod-know-s1-rev-001.md",
+    "contracts/delegation-request.schema.json",
+    "src/ledger/delegation-ledger.mjs",
+    "tests/delegation-ledger.test.mjs",
+    "tests/fixtures/valid/delegation-request.json",
+    "tests/fixtures/invalid/delegation-request-missing-budget.json",
+    "docs/03-project-control/candidates/mod-a2a-s1-delegation-ledger-producer-verification-001.md"
   ]
 }
