@@ -172,6 +172,7 @@
     "docs/templates/schedule.yaml",
     "docs/templates/session.yaml",
     "docs/templates/skill-candidate.yaml",
-    "docs/source/om-v0.1/import-map.yaml"
+    "docs/source/om-v0.1/import-map.yaml",
+    "docs/03-project-control/candidates/module-completion-tracker-001.md"
   ]
 }
