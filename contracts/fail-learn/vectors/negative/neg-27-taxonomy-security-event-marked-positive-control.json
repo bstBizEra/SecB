@@ -1,0 +1,133 @@
+{
+  "vector_id": "neg-27-taxonomy-security-event-marked-positive-control",
+  "description": "SECURITY_EVENT entry edited to claim is_positive_control=true -- the per-entry if/then forbids this combination.",
+  "scenario_refs": [],
+  "matrix_row_refs": [
+    "ROW-1"
+  ],
+  "expected": {
+    "ajv": "FAIL",
+    "semantic": "N/A"
+  },
+  "documents": {
+    "taxonomy": {
+      "schema_version": "1.0",
+      "taxonomy_version": "1.0.0",
+      "closed": true,
+      "entries": [
+        {
+          "failure_class": "POLICY_DENIAL_EXPECTED",
+          "category": "F-AUTH",
+          "default_severity": "low",
+          "is_positive_control": true,
+          "requires_security_event_routing": false,
+          "description": "Policy denied an operation exactly as the policy intends; the control worked."
+        },
+        {
+          "failure_class": "NEGATIVE_TEST_PASS",
+          "category": "F-QUAL",
+          "default_severity": "low",
+          "is_positive_control": true,
+          "requires_security_event_routing": false,
+          "description": "A negative test asserted a denial/failure and observed it; the assertion passed."
+        },
+        {
+          "failure_class": "POLICY_DENIAL_FALSE_POSITIVE",
+          "category": "F-AUTH",
+          "default_severity": "medium",
+          "is_positive_control": true,
+          "requires_security_event_routing": false,
+          "description": "Policy denied a legitimate request it should have allowed; a policy-improvement candidate, not a malfunction of the deny-by-default control."
+        },
+        {
+          "failure_class": "AUTHORITY_GAP",
+          "category": "F-AUTH",
+          "default_severity": "medium",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "Missing approval, role, lease, or delegation prevented the operation."
+        },
+        {
+          "failure_class": "PRECONDITION_MISSING",
+          "category": "F-DEP",
+          "default_severity": "low",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "Absent file, config, dependency, or state prevented the operation."
+        },
+        {
+          "failure_class": "IMPLEMENTATION_DEFECT",
+          "category": "F-TECH",
+          "default_severity": "high",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "Incorrect code or workflow behavior caused the failure."
+        },
+        {
+          "failure_class": "ENVIRONMENTAL_FAILURE",
+          "category": "F-OPS",
+          "default_severity": "medium",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "An operational condition outside the code (infra, network, host) caused the failure."
+        },
+        {
+          "failure_class": "TRANSIENT_FAILURE",
+          "category": "F-OPS",
+          "default_severity": "low",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "A non-reproducible, time-bounded operational condition caused the failure."
+        },
+        {
+          "failure_class": "KNOWLEDGE_GAP",
+          "category": "F-KNOW",
+          "default_severity": "medium",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "Missing or stale organizational knowledge caused the failure."
+        },
+        {
+          "failure_class": "CAPABILITY_GAP",
+          "category": "F-SKILL",
+          "default_severity": "medium",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "No repeatable capability existed to perform the task safely."
+        },
+        {
+          "failure_class": "AMBIGUITY_FAILURE",
+          "category": "F-QUAL",
+          "default_severity": "medium",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "Underspecified instructions or contract led to an incorrect outcome."
+        },
+        {
+          "failure_class": "INTEGRATION_DRIFT",
+          "category": "F-DEP",
+          "default_severity": "medium",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "An upstream dependency or interface changed incompatibly."
+        },
+        {
+          "failure_class": "EVALUATION_FAILURE",
+          "category": "F-QUAL",
+          "default_severity": "medium",
+          "is_positive_control": false,
+          "requires_security_event_routing": false,
+          "description": "A gate's evaluation criteria were not met."
+        },
+        {
+          "failure_class": "SECURITY_EVENT",
+          "category": "F-SEC",
+          "default_severity": "critical",
+          "is_positive_control": true,
+          "requires_security_event_routing": true,
+          "description": "Injection, tampering, escalation, or malicious input was observed."
+        }
+      ]
+    }
+  }
+}

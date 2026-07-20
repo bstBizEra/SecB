@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/fail-learn/v1/failure-evidence-envelope.schema.json",
+  "title": "SecB Failure Evidence Envelope (WP1 deliverable 1)",
+  "description": "Formalizes SECB-FAIL-LEARN-001 section 6 as strict JSON Schema. Supersedes-in-design (not yet effective; requires REV+SEC and Human GOV) the informal v0.1 docs/templates/failure-evidence-envelope.yaml. LIMITATIONS the schema layer cannot close, all deferred to semantic-validator.mjs or to WP2+ runtime: (1) recomputing the content-address digest to detect tampering (validateContentAddressIntegrity) -- SCEN-04; (2) proving affected_resources/mutation_committed matches what ACTUALLY happened at runtime rather than what the record claims -- WP2 capture-time concern; (3) literal secret-content scanning of free-text fields -- this schema forbids the SHAPE of secret-carrying fields (additionalProperties:false everywhere, sanitized_message pattern-forbids common secret-shaped substrings, contains_secrets is hard-const-false) but cannot prove a secret was never embedded inside an otherwise-innocuous string; real secret scanning is a WP2 capture-time control (section 8's 'redaction before durable serialization').",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "evidence_id", "occurred_at", "captured_at", "clock_source", "sequence",
+    "scope", "actor", "operation", "decision", "failure", "environment", "outcome", "evidence", "governance"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "evidence_id": {
+      "description": "Content-addressed id: 'fev_' + sha256 hex of the canonical envelope with evidence_id and governance.integrity_signature excluded. See semantic-validator.mjs validateContentAddressIntegrity.",
+      "type": "string",
+      "pattern": "^fev_[0-9a-f]{64}$"
+    },
+    "occurred_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "captured_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "clock_source": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "successor_of": {
+      "description": "When present, this envelope is a linked correction of a prior sealed envelope (section 6: 'Corrections SHALL create a linked successor'). Sealed evidence is never edited in place.",
+      "oneOf": [ { "type": "null" }, { "$ref": "common.schema.json#/$defs/reference" } ]
+    },
+    "scope": { "$ref": "common.schema.json#/$defs/tenant_scope" },
+    "actor": { "$ref": "common.schema.json#/$defs/actor" },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_type", "target_class", "requested_capability", "command_digest", "input_digest"],
+      "properties": {
+        "operation_type": { "enum": ["tool_call", "git_mutation", "build", "test", "deploy", "policy_query"] },
+        "target_class": { "enum": ["repository", "filesystem", "credential", "runtime", "external_service"] },
+        "requested_capability": { "$ref": "common.schema.json#/$defs/identifier" },
+        "command_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" },
+        "input_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "policy_decision_id", "policy_bundle_digest", "matched_rules", "fail_closed_applied"],
+      "properties": {
+        "result": { "$ref": "common.schema.json#/$defs/decision_result" },
+        "policy_decision_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "policy_bundle_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" },
+        "matched_rules": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identifier" } },
+        "fail_closed_applied": { "type": "boolean" }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_class", "error_type", "error_code", "sanitized_message", "stacktrace_reference", "severity"],
+      "properties": {
+        "failure_class": { "$ref": "common.schema.json#/$defs/failure_class" },
+        "error_type": { "$ref": "common.schema.json#/$defs/identifier" },
+        "error_code": { "$ref": "common.schema.json#/$defs/identifier" },
+        "sanitized_message": {
+          "description": "Structural (not semantic) secret guard: forbids common secret-shaped substrings. This is a best-effort schema-layer defense, not a substitute for the WP2 redaction/secret-scan control.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^(?!.*(?:BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|api[_-]?key\\s*[=:]|secret[_-]?key\\s*[=:]|Bearer [A-Za-z0-9._-]{10,}|password\\s*[=:]|Authorization:\\s*Basic)).*$"
+        },
+        "stacktrace_reference": {
+          "description": "Must be an encrypted-object reference, never raw stack text (section 6: 'stacktrace_reference: encrypted-object-reference').",
+          "type": "string",
+          "pattern": "^encref:[A-Za-z0-9_-]+:sha256:[0-9a-f]{64}$"
+        },
+        "severity": { "enum": ["low", "medium", "high", "critical"] }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_commit", "worktree_id", "operating_system", "dependency_lock_digest", "configuration_digest", "tool_versions"],
+      "properties": {
+        "repository_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "worktree_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "operating_system": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "dependency_lock_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" },
+        "configuration_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" },
+        "tool_versions": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 64 }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mutation_committed", "affected_resources", "rollback_required", "containment_status"],
+      "properties": {
+        "mutation_committed": { "type": "boolean" },
+        "affected_resources": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/canonical_path" } },
+        "rollback_required": { "type": "boolean" },
+        "containment_status": { "enum": ["contained", "uncontained", "unknown"] }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["log_refs", "trace_refs", "test_result_refs", "artifact_refs", "screenshot_refs", "attestation_refs"],
+      "properties": {
+        "log_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+        "trace_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+        "test_result_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+        "artifact_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+        "screenshot_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+        "attestation_refs": { "$ref": "common.schema.json#/$defs/reference_list" }
+      },
+      "anyOf": [
+        { "type": "object", "required": ["log_refs"], "properties": { "log_refs": { "type": "array", "minItems": 1 } } },
+        { "type": "object", "required": ["trace_refs"], "properties": { "trace_refs": { "type": "array", "minItems": 1 } } },
+        { "type": "object", "required": ["artifact_refs"], "properties": { "artifact_refs": { "type": "array", "minItems": 1 } } },
+        { "type": "object", "required": ["test_result_refs"], "properties": { "test_result_refs": { "type": "array", "minItems": 1 } } }
+      ]
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["security_classification", "contains_secrets", "redaction_policy", "retention_policy", "admissibility_status", "integrity_signature"],
+      "properties": {
+        "security_classification": { "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"] },
+        "contains_secrets": {
+          "description": "Hard requirement, section 14: secrets SHALL never enter evidence. Always false; there is no allowed path for an admissible envelope to declare true.",
+          "const": false
+        },
+        "redaction_policy": { "$ref": "common.schema.json#/$defs/identifier" },
+        "retention_policy": { "$ref": "common.schema.json#/$defs/identifier" },
+        "admissibility_status": { "enum": ["pending", "admissible", "inadmissible", "superseded"] },
+        "integrity_signature": { "$ref": "common.schema.json#/$defs/signature_envelope" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "description": "SCEN-02 / matrix row 1: a denied action produces evidence WITHOUT performing the action -- denial implies no committed mutation and no affected resources.",
+      "if": { "type": "object", "required": ["decision"], "properties": { "decision": { "type": "object", "required": ["result"], "properties": { "result": { "const": "denied" } } } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "outcome": { "type": "object", "properties": { "mutation_committed": { "const": false }, "affected_resources": { "type": "array", "maxItems": 0 } } },
+          "decision": { "type": "object", "properties": { "fail_closed_applied": { "const": true }, "matched_rules": { "type": "array", "minItems": 1 } } }
+        }
+      }
+    },
+    {
+      "description": "SCEN-01: fail-closed application must be evidenced whenever the result is denied or failed -- an unauthorized-operation record cannot claim fail_closed_applied=false while also reporting the operation as denied/failed.",
+      "if": { "type": "object", "required": ["decision"], "properties": { "decision": { "type": "object", "required": ["result"], "properties": { "result": { "enum": ["denied", "failed"] } } } } },
+      "then": { "type": "object", "properties": { "decision": { "type": "object", "properties": { "fail_closed_applied": { "const": true } } } } }
+    },
+    {
+      "description": "If no mutation was committed there can be no affected resources to report, independent of decision.result (covers cancelled/timed_out/partially_completed cases with mutation_committed=false too).",
+      "if": { "type": "object", "required": ["outcome"], "properties": { "outcome": { "type": "object", "required": ["mutation_committed"], "properties": { "mutation_committed": { "const": false } } } } },
+      "then": { "type": "object", "properties": { "outcome": { "type": "object", "properties": { "affected_resources": { "type": "array", "maxItems": 0 } } } } }
+    }
+  ]
+}

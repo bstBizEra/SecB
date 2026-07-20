@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/fail-learn/v1/skill-candidate.schema.json",
+  "title": "SecB Skill Candidate (WP1 deliverable 5)",
+  "description": "Formalizes SECB-FAIL-LEARN-001 section 10 (Skill formation, S0..S3) as strict JSON Schema. Matrix row 4: positive proof 'Manifest and tests compile'; negative proof 'Undeclared side effect or permission rejects'. WP1 authors the CONTRACT SHAPE across the whole S0..RETIRED lifecycle so lineage/precondition rules are expressible, but WP1 does NOT implement Skill Foundry, evaluation execution, security review, or promotion (WP7/WP8, explicitly prohibited for this dispatch) -- fields like evaluation_evidence_refs, security_review_ref, checker_actor_id are contract slots a later work package populates and enforces at runtime; here they are only schema-required to be present/non-empty at the right maturity_state. LIMITATIONS deferred to semantic-validator.mjs: (1) whether any tests.*.observed_side_effects or permission_class value is genuinely outside capability_manifest.declared_permissions (validateNoUndeclaredSideEffectsOrPermissions, SCEN-10 / matrix row 4); (2) whether knowledge_maturity_at_binding honestly reflects the referenced Knowledge Artifact's real maturity_state, including the deprecated-knowledge case (validateNoDerivationFromDeprecatedKnowledge, SCEN-14); (3) full evidence/experience/knowledge/evidence lineage-chain resolution (validateFullLineageTraceability, SCEN-13); (4) checker_actor_id vs builder_identity.actor_id separation-of-duties (validateSkillProducerCheckerSeparation).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "skill_id", "maturity_state", "knowledge_ref", "knowledge_maturity_at_binding",
+    "capability_manifest", "source", "builder_identity", "owner_actor_id", "checker_actor_id",
+    "provenance", "signature", "evaluation_evidence_refs", "tests", "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "skill_id": { "type": "string", "pattern": "^skill_[0-9a-f]{64}$" },
+    "maturity_state": { "enum": ["S0", "S1", "S2", "S3", "SUSPENDED", "ROLLED_BACK", "RETIRED", "QUARANTINED"] },
+    "knowledge_ref": { "$ref": "common.schema.json#/$defs/reference" },
+    "knowledge_maturity_at_binding": {
+      "description": "Producer's claim about the referenced Knowledge Artifact's maturity_state at the moment this Skill Candidate was minted. Section 10: knowledge becomes a Skill Candidate only from verified (K1) knowledge. Schema forces the claim itself to be K1 (structural); semantic-validator.mjs cross-checks the claim against the actual referenced document to catch a lie (SCEN-09, SCEN-14).",
+      "const": "K1"
+    },
+    "capability_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_version", "skill_name", "purpose", "declared_permissions", "timeout_seconds", "idempotent"],
+      "properties": {
+        "manifest_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "skill_name": { "$ref": "common.schema.json#/$defs/identifier" },
+        "purpose": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "declared_permissions": {
+          "description": "Least-privilege skill manifest (section 8). credentials is always maxItems:0 -- a Skill Candidate may never declare direct credential access at WP1 design stage; broker-mediated credential use is a separate, not-yet-designed contract.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action_classes", "declared_side_effects", "tools", "mcp_servers", "filesystem_paths", "network_hosts", "credentials"],
+          "properties": {
+            "action_classes": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/declarable_action_class" } },
+            "declared_side_effects": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/declarable_side_effect_class" } },
+            "tools": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identifier" } },
+            "mcp_servers": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identifier" } },
+            "filesystem_paths": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/canonical_path" } },
+            "network_hosts": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 253 } },
+            "credentials": { "type": "array", "maxItems": 0 }
+          }
+        },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 1800 },
+        "idempotent": { "type": "boolean" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit_sha", "dependency_lock_digest"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "dependency_lock_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" }
+      }
+    },
+    "builder_identity": { "$ref": "common.schema.json#/$defs/actor" },
+    "owner_actor_id": { "$ref": "common.schema.json#/$defs/identifier" },
+    "checker_actor_id": { "$ref": "common.schema.json#/$defs/identifier" },
+    "provenance": {
+      "description": "Light in-toto/SLSA-styled shape (source-validation doc item 7). Not a real attestation verifier -- WP1 shape only.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statement_type", "predicate_type", "subject_digest"],
+      "properties": {
+        "statement_type": { "const": "https://in-toto.io/Statement/v1" },
+        "predicate_type": { "enum": ["https://slsa.dev/provenance/v1", "https://secb.local/predicates/skill-build/v1"] },
+        "subject_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" }
+      }
+    },
+    "signature": { "$ref": "common.schema.json#/$defs/signature_envelope" },
+    "evaluation_evidence_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+    "security_review_ref": { "oneOf": [ { "type": "null" }, { "$ref": "common.schema.json#/$defs/reference" } ] },
+    "experience_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+    "known_limitations": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 1024 } },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positive_cases", "negative_cases", "regression_cases", "policy_denial_cases"],
+      "properties": {
+        "positive_cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/test_case_allow_capable" } },
+        "negative_cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/test_case_deny_only" } },
+        "regression_cases": { "type": "array", "items": { "$ref": "#/$defs/test_case_allow_capable" } },
+        "policy_denial_cases": { "type": "array", "items": { "$ref": "#/$defs/test_case_deny_only" } }
+      }
+    },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "$defs": {
+    "test_case_allow_capable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "description", "expected_result", "observed_side_effects", "permission_class"],
+      "properties": {
+        "case_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "expected_result": { "enum": ["ALLOW", "DENY", "ERROR"] },
+        "observed_side_effects": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/side_effect_class" } },
+        "permission_class": { "$ref": "common.schema.json#/$defs/action_class" }
+      }
+    },
+    "test_case_deny_only": {
+      "description": "SCEN-11: negative/policy-denial cases must remain fail-closed -- expected_result cannot ever be ALLOW here, closed at the enum level regardless of maturity_state.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "description", "expected_result", "observed_side_effects", "permission_class"],
+      "properties": {
+        "case_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "expected_result": { "enum": ["DENY", "ERROR"] },
+        "observed_side_effects": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/side_effect_class" } },
+        "permission_class": { "$ref": "common.schema.json#/$defs/action_class" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "description": "SCEN-09 / matrix row 4: promotion beyond S0 requires evaluation evidence (G4/G3 gate inputs). S0 itself (isolated sandbox candidate, section 4) does not require it yet.",
+      "if": { "type": "object", "required": ["maturity_state"], "properties": { "maturity_state": { "enum": ["S1", "S2", "S3"] } } },
+      "then": { "type": "object", "required": ["security_review_ref"], "properties": { "evaluation_evidence_refs": { "type": "array", "minItems": 1 }, "security_review_ref": { "not": { "type": "null" } } } }
+    },
+    {
+      "description": "SUSPENDED/ROLLED_BACK/RETIRED are only reachable from a skill that reached at least S1 (see data/maturity-transition-table.json) so they too require evaluation evidence on record.",
+      "if": { "type": "object", "required": ["maturity_state"], "properties": { "maturity_state": { "enum": ["SUSPENDED", "ROLLED_BACK", "RETIRED"] } } },
+      "then": { "type": "object", "properties": { "evaluation_evidence_refs": { "type": "array", "minItems": 1 } } }
+    }
+  ]
+}

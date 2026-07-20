@@ -1,0 +1,32 @@
+{
+  "vector_id": "neg-22-scenario12-illegal-rollback-resume",
+  "description": "ROLLED_BACK -> S3 attempts to resume a rolled-back skill directly at its prior maturity -- not a legal edge; only RETIRED, or re-entry as a brand-new S0 candidate, is legal from ROLLED_BACK.",
+  "scenario_refs": [
+    "SCEN-12"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "FAIL"
+  },
+  "documents": {
+    "transitionRequest": {
+      "object_type": "SkillCandidate",
+      "object_id": "skill_b92dd55cbadcb4b4391a44bedd8a0a7cf654ca9788f620422f78659e158130cd",
+      "from_state": "ROLLED_BACK",
+      "to_state": "S3",
+      "triggering_event_type": "skill.promoted",
+      "evidence_refs": [
+        {
+          "ref_id": "resume-evidence-01",
+          "digest": "sha256:9c899e592c3b6e5a99c75b5275a15e37afbdd7ade5f8439876bfe793a84c2c2d"
+        }
+      ],
+      "actor": {
+        "actor_id": "agent-reviewer-01",
+        "actor_type": "agent",
+        "role": "reviewer"
+      }
+    }
+  }
+}

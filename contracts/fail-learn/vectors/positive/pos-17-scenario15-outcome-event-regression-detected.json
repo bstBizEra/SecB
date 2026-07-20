@@ -1,0 +1,45 @@
+{
+  "vector_id": "pos-17-scenario15-outcome-event-regression-detected",
+  "description": "A well-formed skill.regression.detected event validates -- this is the data-plane hook outcome telemetry would consume to test whether promotion reduced recurrence; the recurrence computation itself is a WP8 analytics concern, not schema-provable.",
+  "scenario_refs": [
+    "SCEN-15"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "PASS"
+  },
+  "documents": {
+    "event": {
+      "schema_version": "1.0",
+      "event_id": "evt_2e520bf235118087651a84d94713cf29851507094f677ff35af6e8f7fb7667f0",
+      "event_type": "skill.regression.detected",
+      "occurred_at": "2026-07-20T19:05:00.000Z",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "subject_ref": {
+        "object_type": "SkillCandidate",
+        "object_id": "skill_b92dd55cbadcb4b4391a44bedd8a0a7cf654ca9788f620422f78659e158130cd",
+        "previous_maturity_state": "S1",
+        "new_maturity_state": "SUSPENDED"
+      },
+      "actor": {
+        "actor_id": "agent-reviewer-01",
+        "actor_type": "agent",
+        "role": "reviewer"
+      },
+      "evidence_refs": [
+        {
+          "ref_id": "regression-log-01",
+          "digest": "sha256:5bfa4cf63ae8906a2c6081247739bd362bbc725f152130f25da35230cb452a17"
+        }
+      ],
+      "payload_digest": "sha256:ee0bb5325ae2cf3d3fba515fcd8cb4208e1894f3ae065d651f98072476338e64"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "vector_id": "neg-25-scenario15-event-type-not-in-closed-enum",
+  "description": "event_type 'skill.made_up_event' is not in the closed vocabulary from section 12.",
+  "scenario_refs": [
+    "SCEN-15"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "FAIL",
+    "semantic": "N/A"
+  },
+  "documents": {
+    "event": {
+      "schema_version": "1.0",
+      "event_id": "evt_b30261e81414653c9a5ff1c072489492ebda7ba63bd4a831719f7f54e091a23a",
+      "event_type": "skill.made_up_event",
+      "occurred_at": "2026-07-20T19:10:00.000Z",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "subject_ref": {
+        "object_type": "SkillCandidate",
+        "object_id": "skill_b92dd55cbadcb4b4391a44bedd8a0a7cf654ca9788f620422f78659e158130cd",
+        "previous_maturity_state": "S1",
+        "new_maturity_state": "S1"
+      },
+      "actor": {
+        "actor_id": "agent-reviewer-01",
+        "actor_type": "agent",
+        "role": "reviewer"
+      },
+      "evidence_refs": [],
+      "payload_digest": "sha256:2e709608bd496d779e11aa7da98789c33cb94c7e638fc5e9698bbb037ce2ad86"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "vector_id": "pos-13-scenario12-legal-rollback-transition",
+  "description": "SUSPENDED -> ROLLED_BACK is a legal edge in the maturity transition table.",
+  "scenario_refs": [
+    "SCEN-12"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "PASS"
+  },
+  "documents": {
+    "transitionRequest": {
+      "object_type": "SkillCandidate",
+      "object_id": "skill_b92dd55cbadcb4b4391a44bedd8a0a7cf654ca9788f620422f78659e158130cd",
+      "from_state": "SUSPENDED",
+      "to_state": "ROLLED_BACK",
+      "triggering_event_type": "skill.rolled_back",
+      "evidence_refs": [
+        {
+          "ref_id": "rollback-evidence-01",
+          "digest": "sha256:b20e71964e1261e949de7349deb3883a54088b477269d5c100108c0b9a48a580"
+        }
+      ],
+      "actor": {
+        "actor_id": "agent-reviewer-01",
+        "actor_type": "agent",
+        "role": "reviewer"
+      }
+    }
+  }
+}

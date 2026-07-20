@@ -1,0 +1,292 @@
+{
+  "vector_id": "neg-23-scenario13-lineage-break-knowledge-mismatch",
+  "description": "skill.knowledge_ref.ref_id does not match the supplied knowledge document's own knowledge_id -- a spliced/broken chain.",
+  "scenario_refs": [
+    "SCEN-13"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "FAIL"
+  },
+  "documents": {
+    "skill": {
+      "schema_version": "1.0",
+      "maturity_state": "S0",
+      "knowledge_ref": {
+        "ref_id": "know_0000000000000000000000000000000000000000000000000000000000000000",
+        "digest": "sha256:649a127d392d0fa4e734941d9987b9d6ae393b4ac2a7763c79da2bada32d2c55"
+      },
+      "knowledge_maturity_at_binding": "K1",
+      "capability_manifest": {
+        "manifest_version": "1.0.0",
+        "skill_name": "route-protected-write-via-pr",
+        "purpose": "detect a protected-branch write attempt and open a pull request instead",
+        "declared_permissions": {
+          "action_classes": [
+            "EXECUTION_WRITE"
+          ],
+          "declared_side_effects": [
+            "FILE_WRITE",
+            "GIT_COMMIT"
+          ],
+          "tools": [
+            "git"
+          ],
+          "mcp_servers": [],
+          "filesystem_paths": [
+            "/workspace/proj/build"
+          ],
+          "network_hosts": [],
+          "credentials": []
+        },
+        "timeout_seconds": 300,
+        "idempotent": true
+      },
+      "source": {
+        "repository": "secb",
+        "commit_sha": "7ae682e5368dc36c1cab57daa34088310c5c861a",
+        "dependency_lock_digest": "sha256:90f3c17386a911104bb0c490d8d1d59fd003849fa982210046784ee9417cbd3e"
+      },
+      "builder_identity": {
+        "actor_id": "agent-builder-01",
+        "actor_type": "agent",
+        "role": "maker"
+      },
+      "owner_actor_id": "owner-01",
+      "checker_actor_id": "agent-checker-01",
+      "provenance": {
+        "statement_type": "https://in-toto.io/Statement/v1",
+        "predicate_type": "https://secb.local/predicates/skill-build/v1",
+        "subject_digest": "sha256:e1df15e75cf829c17e497ab37b2ff3aece29634d3727bdaa12d3779436a445f7"
+      },
+      "evaluation_evidence_refs": [],
+      "experience_refs": [],
+      "known_limitations": [],
+      "tests": {
+        "positive_cases": [
+          {
+            "case_id": "pos-1",
+            "description": "opens a PR instead of writing directly",
+            "expected_result": "ALLOW",
+            "observed_side_effects": [
+              "FILE_WRITE",
+              "GIT_COMMIT"
+            ],
+            "permission_class": "EXECUTION_WRITE"
+          }
+        ],
+        "negative_cases": [
+          {
+            "case_id": "neg-1",
+            "description": "direct protected-branch write attempt is still denied",
+            "expected_result": "DENY",
+            "observed_side_effects": [],
+            "permission_class": "EXECUTION_WRITE"
+          }
+        ],
+        "regression_cases": [],
+        "policy_denial_cases": []
+      },
+      "created_at": "2026-07-20T18:35:00.000Z",
+      "skill_id": "skill_5bcaf440605c5324267e2a29ab6053de4793b5c45559f20f68eab4891db0fb0e",
+      "signature": {
+        "algorithm": "ED25519",
+        "key_id": "key-skill-01",
+        "trust_domain": "secb.trust.skill",
+        "canonical_form": "SECB_CANONICAL_JSON_V1",
+        "signed_digest": "sha256:5bcaf440605c5324267e2a29ab6053de4793b5c45559f20f68eab4891db0fb0e",
+        "signature_value": "sig-5bcaf440605c5324267e2a29ab6053de4793b5c45559f20f68eab4891db0"
+      }
+    },
+    "skillKnowledge": {
+      "schema_version": "1.0",
+      "maturity_state": "K1",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "applicability": "any git_mutation targeting a protected branch",
+      "symptoms": [
+        "write denied on protected branch"
+      ],
+      "diagnosis": "policy correctly enforces protected-branch write denial",
+      "verified_cause": "protected_branch action_class hard-deny rule",
+      "resolution": "route the change through a pull request instead of a direct write",
+      "prevention": "document the protected-branch workflow for agents",
+      "unsafe_shortcuts": [
+        "do not attempt to bypass by disabling the policy bundle"
+      ],
+      "permissions_required": [
+        "READ_ONLY"
+      ],
+      "evidence_refs": [
+        {
+          "ref_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
+          "digest": "sha256:8d5f68143af52650abb2e352ffa162ed217de2ab57f9420fd5a4df9c26bac065"
+        }
+      ],
+      "experience_refs": [
+        {
+          "ref_id": "exp_53d61422972ad1bbf064067c4eba95afec9fe3e7d40d321044083f80f2b58b98",
+          "digest": "sha256:283f0b4acbbcd5bbb33a8b6fdc07a5f29fe7ea77137e6b53fd7e1d2f76db6fd7"
+        }
+      ],
+      "reviewers": [
+        {
+          "reviewer_id": "agent-reviewer-01",
+          "reviewed_at": "2026-07-20T18:40:00.000Z",
+          "verdict": "APPROVED"
+        }
+      ],
+      "author_actor_id": "agent-producer-01",
+      "confidence": "high",
+      "validity": {
+        "valid_from": "2026-07-20T18:30:00.000Z",
+        "review_due": "2027-01-20T18:30:00.000Z",
+        "valid_until": null
+      },
+      "supersedes": null,
+      "superseded_by": null,
+      "created_at": "2026-07-20T18:30:00.000Z",
+      "knowledge_id": "know_948c7c5bd1b5f65fd1c3f80abf0fd24eff80e007737b519d831c94b2c045c0ac"
+    },
+    "skillKnowledgeExperience": {
+      "schema_version": "1.0",
+      "maturity_state": "X1",
+      "source_evidence_refs": [
+        {
+          "ref_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
+          "digest": "sha256:8d5f68143af52650abb2e352ffa162ed217de2ab57f9420fd5a4df9c26bac065"
+        }
+      ],
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "classification": "POLICY_DENIAL_EXPECTED",
+      "intended_outcome": "write should be blocked on a protected branch",
+      "observed_outcome": "write was blocked as expected",
+      "contributing_conditions": [
+        "target branch is protected"
+      ],
+      "immediate_cause": "policy rule rule-deny-protected-branch matched",
+      "systemic_factors": [],
+      "containment": "no mutation occurred",
+      "workaround": "",
+      "proposed_prevention": "none required, control worked as designed",
+      "reproducibility": {
+        "status": "INDEPENDENT_CHECKER_CONFIRMATION",
+        "evidence_refs": [
+          {
+            "ref_id": "checker-report-01",
+            "digest": "sha256:33a13619dc9bc103ce73bdad37fdd4a90bc48b6ce0cd0929f404ddd21b066489"
+          }
+        ]
+      },
+      "confidence": "high",
+      "reviewer_status": {
+        "status": "CHECKER_CONFIRMED",
+        "checker_id": "agent-checker-01",
+        "checker_distinct_from_actor": true
+      },
+      "source_actor_id": "agent-producer-01",
+      "created_at": "2026-07-20T18:25:00.000Z",
+      "experience_id": "exp_53d61422972ad1bbf064067c4eba95afec9fe3e7d40d321044083f80f2b58b98"
+    },
+    "skillEvidenceForLineage": {
+      "schema_version": "1.0",
+      "occurred_at": "2026-07-20T18:20:00.000Z",
+      "captured_at": "2026-07-20T18:20:05.000Z",
+      "clock_source": "secb-trusted-clock-01",
+      "sequence": 1,
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "actor": {
+        "actor_id": "agent-producer-01",
+        "actor_type": "agent",
+        "role": "maker"
+      },
+      "operation": {
+        "operation_type": "git_mutation",
+        "target_class": "repository",
+        "requested_capability": "write_file",
+        "command_digest": "sha256:7227d4867c62ac47131523309535b84e9cedb845e71ba774dc18d3e3cfac7fd7",
+        "input_digest": "sha256:40aca46cb9ebb03e5e09864ab8b89d6fd9c968845befcd5769970cdcac1830f6"
+      },
+      "decision": {
+        "result": "denied",
+        "policy_decision_id": "pdp-dec-01",
+        "policy_bundle_digest": "sha256:0380584c1e86e983bb67d9604e52bd5a00fd9fdbd822e91df9599808aff8f8db",
+        "matched_rules": [
+          "rule-deny-protected-branch"
+        ],
+        "fail_closed_applied": true
+      },
+      "failure": {
+        "failure_class": "POLICY_DENIAL_EXPECTED",
+        "error_type": "PolicyDenial",
+        "error_code": "E_POLICY_DENY",
+        "sanitized_message": "policy denied write to protected branch",
+        "stacktrace_reference": "encref:trace-01:sha256:4e2fbe7ae9c5146f4b7b0ba834f1e270843120629abed25b2d9a9de8ab51b23f",
+        "severity": "low"
+      },
+      "environment": {
+        "repository_commit": "6a35fc68ffb55f3ebb8cf8039efdaae0b8648cd4",
+        "worktree_id": "wt-01",
+        "operating_system": "linux-x86_64",
+        "dependency_lock_digest": "sha256:261a13c80be028517bccbd2237192ad581e97d2cff8fa9dce5ba92a7aad7adbd",
+        "configuration_digest": "sha256:a256fe80eb273e518019d1572c02d66ebe47b8afb4bbd837dfcb59873e9e9c30",
+        "tool_versions": {
+          "node": "22.0.0"
+        }
+      },
+      "outcome": {
+        "mutation_committed": false,
+        "affected_resources": [],
+        "rollback_required": false,
+        "containment_status": "contained"
+      },
+      "evidence": {
+        "log_refs": [
+          {
+            "ref_id": "log-01",
+            "digest": "sha256:b8842c7dd5ba2af27a2fd0cb07474a241277226589e9adbee98804d862b1ab43"
+          }
+        ],
+        "trace_refs": [],
+        "test_result_refs": [],
+        "artifact_refs": [],
+        "screenshot_refs": [],
+        "attestation_refs": []
+      },
+      "governance": {
+        "security_classification": "INTERNAL",
+        "contains_secrets": false,
+        "redaction_policy": "redact-v1",
+        "retention_policy": "retain-90d",
+        "admissibility_status": "admissible",
+        "integrity_signature": {
+          "algorithm": "ED25519",
+          "key_id": "key-evidence-01",
+          "trust_domain": "secb.trust.evidence",
+          "canonical_form": "SECB_CANONICAL_JSON_V1",
+          "signed_digest": "sha256:1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
+          "signature_value": "sig-1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692"
+        }
+      },
+      "evidence_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f"
+    }
+  }
+}

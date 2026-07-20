@@ -1,0 +1,15 @@
+{
+  "name": "secb-fail-learn-wp1-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WP1 (Ontology and contracts) design artifacts for SECB-FAIL-LEARN-001 / SECB-FAIL-LEARN-P0-001, package p0-fail-learn-architecture-intake-014. Contract/schema/state-machine design and conformance-test authoring only -- not a runtime service.",
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  },
+  "scripts": {
+    "build-vectors": "node build-vectors.mjs",
+    "validate": "node run-validation.mjs"
+  }
+}

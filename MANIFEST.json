@@ -306,6 +306,24 @@
     "tests/goal-graph-service.test.mjs",
     "src/ui/goal-rollup-projection.mjs",
     "tests/goal-rollup-projection.test.mjs",
-    "docs/03-project-control/candidates/mod-work-completion-rev-001.md"
+    "docs/03-project-control/candidates/mod-work-completion-rev-001.md",
+    "contracts/fail-learn/schemas/common.schema.json",
+    "contracts/fail-learn/schemas/classification-taxonomy.schema.json",
+    "contracts/fail-learn/schemas/failure-evidence-envelope.schema.json",
+    "contracts/fail-learn/schemas/experience-record.schema.json",
+    "contracts/fail-learn/schemas/knowledge-artifact.schema.json",
+    "contracts/fail-learn/schemas/skill-candidate.schema.json",
+    "contracts/fail-learn/schemas/transitions.schema.json",
+    "contracts/fail-learn/data/classification-taxonomy.instance.json",
+    "contracts/fail-learn/data/maturity-transition-table.json",
+    "contracts/fail-learn/semantic-validator.mjs",
+    "contracts/fail-learn/build-vectors.mjs",
+    "contracts/fail-learn/run-validation.mjs",
+    "contracts/fail-learn/package.json",
+    "contracts/fail-learn/package-lock.json",
+    "contracts/fail-learn/vectors/positive/",
+    "contracts/fail-learn/vectors/negative/",
+    "contracts/fail-learn/run-validation-output.json",
+    "contracts/fail-learn/run-validation-stderr.txt"
   ]
 }

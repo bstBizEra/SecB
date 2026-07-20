@@ -1,0 +1,32 @@
+{
+  "vector_id": "neg-21-scenario12-illegal-skip-to-s2",
+  "description": "S0 -> S2 skips evaluation (S1) and signed approval entirely -- not a legal edge.",
+  "scenario_refs": [
+    "SCEN-12"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "FAIL"
+  },
+  "documents": {
+    "transitionRequest": {
+      "object_type": "SkillCandidate",
+      "object_id": "skill_5c3ce178e3f1556bc4860dbff769279caf66119b2611cc72b05e3c032df65787",
+      "from_state": "S0",
+      "to_state": "S2",
+      "triggering_event_type": "skill.promoted",
+      "evidence_refs": [
+        {
+          "ref_id": "skip-evidence-01",
+          "digest": "sha256:478e24dc015e132be729252ee5fd614f45ab4f63e11afb48bfe090310d9936a5"
+        }
+      ],
+      "actor": {
+        "actor_id": "agent-reviewer-01",
+        "actor_type": "agent",
+        "role": "reviewer"
+      }
+    }
+  }
+}

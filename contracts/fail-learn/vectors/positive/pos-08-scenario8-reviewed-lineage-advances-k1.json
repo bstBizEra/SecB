@@ -1,0 +1,117 @@
+{
+  "vector_id": "pos-08-scenario8-reviewed-lineage-advances-k1",
+  "description": "K1 knowledge carries an APPROVED reviewer independent of both the author and the source experience's actor/checker.",
+  "scenario_refs": [
+    "SCEN-08"
+  ],
+  "matrix_row_refs": [
+    "ROW-3"
+  ],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "PASS"
+  },
+  "documents": {
+    "knowledge": {
+      "schema_version": "1.0",
+      "maturity_state": "K1",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "applicability": "any git_mutation targeting a protected branch",
+      "symptoms": [
+        "write denied on protected branch"
+      ],
+      "diagnosis": "policy correctly enforces protected-branch write denial",
+      "verified_cause": "protected_branch action_class hard-deny rule",
+      "resolution": "route the change through a pull request instead of a direct write",
+      "prevention": "document the protected-branch workflow for agents",
+      "unsafe_shortcuts": [
+        "do not attempt to bypass by disabling the policy bundle"
+      ],
+      "permissions_required": [
+        "READ_ONLY"
+      ],
+      "evidence_refs": [
+        {
+          "ref_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
+          "digest": "sha256:8d5f68143af52650abb2e352ffa162ed217de2ab57f9420fd5a4df9c26bac065"
+        }
+      ],
+      "experience_refs": [
+        {
+          "ref_id": "exp_53d61422972ad1bbf064067c4eba95afec9fe3e7d40d321044083f80f2b58b98",
+          "digest": "sha256:283f0b4acbbcd5bbb33a8b6fdc07a5f29fe7ea77137e6b53fd7e1d2f76db6fd7"
+        }
+      ],
+      "reviewers": [
+        {
+          "reviewer_id": "agent-reviewer-01",
+          "reviewed_at": "2026-07-20T18:40:00.000Z",
+          "verdict": "APPROVED"
+        }
+      ],
+      "author_actor_id": "agent-producer-01",
+      "confidence": "high",
+      "validity": {
+        "valid_from": "2026-07-20T18:30:00.000Z",
+        "review_due": "2027-01-20T18:30:00.000Z",
+        "valid_until": null
+      },
+      "supersedes": null,
+      "superseded_by": null,
+      "created_at": "2026-07-20T18:30:00.000Z",
+      "knowledge_id": "know_948c7c5bd1b5f65fd1c3f80abf0fd24eff80e007737b519d831c94b2c045c0ac"
+    },
+    "knowledgeExperience": {
+      "schema_version": "1.0",
+      "maturity_state": "X1",
+      "source_evidence_refs": [
+        {
+          "ref_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
+          "digest": "sha256:8d5f68143af52650abb2e352ffa162ed217de2ab57f9420fd5a4df9c26bac065"
+        }
+      ],
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "classification": "POLICY_DENIAL_EXPECTED",
+      "intended_outcome": "write should be blocked on a protected branch",
+      "observed_outcome": "write was blocked as expected",
+      "contributing_conditions": [
+        "target branch is protected"
+      ],
+      "immediate_cause": "policy rule rule-deny-protected-branch matched",
+      "systemic_factors": [],
+      "containment": "no mutation occurred",
+      "workaround": "",
+      "proposed_prevention": "none required, control worked as designed",
+      "reproducibility": {
+        "status": "INDEPENDENT_CHECKER_CONFIRMATION",
+        "evidence_refs": [
+          {
+            "ref_id": "checker-report-01",
+            "digest": "sha256:33a13619dc9bc103ce73bdad37fdd4a90bc48b6ce0cd0929f404ddd21b066489"
+          }
+        ]
+      },
+      "confidence": "high",
+      "reviewer_status": {
+        "status": "CHECKER_CONFIRMED",
+        "checker_id": "agent-checker-01",
+        "checker_distinct_from_actor": true
+      },
+      "source_actor_id": "agent-producer-01",
+      "created_at": "2026-07-20T18:25:00.000Z",
+      "experience_id": "exp_53d61422972ad1bbf064067c4eba95afec9fe3e7d40d321044083f80f2b58b98"
+    }
+  }
+}
