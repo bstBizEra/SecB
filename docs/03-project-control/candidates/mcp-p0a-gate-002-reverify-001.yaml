@@ -1,0 +1,186 @@
+# MCP P0-A Gateway Core — Independent Gate-002 Blocking-Finding Re-Verification
+# Scope: NARROW. Re-verify closure of GATE2-BLOCKING-001 only, plus no-regression.
+# This is an independent gate re-verifier record. It applies no code change,
+# merges nothing, activates nothing, and authorizes nothing. Advisory only.
+
+record_metadata:
+  record_id: "mcp_p0a_gate_002_reverify_001_candidate"
+  record_status: "REVERIFY_ADVISORY_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  reviewer_identity: "claude-immune-gate2-reverify"
+  reviewer_runtime: "Claude Fable 5 (Anthropic)"
+  reviewer_role: "immune / independent gate re-verifier"
+  independence_note: >-
+    Separate actor from the producer lane (Claude-Sonnet5-Motor) and from the
+    gate-002 reviewers. Verified from first-hand execution in an isolated
+    detached worktree, not from commit messages or the producer handoff's
+    self-reported numbers.
+  method_summary: >-
+    Isolated git worktree; extracted src/gateway/mcp-gateway-core.mjs at both
+    the pre-fix (60bbb6a) and post-fix (770aebb) commits; ran a purpose-built
+    empirical wedge repro against each; ran the branch focused suite and the
+    full tracked suite with `node --test`; and ran the producer's two new
+    regression tests against the PRE-fix core to confirm they are not
+    tautological.
+
+target:
+  branch: "producer/mcp/p0a-gateway-core-rework-006"
+  rework_006_tip_commit: "c2472e5ce734d92b68d2aa699ada63b42916dd83"  # handoff (provenance only)
+  fix_code_commit: "770aebb3a2488e51d978c8ddb3f2d0615465152d"        # [P0-MCP-A-REWORK-006]
+  pre_fix_parent_commit: "60bbb6acfd3914728e29add7b8562457a704614a"  # [P0-MCP-A-REWORK-005]
+  bound_gate_review: "claude/rev/mcp-p0a-gate-002 @ 6a8241464ec29f4caa54d22140f6287901f0814b"
+  bound_gate_record: "docs/03-project-control/candidates/mcp-p0a-independent-gate-review-002.yaml"
+
+finding_under_review:
+  id: "GATE2-BLOCKING-001"
+  title: "Capacity-exhaustion DoS from an unbounded await in the audit-timeout recovery path"
+  gate_002_required_action: >-
+    Apply the same boundedCall/timeout-race pattern to the recovery await in
+    #scheduleAuditTimeout, so a hung audit sink cannot indefinitely retain a
+    capacity-lane reservation.
+
+diff_review:
+  diff_range: "60bbb6a..770aebb"
+  files_changed: 2
+  files:
+    - "src/gateway/mcp-gateway-core.mjs (+16, purely additive)"
+    - "tests/mcp-gateway-core-adversarial.test.mjs (+68, two new regression tests)"
+  change_is_additive_only: true
+  no_other_behavior_changed: >-
+    Confirmed. The only production edit is inside #holdCapacity (src lines
+    ~356-378): a setTimeout `abandon` bound of this.#timeouts.audit_ms * 4 that,
+    on fire, does reservation.pending.delete(settlement) and
+    #releaseCapacityIfComplete(reservation); plus a clearTimeout(abandon) added
+    to the existing .finally() handler. No lines removed, no other method
+    touched, no imports added (module remains pure/no-I/O).
+
+  mechanism_divergence_from_required_action:
+    observed: >-
+      The fix is NOT placed at #scheduleAuditTimeout's `await outcome.settled`
+      as the gate-002 required_action literally specified. It is placed one
+      layer lower, in #holdCapacity — the single shared primitive that
+      #call (raw hook/adapter timeouts), #scheduleAuditTimeout (audit-sink
+      hang recovery), and #scheduleLateSettlement (late-settlement evidence)
+      all route their retained settlements through.
+    reviewer_assessment: >-
+      The divergence is justified and is a STRICTLY SUPERIOR fix, not a
+      deviation-defect. Independently confirmed: the wedge is reachable via a
+      never-settling ADAPTER, whose settlement is retained by #call ->
+      #holdCapacity (src line 383), a path that never enters
+      #scheduleAuditTimeout at all. The literal required_action would
+      therefore have left the adapter-hang variant of the wedge OPEN. Placing
+      the bound in #holdCapacity closes all three retention sites uniformly.
+    pattern_note: >-
+      The bound is implemented as a setTimeout-based abandonment timer rather
+      than boundedCall's Promise.race. It does not (and in JS cannot) force the
+      underlying hung promise to settle; it only stops counting it against
+      capacity after the bound. If the promise later settles, the existing
+      .finally() fires as a safe no-op against the already-abandoned entry
+      (clearTimeout guards double-release). Semantically sound.
+
+empirical_results:
+  harness: >-
+    max_concurrency: 1, adapter = () => new Promise(() => {}) (never settles),
+    all timeouts 20ms so abandonment bound = audit_ms*4 = 80ms. First invoke,
+    then probe subsequent invokes immediately, past the bound, and long past it.
+  pre_fix_60bbb6a:
+    first_call: "DENY_ADAPTER_TIMEOUT_PENDING (times out and denies — expected)"
+    immediately_after: "DENY_CONCURRENCY_LIMIT"
+    after_bound_200ms: "DENY_CONCURRENCY_LIMIT"
+    after_long_700ms: "DENY_CONCURRENCY_LIMIT"
+    result: "WEDGED — capacity slot never drains; every subsequent call denies
+      DENY_CONCURRENCY_LIMIT for the process lifetime. Original defect reproduced."
+  post_fix_770aebb:
+    first_call: "DENY_ADAPTER_TIMEOUT_PENDING"
+    immediately_after: "DENY_CONCURRENCY_LIMIT (slot correctly still held right after timeout)"
+    after_bound_200ms: "DENY_ADAPTER_TIMEOUT_PENDING (slot reclaimed — request got PAST the capacity gate)"
+    after_long: "DENY_ADAPTER_TIMEOUT_PENDING (drains again; each new call that reaches
+      the adapter re-occupies then re-releases the slot on its own bound)"
+    result: "CAPACITY DRAINS — subsequent calls are no longer permanently
+      DENY_CONCURRENCY_LIMIT. Blocking finding empirically closed."
+  interpretation: >-
+    The discriminating signal is DENY_ADAPTER_TIMEOUT_PENDING (request passed the
+    capacity gate and reached the adapter) vs DENY_CONCURRENCY_LIMIT (blocked at
+    the gate, slot held). Pre-fix stays permanently at the latter; post-fix
+    returns to the former after the abandonment bound. Conclusive.
+
+test_execution:
+  focused_suite:
+    command: "node --test tests/mcp-gateway-core-adversarial.test.mjs tests/mcp-gateway-core.test.mjs"
+    result: {tests: 45, pass: 45, fail: 0, skipped: 0}
+    handoff_claim: "45 total, 45 pass, 0 fail, 0 skip"
+    matches_handoff: true
+  full_tracked_suite:
+    command: "node --test tests/*.test.mjs"
+    result: {tests: 197, pass: 184, fail: 0, skipped: 13}
+    handoff_claim: "197 total, 184 pass, 0 fail, 13 skip"
+    matches_handoff: true
+  skips_characterization: >-
+    All 13 skips are pre-existing in tests/conformance-stubs.test.mjs, each
+    gated on unrelated work packages (P0-06/08/09/10/11/14) via explicit
+    { skip: "BLOCKED: ..." } directives. None touch the gateway or this fix.
+    Consistent with gate-002's round-5 baseline (195/182/13); the +2 tests /
+    +2 pass are exactly this round's two new regression tests.
+  foundation_validator_note: >-
+    Not run as a gate here; per the producer handoff and gate-002's round-5
+    precedent, tools/validate-foundation.mjs's git-remote check trips on a
+    shared-worktree 'origin' regardless of code correctness. Bypassed via direct
+    `node --test`, matching that precedent. Not a defect in this diff.
+
+regression_test_quality:
+  tests_reviewed:
+    - "a hung adapter's capacity reservation is abandoned on a bound, not held forever"
+    - "a hung hook does not permanently wedge the shared overflow-audit lane"
+  exercises_the_wedge: true
+  non_tautological_proof: >-
+    Ran the post-fix test file (both new tests included) against the PRE-fix
+    core (60bbb6a): 34 tests, 32 pass, 2 FAIL — exactly the two new regression
+    tests fail on unfixed code, and both pass on 770aebb. A tautological test
+    would pass on both. These detect the wedge: they assert a fresh request
+    after the abandonment window reaches DENY_ADAPTER_TIMEOUT_PENDING (past the
+    gate) rather than DENY_CONCURRENCY_LIMIT, and that three queued overflow
+    responses plus a later request all complete rather than hang.
+
+residuals_deferred_this_round:
+  # Recorded for completeness; all consistent with gate-002's own recommendations.
+  # None re-open GATE2-BLOCKING-001.
+  - id: "GATE2-NONBLOCKING-LATE-RETRY-ASYMMETRY"
+    status: "deferred (non-blocking) — late-settlement retry scheduled only for
+      timeouts, not sync/rejected audit failures. Gate-002 flagged as non-blocking."
+  - id: "ABORT_SIGNAL_COOPERATIVE_CANCEL"
+    status: "deferred (non-blocking follow-up) per gate-002 recommendation; not an ADR item."
+  - id: "GATE2-RESIDUAL-A-DURABLE-EVIDENCE"
+    status: "design-class, routed to operator/ADR queue per gate-002. Out of producer scope."
+  - id: "GATE2-RESIDUAL-B-FORCED-PREEMPTION"
+    status: "design-class (no cross-realm hard-kill in JS), routed to operator/ADR queue. Out of scope."
+
+verdict: CLOSED_WITH_NOTES
+verdict_detail: >-
+  GATE2-BLOCKING-001 is empirically and independently CLOSED: the pre-fix wedge
+  reproduces (permanent DENY_CONCURRENCY_LIMIT after the first hung-call
+  timeout) and the post-fix code drains the capacity slot on the abandonment
+  bound. Focused and full suites match the producer handoff exactly (45/45/0/0
+  and 197/184/0/13). The added regression tests are non-tautological (they fail
+  on pre-fix code). NOTES, none re-opening the finding: (1) the fix diverges
+  from gate-002's literal required_action location (#holdCapacity, not
+  #scheduleAuditTimeout) — an intentional and STRICTLY SUPERIOR choice, since
+  the literal fix would have missed the adapter-hang wedge variant; (2) the
+  bound is a setTimeout abandonment timer, not Promise.race — it frees capacity
+  accounting only and does not force the hung promise to settle, which is a
+  correct and unavoidable limitation in JS, with the pre-existing late-settlement
+  audit trail preserved; (3) four non-blocking/design-class residuals remain
+  deferred, all consistent with gate-002's recommendations.
+
+scope_and_authority: >-
+  Independent re-verification verdict only. Applies no code change, merges
+  nothing, activates nothing, and does not authorize any merge, push, transport
+  binding, registry promotion, deployment, evidence acceptance, or activation.
+  Merge/activation authority remains with the operator per AMD-002. This record
+  is prepared on a non-main branch; not pushed.
+
+self_certification:
+  agent_id: claude-immune
+  peer_agent_id: null
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

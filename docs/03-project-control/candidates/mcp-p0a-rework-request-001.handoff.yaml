@@ -1,0 +1,83 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_request_001_v1_candidate"
+  record_status: "ADVISORY_REWORK_REQUEST_NOT_EFFECTIVE"
+  source: "Codex advisory REV rework dispatch, 2026-07-19T18:00:27.6621762+07:00"
+  limitations:
+    - "No effective MCP-specific reviewer or dispatcher authority was resolved for this session; this record is an advisory rework request under AMD-002."
+    - "This handoff does not authorize merge to main, push, transport binding, adapter registration, deployment, evidence acceptance, or activation."
+    - "The producer must create a new immutable rework commit; the frozen target 270dacf must not be amended or rewritten."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-001"
+  sequence: 1
+  source_role: "REV_ADVISORY"
+  source_agent_instance_id: "codex-reviewer-advisory-2026-07-19"
+  destination_role: "ENGIN_PRODUCER"
+  destination_agent_constraint: "The rework producer must not serve as REV, QA, SEC, evidence acceptor, or GOV for the resulting commit."
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  original_target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  review_commit: "06c3b7c3e215e306d3eeff31434b8790370df176"
+  review_record: "docs/03-project-control/candidates/mcp-p0a-codex-advisory-review-001.yaml"
+  executable_review_evidence: "tests/mcp-gateway-core-adversarial.test.mjs"
+  requested_outcome: "Prepare a new fail-closed gateway-core rework candidate that closes REV-MCP-P0A-001 through REV-MCP-P0A-005 and passes both producer and adversarial tests."
+
+  authorized_candidate_write_set:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core.test.mjs"
+    - "tests/mcp-gateway-core-adversarial.test.mjs"
+    - "MANIFEST.json only if file inventory changes"
+    - "One append-only producer verification or rework handoff record under docs/03-project-control/candidates/, with matching MANIFEST.json entry"
+
+  prohibited_write_set:
+    - "main branch"
+    - "docs/03-project-control/effective/**"
+    - "contracts/** authority or evidence schemas"
+    - "remote configuration and protected refs"
+    - "MCP transports, ports, process launchers, adapter implementations, private registry, credential broker, and runtime configuration"
+    - "Existing review records or frozen producer commits"
+
+  required_rework:
+    - finding_id: "REV-MCP-P0A-001"
+      requirement: "Use an async dispatch boundary; await adapters; contain policy, clock, audit, and adapter failures as stable structured denials."
+    - finding_id: "REV-MCP-P0A-002"
+      requirement: "Prevent narrowing-only policy hooks from mutating capability routing or widening the validated read-only decision."
+    - finding_id: "REV-MCP-P0A-003"
+      requirement: "Prevent adapter mutation from changing audit or receipt attribution; derive both from one immutable pre-dispatch snapshot."
+    - finding_id: "REV-MCP-P0A-004"
+      requirement: "Record privacy-bounded ALLOW and DENY audit dispositions for every invocation attempt, with fail-closed audit behavior."
+    - finding_id: "REV-MCP-P0A-005"
+      requirement: "Do not expose raw policy, audit, clock, or adapter error text to callers; use stable public codes and generic messages."
+
+  acceptance_checks:
+    - "node tools/validate-foundation.mjs exits 0."
+    - "node --test tests/mcp-gateway-core.test.mjs passes with zero failures after adapting synchronous expectations to the async API."
+    - "node --test tests/mcp-gateway-core-adversarial.test.mjs passes all seven probes with zero failures and no unhandledRejection."
+    - "npm test passes the full tracked suite with zero failures; pre-existing blocked skips remain explicitly reported."
+    - "git diff --check passes."
+    - "Static inspection confirms no filesystem, network, process, credential, transport, or activation capability was added."
+
+  producer_verification_requirements:
+    - "Pin the new rework commit SHA and its parent SHA."
+    - "Report exact test totals, passes, failures, and skips after the final change."
+    - "Map each closed finding to code and test evidence."
+    - "State remaining N-3 controls explicitly as residual and not implemented."
+    - "Request a fresh independent REV on the new immutable pin; do not self-approve."
+
+  retained_residual_gates:
+    - "QA and SEC remain separate from producer and REV."
+    - "SECB-MCP-P0-001 remains DRAFT / NOT EFFECTIVE."
+    - "Transport binding and activation remain operator/GOV-gated."
+    - "The broader N-3 controls remain mandatory before any runtime admission."
+
+  recommended_branch: "producer/mcp/p0a-gateway-core-rework-001"
+  recommended_commit_prefix: "[P0-MCP-A-REWORK]"
+  recommended_next_action: "ENGIN producer prepares the bounded rework candidate and returns a producer-verification handoff pinned to the new commit for fresh REV."
+
+self_certification:
+  author_role: "REV_ADVISORY"
+  modified_producer_implementation: false
+  execution_authority: false
+  merge_authority: false
+  activation_authority: false
