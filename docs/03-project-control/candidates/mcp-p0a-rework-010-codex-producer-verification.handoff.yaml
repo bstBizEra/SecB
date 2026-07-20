@@ -1,0 +1,38 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_010_codex_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_FRESH_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Codex ENGIN producer verification, 2026-07-20"
+  producer_runtime: "Codex"
+  producer_actor_id: "codex-engin-mcp-p0a-rework-010"
+  risk_class: "R2"
+  mutation_class: "M3"
+  limitations:
+    - "Producer evidence is not independent REV, QA, SEC, GOV, acceptance, integration, release, or activation authority."
+    - "Capacity remains charged until actual settlement; indefinite active work remains an explicit residual."
+    - "No push, merge, promotion, deployment, release, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-010-CODEX-PRODUCER-VERIFY"
+  sequence: 11
+  source_role: "ENGIN_PRODUCER"
+  destination_role: "FRESH_INDEPENDENT_REV"
+  current_main_parent: "f04dee6cfafaae0213d92dc0da13300b14707f5e"
+  implementation_parent: "007da0e1221f066d908e1265be6859cb1af2c635"
+  implementation_commit: "7bb7a443c14ab4ef5b02d11d1dedc86f8f69d0c6"
+  implementation_target: "7bb7a443c14ab4ef5b02d11d1dedc86f8f69d0c6"
+  branch: "producer/codex/mcp/p0a-gateway-core-rework-009"
+  advisory_decision: "PRODUCER_VERIFY_ONLY_FRESH_REVIEW_REQUIRED"
+  changes:
+    - "Retain active capacity until actual promise settlement; no audit_ms*4 abandonment timer."
+    - "Canonicalize and byte-bound request_context plus params before saturated overflow evidence state/logger."
+    - "Add regressions for delayed settlement capacity retention and oversized saturated requests with zero logger calls."
+  checks:
+    focused: "node --test tests/mcp-gateway-core.test.mjs tests/mcp-gateway-core-adversarial.test.mjs: 51 total, 51 pass, 0 fail, 0 skip"
+    foundation: "PASS (prior baseline; rerun required after root commit)"
+    diff_check: "PASS before handoff preparation"
+    no_io_scan: "PASS before handoff preparation"
+  residuals:
+    - "MCP-R10-INDEFINITE-ACTIVE-WORK: never-settling clock, policy, audit, adapter, validator, or evidence callbacks can retain capacity indefinitely; cancellation or worker isolation remains external."
+    - "MCP-R10-OVERFLOW-EVIDENCE-SLOT: one in-memory overflow evidence callback may remain pending; later calls receive truthful bounded backpressure."
+    - "N-3 project, repository, branch, human authority/lease freshness, egress, credential handles, durable evidence, DLP/data class, and activation gates remain external controls."
