@@ -308,6 +308,8 @@
     "tests/goal-rollup-projection.test.mjs",
     "docs/03-project-control/candidates/mod-work-completion-rev-001.md",
     "src/services/knowledge-claim-service.mjs",
-    "tests/knowledge-claim-service.test.mjs"
+    "tests/knowledge-claim-service.test.mjs",
+    "src/services/knowledge-linkage-service.mjs",
+    "tests/knowledge-linkage-service.test.mjs"
   ]
 }
