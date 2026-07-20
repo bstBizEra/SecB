@@ -135,6 +135,7 @@
     "tests/fixtures/valid/project.json",
     "tests/fixtures/valid/work-package.json",
     "tools/validate-foundation.mjs",
-    "tools/validate-foundation.meta.yaml"
+    "tools/validate-foundation.meta.yaml",
+    "docs/03-project-control/candidates/mcp-p0a-independent-gate-review-002.yaml"
   ]
 }
