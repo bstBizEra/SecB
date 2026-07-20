@@ -202,6 +202,8 @@
     "tests/fixtures/invalid/skill-manifest-bad-status.json",
     "src/services/work-package-service.mjs",
     "tests/work-package-service.test.mjs",
+    "src/services/evidence-envelope-service.mjs",
+    "tests/evidence-envelope-service.test.mjs",
     "tests/host-runtime-agent.test.mjs",
     "tests/runtime-registry.test.mjs",
     "tests/state-machine.test.mjs",
