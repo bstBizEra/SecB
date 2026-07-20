@@ -100,3 +100,4 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 
 Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch); EVID-S2 R4; SKILL S2/S3; MEM S2/S3; OP-1..4; WP-index adoption; ADR-0008; K-12 design; P0-21 activation.
 - 2026-07-20: MOD-KNOW S2 PRODUCED @ a67d49e (bst/mod-know-s2-sidecar): knowledge-linkage-service sibling module (S1 provably untouched — guard widened to 4 files), supersession/contradiction sidecar records, defense-in-depth lineage (record+walk gates, foreign-writer injection tested), backdated-at resurrection blocked. 589/584/0 fail/5 skip. S2 REV dispatched.
+- 2026-07-20: MOD-KNOW S2 REV: APPROVE_WITH_NOTES @ bbf649b (1 LOW: walker cross-project-edge symmetry, tracked); staged as PR #19. S3 dispatch next.
