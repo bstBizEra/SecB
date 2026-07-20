@@ -380,6 +380,37 @@ export class GoalGraphService {
     ]);
   }
 
+  // Read-only enumeration: a frozen summary of every goal at its highest
+  // registered version, carrying current status and parent linkage. Additive
+  // accessor for external read models (goal-rollup-projection, Slice 3); pure
+  // read, no state change, no audit (nothing is attempted).
+  listGoals() {
+    const summaries = new Map();
+    for (const entry of this.#goals.values()) {
+      const best = summaries.get(entry.goalId);
+      if (!best || entry.version > best.version) {
+        summaries.set(entry.goalId, {
+          goal_id: entry.goalId,
+          version: entry.version,
+          level: entry.level,
+          status: entry.status,
+          parent_goal_id: entry.record.parent_goal_id
+        });
+      }
+    }
+    return deepFreeze([...summaries.values()]);
+  }
+
+  // Read-only enumeration: the frozen list of work_package_ids linked to a
+  // goal (empty for a blank or unlinked goal). Additive accessor for external
+  // read models; pure read, no state change.
+  listLinkedWorkPackages(goalId) {
+    if (isBlank(goalId)) return deepFreeze([]);
+    const links = this.#links.get(goalId);
+    if (!links) return deepFreeze([]);
+    return deepFreeze([...links.keys()]);
+  }
+
   // Retire a goal. Blocked while it has ACTIVE child goals or any linked work
   // packages, unless `force` is set AND `approvals` carries a valid N-5
   // pairwise-distinct governance approval (independent review + governance,

@@ -288,6 +288,8 @@
     "tests/fixtures/valid/goal.json",
     "tests/fixtures/invalid/goal-missing-id.json",
     "src/services/goal-graph-service.mjs",
-    "tests/goal-graph-service.test.mjs"
+    "tests/goal-graph-service.test.mjs",
+    "src/ui/goal-rollup-projection.mjs",
+    "tests/goal-rollup-projection.test.mjs"
   ]
 }

@@ -268,6 +268,37 @@ test("force retire requires a valid pairwise-distinct N-5 approval", () => {
   );
 });
 
+test("listGoals enumerates highest-version goal summaries with current status", () => {
+  const { service } = makeService();
+  seedChain(service);
+  // A second version of the objective shadows v1 in the summary.
+  assert.equal(service.registerGoal(objective({ version: 2, status: "DRAFT" })).ok, true);
+  const summaries = service.listGoals();
+  assert.ok(Object.isFrozen(summaries));
+  const byId = new Map(summaries.map((s) => [s.goal_id, s]));
+  assert.equal(byId.size, 3);
+  assert.deepEqual({ ...byId.get("g_objective") }, {
+    goal_id: "g_objective", version: 2, level: "OBJECTIVE", status: "DRAFT", parent_goal_id: "g_product"
+  });
+  assert.equal(byId.get("g_portfolio").parent_goal_id, null);
+  // Retirement is reflected as current status in the enumeration.
+  service.retireGoal("g_objective");
+  assert.equal(new Map(service.listGoals().map((s) => [s.goal_id, s])).get("g_objective").status, "RETIRED");
+});
+
+test("listLinkedWorkPackages returns the frozen linked work-package ids", () => {
+  const { service } = makeService();
+  seedChain(service);
+  assert.deepEqual(service.listLinkedWorkPackages("g_objective"), []);
+  assert.deepEqual(service.listLinkedWorkPackages(""), []);
+  service.linkWorkPackage("g_objective", "wp_1");
+  service.linkWorkPackage("g_objective", "wp_2");
+  const linked = service.listLinkedWorkPackages("g_objective");
+  assert.ok(Object.isFrozen(linked));
+  assert.deepEqual([...linked].sort(), ["wp_1", "wp_2"]);
+  assert.deepEqual(service.listLinkedWorkPackages("g_unlinked"), []);
+});
+
 test("retireGoal denies on unavailable clock and throwing ledger", () => {
   const clock = makeService({ now: () => new Date(NaN) });
   assert.equal(clock.service.retireGoal("g_objective").deny_code, "DENY_CLOCK_UNAVAILABLE");
