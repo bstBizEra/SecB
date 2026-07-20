@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/goal.schema.json",
+  "title": "SecB Goal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "provenance", "content_hash"],
+  "properties": {
+    "goal_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "level": {"enum": ["PORTFOLIO", "PRODUCT", "OBJECTIVE"]},
+    "title": {"type": "string", "minLength": 1},
+    "status": {"enum": ["DRAFT", "ACTIVE", "RETIRED"]},
+    "parent_goal_id": {"type": ["string", "null"], "minLength": 1},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "agent_id", "created_at"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "agent_id": {"type": "string", "minLength": 1},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}
