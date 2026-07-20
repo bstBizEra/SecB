@@ -65,10 +65,11 @@ function hardenedRecord(entries) {
   return Object.freeze(output);
 }
 
-const deny = (code) => hardenedRecord([
+const deny = (code, evidenceStatus = null) => hardenedRecord([
   ["ok", false],
   ["deny_code", code],
   ["message", "request denied"],
+  ...(evidenceStatus === null ? [] : [["evidence_status", evidenceStatus]]),
 ]);
 
 function positiveInteger(value, name) {
@@ -297,7 +298,7 @@ export class McpGatewayCore {
   #limits;
   #timeouts;
   #capacityInUse = 0;
-  #overflowEvidenceTail = Promise.resolve();
+  #overflowEvidenceBusy = false;
 
   constructor({
     capabilityRegistry,
@@ -383,16 +384,18 @@ export class McpGatewayCore {
 
   #holdCapacity(reservation, settlement) {
     reservation.pending.add(settlement);
-    // Bounded abandonment: a truly-never-settling hook/sink cannot be forced
-    // to resolve (no cross-realm cancellation in JS), so this reservation's
-    // capacity slot must still be reclaimed on a bound, or GATE2-BLOCKING-001
-    // reproduces (a hung hook permanently wedges #capacityInUse, and via
-    // #denyConcurrencyAudited's shared #overflowEvidenceTail, the entire
-    // concurrency-overflow lane). Abandoning the pending entry after a bound
-    // does not stop `settlement` from continuing in the background -- it
-    // only stops counting it against capacity. If it later settles anyway,
-    // the .finally() below still fires and is a safe no-op against an
-    // already-abandoned entry.
+    // Bounded abandonment (GATE2-BLOCKING-001): a truly-never-settling
+    // hook/sink cannot be forced to resolve (no cross-realm cancellation in
+    // JS), so this reservation's capacity slot must still be reclaimed on a
+    // bound, or a hung hook permanently wedges #capacityInUse. This applies
+    // only to settlements that already TIMED OUT and were handed here by
+    // #call -- still-active work within its own timeout budget is never
+    // released early (the overflow-evidence lane itself is separately
+    // bounded via #overflowEvidenceBusy backpressure and cannot wedge).
+    // Abandoning the pending entry after a bound does not stop `settlement`
+    // from continuing in the background -- it only stops counting it against
+    // capacity. If it later settles anyway, the .finally() below still fires
+    // and is a safe no-op against an already-abandoned entry.
     const abandon = setTimeout(() => {
       if (reservation.pending.delete(settlement)) {
         this.#releaseCapacityIfComplete(reservation);
@@ -498,29 +501,39 @@ export class McpGatewayCore {
   }
 
   async #denyConcurrencyAudited(requestContext) {
+    if (this.#overflowEvidenceBusy) {
+      return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_NOT_RECORDED_BACKPRESSURE");
+    }
+    this.#overflowEvidenceBusy = true;
     const context = snapshotContext(requestContext);
     const capability = this.#capabilities.get(context.capability_id) ?? null;
-    const reservation = this.#newReservation(false);
-    const previous = this.#overflowEvidenceTail;
-    let releaseLane;
-    this.#overflowEvidenceTail = new Promise((resolve) => { releaseLane = resolve; });
+    const evidenceSequence = { nextSequence: 1 };
+    const outcome = await boundedCall(
+      () => this.#invocationLog(this.#auditEntry(
+        context,
+        capability,
+        null,
+        "DENY_CONCURRENCY_LIMIT",
+        evidenceSequence,
+      )),
+      this.#timeouts.audit_ms,
+    );
 
-    const response = previous.then(async () => {
-      try {
-        return await this.#denyAudited(
-          "DENY_CONCURRENCY_LIMIT",
-          context,
-          capability,
-          null,
-          reservation,
-        );
-      } finally {
-        reservation.completed = true;
-        this.#releaseCapacityIfComplete(reservation);
-        reservation.drained.then(releaseLane, releaseLane);
-      }
-    });
-    return response.catch(() => deny("DENY_AUDIT_UNAVAILABLE"));
+    if (outcome.status === "timeout") {
+      // The caller is bounded, but the single evidence slot remains occupied
+      // until the underlying callback actually settles. Later overflow calls
+      // receive explicit backpressure instead of joining an unbounded queue.
+      outcome.settled.finally(() => {
+        this.#overflowEvidenceBusy = false;
+      }).catch(() => {});
+      return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_RECORDING_TIMEOUT_UNCONFIRMED");
+    }
+
+    this.#overflowEvidenceBusy = false;
+    if (outcome.status === "ok") {
+      return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_CANDIDATE_RECORDED_NOT_ACCEPTED");
+    }
+    return deny("DENY_CONCURRENCY_LIMIT", "EVIDENCE_RECORDING_FAILED");
   }
 
   async invoke(requestContext, params = {}) {

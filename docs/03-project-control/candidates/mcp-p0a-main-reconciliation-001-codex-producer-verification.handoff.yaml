@@ -1,0 +1,99 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_main_reconciliation_001_codex_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_FRESH_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Codex ENGIN reconciliation producer verification, 2026-07-20T13:35:31.4442280+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: "codex-engin-mcp-p0a-main-reconciliation-001"
+  risk_class: "R2"
+  mutation_class: "M3"
+  limitations:
+    - "Producer checks are evidence candidates, not independent REV, QA, SEC, evidence acceptance, governance acceptance, or integration authority."
+    - "This candidate supersedes the behavior previously reviewed at 770aebb; its competing design choice requires fresh independent review rather than inheriting the earlier verdict."
+    - "The overflow evidence lane has one in-memory slot and no queue. While its logger is pending, later overflow denials truthfully report that evidence was not recorded because of backpressure."
+    - "No push, merge to main, transport binding, registry promotion, deployment, evidence acceptance, release, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-MAIN-RECONCILIATION-001-CODEX-PRODUCER-VERIFY"
+  sequence: 7
+  source_role: "ENGIN_RECONCILIATION_PRODUCER"
+  source_agent_instance_id: "codex-engin-mcp-p0a-main-reconciliation-001"
+  destination_role: "FRESH_INDEPENDENT_REV"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  original_target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  drifted_main_baseline_commit: "49d1e0c4436b088bc9428d67c9f915d113cea60a"
+  drifted_main_gateway_candidate_commit: "770aebb3a2488e51d978c8ddb3f2d0615465152d"
+  drifted_main_review_record_commit: "c7d0e76375fd839e3a8d7b5a979f40e3130bfca4"
+  competing_codex_candidate_commit: "7f072b04768cecc1a0af60763581aef62391e18a"
+  implementation_parent_commit: "49d1e0c4436b088bc9428d67c9f915d113cea60a"
+  implementation_commit: "fe532ced7587aac55f3b48312773a2254ee9d186"
+  reconciliation_target_commit: "fe532ced7587aac55f3b48312773a2254ee9d186"
+  branch: "producer/codex/mcp/p0a-main-reconciliation-001"
+  review_scope_note: "Review the complete implementation diff 49d1e0c..fe532ce. Only the gateway core and its adversarial test differ from current main; their resulting content matches Codex 7f072b0. This later handoff commit is provenance only and is not part of the frozen implementation target."
+
+  drift_reconciliation:
+    verified_fact: "During the prior Codex rework-006 slice, main advanced from 6b47cf1 to 49d1e0c through origin/main and incorporated Claude 770aebb plus its gate-review lineage."
+    competing_option_claude: "770aebb releases tracked execution capacity after audit_ms * 4 even when the underlying operation has not settled, and retains the serialized overflow evidence tail."
+    competing_option_codex: "7f072b0 retains actual execution capacity until underlying settlement and replaces the serialized overflow tail with one bounded, non-queued evidence slot."
+    advisory_decision: "Preserve all unrelated 49d1e0c integration content, remove only the global elapsed-time capacity abandonment and its assertions, and reconcile the 7f072b0 bounded overflow design."
+    rationale: "Elapsed time does not prove that underlying work stopped. Releasing capacity can therefore admit more work than max_concurrency while the prior work still executes. The one-slot overflow design bounds response latency and retained backlog without falsifying execution accounting."
+    rejected_alternative: "Keeping the serialized tail preserves durable-evidence aspiration only nominally: one non-settling logger blocks later responses and permits unbounded waiting callers."
+    truth_status: "PRODUCER_RECOMMENDATION_PENDING_FRESH_REV_QA_SEC_GOV"
+
+  closure_claims:
+    - control_id: "MCP-RECON-001-INTEGRATION-PRESERVATION"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "The implementation commit is directly based on 49d1e0c and changes exactly src/gateway/mcp-gateway-core.mjs plus tests/mcp-gateway-core-adversarial.test.mjs. All unrelated current-main integration content is preserved."
+    - control_id: "MCP-RECON-001-ACTUAL-WORK-ACCOUNTING"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "The audit_ms * 4 abandonment timer is removed. Timed-out execution remains charged until its underlying settlement, and the regression proves elapsed time alone does not release the base slot."
+    - control_id: "MCP-RECON-001-OVERFLOW-LIVENESS"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "The first overflow logger call is bounded by audit_ms; if it remains pending, 64 later overflow calls return independently with EVIDENCE_NOT_RECORDED_BACKPRESSURE and create no queued logger work."
+    - control_id: "MCP-RECON-001-STATE-BOUND"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "At most one overflow logger callback is retained. Backpressured calls are not queued, and deterministic recording resumes only after the occupied slot's real settlement."
+    - control_id: "MCP-RECON-001-NO-IO"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Static scan found no fetch, HTTP URL, networking, child-process, spawn, or exec capability in the changed source and test."
+
+  final_checks:
+    dependency_restore: "npm ci --offline: 6 packages installed, 0 vulnerabilities"
+    focused_gateway_tests: "44 total, 44 pass, 0 fail, 0 skip"
+    current_main_full_suite: "292 total, 287 pass, 0 fail, 5 pre-existing blocked skips"
+    foundation_validator: "PASS from a clean clone with no remotes configured; final repository manifest contains 255 unique paths and all declared paths resolve"
+    exact_content_check: "PASS: reconciled gateway source and adversarial test match 7f072b0"
+    diff_check: "PASS"
+    static_scope_check: "PASS: no fetch, axios, HTTP URL, node networking, child_process, spawn, or exec capability in the changed source and regression test"
+
+  implementation_changed_files:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core-adversarial.test.mjs"
+
+  retained_residuals:
+    - "Durable evidence-envelope persistence, accepted sequence or signature authority, external corroboration, and retention enforcement remain outside this in-memory gateway core."
+    - "While the single overflow evidence slot is occupied, later overflow denials are intentionally not recorded and truthfully report EVIDENCE_NOT_RECORDED_BACKPRESSURE."
+    - "A timed-out overflow caller cannot later learn whether its pending callback reached a durable sink."
+    - "An uncooperative overflow logger can retain the one evidence slot indefinitely, but cannot create an internal queue or block later overflow responses."
+    - "An uncooperative timed-out execution hook can retain execution capacity indefinitely; recovery requires a separately reviewed process or worker isolation and cancellation boundary."
+    - "The preserved current-main integration includes prior independent records approving the competing 770aebb design. Those verdicts do not accept this behaviorally different candidate; fresh REV, QA, and SEC are required."
+    - "Bounded output controls are not complete DLP, and durable evidence acceptance remains external."
+    - "The OM v0.1 pack and MCP work-package material remain candidate governance artifacts and grant no activation authority."
+
+  requested_review:
+    - "A fresh reviewer reruns focused and full tests from immutable target fe532ced7587aac55f3b48312773a2254ee9d186 against parent 49d1e0c4436b088bc9428d67c9f915d113cea60a."
+    - "REV explicitly compares the safety semantics of actual-settlement capacity accounting against 770aebb elapsed abandonment, and challenges never-settling overflow evidence, independent later bounds, strict retained-state bounds, truthful response status, and recovery ordering."
+    - "QA and SEC must use independent execution and must not inherit the earlier 770aebb verdict as acceptance of this candidate."
+
+self_certification:
+  producer_id: "codex-engin-mcp-p0a-main-reconciliation-001"
+  producer_verified: true
+  independent_review: false
+  qa_acceptance: false
+  sec_acceptance: false
+  evidence_acceptance: false
+  governance_acceptance: false
+  integration_authority: false
+  merge_authority: false
+  activation_authority: false
