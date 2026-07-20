@@ -1,0 +1,53 @@
+# P0-21 SecB MCP Server (alpha) - Delivery Record
+# Authority: operator direction "proceed to build the P0-21 MCP server"
+#   (2026-07-19). Disposition GOV-MCP-01..09 adopted
+#   (secb-mcp-server-gov-disposition.yaml). Built on the merge candidate
+#   lineage (branch bst/p0-21-mcp-server from bst/integration-rehearsal-3).
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+delivery:
+  work_package: "P0-21 SecB MCP Server - READ-ONLY alpha"
+  files:
+    - "src/mcp/tool-catalog.mjs - FROZEN nine-tool read-only catalog with static descriptions; pinned protocol version constant"
+    - "src/mcp/secb-mcp-server.mjs - SecBMcpServer.handle() dispatch core: deny-by-default methods + tools, caller resolution, closed params + reserved-delimiter scan, classification floor, fail-closed invocation audit"
+    - "src/mcp/jsonrpc-stdio.mjs - thin newline-delimited JSON-RPC 2.0 stdio transport (no socket/port/bind); parse errors answered, never crashes"
+    - "tools/run-secb-mcp-server.mjs - CLI skeleton (service wiring + seed validation is an operator deployment step; refuses to start bare)"
+    - "tests/mcp-server.test.mjs - 10 gate-pipeline tests"
+
+decisions_realized:
+  - "GOV-MCP-01 stdio transport (no network surface, Rule 13 structural)"
+  - "GOV-MCP-02 hand-rolled pinned JSON-RPC subset: five methods {initialize, tools/list, tools/call, ping, notifications/initialized}; everything else method-not-found (-32601); no new dependency"
+  - "GOV-MCP-03 nine READ-ONLY tools (resolve_effective wp/project, ledger_verify_summary, events/evidence read, skill_resolve, registry_resolve, contract_validate, canonical_fingerprint); no mutation surface exists"
+  - "GOV-MCP-04 caller resolved against the injected registry (APPROVED+ACTIVE via RuntimeRegistry.resolve); OS-spawn boundary honesty stated in-code (SARCHI-AA-01)"
+  - "GOV-MCP-05 effective ceiling = min(server config, caller max_data_classification), default INTERNAL, exact-match, unknown caller-max -> PUBLIC (fail-closed low); read projections reuse src/ui/report-projections.mjs verbatim"
+  - "GOV-MCP-06 fail-closed invocation audit: every call (ALLOW and DENY) is logged; a log-append failure -> DENY_AUDIT_UNAVAILABLE, result withheld"
+  - "GOV-MCP-09 non-pinned initialize refused (DENY_PROTOCOL_VERSION)"
+
+invariants_delivered:
+  - "OBSERVER-ONLY: no mutation tool exists; dispatch only reads/queries delivered services"
+  - "AUTHORITY NEVER ORIGINATES HERE: every answer is the underlying service's answer; the server adds denials, never permissions"
+  - "DENY-BY-DEFAULT: unknown method -> -32601; unknown tool -> DENY_UNKNOWN_TOOL; deny-by-default is the protocol posture"
+  - "RESERVED DELIMITERS: id-typed params scanned via the shared findReservedDelimiter -> DENY_RESERVED_DELIMITER"
+  - "DATA-NOT-INSTRUCTIONS: results carry {content_disposition: 'data_untrusted'}; tool descriptions are frozen static constants (no ledger/caller text can reach the description channel)"
+  - "AUDIT-BEFORE-SERVE: the invocation record is written before the response; withheld if it cannot be recorded"
+  - "registry_resolve never leaks another instance's full identity (id + lifecycle + max class only)"
+
+honesty_notes:
+  - "SARCHI-AA-01: caller identity is registry-asserted; the real boundary is the OS process spawn - these checks bind cooperative callers. Alpha is read-only precisely because caller identity cannot be cryptographically verified yet"
+  - "The stdio transport + CLI are integration entry points, unit-tested only at the server.handle() core; real service wiring + registry-seed validation are an operator-authorized deployment step, not this skeleton"
+  - "Per-tool param validation is explicit (required + non-blank + id-charset), not ajv-compiled; a schema-compiled catalog is a hardening V-item"
+  - "V-014 (credential-bounded MCP invocation) is NOT completed: alpha has no mutation/credential surface; V-014 joins when a mutation phase + bounded credentials exist"
+
+conformance:
+  - "No conformance stub is claimed complete by alpha; the SECB-FEDERATION-001 steps 2,3,4,6,7,8 are discharged; step 1 (session) is assertion+audit; step 5 (bounded credentials) is structurally absent (stated)"
+
+test_result: "10 MCP gate tests; full suite to be confirmed on fold"
+next: "Pinned Immune review on the merge candidate (catalog descriptions verbatim, fail-closed paths, SARCHI-AA-01 honesty, deny-by-default)"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "claude-immune"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

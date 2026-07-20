@@ -1,0 +1,49 @@
+# IMM-P009-V2 Design Proposal: Obligation Typing and Stage/Role Evidence Binding
+# Prepared by: Claude (BST-SA motor lane, advisory only)
+# Addresses: Immune round-3 finding (d) / round-4 open item 1 - obligation-tagged
+#   evidence is not bound to the producing stage or role, weakening
+#   claim-to-source binding while remaining within the GOV-P009-04 minimum.
+# Also resolves: RISK-P009-04 (obligation typing) without schema mutation.
+# Status: DESIGN ONLY - implementation requires GOV disposition and lands as a
+#   follow-up branch after the P0-09 merge (current branch is review-complete).
+
+problem:
+  - "Obligations are free strings; any evidence item tagged with an obligation counts toward coverage regardless of which actor produced it, at which lifecycle stage, or whether execution had occurred yet"
+  - "Consequences (probe-confirmed by Immune round 3): a GOV actor at GOV_DECISION can supply the item satisfying review-report; a reviewer can pre-satisfy qa-report at PLANNED->REVIEWED before re-execution has begun"
+  - "Independence (non-executor) and cycle-scoping already hold; the missing property is provenance: the artifact satisfying an obligation may not originate from the role/stage its name implies"
+
+proposed_convention:
+  obligation_prefixes:
+    - "self:<name>  - satisfiable only by an executor actor; producing stage SELF_VERIFIED"
+    - "review:<name> - satisfiable only by the actor who performed this cycle's REVIEW entry; producing stage REVIEW or later within the cycle"
+    - "qa:<name>    - satisfiable only by this cycle's QA actor; producing stage QA or later within the cycle"
+    - "gov:<name>   - satisfiable only by the GOV actor; producing stage GOV_DECISION"
+    - "any:<name>   - explicit opt-out; any non-executor actor, any stage (current behavior, made visible)"
+  legacy_rule: "Un-prefixed obligations are treated as any:<name> for one deprecation cycle, with a ledger warning entry; new contracts should use typed prefixes"
+  ordering_rule: "Evidence for review:/qa:/gov: obligations only counts if recorded at or after this cycle's SELF_VERIFIED entry (evidence-after-execution); self: evidence only counts if recorded at RUNNING or SELF_VERIFIED"
+
+enforcement_points:
+  - "submitTransition: evidence item whose obligation prefix conflicts with the transition's stage/actor is denied at submission (DENY_OBLIGATION_STAGE) rather than silently recorded-but-uncounted - fail loud at the source"
+  - "#assertObligationsSatisfied: coverage filter adds prefix-role/stage match to the existing cycle and independence filters"
+  - "No schema change: prefixes live inside the existing evidence_obligations strings; contract-validator untouched"
+
+sod_interaction:
+  - "review:/qa: prefixes bind to the cycle's recorded reviewerActorId/qaActorId, which the ledger-derived SoD already guarantees are non-executors and pairwise distinct"
+  - "gov: items are attached by the GOV actor during the GOV_DECISION entry envelope - the current looseness becomes the only sanctioned path for gov-typed obligations, and is closed for review/qa-typed ones"
+
+migration_and_tests:
+  - "Existing tests use self:unit-tests (already conformant), review-report and qa-report (legacy -> any:); tests updated to review:report / qa:report exercise the binding"
+  - "New negatives: gov actor supplying review:report at GOV_DECISION -> DENY_OBLIGATION_STAGE; reviewer pre-tagging qa:report at REVIEWED -> DENY_OBLIGATION_STAGE; review:report recorded before SELF_VERIFIED in the cycle -> not counted, GOV_DECISION denies insufficient"
+
+blocking_decision_for_human_gov:
+  - id: "GOV-P009-07"
+    question: "Adopt the prefix convention (self:/review:/qa:/gov:/any:) with evidence-after-execution ordering and one-cycle legacy grace, or defer stage binding until context-receipt schema v2 introduces structured obligation objects?"
+    recommendation: "Adopt the prefix convention now - it is schema-neutral, closes the provenance gap Immune flagged, and structured obligations in a future schema v2 can supersede it without conflict"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "claude-immune"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

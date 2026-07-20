@@ -1,0 +1,16 @@
+{
+  "decision_id": "dec_p0_14_fixture",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_14_001",
+  "session_id": "ses_p0_14_001",
+  "actor_id": "gov-actor",
+  "decision_type": "GOVERNANCE",
+  "outcome": "ACCEPT",
+  "rationale": "Accepted on complete, independent evidence",
+  "authority_ref": "grant_gov",
+  "evidence_refs": ["ev_accept_001"],
+  "decided_at": "2026-07-19T10:00:00Z",
+  "valid_from": "2026-07-19T10:00:00Z",
+  "valid_until": "2026-12-31T00:00:00Z"
+}

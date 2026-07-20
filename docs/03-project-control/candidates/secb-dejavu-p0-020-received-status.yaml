@@ -1,0 +1,63 @@
+# SECB-DEJAVU-P0-020 - Received Coordination Status (NOT VERIFIED)
+# Filed by: Claude (BST-SA SARCHI lane, worker only) at operator request.
+# PROVENANCE: transcribed verbatim from an operator-pasted status message
+#   on 2026-07-19. It originates from another lane/system. This Claude
+#   session did NOT produce, review, verify, or reproduce any part of it.
+# STATUS: RECEIVED_NOT_VERIFIED. Recorded for the governance trail only.
+
+record_type: "external_coordination_status"
+verification_status: "unverified"
+capture:
+  captured_at: "2026-07-19"
+  captured_by: "claude-code-sarchi"
+  source: "operator chat message (pasted)"
+  transcription: "verbatim of the status claims; no endorsement"
+
+grounding_note: >
+  As of capture, NO artifact named SECB-DEJAVU-P0-020, no release
+  binary, no WP-01 pilot package, and none of the referenced REV/security
+  rereviews exist in this worktree (branch worktree-p0-09-reconciliation).
+  The only in-repo match is the backlog concept P0-20 "Governance verdict
+  / residual risk and activation decision" (docs/09-delivery/backlog-p0.md).
+  This Claude session cannot and does not attest to any claim below.
+
+reported_completed_claims_UNVERIFIED:
+  - "Architecture intake and source validation"
+  - "Phase-alignment and roadmap-exception candidates"
+  - "v2/v3 independent REV and security rereviews"
+  - "Latest composite verdict: APPROVE_CANDIDATE_FOR_HUMAN_GOV"
+  - "Blocking findings: none at the contract-review level"
+
+reported_pending:
+  - "Explicit Human GOV review/signature"
+  - "Separate content-bound SECB-DEJAVU-P0-020 execution authorization"
+  - "Credential attestations and trust-store verification"
+  - "Directory/ACL and PEP operational proofs"
+  - "Supply-chain validation of the actual release artifact"
+  - "Controlled WP-01 pilot"
+
+reported_denied_actions_held:
+  statement: "The controlled pilot package is absent; execution, download, binary use, credentials, MCP registration, and runtime mutation remain DENIED."
+  claude_position: >
+    This session affirms and holds every listed denial. Several are
+    hard-prohibited for Claude irrespective of any approval (entering
+    credentials, executing downloaded binaries, MCP/runtime registration
+    as a mutation); the remainder are denied here and stay denied. No
+    action was or will be taken toward any of them.
+
+authority_assessment:
+  - "APPROVE_CANDIDATE_FOR_HUMAN_GOV is a contract-review verdict, NOT execution authorization"
+  - "Under the BST-SA contract Claude is a worker, never an approver; none of the pending items are clearable by any agent"
+  - "Human GOV signature and the separate content-bound execution authorization are distinct operator acts, correctly separated"
+  - "Credential/trust-store verification maps to the open SARCHI-AA-02 gap (no signing/trust root exists in SecB yet)"
+  - "Directory/ACL and PEP operational proofs are the SARCHI-AA-01 privilege-boundary point: OS-level, not agent-assertable"
+
+next_transition: "Human GOV review of SECB-DEJAVU-P0-020 (out of this session's authority); operator to relabel/verify this capture on their side"
+
+self_certification:
+  agent_id: "claude-code-sarchi"
+  peer_agent_id: null
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

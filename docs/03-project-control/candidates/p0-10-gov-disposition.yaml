@@ -1,0 +1,60 @@
+# P0-10 Plan Disposition Record
+# Disposes: docs/03-project-control/candidates/p0-10-planning-001.cortex-advisory.yaml
+# Authority: Human operator instruction ("proceed next") received 2026-07-18
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+disposition_record:
+  work_package: "wp_secb_p0_10_planning_001"
+  planning_packet: "docs/03-project-control/candidates/p0-10-planning-001.cortex-advisory.yaml"
+  disposed_at: "2026-07-18"
+  disposed_by: "human-operator"
+  disposition: "PROCEED_PER_RECOMMENDATIONS"
+  interpretation: >
+    Operator instruction "proceed next" is recorded as adoption of the
+    planning packet's recommended answers for all seven blocking
+    decisions. If the operator intended different answers for any
+    GOV-P010 item, this record must be superseded by an appended
+    correction and affected work re-reviewed.
+  r2_gate: >
+    Per the packet's recommended sequence step 4, R2 implementation of
+    the ContextFederationService remains gated on P0-09 acceptance,
+    operationally signalled by the operator merging
+    bst/p0-09-work-package-auth-6f341f into main. This disposition does
+    NOT waive that gate. Until the merge lands, only sequence steps 2-3
+    (artifact freezing, conformance planning) proceed.
+
+decisions:
+  - id: "GOV-P010-01"
+    adopted: "Option C - dedicated ContextFederationService composing over injected WorkPackageContractService.resolveEffective; live re-resolution at issuance and consumption; either layer's denial denies; federation-typed denial wins, carrying the underlying reason"
+  - id: "GOV-P010-02"
+    adopted: "Ledger-side enforcement of issuer/expiry/revocation/chain metadata for R2; context-receipt schema v2 tracked as an extend-only V-item; shared schema surface stays frozen this cycle"
+  - id: "GOV-P010-03"
+    adopted: "Chain-and-supersede compaction; in-place re-seal categorically prohibited"
+  - id: "GOV-P010-04"
+    adopted: "Single-session binding at issuance; re-binding and cross-session sharing prohibited; new session requires new issuance"
+  - id: "GOV-P010-05"
+    adopted: "expires_at = min(issued_at + policy TTL, work package valid_until); deny-on-use, no timer mutation; R2 default TTL = work package valid_until; issuers may request shorter, never longer"
+  - id: "GOV-P010-06"
+    adopted: "Issuance by any actor holding an ACTIVE grant binding actor+project+work_package whose role matches the receipt's assigned_role, gated service-side; dedicated CTX_ISSUER role deferred to P0-11"
+  - id: "GOV-P010-07"
+    adopted: "Supersession/revocation invalidate receipts by consumption-time resolution only; no cascade writer; denial recorded at attempted use"
+
+frozen_artifacts:
+  binding_tuple: "(project_id, work_package_id, bound_wp_version, baseline_version, session_id) - all five must match at consumption; triple baseline equality (asserted == receipt == effective contract)"
+  retrieval_pipeline_order: "1 project-scope, 2 authority-filter, 3 temporal/current-state, 4 verification-status, 5 exact-source-evidence, 6 relevance-rank (reorder only), 7 minimum-sufficient (remove only); stages 6-7 strictly subtractive; every stage records exclusions"
+  chain_rules: "successor version N+1 same receipt_id; parent hash recorded in COMPACT_CHAIN ledger entry; subset-only sources/tools/skills/scope; successor expires_at <= parent; parent SUPERSEDED deny-on-use with chain-head pointer; REVOKE terminal for entire chain"
+  ledger_side_metadata: "issuer actor, authority decision id, bound wp version, issued_at, expires_at, derived status, parent content_hash, per-stage exclusions"
+  id_charset: "receipt_id, project_id, work_package_id, session_id must not contain '|' (P0-09 IMM-P009-01 parity)"
+
+implementation_notes:
+  - "Shared canonicalize/fingerprint pair to be extracted from work-package-service at R2 as an additive module (RISK-P010-03)"
+  - "context-receipt fixture content_hash regeneration and schema-valid-but-seal-invalid negative test required at R2 (RISK-P010-04)"
+  - "Session identity remains caller-asserted until a session service exists (RISK-P010-06); ledger records assertions for retroactive audit"
+
+self_certification:
+  agent_id: "claude-code-motor"
+  peer_agent_id: "codex-operator"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
