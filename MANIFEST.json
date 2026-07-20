@@ -52,6 +52,7 @@
     "docs/03-project-control/candidates/wp-p0-08-project-contract-service.work-package.yaml",
     "docs/03-project-control/candidates/wp-p0-15a-runtime-registry-core.work-package.yaml",
     "docs/03-project-control/candidates/wp-p0-19-read-only-self-pilot.work-package.yaml",
+    "docs/03-project-control/candidates/om-v0.1-doctrine-rev-001.md",
     "docs/03-project-control/effective/context-receipts/claude-p0-15a.context-receipt.yaml",
     "docs/03-project-control/effective/context-receipts/codex-p0-08.context-receipt.yaml",
     "docs/03-project-control/effective/p0-wave-1-authority-packet.yaml",
@@ -246,6 +247,7 @@
     "docs/adr/0005-failure-is-a-learning-transition.md",
     "docs/adr/0006-harness-neutral-authority.md",
     "docs/adr/0007-serialized-integration.md",
+    "docs/adr/0008-root-agents-adoption.md",
     "docs/templates/agent-profile.yaml",
     "docs/templates/failure-evidence-envelope.yaml",
     "docs/templates/goal.yaml",
@@ -256,6 +258,9 @@
     "docs/templates/schedule.yaml",
     "docs/templates/session.yaml",
     "docs/templates/skill-candidate.yaml",
-    "docs/source/om-v0.1/import-map.yaml"
+    "docs/source/om-v0.1/import-map.yaml",
+    "docs/03-project-control/candidates/om-v0.1-import-rev-001.md",
+    "docs/03-project-control/candidates/om-mcp-wave-governance-decision-001.md",
+    "docs/03-project-control/candidates/module-completion-tracker-001.md"
   ]
 }
