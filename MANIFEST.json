@@ -286,6 +286,26 @@
     "docs/03-project-control/candidates/module-completion-tracker-001.md",
     "src/services/memory-gateway-service.mjs",
     "tests/memory-gateway-service.test.mjs",
-    "docs/03-project-control/candidates/mod-mem-s1-rev-001.md"
+    "docs/03-project-control/candidates/mod-mem-s1-rev-001.md",
+    "tests/context-receipt-mint.test.mjs",
+    "src/services/candidate-source-port.mjs",
+    "tests/candidate-source-port.test.mjs",
+    "docs/03-project-control/candidates/context-receipt-shape-convergence-001.md",
+    "tests/context-federation-lifecycle-facets.test.mjs",
+    "docs/03-project-control/candidates/mod-context-completion-rev-001.md",
+    "docs/03-project-control/candidates/mcp-p0a-rework-009-codex-producer-verification.handoff.yaml",
+    "docs/03-project-control/candidates/mcp-p0a-rework-010-codex-producer-verification.handoff.yaml",
+    "docs/03-project-control/candidates/mcp-gateway-gate-008-010-001.md",
+    "docs/03-project-control/candidates/mod-evid-s1-rev-001.md",
+    "src/services/evidence-envelope-service.mjs",
+    "tests/evidence-envelope-service.test.mjs",
+    "contracts/goal.schema.json",
+    "tests/fixtures/valid/goal.json",
+    "tests/fixtures/invalid/goal-missing-id.json",
+    "src/services/goal-graph-service.mjs",
+    "tests/goal-graph-service.test.mjs",
+    "src/ui/goal-rollup-projection.mjs",
+    "tests/goal-rollup-projection.test.mjs",
+    "docs/03-project-control/candidates/mod-work-completion-rev-001.md"
   ]
 }
