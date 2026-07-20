@@ -311,6 +311,8 @@
     "tests/knowledge-claim-service.test.mjs",
     "src/services/knowledge-linkage-service.mjs",
     "tests/knowledge-linkage-service.test.mjs",
+    "src/services/knowledge-candidate-provider.mjs",
+    "tests/knowledge-candidate-provider.test.mjs",
     "contracts/skill-candidate.schema.json",
     "src/registry/skill-candidate-registry.mjs",
     "tests/skill-candidate-registry.test.mjs",
