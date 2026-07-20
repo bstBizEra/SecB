@@ -21,6 +21,7 @@ const validFixtures = {
   knowledgeClaim: "valid/knowledge-claim.json",
   outcomeReceipt: "valid/outcome-receipt.json",
   skillManifest: "valid/skill-manifest.json",
+  skillCandidate: "valid/skill-candidate.json",
   goal: "valid/goal.json"
 };
 
@@ -37,6 +38,7 @@ const invalidFixtures = {
   knowledgeClaim: "invalid/knowledge-claim-no-evidence.json",
   outcomeReceipt: "invalid/outcome-receipt-bad-status.json",
   skillManifest: "invalid/skill-manifest-bad-status.json",
+  skillCandidate: "invalid/skill-candidate-bad-status.json",
   goal: "invalid/goal-missing-id.json"
 };
 

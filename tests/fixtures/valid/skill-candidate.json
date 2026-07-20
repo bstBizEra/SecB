@@ -1,0 +1,32 @@
+{
+  "skill_candidate_id": "skill.pdf.extract",
+  "version": "0.1.0",
+  "name": "PDF table extraction",
+  "purpose": "Extract tabular data from PDF documents into structured rows.",
+  "status": "CANDIDATE",
+  "source_identity": {
+    "maintainer": "bst-motor",
+    "repository": "https://github.com/bstBizEra/SecB",
+    "namespace": "@secb/skill-pdf-extract"
+  },
+  "immutable_version": {
+    "commit": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+    "tag_or_digest": "sha256:bb22cc33dd44ee55ff667788990011223344556677889900aabbccddeeff1122"
+  },
+  "integrity": {
+    "sha256": "bb22cc33dd44ee55ff667788990011223344556677889900aabbccddeeff1122"
+  },
+  "tool_inventory": ["read_text_file", "list_directory"],
+  "filesystem_boundary": "workspace-lease-root-read-only",
+  "network_boundary": "none",
+  "credential_handle": null,
+  "harness_compatibility": [
+    { "harness_id": "claude-code", "compatibility_level": "C3" },
+    { "harness_id": "codex", "compatibility_level": "C2" }
+  ],
+  "intake_evidence_refs": ["evidence:intake:skill-pdf-extract:0001"],
+  "withdrawal": {
+    "withdrawn": false,
+    "reason": null
+  }
+}
