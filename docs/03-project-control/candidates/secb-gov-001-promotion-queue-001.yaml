@@ -1,0 +1,29 @@
+artifact_id: SECB-GOV-001-PROMOTION-QUEUE-001
+artifact_type: promotion_queue_handoff
+status: QUEUED_FOR_OPERATOR_REVIEW
+authority_status: advisory_only
+baseline:
+  commit: 1fb7ba9
+  branch: producer/codex/mcp/p0a-gateway-core-rework-011
+  source_packet: docs/03-project-control/candidates/secb-gov-001-promotion-readiness-001.md
+requested_disposition: ACTIVE_READ_ONLY_CONTROLLED_ACTIVATION
+stable_disposition: NOT_DEFINED_IN_CURRENT_NORMATIVE_PACK
+producer: codex-root
+ready_for_operator_review: true
+approval_authority: false
+activation_authority: false
+merge_authority: false
+required_before_activation:
+  - effective_project_contract_bound_to_exact_accepted_commit
+  - independent_rev_acceptance
+  - independent_qa_acceptance
+  - sec_review_for_r3_r4_controls
+  - evidence_acceptance_and_retention_verification
+  - explicit_human_gov_activation_decision
+hard_denials:
+  - no_push
+  - no_merge_to_main
+  - no_release
+  - no_deployment
+  - no_activation
+  - no_stable_claim
