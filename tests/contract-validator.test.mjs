@@ -15,7 +15,8 @@ const validFixtures = {
   contextReceipt: "valid/context-receipt.json",
   handoffEnvelope: "valid/handoff-envelope.json",
   eventEnvelope: "valid/event-envelope.json",
-  evidenceEnvelope: "valid/evidence-envelope.json"
+  evidenceEnvelope: "valid/evidence-envelope.json",
+  capabilityRecord: "valid/capability-record.json"
 };
 
 const invalidFixtures = {
@@ -25,7 +26,8 @@ const invalidFixtures = {
   contextReceipt: "invalid/context-bad-hash.json",
   handoffEnvelope: "invalid/handoff-missing-scope.json",
   eventEnvelope: "invalid/event-missing-idempotency.json",
-  evidenceEnvelope: "invalid/evidence-bad-status.json"
+  evidenceEnvelope: "invalid/evidence-bad-status.json",
+  capabilityRecord: "invalid/capability-record-bad-status.json"
 };
 
 test("all canonical contract kinds have valid fixtures", () => {

@@ -45,7 +45,7 @@ for (const file of docsManifest.files) {
 }
 
 const schemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"));
-assert(schemaFiles.length === 7, "schemas.count", "7 canonical bootstrap schemas");
+assert(schemaFiles.length === 8, "schemas.count", "8 canonical bootstrap schemas");
 const mandatoryIdentityFields = {
   "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_instance_id", "evaluation_status", "lifecycle_state"],
   "contracts/project-contract.schema.json": ["project_id", "version", "status", "approvals"],
@@ -53,7 +53,8 @@ const mandatoryIdentityFields = {
   "contracts/context-receipt.schema.json": ["receipt_id", "version", "project_id", "work_package_id", "session_id", "content_hash"],
   "contracts/handoff-envelope.schema.json": ["handoff_id", "version", "project_id", "work_package_id", "source_session_id", "content_hash"],
   "contracts/event-envelope.schema.json": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "idempotency_key", "content_hash"],
-  "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "content_hash", "verification_status"]
+  "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "content_hash", "verification_status"],
+  "contracts/capability-record.schema.json": ["capability_id", "version", "adapter_id", "tool", "access", "status"]
 };
 for (const file of schemaFiles) {
   const schema = JSON.parse(read(file));
