@@ -1,0 +1,58 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rev_request_001_v1_candidate"
+  record_status: "DRAFT_CANDIDATE"
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: "Advise-and-proceed REV/QA dispatch preparation (AMD-002), 2026-07-19"
+  producer_runtime: "Claude"
+  limitations:
+    - "Producer (Claude) may not self-review; this packet requests independent REV and QA per agent-team-and-sod."
+    - "Review scope is FROZEN at the pinned commit; commits after the pin (including this packet) are governance records, not review targets."
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REV-001"
+  sequence: 1
+  source_agent_instance_id: "claude-secb-session-2026-07-19"
+  source_session_id: "234ef494-8a68-4e15-8e00-3d2fd9b6e7b0"
+  destination_role: "REV+QA (Codex identities per docs/03-project-control/candidates/agents/, distinct from producer)"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  objective: "Independent review of the SECB-MCP-P0-001 candidate set and the gateway dispatch core candidate."
+  authorized_scope:
+    - "Branch bst/secb-mcp-p0-001-candidate, PINNED at commit 270dacf (review target: e66adcf + 270dacf relative to main 7799dcc)."
+    - "Read-only review; findings as records; no fixes on the frozen range without a new pinned round."
+  work_completed:
+    - "Recorded operator-supplied MCP tooling research verbatim (EXTERNAL_REFERENCE, DRAFT)."
+    - "Derived SECB-MCP-P0-001 control-plane candidate (rules N-1..N-6)."
+    - "Built src/gateway/mcp-gateway-core.mjs pure fail-closed dispatch core; no transport/port/I-O/spawn."
+    - "11 unit tests covering all deny paths + happy path; MANIFEST maintained in-commit."
+  artifacts_created:
+    - "docs/03-project-control/candidates/secb-mcp-p0-tooling-research-2026-07-19.md"
+    - "docs/03-project-control/candidates/secb-mcp-p0-001-control-plane.md"
+    - "docs/03-project-control/candidates/wp-mcp-a-gateway-core.work-package.yaml"
+    - "docs/03-project-control/candidates/wp-mcp-e-gitea-adapter.work-package.yaml"
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core.test.mjs"
+  decisions_made:
+    - "Built the gateway core now (zero activation surface) so REV/QA review a real artifact; deferred all adapter code until the core passes review."
+    - "Codex harness config stripped to zero third-party MCP servers, conforming to rule N-1 ahead of acceptance."
+  assumptions:
+    - "Research packet claims (external citations) not independently re-verified; classified EXTERNAL_REFERENCE."
+    - "secb-local-v2-r2 project contract remains the applicable non-effective candidate reference."
+  evidence_refs:
+    - "npm test on 270dacf: validate PASS; 163 tests, 150 pass, 0 fail, 13 pre-existing skips."
+  checks_performed:
+    - "node tools/validate-foundation.mjs exit 0 (manifest existence, links, schemas)."
+    - "node --test full suite."
+  known_limitations:
+    - "Gateway core has no transport binding by design; receipts are in-memory objects, not yet evidence-envelope ledger entries."
+    - "Policy hook and capability registry are injected in-memory; private-registry schema is an open item."
+  unresolved_findings: []
+  risks:
+    - "MCP permission surface is R3 at activation; this round reviews R1 build artifacts only."
+    - "Research-derived tool lists adopted by reference pending REV verification."
+  recommended_next_action: "REV: verify core against SECB-MCP-P0-001 N-1..N-3 and hunt bypasses of deny paths (context forgery, capability aliasing, policy-widening, audit suppression). QA: rerun acceptance checks from wp_secb_mcp_a_gateway_core_001. Return verdicts as records; operator merges or orders rework."
+  confidence: "medium-high on core correctness; medium on control-doc completeness pending SEC view"
+  context_delta:
+    - "AMD-002 rev 2 effective on main at 7799dcc (advise-and-proceed)."
+    - "Codex config.toml now has zero third-party MCP servers (harness conformance to N-1)."
+  envelope_sha256: "UNSET_AT_AUTHORING"

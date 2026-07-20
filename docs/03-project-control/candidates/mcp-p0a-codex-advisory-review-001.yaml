@@ -1,0 +1,127 @@
+# MCP P0-A Codex Advisory Review Record
+# Frozen target: 270dacfc7fad75e82014809743ba1545a66fc5f2
+# Review base: HANDOFF-MCP-P0A-REV-001 at 7576a2937b3efffe4b39443691a8b5e843be47dd
+
+schema_version: "1.0"
+record_metadata:
+  record_id: "review_mcp_p0a_codex_001_v1_candidate"
+  record_status: "ADVISORY_REQUEST_CHANGES_NOT_EFFECTIVE"
+  source: "Independent Codex adversarial review, 2026-07-19T17:45:08.5816470+07:00"
+  reviewer_runtime: "Codex"
+  reviewer_actor_id: "codex-reviewer-advisory-2026-07-19"
+  limitations:
+    - "No effective MCP-specific reviewer registration or server-derived review authority was resolved for this session; this is an advisory finding record, not governance acceptance."
+    - "The reviewer did not modify the frozen producer commit. Adversarial tests are carried only on the separate codex/rev/mcp-p0a-001 review branch."
+    - "No merge to main, push, transport binding, registry promotion, deployment, or activation is authorized by this record."
+
+review:
+  review_id: "REV-MCP-P0A-CODEX-001"
+  target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  target_branch_at_handoff: "bst/secb-mcp-p0-001-candidate"
+  handoff_ref: "HANDOFF-MCP-P0A-REV-001"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  scope:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core.test.mjs"
+    - "SECB-MCP-P0-001 rules N-1 through N-3 as exercised by the gateway-core slice"
+  disposition: "REQUEST_CHANGES"
+  activation_disposition: "DENY_FAIL_CLOSED"
+  ready_for_merge: false
+  ready_for_activation: false
+
+  producer_evidence_replayed:
+    foundation_validator: "PASS on isolated local clone with no remotes configured"
+    producer_gateway_tests: "11 pass, 0 fail"
+    full_tracked_suite: "163 tests, 150 pass, 0 fail, 13 pre-existing blocked skips"
+    interpretation: "Passing producer tests do not close the adversarial findings below."
+
+  blocking_findings:
+    - finding_id: "REV-MCP-P0A-001"
+      severity: "HIGH"
+      title: "Caller-controlled hooks can escape the structured fail-closed boundary"
+      evidence:
+        - "policy.allow() exceptions escape invoke() instead of returning a structured denial."
+        - "The injected clock can throw before audit and escape invoke()."
+        - "An asynchronous adapter rejection is returned inside an ok:true result and later becomes an unhandledRejection."
+      violated_claims:
+        - "Work-package acceptance: every deny path returns a structured deny code; no throw escapes invoke()."
+        - "Gateway core comment: never throws for a caller-supplied condition."
+      required_rework:
+        - "Make the dispatch boundary asynchronous and await adapter invocation."
+        - "Convert policy, clock, audit, and adapter failures to stable structured denials without exposing raw error text."
+
+    - finding_id: "REV-MCP-P0A-002"
+      severity: "CRITICAL"
+      title: "The narrowing-only policy hook can mutate capability routing and widen authority"
+      evidence:
+        - "policy.allow(context, capability) receives the mutable registry object after the read-only check."
+        - "A policy hook can change adapter_id and tool, return true, and cause dispatch to a different adapter without a second access check."
+      violated_claims:
+        - "Policy only narrows."
+        - "N-3 server/tool allowlists and read/write classification are enforced fail-closed."
+      required_rework:
+        - "Snapshot and deep-freeze validated context and capability data before invoking policy or adapters."
+        - "Resolve routing from the immutable validated snapshot and reject any mutation or mismatch."
+
+    - finding_id: "REV-MCP-P0A-003"
+      severity: "HIGH"
+      title: "Adapter mutation can forge receipt attribution"
+      evidence:
+        - "The adapter receives the original mutable request_context."
+        - "Changing work_package_id or session_id inside the adapter changes the emitted receipt while the audit entry retains the original values."
+      violated_claims:
+        - "N-2 request_context binding."
+        - "Receipt provenance and attribution integrity."
+      required_rework:
+        - "Use an immutable cloned context for policy and adapter calls."
+        - "Build audit and receipt records from the same pre-dispatch immutable snapshot."
+
+    - finding_id: "REV-MCP-P0A-004"
+      severity: "HIGH"
+      title: "Denied attempts are not audited"
+      evidence:
+        - "Missing context, unknown capability, non-read access, policy denial, and missing adapter return before invocationLog is called."
+        - "An unknown-capability probe produced zero audit entries."
+      violated_claims:
+        - "Every invocation attempt is audit-first."
+        - "SecB fail-closed evidence preservation expectations."
+      required_rework:
+        - "Record both ALLOW and DENY dispositions for every invocation attempt using a privacy-bounded audit envelope."
+        - "Define behavior for audit failure on pre-dispatch denials without accidentally dispatching."
+
+    - finding_id: "REV-MCP-P0A-005"
+      severity: "HIGH"
+      title: "Raw backend error messages cross the gateway boundary"
+      evidence:
+        - "Adapter and invocation-log error.message values are interpolated into caller-visible denials."
+        - "A synthetic adapter error containing token=super-secret-value was returned verbatim."
+      violated_claims:
+        - "N-3 output redaction."
+        - "Credential isolation and no-token-passthrough posture."
+      required_rework:
+        - "Return stable public error codes and generic messages."
+        - "Route sanitized diagnostic detail only to an approved evidence sink."
+
+  non_blocking_residuals:
+    - "The core slice does not yet implement the rest of N-3: path/repository/branch scope, egress, credential handles, size limits, timeouts, concurrency, evidence-envelope persistence, or kill switch. These remain mandatory before transport binding or activation."
+    - "The capability registry is injected and mutable after construction; a later rework should snapshot it or require an immutable registry interface."
+    - "QA and SEC remain distinct required gates; this advisory review does not satisfy either role."
+
+  evidence_artifact:
+    path: "tests/mcp-gateway-core-adversarial.test.mjs"
+    result: "7 tests, 0 pass, 7 fail against frozen target behavior"
+    purpose: "Executable reproductions for producer rework; failures are expected on the reviewed commit."
+
+  recommended_next_action:
+    - "Producer prepares a new immutable rework commit addressing REV-MCP-P0A-001 through REV-MCP-P0A-005."
+    - "Fresh independent REV reruns the adversarial test artifact against the new pin."
+    - "Only after REV passes should distinct QA and SEC evaluate the remaining N-3 and activation boundaries."
+
+self_certification:
+  reviewer_id: "codex-reviewer-advisory-2026-07-19"
+  producer_id: "claude-secb-session-2026-07-19"
+  producer_independence: true
+  modified_frozen_target: false
+  execution_authority: false
+  approval_authority: false
+  governance_acceptance: false
