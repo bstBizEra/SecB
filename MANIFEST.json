@@ -259,6 +259,7 @@
     "docs/templates/session.yaml",
     "docs/templates/skill-candidate.yaml",
     "docs/source/om-v0.1/import-map.yaml",
-    "docs/03-project-control/candidates/om-v0.1-import-rev-001.md"
+    "docs/03-project-control/candidates/om-v0.1-import-rev-001.md",
+    "docs/03-project-control/candidates/om-mcp-wave-governance-decision-001.md"
   ]
 }
