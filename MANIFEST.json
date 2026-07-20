@@ -288,6 +288,7 @@
     "src/services/candidate-source-port.mjs",
     "tests/candidate-source-port.test.mjs",
     "docs/03-project-control/candidates/context-receipt-shape-convergence-001.md",
-    "tests/context-federation-lifecycle-facets.test.mjs"
+    "tests/context-federation-lifecycle-facets.test.mjs",
+    "docs/03-project-control/candidates/mod-context-completion-rev-001.md"
   ]
 }
