@@ -19,8 +19,8 @@ handoff:
   destination_role: "FRESH_INDEPENDENT_REV"
   current_main_parent: "f04dee6cfafaae0213d92dc0da13300b14707f5e"
   implementation_parent: "007da0e1221f066d908e1265be6859cb1af2c635"
-  implementation_commit: "7bb7a443c14ab4ef5b02d11d1dedc86f8f69d0c6"
-  implementation_target: "7bb7a443c14ab4ef5b02d11d1dedc86f8f69d0c6"
+  implementation_commit: "7bb7a44be2bbb410850da739c06839f8d430ea3a"
+  implementation_target: "7bb7a44be2bbb410850da739c06839f8d430ea3a"
   branch: "producer/codex/mcp/p0a-gateway-core-rework-009"
   advisory_decision: "PRODUCER_VERIFY_ONLY_FRESH_REVIEW_REQUIRED"
   changes:
