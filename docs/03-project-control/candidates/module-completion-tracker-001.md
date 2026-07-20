@@ -105,3 +105,4 @@ Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch
 - 2026-07-20: MOD-KNOW S3 PRODUCED @ ce9957f (bst/mod-know-s3-provider): pure knowledge→CandidateSource mapper — honest verified/contested/classification semantics, real-stack feed-forward proof (port zero-exclusion + mint seal + supersession-aware). 632/627/0 fail/5 skip. Module completion review dispatched.
 - 2026-07-20: **MOD-KNOW FINISHED_WITH_TRACKED_FOLLOWUPS** — completion REV @ ac3379f: zero adversarial escapes, G1-G4+G6 closed, G5 latent on EVID ladder (operator-gated), G7 partial. Staged as PR #20.
 - 2026-07-20: PR #20 MERGED — MOD-KNOW module fully ratified on main.
+- 2026-07-20: **OPERATOR AUTHORIZATION**: EVID-S2 R4 verify+accept ladder authorized for implementation (in-session directive). Producer dispatched; independent REV + SEC-focused review to follow; ratification remains at operator merge. MOD-EVID S3 (accepted-evidence resolver, R3) remains separately gated.
