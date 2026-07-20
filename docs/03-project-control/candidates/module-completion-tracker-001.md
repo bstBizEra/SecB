@@ -78,3 +78,4 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 - 2026-07-20: MOD-SKILL S1 PRODUCED @ a629325 (bst/mod-skill-s1-intake): skill-candidate schema #14 (promotion states absent by design — invalid fixture proves PUBLISHED rejected), intake registry (register/withdraw only, config-only governance actors), resolver+sod byte-identity guarded. 559/554/0 fail/5 skip. S1 REV dispatched.
 - 2026-07-20: MOD-KNOW S1 REV: APPROVE_FOR_OPERATOR_MERGE @ a9d10ec; staged as PR #17.
 - 2026-07-20: PR #17 MERGED — MOD-KNOW S1 ratified on main.
+- 2026-07-20: MOD-SKILL S1 REV: APPROVE_FOR_OPERATOR_MERGE @ eb2dd4b; folded onto main 4fef2f1; staged as PR #18.
