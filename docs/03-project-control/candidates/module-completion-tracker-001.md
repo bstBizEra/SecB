@@ -102,3 +102,4 @@ Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch
 - 2026-07-20: MOD-KNOW S2 PRODUCED @ a67d49e (bst/mod-know-s2-sidecar): knowledge-linkage-service sibling module (S1 provably untouched — guard widened to 4 files), supersession/contradiction sidecar records, defense-in-depth lineage (record+walk gates, foreign-writer injection tested), backdated-at resurrection blocked. 589/584/0 fail/5 skip. S2 REV dispatched.
 - 2026-07-20: MOD-KNOW S2 REV: APPROVE_WITH_NOTES @ bbf649b (1 LOW: walker cross-project-edge symmetry, tracked); staged as PR #19. S3 dispatch next.
 - 2026-07-20: PR #19 MERGED — MOD-KNOW S2 ratified on main.
+- 2026-07-20: MOD-KNOW S3 PRODUCED @ ce9957f (bst/mod-know-s3-provider): pure knowledge→CandidateSource mapper — honest verified/contested/classification semantics, real-stack feed-forward proof (port zero-exclusion + mint seal + supersession-aware). 632/627/0 fail/5 skip. Module completion review dispatched.
