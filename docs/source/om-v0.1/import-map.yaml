@@ -1,0 +1,179 @@
+# SECB-GOV-001 v0.1 pack import map — source path, imported path, source content hash.
+# Renames: pack sections 01..08 -> 10..17 (legacy constitution keeps 0x);
+# pack ADRs 0001..0003 -> 0005..0007 (legacy ADR numbers retained, incl. their
+# pre-existing duplicate 0001/0002 pairs); reading-order ordinals prefixed in 1x
+# sections; pack AGENTS.md imported as a NON-ACTIVE candidate under 00-governance.
+pack: SECB-GOV-001
+pack_version: "0.1"
+imported_at: "2026-07-19"
+importing_agent: "Claude (BST-SA worker)"
+status: DRAFT_NOT_EFFECTIVE
+files:
+  - source: AGENTS.md
+    imported_as: docs/00-governance/agents-instructions-om-v0.1-candidate.md
+    source_sha256: 2be6d2e4d3299d0c4f77dc4d12f92a659224bb29702d1e37b3ff6c31b13f4ce9
+  - source: MANIFEST.sha256
+    imported_as: docs/source/om-v0.1/MANIFEST.sha256
+    source_sha256: 36d36623dbcc4bddf6d53173aad16cde4508e023a348b8b124b537483f5243cf
+  - source: README.md
+    imported_as: docs/source/om-v0.1/PACK-README.md
+    source_sha256: 3065008f35482dafa6854d70cb8f6e4e920a3b8bd9483e8d6e88301dd9c9155b
+  - source: VALIDATION.json
+    imported_as: docs/source/om-v0.1/VALIDATION.json
+    source_sha256: 6753814beef481e7c4af33d6d7070044c720e5f9f5564d74d9aa8e54161de3b6
+  - source: docs/00-governance/SECB-GOV-001.md
+    imported_as: docs/00-governance/SECB-GOV-001.md
+    source_sha256: cf78054bb55d5d885f7efc6f8c79db803d03fddbf707a088dca0a2018c528bf2
+  - source: docs/00-governance/decision-rights.md
+    imported_as: docs/00-governance/decision-rights.md
+    source_sha256: 606490a4d4e6c4006435ad6631ea344422f02fe06e1a7dc07007b96993178a7d
+  - source: docs/00-governance/governing-principles.md
+    imported_as: docs/00-governance/governing-principles.md
+    source_sha256: 62b31362149aba4386e4001c84f3f65c4b3bc9dd8a124f7cc26f9c220f2c7428
+  - source: docs/00-governance/system-of-record-boundaries.md
+    imported_as: docs/00-governance/system-of-record-boundaries.md
+    source_sha256: 4215fab427343f388ea3b7c1ee406a26d109e605764aa34fab59cdbd7a7d2785
+  - source: docs/01-platform/module-catalog.md
+    imported_as: docs/10-platform/03-module-catalog.md
+    source_sha256: 0531a327f21fe03c7e026455819e05d1d623aa19662c75286b286824df200cfa
+  - source: docs/01-platform/product-operating-model.md
+    imported_as: docs/10-platform/02-product-operating-model.md
+    source_sha256: ff020f3dac523d921ccd8bc43be2e3aee1fcba6dd26fb1e3a5297b8a65de2bff
+  - source: docs/01-platform/target-platform-architecture.md
+    imported_as: docs/10-platform/01-target-platform-architecture.md
+    source_sha256: c7726fbafc9ab641111d8ef4d1155bb9fa6cd63cec8c07e9b0bf464d851bcad1
+  - source: docs/02-agents/dynamic-team-topology.md
+    imported_as: docs/11-agents/04-dynamic-team-topology.md
+    source_sha256: 646d07a8284868a744971a340fee78f63eb5f26a5aa191b6a1c9ba85040acb9e
+  - source: docs/02-agents/harness-registry.md
+    imported_as: docs/11-agents/02-harness-registry.md
+    source_sha256: 71ea747f477e86cc4fe99ae825c20c2582b61404ba6723c06ca682ca8aba28f3
+  - source: docs/02-agents/harness-routing.md
+    imported_as: docs/11-agents/03-harness-routing.md
+    source_sha256: f376324d32b200e6004c0eba71880277962568aff0a50d31c0b8e22f93b9ea1e
+  - source: docs/02-agents/roles-and-separation-of-duties.md
+    imported_as: docs/11-agents/01-roles-and-separation-of-duties.md
+    source_sha256: 797d339a3fd35cae7d6aa90cd48d6b05330b1cb98bcce93864e0c2f0a5c42a1c
+  - source: docs/03-execution/context-and-handoff.md
+    imported_as: docs/12-execution/07-context-and-handoff.md
+    source_sha256: a269ed1388be35ed271dd600bdf74116d6e71572e4b322f4682870a619e60872
+  - source: docs/03-execution/failure-to-capability-loop.md
+    imported_as: docs/12-execution/04-failure-to-capability-loop.md
+    source_sha256: fda5c1ad67dad20995fa5deccf3bc64cd2e1c901ef4cbbc2bbef72b47709b6ff
+  - source: docs/03-execution/goal-system.md
+    imported_as: docs/12-execution/01-goal-system.md
+    source_sha256: d21abb464142188c7bf6ecf46355049e64a339f80c00abf8ec50983f62bdf0f5
+  - source: docs/03-execution/parallel-execution.md
+    imported_as: docs/12-execution/06-parallel-execution.md
+    source_sha256: 3fe83da8329a6e416d4557acf4881fbbe4529a7ab6e543dee0aab17baef09c87
+  - source: docs/03-execution/schedule-and-cadence.md
+    imported_as: docs/12-execution/02-schedule-and-cadence.md
+    source_sha256: cf78f4cc2b5e06ad85fb23782ad18a91d555b1b770771b0d2ad3133da358f4ea
+  - source: docs/03-execution/universal-delivery-loop.md
+    imported_as: docs/12-execution/03-universal-delivery-loop.md
+    source_sha256: 572d7478373bc12062bc2a7e54ce39bcdb2682656e529d593cfc339f9260ac96
+  - source: docs/03-execution/work-package-lifecycle.md
+    imported_as: docs/12-execution/05-work-package-lifecycle.md
+    source_sha256: 6cc6274e167c8d4909c66b21a16584dcc202c18760f0cf4146f790480d1faad0
+  - source: docs/04-skills/harness-compatibility.md
+    imported_as: docs/13-skills/03-harness-compatibility.md
+    source_sha256: c5fc1d5192fae354a0f3ce6ca80a31e519bc42f5c9d08e50c160015d3337c543
+  - source: docs/04-skills/skill-lifecycle.md
+    imported_as: docs/13-skills/02-skill-lifecycle.md
+    source_sha256: e11ac6a99339199048f879393dc539e621cb1e377c56e61279baed17d3212c9e
+  - source: docs/04-skills/skill-set.md
+    imported_as: docs/13-skills/01-skill-set.md
+    source_sha256: dbe8cbb264235e23a43237bedad21b8dc4761165b29baf84d4b7161ce9245ae5
+  - source: docs/05-delivery/delivery-roadmap.md
+    imported_as: docs/14-delivery/02-delivery-roadmap.md
+    source_sha256: 8de39c206a92530432c87d2177f3111bf841c76c46ac967bb61ff2ec02b60872
+  - source: docs/05-delivery/exit-gates.md
+    imported_as: docs/14-delivery/03-exit-gates.md
+    source_sha256: a33e90bfcf2c0347ed970b9f51595efd6266cfe5846fd37341c05ee2388d6f90
+  - source: docs/05-delivery/module-allocation.md
+    imported_as: docs/14-delivery/01-module-allocation.md
+    source_sha256: 0d6800ffd9c5fe737dd3938276d453f0e9608d46cf4e3cd07e8ea471a2495b4c
+  - source: docs/05-delivery/release-and-integration.md
+    imported_as: docs/14-delivery/04-release-and-integration.md
+    source_sha256: 24f897daf0a9298e53308974b2901c86738ac305759b1a0b2f621e5e9f45184d
+  - source: docs/06-knowledge/evidence-knowledge-skill.md
+    imported_as: docs/15-knowledge/02-evidence-knowledge-skill.md
+    source_sha256: 75f0e04b8393e26348f0426e755ef075564b74bc651295705719015414c3c8ca
+  - source: docs/06-knowledge/memory-and-context.md
+    imported_as: docs/15-knowledge/03-memory-and-context.md
+    source_sha256: 9e25b6ecd4ab0c7bb448670cb3c9eea91c0b228ea318c01e8f2a0c0a17676284
+  - source: docs/06-knowledge/seven-ledger-model.md
+    imported_as: docs/15-knowledge/01-seven-ledger-model.md
+    source_sha256: f2d2847bb8c27a0223ba5f84c811cfa0dc0cfc8e4a64560acbf75968a19df888
+  - source: docs/07-security/agentic-threat-model.md
+    imported_as: docs/16-security/03-agentic-threat-model.md
+    source_sha256: 6d19c42c3dd9e5166fbb225ddb878d3e2f866e46d4dafbb4902c2636b7326038
+  - source: docs/07-security/credential-handling.md
+    imported_as: docs/16-security/01-credential-handling.md
+    source_sha256: a26c00a2d2aa095b46acc6ff847be5fbf883b5c38545724759ecf56de02dc302
+  - source: docs/07-security/risk-and-mutation-classes.md
+    imported_as: docs/16-security/02-risk-and-mutation-classes.md
+    source_sha256: 50c6311b328ff97eb2d3645efc04c24f17301ac7e5d84a2fa27e394bd6c48620
+  - source: docs/08-operations/kpis-and-scorecards.md
+    imported_as: docs/17-operations/02-kpis-and-scorecards.md
+    source_sha256: 558621910163c7c80891d5508569b9a7eb8de04934b41b5f122e353b3462bd2f
+  - source: docs/08-operations/live-operations.md
+    imported_as: docs/17-operations/01-live-operations.md
+    source_sha256: 00e87834347f34050e98951148d4a9fb7c24286cc538d474e15f21dda46fecec
+  - source: docs/SOURCE-TRACEABILITY.md
+    imported_as: docs/SOURCE-TRACEABILITY.md
+    source_sha256: f9cd263eb16e7db92c4cee1e40efe096931bd4fe36c40ee4f41d171fdf8f73c1
+  - source: docs/adr/0001-failure-is-a-learning-transition.md
+    imported_as: docs/adr/0005-failure-is-a-learning-transition.md
+    source_sha256: 0d5b8be28ac1baf4fcfdf9801d9fedfdad486bb3017938ffd3726ced56db183e
+  - source: docs/adr/0002-harness-neutral-authority.md
+    imported_as: docs/adr/0006-harness-neutral-authority.md
+    source_sha256: 1478478996c57ad0d3b2330f84e6e84e771c5a7f966cbaa775d165ca5684bc41
+  - source: docs/adr/0003-serialized-integration.md
+    imported_as: docs/adr/0007-serialized-integration.md
+    source_sha256: f3a1896548e5675ca109325c9911da260ec041a1a78897a9514872dca1c8ab7f
+  - source: docs/templates/agent-profile.yaml
+    imported_as: docs/templates/agent-profile.yaml
+    source_sha256: 1b4b6e931ce6b3cdb6c6f4e834acdbdd9bc551ef3e267603240224ad65c80b2c
+  - source: docs/templates/context-receipt.yaml
+    imported_as: docs/templates/context-receipt.yaml
+    source_sha256: 0fbbc3cc8332f3ca79fab3bd038daf0883d6eb20ec387851df2865cfce54d12d
+  - source: docs/templates/evidence-envelope.yaml
+    imported_as: docs/templates/evidence-envelope.yaml
+    source_sha256: 55a63fd60d6df1b576520c231e2f12f94d7eee2f6fbbbdc0f30e1376e2ad82ce
+  - source: docs/templates/failure-evidence-envelope.yaml
+    imported_as: docs/templates/failure-evidence-envelope.yaml
+    source_sha256: 43b2b978afbce94f8df58ffa01abc5613028a3afb865619231a512d2e6bac1cc
+  - source: docs/templates/goal.yaml
+    imported_as: docs/templates/goal.yaml
+    source_sha256: bcd141639af09927532cfb64a98343b8d6dfc5d77c754a73796dab1a1d73a4e4
+  - source: docs/templates/handoff-envelope.yaml
+    imported_as: docs/templates/handoff-envelope.yaml
+    source_sha256: 3456587df9d4fab650f14e1afad6566618f7539f397c43e927252deb8f9b647d
+  - source: docs/templates/harness-profile.yaml
+    imported_as: docs/templates/harness-profile.yaml
+    source_sha256: 974f0a3cd69a07ad1ce7e9c7b311ace41fda65c75e3924bbe29bb313d80919f7
+  - source: docs/templates/knowledge-candidate.yaml
+    imported_as: docs/templates/knowledge-candidate.yaml
+    source_sha256: ffab96f46dc565f9d03575bdc5e9080ad9acfc8e41c771a3c3dc181def1436c2
+  - source: docs/templates/module-manifest.yaml
+    imported_as: docs/templates/module-manifest.yaml
+    source_sha256: 56fe82f7b494b5f0057de99d8ec5bd0646bb8c33626f80a55a7bee0aecd4a40e
+  - source: docs/templates/project-contract.yaml
+    imported_as: docs/templates/project-contract.yaml
+    source_sha256: 6a2c6e9a3fbeb60ee9aaf40504752bc2881fa0ad2681b172720bf60a11842934
+  - source: docs/templates/research-task.yaml
+    imported_as: docs/templates/research-task.yaml
+    source_sha256: 6c41eb708845791b64641a2729d2332d9314b09b9c876c2a5b2793147f38d276
+  - source: docs/templates/schedule.yaml
+    imported_as: docs/templates/schedule.yaml
+    source_sha256: be5ca66cb2a495d316cfec1907c850758654946983a1efc99e6a18230b58c659
+  - source: docs/templates/session.yaml
+    imported_as: docs/templates/session.yaml
+    source_sha256: 9cd173ff77a5f60854554515a9e26f526bf40b2833d40f36be001693da870e36
+  - source: docs/templates/skill-candidate.yaml
+    imported_as: docs/templates/skill-candidate.yaml
+    source_sha256: f525e3fbc2e0490ba974a31e1c8bd460827f971f2e97fd81e7fd4be13bc249ee
+  - source: docs/templates/work-package.yaml
+    imported_as: docs/templates/work-package.yaml
+    source_sha256: ce48bb98961c2cf54ec77cf0058cf46d618789afae2e39cd2750114abb54049c

@@ -1,25 +1,22 @@
-schema_version: "1.0"
-context_receipt:
-  receipt_id: "CTX-TBD"
-  project_id: "SECB"
-  objective_id: "OBJ-TBD"
-  work_package_id: "WP-TBD"
-  agent_session_id: "ASESSION-TBD"
-  assigned_role: "TBD"
-  authority_scope: "A0"
-  baseline_version: "TBD"
-  requirements: []
-  acceptance_criteria: []
-  applicable_decisions: []
-  approved_knowledge: []
-  known_risks: []
-  unresolved_questions: []
-  allowed_tools: []
-  allowed_skills: []
-  evidence_obligations: []
-  token_budget: null
-  source_references: []
-  freshness_timestamp: null
-  issued_at: null
-  expires_at: null
-  receipt_sha256: "TBD"
+schema_version: "0.1"
+context_receipt_id: "CTX-"
+project_id: ""
+goal_id: ""
+module_id: ""
+work_package_id: ""
+assigned_role: ""
+authority_scope: []
+baseline_version: ""
+requirements: []
+acceptance_criteria: []
+applicable_decisions: []
+approved_knowledge: []
+known_risks: []
+unresolved_questions: []
+allowed_tools: []
+allowed_skills: []
+evidence_obligations: []
+token_budget: 0
+freshness_timestamp: ""
+source_references: []
+integrity_sha256: ""

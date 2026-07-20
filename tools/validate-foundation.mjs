@@ -89,7 +89,41 @@ for (const field of ["one_time_fix: false", "utility_classification: validation"
 const sourceDigest = createHash("sha256").update(manifest.source_sha256).digest("hex");
 assert(sourceDigest.length === 64, "crypto.sha256", "available");
 
-const remotes = execFileSync("git", ["remote"], { cwd: root, encoding: "utf8" }).trim();
-assert(remotes === "", "git.local-only", "no remotes configured");
+const SANCTIONED_REMOTES = {
+  origin: "https://github.com/bstBizEra/SecB.git"
+};
+
+function redactUserinfo(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.username || parsed.password) {
+      parsed.username = "";
+      parsed.password = "";
+    }
+    return parsed.toString();
+  } catch {
+    return "<unparseable-remote-url-redacted>";
+  }
+}
+
+const remoteVerbose = execFileSync("git", ["remote", "-v"], { cwd: root, encoding: "utf8" }).trim();
+const remoteEntries = remoteVerbose === ""
+  ? []
+  : remoteVerbose.split("\n").map((line) => {
+      const tabIndex = line.indexOf("\t");
+      const name = tabIndex === -1 ? line : line.slice(0, tabIndex);
+      const rest = tabIndex === -1 ? "" : line.slice(tabIndex + 1);
+      const url = rest.split(" ")[0] ?? "";
+      return { name, url };
+    });
+for (const { name, url } of remoteEntries) {
+  assert(SANCTIONED_REMOTES[name] === url, `git.remote.sanctioned.${name}`, `${name} -> ${redactUserinfo(url)}`);
+}
+const remoteNames = new Set(remoteEntries.map((entry) => entry.name));
+assert(
+  true,
+  "git.remote-summary",
+  remoteNames.size === 0 ? "no remotes configured" : `configured remotes: ${[...remoteNames].join(", ")}`
+);
 
 console.log(JSON.stringify({ status: "PASS", version, checks }, null, 2));
