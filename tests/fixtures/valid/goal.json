@@ -1,0 +1,15 @@
+{
+  "goal_id": "goal_p0_portfolio_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "level": "OBJECTIVE",
+  "title": "Portfolio-to-task traceability",
+  "status": "ACTIVE",
+  "parent_goal_id": "goal_p0_product_001",
+  "provenance": {
+    "source": "docs/03-project-control/candidates/mod-work-gap-assessment-001.md",
+    "agent_id": "claude-motor-modwork-s1",
+    "created_at": "2026-07-19T10:00:00+07:00"
+  },
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
