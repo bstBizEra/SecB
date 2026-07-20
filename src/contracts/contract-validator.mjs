@@ -16,6 +16,7 @@ const schemaPaths = {
   knowledgeClaim: "knowledge-claim.schema.json",
   outcomeReceipt: "outcome-receipt.schema.json",
   skillManifest: "skill-manifest.schema.json",
+  skillCandidate: "skill-candidate.schema.json",
   goal: "goal.schema.json"
 };
 
