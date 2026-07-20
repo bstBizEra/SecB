@@ -47,6 +47,104 @@ function pathSubset(candidate, bound) {
   return candidate.every((p) => bounds.some((e) => p === e || p.startsWith(`${e}/`)));
 }
 
+// ——— Shared pure receipt logic (single source of truth for mint + issue;
+// MOD-CONTEXT S1). These are the exact functions the service's verify paths
+// use, extracted unchanged so a mint helper can never drift from what
+// issueReceipt will accept. Extraction is behavior-preserving: every deny
+// code, message, and check order below is identical to the pre-S1 service.
+
+// Seal over the document with content_hash excluded (server authority).
+function sealBody(document) {
+  const { content_hash, ...body } = document;
+  return fingerprint(body);
+}
+
+// Canonical survivor set of a retrieval result: duplicate-free, sorted.
+// issueReceipt compares the claimed source_references against exactly this.
+const survivorSet = (includedRefs) => [...new Set(includedRefs)].sort();
+
+// Reserved-delimiter guard over the receipt identity fields (same fields,
+// same deny code and message as the pre-S1 inline loop in issueReceipt).
+function assertIdCharset(document) {
+  for (const field of ["receipt_id", "project_id", "work_package_id", "session_id"]) {
+    const hit = findReservedDelimiter(document[field]);
+    if (hit) deny("DENY_ID_CHARSET", `${field} must not contain '${hit}'`);
+  }
+}
+
+// Intent fields a mint caller supplies; version is fixed at 1 (issueReceipt
+// only accepts version 1 — successors come from compaction, never from mint).
+const MINT_KEYS = Object.freeze([
+  "receipt_id", "project_id", "objective_id", "work_package_id", "session_id",
+  "assigned_role", "authority_scope", "baseline_version", "acceptance_criteria",
+  "allowed_tools", "allowed_skills", "evidence_obligations", "freshness_timestamp",
+  "candidateSources", "classificationCeiling", "minimumSufficient",
+  "include_exclusions_digest" // MOD-CONTEXT S2 opt-in flag; see mint below
+]);
+
+// MOD-CONTEXT S1 (closes gap G1, verifier-not-minter): pure construction of
+// a candidate receipt document. Runs the SAME subtractive retrieval pipeline
+// and computes the SAME canonical seal the service verifies, so the returned
+// document round-trips through issueReceipt verbatim. No I/O and no state:
+// minting produces a CANDIDATE document only — issuing it still goes through
+// the existing gated issueReceipt path (schema, seal, effectiveness, baseline,
+// scope-subset, survivor-set, and idempotency checks all still apply there).
+// This adds a construction path, never a new ALLOW.
+export function mintReceiptDocument(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) deny("DENY_MALFORMED_REQUEST", "Mint input must be an object");
+  const unknown = Object.keys(input).filter((k) => !MINT_KEYS.includes(k));
+  if (unknown.length) deny("DENY_MALFORMED_REQUEST", `Unknown mint fields: ${unknown.join(", ")}`);
+  const { candidateSources = [], classificationCeiling = "INTERNAL", minimumSufficient, include_exclusions_digest, ...intent } = input;
+  if (!CLASS_ORDER.includes(classificationCeiling)) deny("DENY_MALFORMED_REQUEST", `Unknown classificationCeiling: ${classificationCeiling}`);
+  if (include_exclusions_digest !== undefined && typeof include_exclusions_digest !== "boolean") {
+    deny("DENY_MALFORMED_REQUEST", "include_exclusions_digest must be a boolean when present");
+  }
+
+  const retrieval = runRetrieval(candidateSources, { projectId: intent.project_id, classificationCeiling, minimumSufficient });
+  const body = {
+    receipt_id: intent.receipt_id,
+    version: 1,
+    project_id: intent.project_id,
+    objective_id: intent.objective_id,
+    work_package_id: intent.work_package_id,
+    session_id: intent.session_id,
+    assigned_role: intent.assigned_role,
+    authority_scope: structuredClone(intent.authority_scope),
+    baseline_version: intent.baseline_version,
+    acceptance_criteria: structuredClone(intent.acceptance_criteria),
+    allowed_tools: structuredClone(intent.allowed_tools),
+    allowed_skills: structuredClone(intent.allowed_skills),
+    evidence_obligations: structuredClone(intent.evidence_obligations),
+    freshness_timestamp: intent.freshness_timestamp,
+    source_references: survivorSet(retrieval.included)
+  };
+  const document = { ...body, content_hash: sealBody(body) };
+  validateContract("contextReceipt", document);
+  assertIdCharset(document);
+  const exclusions = structuredClone(retrieval.exclusions);
+  if (include_exclusions_digest !== true) {
+    // opt-out path: byte-identical to the pre-S2 return shape.
+    return deepFreeze({ document, exclusions });
+  }
+  // MOD-CONTEXT S2 (gap G3, exclusions provenance) — SIBLING-ARTIFACT
+  // PLACEMENT, chosen after reading contracts/context-receipt.schema.json
+  // first-hand: the contextReceipt contract is a CLOSED object
+  // (additionalProperties: false, 16 exact fields) with no free-form /
+  // metadata field, so the digest CANNOT ride inside the sealed body
+  // without a schema change. Recording that honestly: sealing the digest
+  // into the document requires SCHEMA EVOLUTION (an optional
+  // exclusions_digest property on contextReceipt), which is an R3
+  // contract change and is FLAGGED FOR THE OPERATOR — not made here.
+  // Until then the digest is a verifiable sibling: canonicalFingerprint
+  // over the normalized exclusions list, checkable by any holder via
+  // canonicalFingerprint(exclusions) === exclusions_digest. It binds the
+  // subtractive-exclusion account to this mint result; it does NOT yet
+  // travel inside the receipt seal, so a forwarded bare document still
+  // lacks it (exactly gap G3's residual, closed only by the schema
+  // evolution above).
+  return deepFreeze({ document, exclusions, exclusions_digest: fingerprint(exclusions) });
+}
+
 export class ContextFederationService {
   #wp;
   #now;
@@ -77,12 +175,6 @@ export class ContextFederationService {
     return frozenClone({ ...structuredClone(prior.result), replayed: true });
   }
 
-  // Seal over the document with content_hash excluded (server authority).
-  #seal(document) {
-    const { content_hash, ...body } = document;
-    return fingerprint(body);
-  }
-
   issueReceipt(request) {
     if (!request || typeof request !== "object" || Array.isArray(request)) deny("DENY_MALFORMED_REQUEST", "Issue request must be an object");
     const unknown = Object.keys(request).filter((k) => !ISSUE_KEYS.includes(k));
@@ -98,12 +190,9 @@ export class ContextFederationService {
     if (!CLASS_ORDER.includes(classificationCeiling)) deny("DENY_MALFORMED_REQUEST", `Unknown classificationCeiling: ${classificationCeiling}`);
 
     validateContract("contextReceipt", document);
-    for (const field of ["receipt_id", "project_id", "work_package_id", "session_id"]) {
-      const hit = findReservedDelimiter(document[field]);
-      if (hit) deny("DENY_ID_CHARSET", `${field} must not contain '${hit}'`);
-    }
+    assertIdCharset(document);
     // seal: caller content_hash must match server recomputation.
-    if (this.#seal(document) !== document.content_hash) deny("DENY_FINGERPRINT_MISMATCH", "Document content_hash does not match the server recomputation");
+    if (sealBody(document) !== document.content_hash) deny("DENY_FINGERPRINT_MISMATCH", "Document content_hash does not match the server recomputation");
 
     if (document.version !== 1) deny("DENY_NOT_INITIAL_VERSION", "Issued receipts start at version 1 (successors come from compaction)");
     if (this.#versions(document.project_id, document.receipt_id).length) deny("DENY_DUPLICATE_RECEIPT", `Receipt already exists: ${document.receipt_id}`);
@@ -124,7 +213,7 @@ export class ContextFederationService {
     // Set equality (order-independent, duplicate-proof): source_references
     // must be exactly the survivor set — no unauthorized ref, and no
     // duplicate under-claim that would drop an authorized one (Immune note 1).
-    const surviving = [...new Set(retrieval.included)].sort();
+    const surviving = survivorSet(retrieval.included);
     const claimed = [...new Set(document.source_references)].sort();
     if (claimed.length !== document.source_references.length ||
         surviving.length !== claimed.length ||
@@ -160,7 +249,7 @@ export class ContextFederationService {
     if (!head) return { head: null, out: { receipt: null, code: "DENY_UNKNOWN_RECEIPT", reason: `Unknown receipt: ${receiptId}` } };
     if (head.status === "REVOKED") return { head: null, out: { receipt: null, code: "DENY_REVOKED", reason: "Receipt chain is revoked" } };
     if (head.status === "SUPERSEDED") return { head: null, out: { receipt: null, code: "DENY_SUPERSEDED", reason: "Consume the chain head", chainHeadVersion: this.#versions(projectId, receiptId).length } };
-    if (this.#seal(head.document) !== head.contentHash) return { head: null, out: { receipt: null, code: "DENY_FINGERPRINT_MISMATCH", reason: "Stored document failed seal re-verification" } };
+    if (sealBody(head.document) !== head.contentHash) return { head: null, out: { receipt: null, code: "DENY_FINGERPRINT_MISMATCH", reason: "Stored document failed seal re-verification" } };
     if (head.sessionId !== sessionId) return { head: null, out: { receipt: null, code: "DENY_SESSION_MISMATCH", reason: "Receipt is bound to another session" } };
     if (head.baseline !== baseline) return { head: null, out: { receipt: null, code: "DENY_BASELINE_MISMATCH", reason: "Asserted baseline does not match the receipt" } };
     if (this.#now().getTime() >= Date.parse(head.expiresAt)) return { head: null, out: { receipt: null, code: "DENY_EXPIRED", reason: "Receipt has expired" } };
@@ -199,7 +288,7 @@ export class ContextFederationService {
     if (parent.status !== "ISSUED") deny("DENY_NOT_COMPACTABLE", `Receipt head is ${parent.status}, not ISSUED`);
 
     validateContract("contextReceipt", compaction);
-    if (this.#seal(compaction) !== compaction.content_hash) deny("DENY_FINGERPRINT_MISMATCH", "Compaction content_hash does not match the server recomputation");
+    if (sealBody(compaction) !== compaction.content_hash) deny("DENY_FINGERPRINT_MISMATCH", "Compaction content_hash does not match the server recomputation");
     if (compaction.receipt_id !== parent.receiptId || compaction.project_id !== parent.projectId) deny("DENY_CHAIN_IDENTITY", "Compaction must keep the same receipt identity");
     if (compaction.version !== parent.version + 1) deny("DENY_CHAIN_VERSION", `Compaction must be version ${parent.version + 1}`);
 
@@ -242,12 +331,40 @@ export class ContextFederationService {
     return frozenClone({ receiptId, projectId, state: "REVOKED" });
   }
 
+  // MOD-CONTEXT S3 (gap G6): derive the lifecycle facets the stored status
+  // omits, from state that IS reachable in-service — the record's expiry and
+  // its head ledger. Pure over (record, now); no mutation, no I/O. EXPIRED is
+  // computed from the SAME `now >= expiresAt` boundary the resolve-time
+  // DENY_EXPIRED gate uses; CONSUMED is true iff a CONSUME entry exists on the
+  // ledger (consumeReceipt appends it to the in-service head ledger, so it is
+  // reachable — not an external/unreachable signal). Precedence mirrors the
+  // fail-closed deny order in #resolveHead: REVOKED > SUPERSEDED > EXPIRED >
+  // CONSUMED > ISSUED. EXPIRED outranks CONSUMED because expiry is a hard
+  // deny-on-use gate while CONSUME is a non-terminal usage marker.
+  #lifecycleFacets(record) {
+    const expired = this.#now().getTime() >= Date.parse(record.expiresAt);
+    const consumed = record.ledger.some((entry) => entry.type === "CONSUME");
+    let effectiveStatus = record.status; // ISSUED | SUPERSEDED | REVOKED
+    if (record.status === "ISSUED") {
+      if (expired) effectiveStatus = "EXPIRED";
+      else if (consumed) effectiveStatus = "CONSUMED";
+    }
+    return { effective_status: effectiveStatus, expired, consumed };
+  }
+
   getReceipt(projectId, receiptId, version) {
     const versions = this.#versions(projectId, receiptId);
     if (!versions.length) deny("DENY_UNKNOWN_RECEIPT", `Unknown receipt: ${receiptId}`);
     const match = version === undefined ? versions[versions.length - 1] : versions.find((v) => v.version === version);
     if (!match) deny("DENY_UNKNOWN_RECEIPT", `Unknown receipt version: ${version}`);
-    return frozenClone({ receiptId, projectId, version: match.version, state: match.status, document: structuredClone(match.document), exclusions: match.exclusions });
+    // Existing projection fields are unchanged and byte-identical; the S3
+    // lifecycle facets are OPTIONAL ADDITIONS to the RETURNED object only
+    // (the sealed document is never touched).
+    return frozenClone({
+      receiptId, projectId, version: match.version, state: match.status,
+      document: structuredClone(match.document), exclusions: match.exclusions,
+      ...this.#lifecycleFacets(match)
+    });
   }
 
   getReceiptLedger(projectId, receiptId) {
