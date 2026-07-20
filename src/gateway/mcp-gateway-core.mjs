@@ -33,7 +33,21 @@ const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
 const DANGEROUS_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const ASCII_OUTPUT_KEY = /^[\x20-\x7e]+$/;
 const SECRET_KEY_NORMALIZED = /(?:apikey|authorization|credential|password|passwd|privatekey|secret|token)/;
-const SECRET_VALUE = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])-[-a-z0-9_]{8,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
+// Value screen. The provider-token alternative uses a [-_] separator (matching
+// the broker's SECRET_MATERIAL) so underscore-delimited tokens (ghp_,
+// github_pat_, sk_) are caught, not just hyphen forms (FU-2 / Gap C). The AWS
+// access-key id (AKIA + 16 upper-alnum) is distinctive enough to screen at the
+// value level regardless of field name (FU-3 / A-FIND-2).
+const SECRET_VALUE = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])[-_][-a-z0-9_]{8,}|\bAKIA[0-9A-Z]{16}\b|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
+// AWS secret access keys are 40 base64-ish chars with NO distinctive prefix, so
+// they are indistinguishable from ordinary base64/hex hashes. Screening every
+// 40-char value would cause false-positive explosions, so this heuristic fires
+// ONLY when the field name itself signals AWS access-key/secret material
+// (AWS_SECRET_FIELD). Fields already matching SECRET_KEY_NORMALIZED are rejected
+// wholesale by the key screen; this narrows the residual gap where an AWS secret
+// hides under an aws/access-key-named field that the key screen does not cover.
+const AWS_SECRET_VALUE = /(?<![A-Za-z0-9/+])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])/;
+const AWS_SECRET_FIELD = /(?:awssecret|accesskey|secretaccesskey)/;
 const JSON_STRINGIFY_PRIMITIVE = JSON.stringify.bind(JSON);
 
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -121,6 +135,17 @@ function isSecretLikeKey(key) {
   }
 }
 
+// Field-name gate for the AWS secret-key value heuristic (see AWS_SECRET_VALUE).
+// Fail-closed to true on any error, matching isSecretLikeKey.
+function isAwsSecretField(key) {
+  try {
+    const normalized = key.normalize("NFKC").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    return AWS_SECRET_FIELD.test(normalized);
+  } catch {
+    return true;
+  }
+}
+
 function snapshotCapabilities(registry) {
   const snapshot = new Map();
   for (const [capabilityId, capability] of registry) {
@@ -195,6 +220,9 @@ function normalizeJson(value, { rejectSecrets = false } = {}, seen = new WeakSet
     if (DANGEROUS_OBJECT_KEYS.has(key)) throw new Error("dangerous object key");
     if (rejectSecrets && !ASCII_OUTPUT_KEY.test(key)) throw new Error("non-ASCII output key");
     if (rejectSecrets && isSecretLikeKey(key)) throw new Error("secret-like key");
+    if (rejectSecrets && isAwsSecretField(key) && typeof entry === "string" && AWS_SECRET_VALUE.test(entry)) {
+      throw new Error("aws secret-key-shaped value");
+    }
     Object.defineProperty(output, key, {
       value: normalizeJson(entry, { rejectSecrets }, seen),
       enumerable: true,

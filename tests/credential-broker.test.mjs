@@ -114,6 +114,7 @@ test("plaintext-looking secret material is rejected even if a permissive sealer 
     "ghp_abcdefghijklmnop",
     "Bearer abcdef.123456-secret",
     "sk-abcdefgh12345678",
+    "AKIAIOSFODNN7EXAMPLE",
     "-----BEGIN RSA PRIVATE KEY-----",
   ]) {
     assert.equal(broker.bind("handle-01", plaintext).deny_code, "DENY_SEALER_INVALID");

@@ -160,6 +160,26 @@ test("independent review by the record producer is a denied self-approval", () =
   assert.equal(service.promote("filesystem.read", "1.0.0", approvals).deny_code, "DENY_SELF_APPROVAL");
 });
 
+test("one non-producer actor supplying both approvals is a denied SoD violation (A-FIND-1)", () => {
+  const { service } = build();
+  service.registerCandidate(validRecord());
+  // independent != producer (passes self-approval), but independent == governance:
+  // the dual-authority gate collapses to a single non-producer actor.
+  const approvals = [
+    { role: INDEPENDENT_REVIEW_ROLE, actor_id: "mallory", decided_at: "2026-07-20T09:00:00.000Z" },
+    { role: GOVERNANCE_ROLE, actor_id: "mallory", decided_at: "2026-07-20T09:05:00.000Z" },
+  ];
+  assert.equal(service.promote("filesystem.read", "1.0.0", approvals).deny_code, "DENY_SOD_VIOLATION");
+});
+
+test("the producer holding the governance role is a denied SoD violation (A-FIND-1)", () => {
+  const { service } = build();
+  service.registerCandidate(validRecord());
+  const approvals = gateApprovals();
+  approvals[1].actor_id = PRODUCER;
+  assert.equal(service.promote("filesystem.read", "1.0.0", approvals).deny_code, "DENY_SOD_VIOLATION");
+});
+
 test("promotion happy path makes the record resolvable", () => {
   const { service, entries } = build();
   service.registerCandidate(validRecord());

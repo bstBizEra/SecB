@@ -221,6 +221,40 @@ test("default output controls and injected validator fail closed", async () => {
   assert.equal(narrowed.deny_code, "DENY_RESULT_INVALID");
 });
 
+test("underscore-delimited provider tokens in adapter output are denied (FU-2 / Gap C)", async () => {
+  // The value screen previously used a hyphen-only separator and missed the
+  // most common real-world GitHub token family plus sk_ underscore variants.
+  for (const token of [
+    "ghp_0123456789abcdefghij",
+    "github_pat_11ABCDEF0123456789ABCDEF",
+    "sk_live_0123456789abcdef",
+  ]) {
+    const result = await gateway({ adapter: () => ({ note: token }) }).invoke(context());
+    assert.equal(result.deny_code, "DENY_RESULT_INVALID", `expected ${token} to be denied`);
+  }
+});
+
+test("AWS access-key id in adapter output is denied regardless of field name (FU-3 / A-FIND-2)", async () => {
+  const result = await gateway({ adapter: () => ({ note: "AKIAIOSFODNN7EXAMPLE" }) }).invoke(context());
+  assert.equal(result.deny_code, "DENY_RESULT_INVALID");
+});
+
+test("40-char AWS secret key under an aws/access-key-named field is denied (FU-3)", async () => {
+  // Field name is aws-shaped but NOT matched by the general secret-key screen,
+  // so this exercises the AWS-secret value heuristic specifically.
+  const result = await gateway({
+    adapter: () => ({ aws_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" }),
+  }).invoke(context());
+  assert.equal(result.deny_code, "DENY_RESULT_INVALID");
+});
+
+test("a 40-char base64-ish value under an innocuous field is NOT a false positive (FU-3 tradeoff)", async () => {
+  const result = await gateway({
+    adapter: () => ({ checksum: "a1b2c3d4e5f60718293a4b5c6d7e8f9011223344" }),
+  }).invoke(context());
+  assert.equal(result.ok, true);
+});
+
 test("dispatch audit has pre-dispatch and terminal success or failure dispositions", async () => {
   const successEntries = [];
   const success = await gateway({ invocationLog: (entry) => successEntries.push(entry) }).invoke(context());

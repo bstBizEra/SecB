@@ -18,14 +18,29 @@
 // Audit-first: every attempted action (allowed or denied) is written to the
 // injected append-only ledger BEFORE taking effect; a throwing writer denies.
 // Ledger entries never contain sealed references.
+//
+// SEALER TRUST BOUNDARY (A-FIND-3, do not weaken): isSealedRef is the PRIMARY
+// control and the SECRET_MATERIAL screen below is only a defense-in-depth
+// backstop against a misbehaving sealer. The production sealer's isSealedRef
+// MUST be UNFORGEABLE — an identity check that only the sealer can satisfy
+// (e.g. a WeakSet of refs it minted), NOT a structural shape test. A shape-only
+// isSealedRef is forgeable: an attacker can hand-craft an object of the right
+// shape wrapping raw secret material, and the string-only backstop here does
+// not run on objects. Injecting a shape-only sealer is a deployment defect.
 
 import { REQUIRED_CONTEXT_FIELDS } from "./mcp-gateway-core.mjs";
 
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
 
 // Mirrors the gateway's secret-material screen: even a misbehaving injected
-// sealer cannot cause the broker to accept plaintext-looking material.
-const SECRET_MATERIAL = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])[-_][-a-z0-9_]{8,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
+// sealer cannot cause the broker to accept plaintext-looking material. Includes
+// the AWS access-key id (AKIA + 16 upper-alnum), which is distinctive enough to
+// screen context-free (FU-3 / A-FIND-2). The gateway additionally screens
+// 40-char AWS *secret* keys, but only under aws/access-key-named fields; that
+// heuristic is deliberately NOT mirrored here because bind() sees a single
+// context-free string (no field name), and a blanket 40-char match would reject
+// legitimate 40-char base64 sealed refs.
+const SECRET_MATERIAL = /(?:\bbearer\s+[a-z0-9._~+\/-]{8,}|\b(?:sk|ghp|github_pat|xox[baprs])[-_][-a-z0-9_]{8,}|\bAKIA[0-9A-Z]{16}\b|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/i;
 
 function hardenedRecord(entries) {
   const output = Object.create(null);

@@ -5,7 +5,8 @@
 // it takes effect (audit-first), and a throwing writer yields a structured
 // denial with no state change. Deny-by-default: resolve() only ever returns
 // PROMOTED records, promotion requires the N-5 gate approvals (independent
-// review by an actor distinct from the record producer, plus governance), and
+// review plus governance, where the independent reviewer, the governance
+// approver, and the record producer are three pairwise-distinct actors), and
 // revocation is always available under governance approval. Runtime activation
 // remains a separate operator-authorized step.
 
@@ -207,6 +208,14 @@ export class CapabilityRegistryService {
     const producer = entry.stored.source_identity.maintainer;
     if (independent.actor_id === producer) {
       return this.#denyAudited("PROMOTE", "DENY_SELF_APPROVAL", { ...fields, producer });
+    }
+    // N-5 separation of duties: the two approval authorities and the record
+    // producer must be three pairwise-distinct actors. Producer-as-independent
+    // is caught above as DENY_SELF_APPROVAL; the remaining collapses (one
+    // non-producer actor holding BOTH approvals, or the producer holding the
+    // governance role) are denied here (A-FIND-1 / FU-1).
+    if (independent.actor_id === governance.actor_id || governance.actor_id === producer) {
+      return this.#denyAudited("PROMOTE", "DENY_SOD_VIOLATION", { ...fields, producer });
     }
 
     if (!this.#audit("PROMOTE", "ALLOW", {
