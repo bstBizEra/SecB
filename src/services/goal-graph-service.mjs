@@ -16,7 +16,7 @@
 // existence is proven only through the injected read-only workPackageResolver.
 
 import { RESERVED_ID_DELIMITERS, findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
-import { evaluatePairwiseDistinctApprovals } from "../control/sod-rules.mjs";
+import { normalizeRole, checkPairwiseDistinct } from "../control/sod-rules.mjs";
 
 // Closed hierarchy: each level's required parent level. PORTFOLIO is the root
 // (null parent); PRODUCT hangs off a PORTFOLIO; OBJECTIVE hangs off a PRODUCT.
@@ -67,6 +67,59 @@ function normalizeAttemptedAt(value) {
 
 function hasReservedDelimiter(...values) {
   return values.some((value) => findReservedDelimiter(value) !== null);
+}
+
+// A single approval is well-formed when it carries a non-blank role, a
+// non-blank actor id, and a parseable decided_at timestamp. (Shape check kept
+// local: the kernel SoD module owns actor/role SoD primitives, not approval
+// record shapes.)
+function approvalWellFormed(approval) {
+  return approval !== null
+    && typeof approval === "object"
+    && !Array.isArray(approval)
+    && !isBlank(approval.role)
+    && !isBlank(approval.actor_id)
+    && !isBlank(approval.decided_at)
+    && Number.isFinite(Date.parse(approval.decided_at));
+}
+
+// Evaluate a governance-approval bundle for force-retirement (N-5 shape):
+// one independent-review approval + one governance approval, with producer,
+// independent reviewer, and governance approver three pairwise-distinct
+// actors. Role tokens are resolved through the kernel role vocabulary
+// (normalizeRole: independent_review -> REV, governance -> GOV) and the
+// distinctness gate is the kernel checkPairwiseDistinct primitive. Structured
+// deny codes mirror the capability-registry N-5 gate:
+//   DENY_APPROVALS      - malformed bundle, missing role, or unknown producer
+//   DENY_SELF_APPROVAL  - independent reviewer is the producer
+//   DENY_SOD_VIOLATION  - the two approvers collapse, or governance is producer
+function evaluateForceRetireApprovals(approvals, producerActorId) {
+  if (!Array.isArray(approvals) || approvals.length === 0 || !approvals.every(approvalWellFormed)) {
+    return { ok: false, code: "DENY_APPROVALS" };
+  }
+  if (isBlank(producerActorId)) {
+    return { ok: false, code: "DENY_APPROVALS" };
+  }
+  const independent = approvals.find((approval) => normalizeRole(approval.role) === "REV");
+  const governance = approvals.find((approval) => normalizeRole(approval.role) === "GOV");
+  if (!independent || !governance) {
+    return { ok: false, code: "DENY_APPROVALS" };
+  }
+  // Producer-as-independent is the dedicated self-approval deny; remaining
+  // collapses (one non-producer actor holding BOTH approvals, or the producer
+  // holding the governance role) fall through to the pairwise-distinct gate.
+  if (independent.actor_id === producerActorId) {
+    return { ok: false, code: "DENY_SELF_APPROVAL" };
+  }
+  const distinct = checkPairwiseDistinct([
+    { role: "producer", actorId: producerActorId },
+    { role: "independent_review", actorId: independent.actor_id },
+    { role: "governance", actorId: governance.actor_id }
+  ], { code: "DENY_SOD_VIOLATION" });
+  if (!distinct.ok) {
+    return { ok: false, code: distinct.code };
+  }
+  return { ok: true, independent, governance };
 }
 
 export class GoalGraphService {
@@ -360,7 +413,7 @@ export class GoalGraphService {
     }
 
     if (force && (hasActiveChildren || linkedCount > 0)) {
-      const verdict = evaluatePairwiseDistinctApprovals(approvals, entry.producerActorId);
+      const verdict = evaluateForceRetireApprovals(approvals, entry.producerActorId);
       if (!verdict.ok) {
         return this.#denyAudited("RETIRE_GOAL", verdict.code, fields);
       }

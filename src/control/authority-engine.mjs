@@ -1,10 +1,9 @@
-const CONFLICTING_ROLES = Object.freeze([
-  ["ENGIN", "REV"],
-  ["REV", "QA"],
-  ["QA", "GOV"],
-  ["SKILL_PRODUCER", "SKILL_PUBLISHER"],
-  ["EVIDENCE_PRODUCER", "EVIDENCE_ACCEPTOR"]
-]);
+import { CONFLICTING_ROLE_PAIRS, checkConflictingRoles, checkProhibitedActors } from "./sod-rules.mjs";
+
+// SoD rule shapes are owned by the sod-rules primitive (MOD-GOV-S1). The
+// engine keeps CONFLICTING_ROLES as a value-identical re-export for existing
+// importers (src/index.mjs) while delegating the checks themselves.
+const CONFLICTING_ROLES = CONFLICTING_ROLE_PAIRS;
 
 const REQUIRED_ROLE = Object.freeze({
   "Project:*->REVIEW": "REV",
@@ -55,10 +54,6 @@ function requiredRole(context) {
   return REQUIRED_ROLE[`${context.objectType}:*->${context.requestedState}`] ?? null;
 }
 
-function hasConflict(roles) {
-  return CONFLICTING_ROLES.find(([left, right]) => roles.has(left) && roles.has(right));
-}
-
 function denied(reason, code = "DENY_AUTHORITY") {
   return { allowed: false, code, reason };
 }
@@ -103,9 +98,9 @@ export class AuthorityEngine {
       scopedRoles.set(scope, roles);
     }
     for (const [scope, roles] of scopedRoles) {
-      const conflict = hasConflict(roles);
-      if (conflict) {
-        throw new AuthorityConfigurationError("SOD_ROLE_CONFLICT", `${scope} combines conflicting roles ${conflict.join("/")}`);
+      const verdict = checkConflictingRoles(roles);
+      if (!verdict.ok) {
+        throw new AuthorityConfigurationError(verdict.code, `${scope} combines conflicting roles ${verdict.pair.join("/")}`);
       }
     }
   }
@@ -131,16 +126,13 @@ export class AuthorityEngine {
       return denied("Authority grant does not allow the requested transition");
     }
 
-    const prohibitedActors = role === "REV"
-      ? [context.producerActorId]
-      : role === "QA"
-        ? [context.producerActorId, context.reviewerActorId]
-        : ["GOV", "EVIDENCE_ACCEPTOR"].includes(role)
-          ? [context.producerActorId, context.reviewerActorId, context.qaActorId, context.evidenceVerifierActorId]
-          : [];
-    if (prohibitedActors.filter(Boolean).includes(context.actorId)) {
-      return denied(`Separation of duties prohibits actor ${context.actorId} from role ${role}`, "DENY_SOD");
-    }
+    const sod = checkProhibitedActors(role, context.actorId, {
+      producer: context.producerActorId,
+      reviewer: context.reviewerActorId,
+      qa: context.qaActorId,
+      evidenceVerifier: context.evidenceVerifierActorId
+    });
+    if (!sod.ok) return denied(sod.message, sod.code);
 
     return {
       allowed: true,
