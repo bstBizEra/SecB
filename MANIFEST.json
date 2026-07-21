@@ -427,6 +427,7 @@
     "docs/03-project-control/candidates/secb-gov-001-promotion-refresh-002.yaml",
     "src/security/redaction-policy.mjs",
     "tests/conformance-v011-redaction.test.mjs",
-    "docs/03-project-control/candidates/p0-18-v011-redaction-candidate-001.md"
+    "docs/03-project-control/candidates/p0-18-v011-redaction-candidate-001.md",
+    "docs/03-project-control/candidates/p0-18-v011-redaction-crossrev-001.md"
   ]
 }
