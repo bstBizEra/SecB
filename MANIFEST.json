@@ -172,6 +172,8 @@
     "src/services/non-escalation-comparator.mjs",
     "src/control/risk-registry.mjs",
     "tests/risk-registry.test.mjs",
+    "src/control/write-set-policy.mjs",
+    "tests/write-set-policy.test.mjs",
     "src/control/policy-decision-point.mjs",
     "tests/policy-decision-point.test.mjs",
     "tests/handoff-service.test.mjs",
