@@ -384,6 +384,8 @@
     "docs/03-project-control/candidates/mod-ops-s2-regate-001.md",
     "docs/03-project-control/candidates/atomic-snapshot-hardening-001.md",
     "docs/03-project-control/candidates/atomic-snapshot-regate-001.md",
+    "docs/03-project-control/candidates/mod-live-s1-value-mutation-fix-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-live-s1-value-mutation-crossrev-001.md",
     "src/ops/cadence-policy.mjs",
     "tests/cadence-policy.test.mjs",
     "docs/03-project-control/candidates/mod-ops-s3-cadence-rev-001.md",
