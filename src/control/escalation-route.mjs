@@ -6,6 +6,7 @@ export const ESCALATION_BOUND = "ESCALATION_BOUND";
 const deny = (code) => Object.freeze({ ok: false, code });
 const nonBlank = (v) => typeof v === "string" && v.trim() !== "";
 const bindingRef = (id, version, role, actor) => `escalation-route:${JSON.stringify([id, version, role, actor])}`;
+const freezeRecord = (record) => Object.freeze({ ...record, evidence_refs: Object.freeze([...record.evidence_refs]) });
 
 export function evaluateEscalationRoute({ delegationCandidate, escalationActorRole, escalationActorId } = {}) {
   if (!delegationCandidate || typeof delegationCandidate !== "object" || Array.isArray(delegationCandidate)) return deny("DENY_MALFORMED_DELEGATION");
@@ -21,7 +22,7 @@ export function evaluateEscalationRoute({ delegationCandidate, escalationActorRo
 export function bindEscalationRoute(input, identity = {}) {
   const result = evaluateEscalationRoute(input);
   const d = input?.delegationCandidate;
-  return Object.freeze({
+  return freezeRecord({
     decision_id: identity.decisionId, version: identity.version ?? 1,
     project_id: d?.project_id, work_package_id: d?.work_package_id, session_id: d?.session_id,
     actor_id: identity.actorId, decision_type: "GOVERNANCE",
@@ -38,6 +39,8 @@ export function verifyEscalation(decision, { exactDelegationId, exactDelegationV
   if (!nonBlank(exactDelegationId) || !Number.isInteger(exactDelegationVersion) || exactDelegationVersion < 1 || !nonBlank(escalationActorRole) || !nonBlank(escalationActorId)) return deny("DENY_MALFORMED_VERIFICATION_REQUEST");
   if (decision.decision_type !== "GOVERNANCE") return deny("DENY_WRONG_DECISION_TYPE");
   if (decision.outcome !== ESCALATION_BOUND) return deny("DENY_NOT_BOUND");
-  const expected = bindingRef(exactDelegationId, exactDelegationVersion, normalizeRole(escalationActorRole), escalationActorId);
+  const role = normalizeRole(escalationActorRole);
+  if (!ESCALATION_ROLES.includes(role)) return deny("DENY_ROUTE_NOT_AUTHORIZED");
+  const expected = bindingRef(exactDelegationId, exactDelegationVersion, role, escalationActorId);
   return Array.isArray(decision.evidence_refs) && decision.evidence_refs.includes(expected) ? Object.freeze({ ok: true }) : deny("DENY_DELEGATION_MISMATCH");
 }
