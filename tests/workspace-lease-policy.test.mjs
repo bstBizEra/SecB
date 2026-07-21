@@ -334,6 +334,40 @@ test("accessor-probe: a getter returning different values per read cannot influe
   assert.deepEqual(res.lease.writeSet, ["src/control"]);
 });
 
+// F3 hardening (mod-wspace-lease-primitive-rev-001): element-level TOCTOU. The
+// prior test covers only the object-PROPERTY level (writeSet read once). This
+// covers the array-INDEX level: a value-varying index getter must be read
+// EXACTLY ONCE by the single upfront snapshot, so the STORED set is provably the
+// set the self-check validated (rev-001 F3 probe 4e: stored differing from the
+// validated candidate). Under the pre-fix code the caller array was read 2-3x
+// (evaluateWriteSet self-check as candidate + allowed, then freezeLease's
+// spread), so the stored set could diverge from the validated one.
+test("F3 regression: a value-varying writeSet INDEX getter is read once; stored set === validated set", () => {
+  let reads = 0;
+  const writeSet = ["placeholder"];
+  Object.defineProperty(writeSet, 0, {
+    enumerable: true,
+    configurable: true,
+    get() { reads += 1; return reads === 1 ? "src/control" : "tests"; }
+  });
+  const res = mintLease({ ...validMintInput(), writeSet });
+  assert.equal(res.ok, true, `expected ok, got ${JSON.stringify(res)}`);
+  assert.equal(reads, 1, "writeSet index getter read exactly once by the single snapshot");
+  // The stored set is exactly the first-read snapshot the self-check validated.
+  assert.deepEqual(res.lease.writeSet, ["src/control"]);
+});
+
+test("F3 regression: each writeSet index is read exactly once at mint (multi-element snapshot)", () => {
+  const counts = [0, 0];
+  const writeSet = ["a", "b"];
+  Object.defineProperty(writeSet, 0, { enumerable: true, configurable: true, get() { counts[0] += 1; return "src/control"; } });
+  Object.defineProperty(writeSet, 1, { enumerable: true, configurable: true, get() { counts[1] += 1; return "tests"; } });
+  const res = mintLease({ ...validMintInput(), writeSet });
+  assert.equal(res.ok, true, `expected ok, got ${JSON.stringify(res)}`);
+  assert.deepEqual(counts, [1, 1], "each index read exactly once");
+  assert.deepEqual(res.lease.writeSet, ["src/control", "tests"]);
+});
+
 // ---------------------------------------------------------------------------
 // Deny-code closed set.
 // ---------------------------------------------------------------------------

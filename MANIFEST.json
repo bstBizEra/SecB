@@ -381,6 +381,7 @@
     "tests/scorecard-assembler.test.mjs",
     "docs/03-project-control/candidates/mod-ops-s2-scorecard-rework-001.md",
     "docs/03-project-control/candidates/mod-ops-s2-scorecard-rev-001.md",
-    "docs/03-project-control/candidates/mod-ops-s2-regate-001.md"
+    "docs/03-project-control/candidates/mod-ops-s2-regate-001.md",
+    "docs/03-project-control/candidates/atomic-snapshot-hardening-001.md"
   ]
 }

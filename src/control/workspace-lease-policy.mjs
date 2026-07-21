@@ -104,6 +104,30 @@ function readFields(source, keys) {
   }
 }
 
+// --- Single-read array snapshot (WSPACE-S1 snapshotArray discipline) ----------
+// Deliberate local twin of src/control/write-set-policy.mjs `snapshotArray`
+// (that module is imported READ-ONLY and pinned byte-identical by a guard test,
+// so its helper cannot be exported without breaking the pin). Copies each index
+// of a genuine, untampered array EXACTLY ONCE via [[Get]] into a fresh own-data
+// array: reads `length` once, rejects a tampered `Symbol.iterator` WITHOUT
+// invoking it, and never re-reads an index. Returns NOT_ARRAY for a
+// non-array/tampered/degenerate-length input, or a plain snapshot array
+// otherwise. May throw ONLY into a caller try/catch (a throwing length/index
+// accessor / Proxy get trap), where it becomes DENY_LEASE_MALFORMED.
+const NOT_ARRAY = Symbol("workspace-lease-not-array");
+const ARRAY_ITERATOR = Array.prototype[Symbol.iterator];
+function snapshotArray(value) {
+  if (!Array.isArray(value)) return NOT_ARRAY;
+  if (value[Symbol.iterator] !== ARRAY_ITERATOR) return NOT_ARRAY;
+  const len = value.length;
+  if (!Number.isSafeInteger(len) || len < 0) return NOT_ARRAY;
+  const out = new Array(len);
+  for (let i = 0; i < len; i++) {
+    out[i] = value[i];
+  }
+  return out;
+}
+
 // Validate the intrinsic well-formedness of a lease's own fields (identity +
 // timing + writeSet), independent of any clock or requested write set. Returns
 // a normalized { leaseId, sessionId, actorId, writeSet, issuedAt, ttl, expiresAt }
@@ -114,15 +138,31 @@ function readFields(source, keys) {
 // allowedPaths === writeSet): a clean, canonical, non-empty set is trivially a
 // subset of itself, so a writeSet carrying a traversal / absolute / non-canonical
 // / empty entry is rejected AT THIS BOUNDARY (fail-early) instead of silently
-// minting a lease that can never authorize anything. `writeSet` is left as the
-// caller's value here (not snapshotted) because every downstream consumer passes
-// it back through evaluateWriteSet, which performs its own defensive snapshot.
+// minting a lease that can never authorize anything.
+//
+// F3 HARDENING (mod-wspace-lease-primitive-rev-001): the caller's writeSet is
+// snapshotted ONCE here — each index read exactly once — and the SAME plain
+// snapshot is used for BOTH the self-containment check AND the stored frozen set
+// (freezeLease spreads normalized.writeSet). Previously the caller array flowed
+// through unsnapshotted: evaluateWriteSet read its elements twice (as
+// candidatePaths and allowedPaths) and freezeLease spread it a third time, so a
+// value-varying INDEX getter could make the STORED set differ from the VALIDATED
+// set (rev-001 F3, probe 4e: stored ["src"] while "src/control/narrow.mjs" was
+// the checked candidate). With one upfront snapshot, stored === validated
+// always; a throwing index getter is contained to DENY_LEASE_MALFORMED here
+// rather than propagating.
 function normalizeLeaseFields(fields) {
   const { leaseId, sessionId, actorId, writeSet, issuedAt, ttl } = fields;
   if (!isNonBlankString(leaseId) || !isNonBlankString(sessionId) || !isNonBlankString(actorId)) {
     return DENY_MALFORMED("leaseId, sessionId and actorId must be non-blank strings");
   }
-  if (!Array.isArray(writeSet)) {
+  let writeSetSnapshot;
+  try {
+    writeSetSnapshot = snapshotArray(writeSet);
+  } catch {
+    return DENY_MALFORMED("writeSet could not be safely inspected");
+  }
+  if (writeSetSnapshot === NOT_ARRAY) {
     return DENY_MALFORMED("writeSet must be an array of repository-relative paths");
   }
   if (!isEpochMs(issuedAt)) {
@@ -135,11 +175,12 @@ function normalizeLeaseFields(fields) {
   if (!Number.isSafeInteger(expiresAt)) {
     return DENY_MALFORMED("issuedAt + ttl overflows the safe-integer range");
   }
-  // Self-containment check reuses evaluateWriteSet byte-identically: the set must
-  // be a clean, canonical, non-empty subset of itself.
+  // Self-containment check reuses evaluateWriteSet byte-identically over the
+  // SAME snapshot that will be stored: the set must be a clean, canonical,
+  // non-empty subset of itself.
   const selfCheck = evaluateWriteSet({
-    candidatePaths: writeSet,
-    allowedPaths: writeSet,
+    candidatePaths: writeSetSnapshot,
+    allowedPaths: writeSetSnapshot,
     prohibitedPaths: []
   });
   if (!selfCheck.ok) {
@@ -148,12 +189,14 @@ function normalizeLeaseFields(fields) {
       detail: selfCheck.code
     });
   }
-  return { leaseId, sessionId, actorId, writeSet, issuedAt, ttl, expiresAt };
+  return { leaseId, sessionId, actorId, writeSet: writeSetSnapshot, issuedAt, ttl, expiresAt };
 }
 
-// Build the deep-frozen lease-record candidate. The writeSet is copied into a
-// fresh frozen array so a later mutation of the caller's array cannot reflect
-// into the record, and the record itself is frozen.
+// Build the deep-frozen lease-record candidate. The writeSet (already the plain
+// single-read snapshot from normalizeLeaseFields) is copied into a fresh frozen
+// array so a later mutation cannot reflect into the record, and the record
+// itself is frozen. Because the input here is the validated snapshot, this
+// spread reads only plain values — the stored set is provably the validated set.
 function freezeLease({ leaseId, sessionId, actorId, writeSet, issuedAt, ttl, expiresAt }) {
   return Object.freeze({
     leaseId,

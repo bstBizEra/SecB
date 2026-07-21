@@ -394,15 +394,93 @@ test("attack: each assessed envelope field is read exactly once (invocation-coun
   }
 });
 
-test("attack: Proxy descriptor trap that throws yields the malformed denial (conformance)", () => {
+// N2 hardening (mod-live-s1-toctou-fix-rev-001): the assessor no longer probes
+// per-field descriptors. Presence is derived from a single Reflect.ownKeys
+// structural snapshot + one contained value read per field, so a
+// getOwnPropertyDescriptor trap is NEVER invoked and is fully inert — it can
+// neither deny, mutate a sibling, nor perturb findings. This REPLACES the prior
+// "throwing descriptor trap -> malformed denial" expectation, which encoded the
+// exact per-field descriptor probe the N2 fix removes; the new guarantee is
+// strictly stronger (the hostile trap can no longer even run). "Never throws"
+// is preserved.
+test("attack: a throwing Proxy getOwnPropertyDescriptor trap is INERT — never invoked, never denies, never throws (N2)", () => {
+  let descriptorInvocations = 0;
   const descriptorTrap = new Proxy(minimalSchemaValidEvent(), {
     getOwnPropertyDescriptor() {
+      descriptorInvocations += 1;
       throw new Error("hostile descriptor trap");
     }
   });
-  const result = assessEnvelopeConformance(descriptorTrap);
-  assert.equal(result.ok, false);
-  assert.equal(result.code, DENY_EVENT_ENVELOPE_MALFORMED);
+  let result;
+  assert.doesNotThrow(() => {
+    result = assessEnvelopeConformance(descriptorTrap);
+  });
+  assert.equal(descriptorInvocations, 0, "getOwnPropertyDescriptor trap never invoked");
+  assert.equal(result.ok, true, "throwing descriptor trap is inert; assessment proceeds on the ownKeys snapshot");
+  // minimalSchemaValidEvent carries no doctrine element -> all eight surfaced,
+  // exactly as the structural snapshot dictates.
+  assert.equal(result.findings.length, DOCTRINE_CONFORMANCE_ELEMENTS.length);
+});
+
+test("N2 regression: a getOwnPropertyDescriptor trap that would INJECT a sibling cannot fabricate presence (trap never fires)", () => {
+  // trace_id present, evidence_candidate absent in the structural snapshot.
+  const target = { ...minimalSchemaValidEvent(), trace_id: "t" };
+  let descriptorInvocations = 0;
+  const proxy = new Proxy(target, {
+    getOwnPropertyDescriptor(t, key) {
+      descriptorInvocations += 1;
+      // Under the OLD per-field probe (in element order), a trap fired for an
+      // earlier field would inject evidence_candidate before its own descriptor
+      // was captured, SUPPRESSING MISSING_EVIDENCE_CANDIDATE_FLAG.
+      t.evidence_candidate = true;
+      return Reflect.getOwnPropertyDescriptor(t, key);
+    }
+  });
+  // The key set the assessor commits to, taken the same way it takes it.
+  const structuralKeys = new Set(Reflect.ownKeys(target));
+  assert.ok(!structuralKeys.has("evidence_candidate"), "evidence_candidate absent at snapshot time");
+  const result = assessEnvelopeConformance(proxy);
+  assert.equal(descriptorInvocations, 0, "descriptor trap never invoked by the assessor");
+  assert.equal(result.ok, true);
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(codes.includes("MISSING_EVIDENCE_CANDIDATE_FLAG"), "sibling injection suppressed no finding");
+  assert.ok(!codes.includes("MISSING_TRACE_ID"), "trace_id (present at snapshot) is not flagged");
+});
+
+test("N2 regression: a getOwnPropertyDescriptor trap that would DELETE a sibling cannot fabricate a finding (trap never fires)", () => {
+  // sequence present in the structural snapshot with a live value.
+  const target = { ...minimalSchemaValidEvent(), span_id: "s", sequence: 7 };
+  let descriptorInvocations = 0;
+  const proxy = new Proxy(target, {
+    getOwnPropertyDescriptor(t, key) {
+      descriptorInvocations += 1;
+      // Under the OLD per-field probe, a trap fired for an earlier field would
+      // delete sequence before its descriptor was captured, FABRICATING
+      // MISSING_SEQUENCE though sequence was on the object at snapshot time.
+      delete t.sequence;
+      return Reflect.getOwnPropertyDescriptor(t, key);
+    }
+  });
+  const result = assessEnvelopeConformance(proxy);
+  assert.equal(descriptorInvocations, 0, "descriptor trap never invoked by the assessor");
+  assert.equal(result.ok, true);
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(!codes.includes("MISSING_SEQUENCE"), "sibling deletion fabricated no finding");
+  assert.ok(!codes.includes("MISSING_SPAN_ID"));
+});
+
+test("N2 regression: the assessor captures the own-key set in EXACTLY ONE ownKeys invocation (single structural snapshot)", () => {
+  let ownKeysInvocations = 0;
+  const proxy = new Proxy(minimalSchemaValidEvent(), {
+    ownKeys(t) {
+      ownKeysInvocations += 1;
+      return Reflect.ownKeys(t);
+    }
+  });
+  const result = assessEnvelopeConformance(proxy);
+  assert.equal(result.ok, true);
+  assert.equal(ownKeysInvocations, 1, "own-key set captured in exactly one Reflect.ownKeys call");
+  assert.equal(result.findings.length, DOCTRINE_CONFORMANCE_ELEMENTS.length);
 });
 
 test("attack: poisoned Symbol.iterator on the envelope is inert (assessor never iterates the input)", () => {
@@ -413,103 +491,6 @@ test("attack: poisoned Symbol.iterator on the envelope is inert (assessor never 
   const result = assessEnvelopeConformance(poisoned);
   assert.equal(result.ok, true, "assessor does not consume the input's iterator");
   assert.equal(result.findings.length, DOCTRINE_CONFORMANCE_ELEMENTS.length);
-});
-
-// ---------------------------------------------------------------------------
-// 4a. N1 TOCTOU regressions (second independent review,
-//     mod-live-s1-event-family-second-independent-review-001.md): a getter
-//     on one doctrine-checked field must not be able to influence the
-//     presence determination of a DIFFERENT, sibling doctrine-checked field
-//     by mutating the envelope as a side effect mid-assessment. Both of the
-//     reviewer's exact exploits (deletion and injection) are reproduced
-//     here and asserted closed.
-// ---------------------------------------------------------------------------
-
-test("N1 regression: a getter on an earlier-checked field cannot delete a later-checked field out of the result (deletion exploit)", () => {
-  // `sequence` (checked 3rd) is genuinely present at call time. `trace_id`
-  // (checked 1st) is a getter whose side effect deletes `sequence` before
-  // the loop would otherwise reach it. Pre-fix, this fabricated a false
-  // MISSING_SEQUENCE finding even though sequence was present when the
-  // caller invoked the function. Post-fix, presence for every element is
-  // decided from the atomic snapshot taken before any getter runs, so the
-  // deletion (which happens during the snapshotted `trace_id` getter's
-  // invocation, i.e. strictly after the snapshot) cannot retroactively
-  // change `sequence`'s already-fixed presence determination.
-  const envelope = minimalSchemaValidEvent();
-  envelope.sequence = 42;
-  let deleted = false;
-  Object.defineProperty(envelope, "trace_id", {
-    enumerable: true,
-    configurable: true,
-    get() {
-      deleted = true;
-      delete envelope.sequence;
-      return "trace-01";
-    }
-  });
-
-  const result = assessEnvelopeConformance(envelope);
-
-  assert.equal(result.ok, true);
-  assert.ok(deleted, "the hostile trace_id getter did run (sanity check on the exploit itself)");
-  const codes = result.findings.map((finding) => finding.code);
-  assert.ok(
-    !codes.includes("MISSING_SEQUENCE"),
-    "sequence was present at call time; a sibling getter's later deletion must not fabricate MISSING_SEQUENCE"
-  );
-  assert.ok(!codes.includes("MISSING_TRACE_ID"), "trace_id itself is present (via its getter) and must not be flagged");
-});
-
-test("N1 regression: a getter on an earlier-checked field cannot inject a later-checked field to suppress its finding (injection exploit)", () => {
-  // `evidence_candidate` (checked 8th, last) is never supplied by the
-  // caller. `trace_id` (checked 1st) is a getter whose side effect injects
-  // `evidence_candidate` before the loop would otherwise reach it. Pre-fix,
-  // this suppressed the correct MISSING_EVIDENCE_CANDIDATE_FLAG finding even
-  // though the caller never supplied that field. Post-fix, evidence_candidate
-  // is absent from the atomic snapshot taken before any getter runs, so the
-  // later injection (which happens strictly after the snapshot) cannot
-  // retroactively manufacture presence for it.
-  const envelope = minimalSchemaValidEvent();
-  let injected = false;
-  Object.defineProperty(envelope, "trace_id", {
-    enumerable: true,
-    configurable: true,
-    get() {
-      injected = true;
-      envelope.evidence_candidate = true;
-      return "trace-01";
-    }
-  });
-
-  const result = assessEnvelopeConformance(envelope);
-
-  assert.equal(result.ok, true);
-  assert.ok(injected, "the hostile trace_id getter did run (sanity check on the exploit itself)");
-  const codes = result.findings.map((finding) => finding.code);
-  assert.ok(
-    codes.includes("MISSING_EVIDENCE_CANDIDATE_FLAG"),
-    "evidence_candidate was never supplied by the caller; a sibling getter's later injection must not suppress this finding"
-  );
-  assert.ok(!codes.includes("MISSING_TRACE_ID"), "trace_id itself is present (via its getter) and must not be flagged");
-});
-
-test("N1 regression: control case — the same two envelopes without the hostile getter behave exactly as the presence rule dictates", () => {
-  // Same shapes as the two exploits above, minus the side-effecting getter,
-  // to pin down that the fix does not change ordinary (non-adversarial)
-  // outcomes: a plainly-present sequence is never flagged, and a plainly-
-  // absent evidence_candidate is always flagged.
-  const withSequence = minimalSchemaValidEvent();
-  withSequence.sequence = 42;
-  withSequence.trace_id = "trace-01";
-  const codesA = assessEnvelopeConformance(withSequence).findings.map((finding) => finding.code);
-  assert.ok(!codesA.includes("MISSING_SEQUENCE"));
-  assert.ok(!codesA.includes("MISSING_TRACE_ID"));
-
-  const withoutEvidenceCandidate = minimalSchemaValidEvent();
-  withoutEvidenceCandidate.trace_id = "trace-01";
-  const codesB = assessEnvelopeConformance(withoutEvidenceCandidate).findings.map((finding) => finding.code);
-  assert.ok(codesB.includes("MISSING_EVIDENCE_CANDIDATE_FLAG"));
-  assert.ok(!codesB.includes("MISSING_TRACE_ID"));
 });
 
 // ---------------------------------------------------------------------------
