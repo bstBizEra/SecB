@@ -230,41 +230,79 @@ export function classifyEventType(input) {
 // Presence rule: an element counts as present only when it is an OWN property
 // (prototype smuggling ignored) with a non-null, non-undefined value.
 //
-// ATOMIC STRUCTURAL SNAPSHOT — closes the cross-field TOCTOU class: the
-// original getter vector (N1) AND its Proxy-`getOwnPropertyDescriptor`-trap
-// variant (N2 in mod-live-s1-toctou-fix-rev-001). The own-key set is captured
-// in a SINGLE `Reflect.ownKeys(envelope)` call — one structural read — into a
-// plain Set, and key-presence is decided ONLY from that captured set. NO
-// per-field existence probe (`Object.hasOwn` / `Object.getOwnPropertyDescriptor`)
-// is ever issued, so there is no per-field descriptor/`has` trap that could run
-// in the public DOCTRINE_CONFORMANCE_ELEMENTS order and inject or delete a
-// SIBLING field before that sibling is captured: the key set is frozen the
-// instant it is taken, and nothing observed afterward can add to or remove from
-// it.
+// ATOMIC STRUCTURAL + DESCRIPTOR SNAPSHOT — closes the cross-field TOCTOU
+// class across THREE distinct mechanisms:
+//   N1 — a plain getter injecting/deleting a sibling KEY (closed:
+//        MOD-LIVE-S1-TOCTOU-FIX-REV-001).
+//   N2 — a Proxy `getOwnPropertyDescriptor`-trap side effect during a
+//        per-field PRESENCE probe (closed: this file's prior revision).
+//   N3 — the residual VALUE-mutation channel identified by the independent
+//        review of that revision
+//        (docs/03-project-control/candidates/mod-live-s1-atomic-snapshot-hardening-independent-review-001.md,
+//        commit cc63e9a, PoC A-D): because a fixed, public field order
+//        (DOCTRINE_CONFORMANCE_ELEMENTS) was walked reading each field's
+//        VALUE fresh at its own turn, an EARLIER field's getter could mutate
+//        a LATER, already-genuinely-present-or-absent sibling's stored VALUE
+//        before that sibling's own read — fabricating or suppressing its
+//        finding without touching key presence at all. Re-ordering the loop,
+//        or merely splitting "read values" from "decide" into two passes
+//        over the SAME live-property reads, does NOT close this: whichever
+//        field is read last in ANY fixed sequence of `envelope[key]`
+//        (`[[Get]]`) calls remains open to every earlier read's side effect,
+//        no matter which pass consumes the result.
 //
-// WHAT IS AND IS NOT GUARANTEED (this narrows the earlier over-broad claim that
-// descriptor reads mean "no side effect can occur here" — true only for plain
-// objects and only for the getter vector; L1 in the same review):
-//   - PLAIN object: `Reflect.ownKeys` runs no user code, so the snapshot is
-//     genuinely atomic and side-effect-free, and the exported element order
-//     cannot cross-contaminate any presence decision.
-//   - PROXY: exactly two contained trap surfaces remain, each a single
-//     invocation and NEITHER able to change another field's already-decided
-//     KEY-presence:
-//       (a) the `ownKeys` trap fires EXACTLY ONCE for the whole snapshot. If it
-//           is itself hostile (mutates state on that one call) that is the one
-//           documented residual boundary — a single contained call, not a
-//           per-field amplification.
-//       (b) each present field's value is taken with ONE contained read
-//           (`envelope[element]`), firing a `get` trap at most once; a throwing
-//           `get` trap is contained to the malformed denial, and because
-//           key-presence is already fixed by the snapshot, a `get` trap governs
-//           ONLY its own field's value — it cannot fabricate or suppress a
-//           sibling's key-presence (a value-channel note is recorded in the
-//           hardening record's residual-boundary section).
-//   A `getOwnPropertyDescriptor` trap is never invoked at all and is therefore
-//   fully inert: it can neither deny nor perturb findings. The event is never
-//   mutated.
+// The actual fix: presence is (unchanged) decided ONLY from the single
+// upfront `Reflect.ownKeys(envelope)` structural Set (N1's injection/deletion
+// guarantee is untouched — nothing below can add to or remove from that Set).
+// VALUES are captured in a dedicated PHASE 1 that reads each present field's
+// raw property DESCRIPTOR (`Object.getOwnPropertyDescriptor`), not its value,
+// for every doctrine field, before ANY field's getter is invoked. For a plain
+// (non-Proxy) object this phase executes ZERO user code — retrieving a
+// property's descriptor never invokes its accessor `get` function, it only
+// returns a reference to it (or the already-resolved `.value` for a data
+// property) — so every sibling's descriptor is an inert, DETACHED snapshot
+// object before any getter anywhere has had a chance to run. PHASE 2 then
+// resolves each field's final value strictly from ITS OWN captured
+// descriptor (`.value` for a data property; invoking the captured `.get`
+// reference — never re-reading `envelope[key]` — for an accessor) and
+// decides/pushes its finding immediately. Because every OTHER field's
+// descriptor was already captured in Phase 1, invoking one field's getter in
+// Phase 2 can mutate the live `envelope` all it wants — it cannot change what
+// Phase 1 already captured for any sibling.
+//
+// WHAT IS AND IS NOT GUARANTEED (same honesty discipline as the L1 note this
+// replaces):
+//   - PLAIN object: Phase 1's descriptor reads run no user code at all, so
+//     value capture is genuinely atomic/side-effect-free for every field
+//     whose value is a plain data property, regardless of what any OTHER
+//     field's getter later does in Phase 2. This is what closes the review's
+//     PoC A, B, and D (plain-getter suppression, fabrication, and
+//     inject/delete of a sibling) with certainty — no Proxy trap is even in
+//     play for those three.
+//   - PROXY, `get`-trap vector (review PoC C, honest-passthrough descriptor
+//     traps): resolving a field's value via its captured descriptor's `.get`
+//     reference — a direct function call, never `envelope[key]` again —
+//     never re-invokes the Proxy's `get` trap machinery, so a hostile `get`
+//     trap keyed to one field cannot reach a sibling's already-captured
+//     descriptor.
+//   - PROXY, HOSTILE `getOwnPropertyDescriptor`-trap vector (not demonstrated
+//     by the independent review, which deliberately kept this trap honest to
+//     isolate the `get`-trap vector in PoC C): Phase 1 issues one descriptor
+//     call per PRESENT doctrine field, gated by the same immutable
+//     Reflect.ownKeys Set N2 already fixed — key PRESENCE cannot be altered
+//     by any of these calls under any circumstances. But if such a trap uses
+//     ITS OWN invocation (for an earlier field) to delete a LATER, still-
+//     unqueried sibling's underlying data, that sibling's own descriptor call
+//     will legitimately come back `undefined` even though Reflect.ownKeys
+//     said it was present moments earlier — a genuine snapshot/read
+//     inconsistency. Rather than silently reporting that sibling as a false
+//     MISSING finding (fail-safe but factually wrong), this function treats
+//     any such presence/descriptor inconsistency as proof the input is
+//     unstable under read and DENIES the whole assessment
+//     (DENY_EVENT_ENVELOPE_MALFORMED) — the same fail-closed posture this
+//     module already takes for any other hostile-accessor signal. No finding
+//     is ever fabricated by this path.
+//   The event is never mutated by this function.
 export function assessEnvelopeConformance(envelope) {
   const findings = [];
   try {
@@ -274,14 +312,41 @@ export function assessEnvelopeConformance(envelope) {
     // ONE structural snapshot: the own-key set, captured in a single
     // Reflect.ownKeys call (one `ownKeys` trap invocation for a Proxy).
     // Presence is decided from this set alone; no later observation can change
-    // which keys are considered own.
+    // which keys are considered own. (N1/N2 closure, unchanged.)
     const ownKeys = new Set(Reflect.ownKeys(envelope));
+
+    // PHASE 1 — descriptor snapshot for every doctrine field the structural
+    // set says is present. No getter is invoked here (see doc comment above):
+    // this fully decouples every sibling's captured descriptor from whatever
+    // any OTHER field's getter does once Phase 2 starts invoking them. A
+    // descriptor that comes back `undefined` for a key Reflect.ownKeys just
+    // confirmed present is a structural inconsistency (the object mutated
+    // itself mid-snapshot) — fail closed rather than silently treat it as
+    // absent.
+    const descriptors = new Map();
     for (const spec of DOCTRINE_CONFORMANCE_ELEMENTS) {
-      let present = false;
       if (ownKeys.has(spec.element)) {
-        // SINGLE contained value read; key-presence already fixed above, so
-        // this read cannot alter any sibling's presence decision.
-        const value = envelope[spec.element];
+        const descriptor = Object.getOwnPropertyDescriptor(envelope, spec.element);
+        if (!descriptor) {
+          throw new Error(`structural inconsistency: ${spec.element} present at snapshot, vanished before descriptor read`);
+        }
+        descriptors.set(spec.element, descriptor);
+      }
+    }
+
+    // PHASE 2 — resolve each field's value strictly from ITS OWN captured
+    // descriptor and decide immediately. `envelope[key]` is never read here;
+    // only a data descriptor's already-resolved `.value`, or a direct call to
+    // the descriptor's own captured `.get` reference, is used.
+    for (const spec of DOCTRINE_CONFORMANCE_ELEMENTS) {
+      const descriptor = descriptors.get(spec.element);
+      let present = false;
+      if (descriptor) {
+        const value = Object.hasOwn(descriptor, "value")
+          ? descriptor.value
+          : typeof descriptor.get === "function"
+            ? descriptor.get.call(envelope)
+            : undefined;
         present = value !== undefined && value !== null;
       }
       if (!present) {
