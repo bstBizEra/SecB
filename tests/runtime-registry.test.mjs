@@ -339,3 +339,65 @@ test("correct expectedVersion allows transition", () => {
   const r2 = reg.transitionLifecycle("inst_claude_001", "ACTIVE", { expectedVersion: 2 });
   assert.equal(r2.version, 3);
 });
+
+// --- F-IDNORM: agent_instance_id duplicate detection is normalized ---
+// (mod-reg-qa-001, probes P2/P3: case-variant, whitespace-padded, and
+// NFC/NFD-confusable "same-looking" IDs must now be detected as duplicates.)
+
+test("F-IDNORM: a case-variant of an already-registered ID is rejected as a duplicate", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration());
+  assert.throws(
+    () => reg.register(registration({ agent_instance_id: "INST_CLAUDE_001" })),
+    (err) => err instanceof RegistryError && err.code === "DENY_DUPLICATE_INSTANCE"
+  );
+  assert.equal(reg.size, 1);
+});
+
+test("F-IDNORM: a whitespace-padded variant of an already-registered ID is rejected as a duplicate", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration());
+  assert.throws(
+    () => reg.register(registration({ agent_instance_id: " inst_claude_001 " })),
+    (err) => err instanceof RegistryError && err.code === "DENY_DUPLICATE_INSTANCE"
+  );
+  assert.equal(reg.size, 1);
+});
+
+test("F-IDNORM: an NFD-normalized ID is rejected as a duplicate of its NFC-registered twin", () => {
+  const reg = new RuntimeRegistry();
+  // "cafe with an accent" as NFC (one precomposed code point, U+00E9) vs NFD
+  // (base letter U+0065 followed by a combining acute accent, U+0301).
+  // Built purely from explicit code points (no literal unicode in source)
+  // so the two strings are guaranteed byte-distinct yet render identically
+  // and are NFC-confusable.
+  const nfc = "inst_caf" + String.fromCharCode(0x00e9);
+  const nfd = "inst_caf" + String.fromCharCode(0x0065, 0x0301);
+  assert.notEqual(nfc, nfd, "test fixture sanity: the two forms must be byte-distinct");
+  assert.equal(nfc.normalize("NFC"), nfd.normalize("NFC"), "test fixture sanity: the two forms must be NFC-confusable");
+
+  reg.register(registration({ agent_instance_id: nfc }));
+  assert.throws(
+    () => reg.register(registration({ agent_instance_id: nfd })),
+    (err) => err instanceof RegistryError && err.code === "DENY_DUPLICATE_INSTANCE"
+  );
+  assert.equal(reg.size, 1);
+});
+
+test("F-IDNORM: genuinely distinct IDs that do not normalize to the same form still register independently", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration());
+  const result = reg.register(registration({ agent_instance_id: "inst_claude_002" }));
+  assert.equal(result.registered, true);
+  assert.equal(reg.size, 2);
+});
+
+test("F-IDNORM: registered entries remain keyed and retrievable by their original, unmodified agent_instance_id", () => {
+  const reg = new RuntimeRegistry();
+  reg.register(registration({ agent_instance_id: "Inst_Mixed_Case" }));
+  const entry = reg.get("Inst_Mixed_Case");
+  assert.equal(entry.agent_instance_id, "Inst_Mixed_Case");
+  // A differently-cased lookup does not resolve to the same key: only the
+  // duplicate-registration check is normalized, not get()/resolve() lookup.
+  assert.equal(reg.get("inst_mixed_case"), null);
+});
