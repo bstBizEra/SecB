@@ -253,7 +253,11 @@ const PINNED_BLOBS = Object.freeze({
   "src/live/event-family-policy.mjs": "47ebc9bb7e5190c6f0f78232884379b3c284248d",
   "src/live/replay-assembler.mjs": "6ba6e4b143ad3662c7dc2f364a8ff665002667d6",
   "src/contracts/canonical-fingerprint.mjs": "721e99032ce7040312e77138c8f156b649fd996e",
-  "src/contracts/contract-validator.mjs": "c3b37776ad1c928395fe681a3e9934c6decff42e"
+  // Repinned by MOD-SKILL S2 (mod-skill-s2-governed-promotion): the addition
+  // of a `skillPromotion` schema-registry entry (17->18 schemas) is an
+  // authorized additive edit, mirroring the same disclosed treatment every
+  // prior contract addition required. Pin tracks the post-S2 blob.
+  "src/contracts/contract-validator.mjs": "527f3fd5b4b552483d5b5b53408f90d7c7ce7f8b"
 });
 
 // git blob hash: sha1("blob <byteLength>\0" + content). CRLF normalized to LF

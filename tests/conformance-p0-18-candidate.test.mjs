@@ -388,6 +388,13 @@ function gitBlobSha1(rel) {
 
 // Directly-imported primitives + their load-bearing transitive dependencies,
 // pinned to `git rev-parse 4abfff2:<file>`.
+//
+// "src/contracts/contract-validator.mjs" repinned by MOD-SKILL S2
+// (mod-skill-s2-governed-promotion): the addition of a `skillPromotion`
+// schema-registry entry (17->18 schemas) is an authorized additive edit to
+// this shared module, mirroring the same disclosed treatment every prior
+// contract addition required. Pin tracks the post-S2 blob so this guard
+// still detects any UNAUTHORIZED further drift of the composed primitives.
 const PINNED_BLOBS = Object.freeze({
   "src/project/project-contract-service.mjs": "b88e20299f40dfa9322a5f2fc8c39a85555950a4",
   "src/live/access-mode-policy.mjs": "5d96eec7af6e717218a81ea5563e09c6b18d191b",
@@ -395,7 +402,7 @@ const PINNED_BLOBS = Object.freeze({
   "src/gateway/mcp-gateway-core.mjs": "ec22a296e280d1c15a26840fba12afb34765c8d8",
   "src/ledger/checkpoint-ledger.mjs": "4df391f892f8bac2b569c5bf9fd627ee0101c542",
   "src/ledger/durable-ledger.mjs": "6be08fc14ff31a7c871c5e86888af42285d40529",
-  "src/contracts/contract-validator.mjs": "c3b37776ad1c928395fe681a3e9934c6decff42e",
+  "src/contracts/contract-validator.mjs": "527f3fd5b4b552483d5b5b53408f90d7c7ce7f8b",
   "src/contracts/canonical-fingerprint.mjs": "721e99032ce7040312e77138c8f156b649fd996e"
 });
 

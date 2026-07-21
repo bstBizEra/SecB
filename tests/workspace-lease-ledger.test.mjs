@@ -453,8 +453,12 @@ test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE
   ];
   // Every contract schema EXCEPT the newly added workspace-lease one must be
   // byte-identical to the base commit — proof this slice touched no other schema.
+  // "skill-promotion.schema.json" is ALSO excluded: it was added later (and
+  // authorized) by mod-skill-s2-governed-promotion, a schema this base commit
+  // predates entirely — excluding it here is the same disclosed, additive
+  // treatment this guard already gives its own workspace-lease schema.
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "workspace-lease.schema.json") continue;
+    if (file === "workspace-lease.schema.json" || file === "skill-promotion.schema.json") continue;
     guarded.push(`contracts/${file}`);
   }
   for (const rel of guarded) {

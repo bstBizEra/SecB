@@ -49,8 +49,9 @@ const schemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"
 // ledgers, skill resolver, MOD-MCP capability registry, MOD-WORK goal graph,
 // MOD-SKILL S1 skill-candidate intake, MOD-A2A S1 delegation-request
 // contract, MOD-RUNTIME S1 checkpoint ledger, MOD-WSPACE S3 workspace-lease
-// ledger). Set equality keeps this fail-closed: an unexpected schema addition
-// or a missing canonical schema both fail.
+// ledger, MOD-SKILL S2 skill-promotion ledger). Set equality keeps this
+// fail-closed: an unexpected schema addition or a missing canonical schema
+// both fail.
 const expectedSchemas = [
   "contracts/agent-registration.schema.json",
   "contracts/context-receipt.schema.json",
@@ -68,12 +69,13 @@ const expectedSchemas = [
   "contracts/goal.schema.json",
   "contracts/delegation-request.schema.json",
   "contracts/checkpoint.schema.json",
-  "contracts/workspace-lease.schema.json"
+  "contracts/workspace-lease.schema.json",
+  "contracts/skill-promotion.schema.json"
 ];
 assert(
   schemaFiles.length === expectedSchemas.length && expectedSchemas.every((file) => schemaFiles.includes(file)),
   "schemas.count",
-  "7 canonical bootstrap schemas + 10 governed extensions (P0-14, skill resolver, capability record, skill candidate, MOD-WORK goal, MOD-A2A delegation request, MOD-RUNTIME checkpoint, MOD-WSPACE workspace-lease)"
+  "7 canonical bootstrap schemas + 11 governed extensions (P0-14, skill resolver, capability record, skill candidate, MOD-WORK goal, MOD-A2A delegation request, MOD-RUNTIME checkpoint, MOD-WSPACE workspace-lease, MOD-SKILL S2 skill-promotion)"
 );
 const mandatoryIdentityFields = {
   "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_instance_id", "evaluation_status", "lifecycle_state"],
@@ -92,7 +94,8 @@ const mandatoryIdentityFields = {
   "contracts/goal.schema.json": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "content_hash"],
   "contracts/delegation-request.schema.json": ["delegation_id", "version", "project_id", "work_package_id", "session_id", "source_actor_id", "content_hash"],
   "contracts/checkpoint.schema.json": ["checkpoint_id", "version", "project_id", "session_id", "source_ledger_id", "sequence_at_checkpoint", "content_hash"],
-  "contracts/workspace-lease.schema.json": ["lease_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "content_hash"]
+  "contracts/workspace-lease.schema.json": ["lease_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "content_hash"],
+  "contracts/skill-promotion.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "skill_candidate_id", "skill_version", "content_hash"]
 };
 for (const file of schemaFiles) {
   const schema = JSON.parse(read(file));
