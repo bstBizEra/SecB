@@ -359,3 +359,45 @@ Adoption/wiring of both remains SEC/GOV-gated behind the P0-20 HOLD.
 - 2026-07-21 claude-motor-modintegqueue-s2: MOD-INTEG Slice S2 (collision-forecast, UNWIRED) PRODUCED on `bst/mod-integ-queue-s2-collision-forecast` (base `bst/mod-integ-queue-s1-ledger` @ 66a5951, the fully-reviewed S1 tip) per `mod-integ-queue-gap-assessment-001.md` §4 Slice S2 — closes MI-3's consumption gap. New `src/control/integration-collision-forecast.mjs` (`forecastCollision(candidateWriteSet, records)`) reuses MOD-WSPACE's `evaluateOverlap`/`OVERLAP_ORDER` from `overlap-policy.mjs` verbatim (byte-identity guarded vs base; a dedicated test proves each comparison's `.overlap` field is `deepEqual` to a direct `evaluateOverlap` call — no re-derivation) — no local collision math. Reduces the ledger's own `records` shape (same one `IntegrationQueueLedger`'s `preWriteCheck` already receives) to current-version, SUBMITTED/IN_REVIEW-only entries locally (small, non-collision reduction, kept local so zero bytes of the reviewed S1 ledger file are touched). Disclosed scope limit: doctrine dimensions `sameModule`/`sameSymbol`/`protectedBranch`/`globalConfig` aren't derivable from `declared_write_set` alone, so this forecast always answers them `false` (the same "O0 floor" convention `overlap-policy.mjs`'s own test suite already uses) — it can only ever surface O0/O2, never O1/O3/O4/O5; verified by a dedicated scope-limit test. Naming deviates from the assessment's own sketch (`integration-collision-check.mjs`/`checkCollisionAgainstQueue`) per this dispatch's explicit `forecastCollision(candidateWriteSet, records)` naming — disclosed in the producer-verification record, not a silent departure. 17 new tests (no-collision; O2 collision in both structural forms; multiple simultaneous colliders; MERGED/REJECTED correctly excluded incl. a mixed old-terminal/new-active case; reuse byte-identity; fail-closed malformed/empty/traversal candidate + non-array/hostile records; frozen output; unwired confirmation; byte-identity guard), all passing. Full suite 1130/1125/0 fail/5 skip (before, S1 tip) -> 1147/1142/0 fail/5 skip (after). `node tools/validate-foundation.mjs` exit 0 both. No hardcoded test-ID branching (grepped). Forecast-only, NOT wired into `appendEntry` or any orchestrator — enforcement wiring explicitly deferred to a separate, later, operator-gated decision per the assessment's own S2 note. Producer verification: `docs/03-project-control/candidates/mod-integ-queue-s2-collision-forecast-producer-verification-001.md`. Local commit only, no push, no merge, no operator ratification yet.
 - 2026-07-22 claude-motor-integ-rebase-01: MOD-INTEG S1+S2 stack REBASED + RE-PINNED onto `main` @ cc582e3 (19 schemas: 7 canonical + 12 governed, incl memory-record + skill-promotion) on branch `bst/mod-integ-rebased`. Mechanical merge-readiness rework ONLY — no change to the already-cross-reviewed ledger/forecast/schema logic (`docs/03-project-control/candidates/mod-integ-s1-s2-crossrev-001.md`). `integration-queue-entry.schema.json` re-registered as the **20th** schema (now 7 canonical + 13 governed) ALONGSIDE memory-record + skill-promotion in `contract-validator.mjs` (`integrationQueueEntry`) and `validate-foundation.mjs` (expectedSchemas + mandatoryIdentityFields + count text); `supportedContractKinds()` === 20 and includes memory-record, skill-promotion, AND integration-queue-entry. Re-pinned all 10 byte-identity guards to the resolved-tree blobs (`validate-foundation.mjs` → dbd4d10883e7724aa75301fc7f3b5c9528089726 across 7 files; `contract-validator.mjs` → 306a3d23ef748ffb987cd35d9ab4cf60264f32bc across 3 files); no assertion or guarded path dropped. `workspace-lease-ledger.test.mjs` baseline sweep now also excludes integration-queue-entry.schema.json; the S1 ledger test's own contracts/ sweep hardened to skip schemas that postdate its BASE (385ac65) so the later-added memory-record/skill-promotion cannot false-fail it. Local commit only, no push, no merge, no operator ratification yet.
 - 2026-07-21 EXECUTED: MOD-INTEG S1+S2 merged to main as PR #104 (rebased, `bst/mod-integ-rebased` @ e4061aa → merge `c8724ba`). 20 schemas live (7 canonical + 13 governed); full suite 1249/1246/0/3 green; validator exit 0, 845 checks. Cross-review `claude-immune-crossrev-integ-01` (code APPROVED; rework was staleness-only). Primitives remain UNWIRED; adoption SEC/GOV-gated behind the P0-20 HOLD.
+- 2026-07-22 claude-cortex-modinteg-completion-01: **MOD-INTEG (Integration Queue, module proper) FINISHED_WITH_TRACKED_FOLLOWUPS** — completion review `mod-integ-completion-review-001.md` @ main `942d09f` (carries PR #104's S1+S2). MI-gap map: 6 CLOSED (MI-1 contract+ledger, MI-2 atomic duplicate-claim via `preWriteCheck`, MI-3 collision-forecast, MI-6 DurableLedger reuse, MI-7 preWriteCheck reuse, MI-8 immutable-candidates step), 2 OPEN — both R3/operator (MI-4 merge-simulation/composite-verification, MI-5 ordering/priority scheduler), MI-9 doc-numbering finding (not a code gap). No OPEN gap is a buildable-now R2 slice: both R2 slices of the module's own S1–S3 plan (S1 ledger + S2 forecast) are delivered+ratified; S3 was rated R3+ out-of-round. Smoke @ 942d09f: module tests 49/49/0 (`integration-queue-ledger` + `integration-collision-forecast`), validator exit 0 / 845 checks / **20 schemas** (7 canonical + 13 governed). Primitives UNWIRED (zero importers; forecast on no live path); adoption + all follow-ups (merge-sim, ordering, collision LIVE enforcement, git/CI wiring) SEC/GOV-gated behind the P0-20 HOLD. LOW pre-wiring follow-ups carried: forecast reduction drift-guard + unbounded-scaling ceiling. Advisory only — operator ratification required; no push, no merge. Change surface: review doc + this line + MANIFEST.
+
+## Coordination 003 — MOD-UI (sole remaining cross-lane item) (2026-07-22)
+
+**Context:** MOD-INTEG closed (PR #104, main @ c8724ba, 20 schemas). MOD-UI is now the
+ONLY open cross-lane module. Coordinated with the Codex lane by shared-file assessment
+(no origin branch yet; Codex working locally).
+
+**Boundary — CONFIRMED respected (Claude independent read of the S1 slice):** the S1
+deliverable `src/ui/command-center-snapshot.mjs` is a PURE, UNWIRED read-model composer —
+its own header + Codex's review-request both state it is "not a renderer, ledger reader,
+authority resolver, action surface, server, deployment unit, or activation mechanism." It
+takes an already-verified projection input, fail-closes with deny codes
+(DENY_SNAPSHOT_MALFORMED / DENY_PROJECT_SCOPE_MISMATCH), deep-freezes output, marks
+`data_untrusted: true`, and touches no ledger/authority/clock/fs/network/process. This is
+the R2 candidate-able slice, OFF the R3/R4-gated interactive Command Center (network
+surface / service process), which remains operator/SEC-GOV-gated and NOT agent-buildable.
+
+**State — NOT yet gateable:** Codex's own assurance is a two-lane REV -> (distinct)
+QA/DOMAIN chain, status DISPATCHED_PENDING / HOLD_PENDING, exact target `713c70e`
+(branch `codex/rework/mod-ui-s1-snapshot-001`). No verdict has returned. Branch is
+local-only (NOT on origin) and stale (merge-base `c52db71`, behind main `9f990fe`).
+Codex's REV probes #2 and #5 already target the proxy / own-key + descriptor-trap /
+getter-execution / detached-immutability axis — so the atomic-snapshot discipline is
+already in-scope for their review; Claude will re-derive it independently at the gate,
+not assume it.
+
+**Mutual handoff (from Codex's own governance-boundary section):** "Root MANIFEST and
+canonical tracker union folds remain staging-owner work"; the request "grants no merge,
+deployment, promotion, activation, or live adoption authority"; S2 held until exact-SHA
+assurance + operator staging. This assigns the cross-provider gate + staging + rebase to
+the Claude lane — matching the Coordination 001/002 model.
+
+**TRIGGER + plan:** when Codex's REV(+QA/DOMAIN) settles AND the branch is pushed to
+origin, Claude (1) runs an independent cross-provider immune review (re-deriving the
+descriptor/Proxy/immutability probes, purity/unwired, deny-completeness, section-ordering,
+no-action-surface), (2) rebases onto current main — NO schema is added, so no
+contract-validator/validate-foundation guard-repin, only a MANIFEST union for the new
+`src/ui/` module + test + docs (a much simpler fold than MOD-INTEG), and (3) stages ONE PR
+for the operator. No merge/wiring/activation without an explicit operator order; the P0-20
+HOLD and the sealed GOV slot (`verdict: null`) are untouched. MOD-UI S2 (accessible static
+renderer) stays deferred behind S1 assurance + operator staging.
