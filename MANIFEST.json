@@ -381,6 +381,12 @@
     "docs/03-project-control/candidates/mod-runtime-s3-rework-001.md",
     "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-rev-001.md",
     "docs/03-project-control/candidates/mod-runtime-s3-regate-001.md",
+    "src/control/escalation-route.mjs",
+    "tests/escalation-route.test.mjs",
+    "docs/03-project-control/candidates/mod-a2a-s3-escalation-route-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-a2a-s3-escalation-route-independent-review-request-001.md",
+    "docs/03-project-control/candidates/mod-a2a-s3-escalation-route-crossprovider-review-001.md",
+    "docs/03-project-control/candidates/mod-a2a-s3-verify-001.md",
     "docs/03-project-control/candidates/mod-runtime-completion-rev-001.md",
     "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md",
     "src/live/access-mode-policy.mjs",
@@ -441,6 +447,11 @@
     "docs/03-project-control/candidates/p0-20-operator-hold-disposition-001.md",
     "docs/03-project-control/candidates/mod-live-s1-n4-dormant-residual-disposition-001.md",
     "docs/03-project-control/candidates/secb-gov-001-second-independent-readiness-review-001.md",
+    "contracts/memory-record.schema.json",
+    "tests/fixtures/valid/memory-record.json",
+    "tests/fixtures/invalid/memory-record-missing-id.json",
+    "docs/03-project-control/candidates/mod-mem-s2-memory-record-contract-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-mem-s2-crossrev-001.md",
     "docs/03-project-control/candidates/session-summary-2026-07-module-loop-and-p0-terminal.md"
   ]
 }
