@@ -339,6 +339,9 @@
     "docs/03-project-control/candidates/mod-a2a-s1-delegation-ledger-producer-verification-001.md",
     "src/control/retry-policy.mjs",
     "tests/retry-policy.test.mjs",
-    "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md"
+    "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md",
+    "src/control/delegation-gate.mjs",
+    "tests/delegation-gate.test.mjs",
+    "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-producer-verification-001.md"
   ]
 }
