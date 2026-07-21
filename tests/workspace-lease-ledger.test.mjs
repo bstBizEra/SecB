@@ -456,9 +456,16 @@ test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE
   // (memory-record.schema.json is ALSO excluded: it postdates ${BASE} entirely
   // — added by MOD-MEM S2, an unrelated later slice — so it cannot be diffed
   // against a commit where the path does not yet exist; that addition is
-  // proven additive-only by its own contract-validator.test.mjs coverage.)
+  // proven additive-only by its own contract-validator.test.mjs coverage.
+  // skill-promotion.schema.json is ALSO excluded for the same reason: it was
+  // added by MOD-SKILL S2, another unrelated later slice, and does not exist at
+  // ${BASE}; its additive-only nature is proven by its own ledger + contract
+  // coverage. integration-queue-entry.schema.json is ALSO excluded for the same
+  // reason: it was added by MOD-INTEG S1, another unrelated later slice, and
+  // does not exist at ${BASE}; its additive-only nature is proven by its own
+  // ledger + contract coverage.)
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json") continue;
+    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json" || file === "skill-promotion.schema.json" || file === "integration-queue-entry.schema.json") continue;
     guarded.push(`contracts/${file}`);
   }
   for (const rel of guarded) {
