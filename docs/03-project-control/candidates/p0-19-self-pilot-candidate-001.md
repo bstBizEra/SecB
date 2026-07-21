@@ -16,7 +16,7 @@
 
 | Field | Value |
 |---|---|
-| `truth_status` | `verified_true` — every claim below is backed by executable code (`src/self-pilot/read-only-self-pilot.mjs`) and passing tests (`tests/self-pilot/read-only-self-pilot.test.mjs`, 15/15). |
+| `truth_status` | `verified_true` — every claim below is backed by executable code (`src/self-pilot/read-only-self-pilot.mjs`) and passing tests (`tests/p0-19-self-pilot.test.mjs`, 15/15). |
 | `authority_status` | `advisory_only` — this packet recommends; it authorizes nothing. |
 | `implementation_status` | `candidate` — a working read-only orchestration exists on the branch; the live/production wiring named under "What remains gated" is `missing`/`blocked`. |
 | `risk_class` | `R3-adjacent` — this is candidate PREP that composes R0–R4 primitives read-only; it introduces no runtime authority and mutates no ratified primitive. Any step toward live wiring or activation is a separately-governed R3+ change. |

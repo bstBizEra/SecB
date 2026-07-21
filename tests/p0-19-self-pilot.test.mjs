@@ -5,16 +5,16 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { DurableLedger } from "../../src/ledger/durable-ledger.mjs";
-import { EventLedger } from "../../src/ledger/governed-ledgers.mjs";
-import { WorkspaceLeaseLedger } from "../../src/ledger/workspace-lease-ledger.mjs";
-import { buildSelfPilotFixtures, PILOT_NOW_ISO } from "../../src/self-pilot/fixtures.mjs";
+import { DurableLedger } from "../src/ledger/durable-ledger.mjs";
+import { EventLedger } from "../src/ledger/governed-ledgers.mjs";
+import { WorkspaceLeaseLedger } from "../src/ledger/workspace-lease-ledger.mjs";
+import { buildSelfPilotFixtures, PILOT_NOW_ISO } from "../src/self-pilot/fixtures.mjs";
 import {
   runReadOnlySelfPilot,
   READ_ONLY_SELF_PILOT_STEPS,
   GOV_DECISION_SLOT,
   SelfPilotError
-} from "../../src/self-pilot/read-only-self-pilot.mjs";
+} from "../src/self-pilot/read-only-self-pilot.mjs";
 
 // P0-19 READ-ONLY SELF-PILOT — candidate proof (AMD-002 clause 3). Proves the
 // governed chain COMPOSES and GATES read-only over fixtures, that each step is
@@ -22,7 +22,7 @@ import {
 // that no real mutation/spawn/remote occurs, and that no composed primitive
 // source file was modified (byte-identity guard).
 
-const ROOT = resolve(import.meta.dirname, "..", "..");
+const ROOT = resolve(import.meta.dirname, "..");
 const now = () => new Date(PILOT_NOW_ISO);
 
 // Fixture-backed ledgers in a throwaway temp dir. The pilot NEVER opens its own

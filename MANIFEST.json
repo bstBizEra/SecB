@@ -213,7 +213,7 @@
     "src/services/work-package-service.mjs",
     "tests/work-package-service.test.mjs",
     "tests/host-runtime-agent.test.mjs",
-    "tests/self-pilot/read-only-self-pilot.test.mjs",
+    "tests/p0-19-self-pilot.test.mjs",
     "tests/runtime-registry.test.mjs",
     "tests/state-machine.test.mjs",
     "tests/mcp-gateway-core.test.mjs",

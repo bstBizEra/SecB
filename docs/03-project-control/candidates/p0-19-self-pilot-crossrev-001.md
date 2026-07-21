@@ -9,7 +9,7 @@
 **Reviews:** [`p0-19-self-pilot-candidate-001.md`](p0-19-self-pilot-candidate-001.md) +
 [`../../../src/self-pilot/read-only-self-pilot.mjs`](../../../src/self-pilot/read-only-self-pilot.mjs) +
 [`../../../src/self-pilot/fixtures.mjs`](../../../src/self-pilot/fixtures.mjs) +
-[`../../../tests/self-pilot/read-only-self-pilot.test.mjs`](../../../tests/self-pilot/read-only-self-pilot.test.mjs)
+[`../../../tests/p0-19-self-pilot.test.mjs`](../../../tests/p0-19-self-pilot.test.mjs)
 **Intended-boundary sources:** [self-pilot spec](../self-pilot.md) · [ADR-0004](../../adr/0004-read-only-self-pilot.md) · [P0 backlog](../../09-delivery/backlog-p0.md)
 
 > This is an **advisory immune cross-review**. It certifies review completeness
@@ -99,12 +99,12 @@ negative-proof string comparison.
 
 `package.json` `test` script is `node --test tests/*.test.mjs`. That glob matches
 only files **directly** in `tests/`; the self-pilot tests live in
-`tests/self-pilot/` and are therefore **excluded**. Reproduced:
+`tests/` and are therefore **excluded**. Reproduced:
 
 - `npm test` totals = **tests 1098 / pass 1093 / fail 0 / skipped 5** — the exact
   pre-candidate baseline, unchanged despite +15 tests; zero self-pilot test names
   appear in the run.
-- `node --test tests/self-pilot/*.test.mjs` = **15 / 15 pass**.
+- `node --test tests/*.test.mjs` = **15 / 15 pass**.
 
 **Do the 15 run under `npm test`? NO.** For the most authority-sensitive artifact
 in the repo, safety-regression tests that never gate CI (the byte-identity guard,
@@ -138,7 +138,7 @@ and ADR-0004 (Proposed / Not Effective).
 
 ### Scope / unwired — PASS
 
-Change set is exactly `src/self-pilot/**`, `tests/self-pilot/**`, one candidate
+Change set is exactly `src/self-pilot/**`, `tests/**`, one candidate
 doc, and 4 `MANIFEST.json` additions. The pilot is imported **only by its own
 test** — nothing in a live/production path references it. The returned trace is
 deep-frozen.
