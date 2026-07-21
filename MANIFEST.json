@@ -353,6 +353,8 @@
     "src/control/delegation-gate.mjs",
     "tests/delegation-gate.test.mjs",
     "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-producer-verification-001.md",
-    "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-rev-001.md"
+    "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-rev-001.md",
+    "src/control/escalation-route.mjs",
+    "tests/escalation-route.test.mjs"
   ]
 }
