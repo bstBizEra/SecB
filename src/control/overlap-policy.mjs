@@ -49,6 +49,27 @@
 // Audit-before-effect (holds by construction): the evaluator's decision record
 // IS its returned frozen result; it has no side effect of its own, so a caller
 // necessarily observes the class + control before it could act on it.
+//
+// --- Fast-follow (mod-wspace-s2-overlap-case-fix-001) ------------------------
+// A second independent review (mod-wspace-s2-overlap-policy-second-independent-
+// review-001, post-merge) found that file-overlap detection routed exclusively
+// through write-set-policy's CASE-SENSITIVE allowed-containment branch, so two
+// write sets naming the SAME file with different case (e.g. `src/Foo.js` vs
+// `src/foo.js`) classified as O0/Parallel instead of O2+ — a false-allow with a
+// confirmed live consumer (MOD-INTEG-queue-S2's forecastCollision(), for which
+// this was the ONLY classification axis exercised). Fixed by additionally
+// routing the same bound through write-set-policy's PROHIBITED branch (which
+// already case-folds, for a different original purpose — defeating a bypass of
+// a declared prohibited prefix by case) as a fallback when the case-sensitive
+// allowed-branch check misses; see `withinCaseFold` below. write-set-policy.mjs
+// itself remains byte-identical and unmodified (guard test still pins it) — only
+// which of its two existing, already-ratified branches this caller routes
+// through changed. Also fixed, same pass: `evaluateOverlap(A,B)` vs `(B,A)`
+// could return a different (still `ok:false`) deny CODE — never a different
+// verdict — when both write sets were independently malformed in different
+// ways; validation of both sides is now order-independent (see the `denyA &&
+// denyB` precedence rule below). Full root-cause/fix/test record:
+// docs/03-project-control/candidates/mod-wspace-s2-overlap-case-fix-producer-verification-001.md
 
 import { evaluateWriteSet } from "./write-set-policy.mjs";
 
@@ -134,8 +155,30 @@ const allow = (overlapClass) =>
 // the other (they would touch the same file or the same subtree). Both directions
 // are tested with evaluateWriteSet's containment semantics; no prefix/subset logic
 // is reimplemented here.
+//
+// Case-fold fallback (fast-follow for the case-sensitivity gap flagged by the
+// second independent review, mod-wspace-s2-overlap-policy-second-independent-
+// review-001): write-set-policy's ALLOWED-containment branch (which the primary
+// check below routes through) is exact-string, case-sensitive. Its PROHIBITED
+// branch, however, already case-folds (`caseFoldedProhibited`) as a defense
+// against bypassing a declared prohibited prefix by varying case. That fold is
+// the SAME "these are the same path on a case-insensitive/case-preserving
+// filesystem" semantics this classifier needs for peer file-overlap detection —
+// so it is reused here as-is (by routing `bound` through prohibitedPaths instead
+// of allowedPaths) rather than reimplemented. write-set-policy.mjs itself is not
+// modified (byte-identity guard test stays valid); only which of its two
+// existing branches this caller routes through changes. A DENY_WRITE_SET_
+// PROHIBITED result means "path is within bound, case-insensitively" — every
+// other outcome (including malformed/traversal/absolute) means "not within",
+// since validateWriteSet has already screened both write sets for grammar
+// violations before pathsOverlap is ever called.
+const withinCaseFold = (path, bound) =>
+  evaluateWriteSet({ candidatePaths: [path], allowedPaths: [], prohibitedPaths: [bound] }).code ===
+  "DENY_WRITE_SET_PROHIBITED";
+
 const within = (path, bound) =>
-  evaluateWriteSet({ candidatePaths: [path], allowedPaths: [bound], prohibitedPaths: [] }).ok;
+  evaluateWriteSet({ candidatePaths: [path], allowedPaths: [bound], prohibitedPaths: [] }).ok ||
+  withinCaseFold(path, bound);
 
 const pathsOverlap = (a, b) => within(a, b) || within(b, a);
 
@@ -219,9 +262,21 @@ function evaluateOverlapInternal(input) {
   }
 
   // Validate each write set through the reused S1 primitive (empty / grammar).
+  // Both sides are checked (not short-circuited) so that a doubly-malformed pair
+  // can be resolved to an order-INDEPENDENT deny code below (F-2 fast-follow,
+  // second independent review): evaluateOverlap(A,B) and evaluateOverlap(B,A)
+  // must return the same code, not whichever one happened to land in the "A"
+  // argument slot first.
   const denyA = validateWriteSet(writeSetA, "writeSetA");
-  if (denyA) return denyA;
   const denyB = validateWriteSet(writeSetB, "writeSetB");
+  if (denyA && denyB) {
+    // Both independently malformed in different ways: pick a fixed, argument-
+    // order-independent precedence rather than "whichever slot is A". A grammar
+    // violation (MALFORMED) is the more structurally severe defect than a
+    // merely-empty set (EMPTY), so it wins regardless of which side it's on.
+    return denyA.code === "DENY_OVERLAP_MALFORMED" ? denyA : denyB;
+  }
+  if (denyA) return denyA;
   if (denyB) return denyB;
 
   // Fail-closed on any non-derivable doctrine dimension that is absent or not a
