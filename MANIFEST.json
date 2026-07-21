@@ -460,6 +460,7 @@
     "tests/fixtures/invalid/skill-promotion-missing-id.json",
     "docs/03-project-control/candidates/mod-skill-s2-governed-promotion-producer-verification-001.md",
     "docs/03-project-control/candidates/mod-skill-s2-governed-promotion-independent-review-001.md",
-    "docs/03-project-control/candidates/mod-skill-s2-crossrev-001.md"
+    "docs/03-project-control/candidates/mod-skill-s2-crossrev-001.md",
+    "docs/03-project-control/candidates/mod-context-s1-mint-receipt-second-independent-review-001.md"
   ]
 }
