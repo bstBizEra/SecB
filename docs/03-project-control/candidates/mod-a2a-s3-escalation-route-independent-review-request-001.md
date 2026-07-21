@@ -4,8 +4,8 @@
 |---|---|
 | Artifact ID | `MOD-A2A-S3-INDEPENDENT-REVIEW-REQUEST-001` |
 | Status | `DISPATCHED_PENDING_RESPONSES` |
-| Exact implementation target | `bc320c92289a57084fdb07f6194c8b0eb82a047a` |
-| Target tree | `8541cdb08ba106a7a1936e511132324dcf4d41b5` |
+| Exact implementation target | `420d6af20e08ee49af787c7d0b259e0ca95dd443` |
+| Target tree | `d5a9bf2246f564b3bdf4d0176db0874c50acfea0` |
 | Branch | `codex/mod-a2a-s3-escalation-route` |
 | Producer | `codex-root` |
 | Requested lanes | `REV`, `SEC` |
