@@ -1,0 +1,18 @@
+artifact_id: SECB-GOV-001-INDEPENDENT-REVIEW-REFRESH-002
+artifact_type: exact_sha_review_refresh
+status: HOLD_PENDING_RESPONSES
+target:
+  commit: e3de3eb8fb46a0413ba41b0d92c5bb88935068ae
+  branch: producer/codex/mcp/p0a-gateway-core-rework-011
+  prior_request: docs/03-project-control/candidates/secb-gov-001-independent-review-request-001.yaml
+reason: "Documentation-only queue records advanced HEAD after the prior request; refresh prevents stale-SHA acceptance."
+acceptance_snapshot:
+  npm_test: "559 tests, 554 pass, 0 fail, 5 skipped, exit 0"
+required_lanes:
+  - REV
+  - QA
+  - SEC
+disposition: HOLD_UNTIL_EXACT_SHA_RESPONSES
+activation_authority: false
+merge_authority: false
+stable_claim: false
