@@ -445,6 +445,7 @@
     "tests/fixtures/valid/memory-record.json",
     "tests/fixtures/invalid/memory-record-missing-id.json",
     "docs/03-project-control/candidates/mod-mem-s2-memory-record-contract-producer-verification-001.md",
-    "docs/03-project-control/candidates/mod-mem-s2-crossrev-001.md"
+    "docs/03-project-control/candidates/mod-mem-s2-crossrev-001.md",
+    "docs/03-project-control/candidates/session-summary-2026-07-module-loop-and-p0-terminal.md"
   ]
 }
