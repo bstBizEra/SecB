@@ -320,6 +320,10 @@
     "docs/03-project-control/candidates/mod-know-s1-rev-001.md",
     "src/control/retry-policy.mjs",
     "tests/retry-policy.test.mjs",
-    "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md"
+    "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md",
+    "src/services/knowledge-candidate-provider.mjs",
+    "tests/knowledge-candidate-provider.test.mjs",
+    "docs/03-project-control/candidates/mod-know-completion-rev-001.md",
+    "docs/03-project-control/candidates/mod-evid-s2-gate-001.md"
   ]
 }

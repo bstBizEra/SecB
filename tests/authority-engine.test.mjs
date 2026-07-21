@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AuthorityConfigurationError, AuthorityEngine } from "../src/control/authority-engine.mjs";
+import { AuthorityConfigurationError, AuthorityEngine, REQUIRED_ROLE } from "../src/control/authority-engine.mjs";
 import { TransitionDeniedError, TransitionEngine } from "../src/control/state-machine.mjs";
 
 const fixedNow = () => new Date("2026-07-17T12:45:00+07:00");
@@ -139,6 +139,52 @@ test("authority engine integrates with governed transition enforcement", () => {
   });
   assert.equal(result.state, "REVIEW");
   assert.equal(result.authorityDecisionId, "decision_gov_001");
+});
+
+// MOD-EVID-S2 parity (table-driven old-vs-new): the S2 ladder relies on the
+// authority role map already carrying the Evidence VERIFY/ACCEPT edges. This
+// pins the ENTIRE map to its expected table, proving every existing
+// authority-engine outcome is unchanged and the Evidence verify/accept entries
+// are present exactly as the ladder requires. S2 made ZERO edits to
+// authority-engine.mjs; this test is the parity lock for that claim.
+test("MOD-EVID-S2 parity: the authority role map equals its expected table (Evidence verify/accept present, nothing else changed)", () => {
+  assert.deepEqual({ ...REQUIRED_ROLE }, {
+    "Project:*->REVIEW": "REV",
+    "Project:*->APPROVED_NOT_EFFECTIVE": "GOV",
+    "Project:*->ACTIVE": "GOV",
+    "WorkPackage:*->RUNNING": "ENGIN",
+    "WorkPackage:*->SELF_VERIFIED": "ENGIN",
+    "WorkPackage:*->REVIEW": "REV",
+    "WorkPackage:*->QA": "QA",
+    "WorkPackage:*->GOV_DECISION": "GOV",
+    "WorkPackage:*->ACCEPTED": "GOV",
+    "Session:*->RUNNING": "ENGIN",
+    "Session:*->REVIEW_HANDOFF": "ENGIN",
+    "Session:*->COMPLETED": "QA",
+    "Evidence:*->SEALED": "EVIDENCE_PRODUCER",
+    "Evidence:*->VERIFIED": "EVIDENCE_VERIFIER",
+    "Evidence:*->ACCEPTED": "EVIDENCE_ACCEPTOR"
+  });
+});
+
+test("MOD-EVID-S2 parity: evidence verifier authority resolves for the VERIFIED edge", () => {
+  const verifyGrant = grant({
+    grantId: "grant_evidence_verify_001",
+    actorId: "evidence-verifier-001",
+    roles: ["EVIDENCE_VERIFIER"],
+    allowedTransitions: ["Evidence:VERIFICATION_PENDING->VERIFIED"]
+  });
+  const engine = new AuthorityEngine({ grants: [verifyGrant], now: fixedNow });
+  const decision = engine.authorize(context({
+    actorId: "evidence-verifier-001",
+    authorityRef: "grant_evidence_verify_001",
+    objectType: "Evidence",
+    currentState: "VERIFICATION_PENDING",
+    requestedState: "VERIFIED",
+    producerActorId: "producer-001"
+  }));
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.role, "EVIDENCE_VERIFIER");
 });
 
 test("transition remains denied when authority scope does not match", () => {
