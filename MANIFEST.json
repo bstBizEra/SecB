@@ -360,6 +360,7 @@
     "docs/03-project-control/candidates/mod-runtime-completion-rev-001.md",
     "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md",
     "src/live/access-mode-policy.mjs",
-    "tests/access-mode-policy.test.mjs"
+    "tests/access-mode-policy.test.mjs",
+    "docs/03-project-control/candidates/mod-live-s2-access-mode-rev-001.md"
   ]
 }
