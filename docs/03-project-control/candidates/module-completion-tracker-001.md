@@ -4,6 +4,8 @@
 **Status:** DRAFT â€” loop working record, extend-only (append status lines; do not rewrite history)
 **Directive:** Operator, 2026-07-20: "finish all modules one by one with subagents." Serialized per ADR-0007; roles per [module allocation](../../14-delivery/01-module-allocation.md); catalog per [module catalog](../../10-platform/03-module-catalog.md). Governance: AMD-002 advise-and-proceed â€” subagents produce and independently review; operator ratifies at merge.
 
+**Authority (2026-07-21):** THIS copy on `main` (`docs/03-project-control/candidates/module-completion-tracker-001.md`) is the SINGLE AUTHORITATIVE module-completion tracker. Updates are append-only via PR to `main`. The former working copy on branch `bst/module-loop-plan` is RETIRED / FROZEN (its content was merged here via the PR #86 reconciliation); do not extend it. Any future tracker entry is made here, on `main`.
+
 ## Base strategy
 
 Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsal-3` @ 1c77958 + accepted descendants), which diverged from `main` (now 6b47cf1 with AMD-002, OM v0.1, validator, gateway lineage in PR #3). **Iteration 1 builds the reconciliation merge candidate**; every later module iteration builds on the reconciled base (or its successor after operator merges).
