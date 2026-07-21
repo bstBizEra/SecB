@@ -189,3 +189,215 @@ test("outputs are deeply frozen", () => withHarness(({ service }) => {
   assert.equal(Object.isFrozen(chain.ledger), true);
   assert.throws(() => { fetched.envelope.result = "mutated"; }, TypeError);
 }));
+
+// ---------------------------------------------------------------------------
+// MOD-EVID S2: governed verify + accept ladder (R4). Distinct actors:
+// producer = envelope.actor_id ("claude-motor"), a requester, a verifier, an
+// acceptor. Covers happy path, every SoD denial, undefined-transition denials,
+// audit-first per edge, ladder chain coverage, and frozen outputs.
+// ---------------------------------------------------------------------------
+
+const PRODUCER = "claude-motor"; // envelope() default actor_id
+const REQUESTER = "stem-requester";
+const VERIFIER = "codex-verifier";
+const ACCEPTOR = "gov-acceptor";
+const APPROVALS = ["gov-approval-001"];
+const EV = "ev_modevid_s1_001";
+
+// A durable-ledger facade that throws on the first append of a chosen entry
+// type, to exercise audit-before-effect per ladder edge.
+function throwingOn(realLedger, type) {
+  return {
+    read: (...args) => realLedger.read(...args),
+    verify: (...args) => realLedger.verify(...args),
+    append: (entry, options) => {
+      if (entry.type === type) throw new Error("disk full");
+      return realLedger.append(entry, options);
+    }
+  };
+}
+
+function withWrappedLedger(wrap, operation) {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const real = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+    const service = new EvidenceEnvelopeService({
+      durableLedger: wrap ? wrap(real) : real,
+      now: () => new Date("2026-07-20T10:05:00+07:00")
+    });
+    return operation({ service, ledger: real, path });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+// Advance a fresh evidence record to SEALED (helper for the ladder tests).
+function toSealed(service) {
+  service.registerEnvelope(envelope());
+  service.sealEnvelope(EV, 1);
+}
+
+test("S2 happy path: register -> seal -> request -> verify(pass) -> accept with distinct actors", () => withHarness(({ service, ledger }) => {
+  toSealed(service);
+
+  const requested = service.requestVerification(EV, 1, REQUESTER);
+  assert.equal(requested.verificationStatus, "VERIFICATION_PENDING");
+  assert.equal(requested.requestedBy, REQUESTER);
+
+  const verified = service.recordVerification(EV, 1, VERIFIER, "pass");
+  assert.equal(verified.verificationStatus, "VERIFIED");
+  assert.equal(verified.verifier, VERIFIER);
+
+  const accepted = service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+  assert.equal(accepted.verificationStatus, "ACCEPTED");
+  assert.equal(accepted.acceptor, ACCEPTOR);
+  assert.deepEqual(accepted.approvals, APPROVALS);
+
+  const resolved = service.resolveAcceptedStatus(EV, 1);
+  assert.deepEqual(resolved, { evidenceId: EV, version: 1, accepted: true, status: "ACCEPTED" });
+
+  const fetched = service.getEnvelope(EV, 1);
+  assert.equal(fetched.verificationStatus, "ACCEPTED");
+  assert.equal(fetched.verifierActorId, VERIFIER);
+  assert.equal(fetched.acceptorActorId, ACCEPTOR);
+  assert.equal(fetched.verdict, "pass");
+
+  const chain = service.verifyChain(EV);
+  assert.equal(chain.valid, true);
+  assert.deepEqual(chain.sealedVersions, []); // advanced past SEALED (currently-sealed view)
+  assert.deepEqual(chain.verifiedVersions, [1]);
+  assert.deepEqual(chain.acceptedVersions, [1]);
+  assert.equal(chain.ledger.count, 4); // seal + request + verification + acceptance
+  assert.equal(ledger.verify().headHash, chain.ledger.headHash);
+}));
+
+test("S2 failed verdict quarantines and blocks acceptance", () => withHarness(({ service }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  const failed = service.recordVerification(EV, 1, VERIFIER, "fail");
+  assert.equal(failed.verificationStatus, "QUARANTINED");
+  assert.equal(service.resolveAcceptedStatus(EV, 1).accepted, false);
+  denies(() => service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS), "DENY_UNDEFINED_TRANSITION");
+  const chain = service.verifyChain(EV);
+  assert.deepEqual(chain.quarantinedVersions, [1]);
+  assert.deepEqual(chain.verifiedVersions, []);
+}));
+
+test("S2 SoD: the producer cannot verify its own evidence", () => withHarness(({ service }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  denies(() => service.recordVerification(EV, 1, PRODUCER, "pass"), "DENY_VERIFIER_IS_PRODUCER");
+  assert.equal(service.getEnvelope(EV, 1).verificationStatus, "VERIFICATION_PENDING");
+}));
+
+test("S2 SoD: the producer cannot accept its own evidence", () => withHarness(({ service }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  service.recordVerification(EV, 1, VERIFIER, "pass");
+  denies(() => service.acceptEvidence(EV, 1, PRODUCER, APPROVALS), "DENY_SOD");
+  assert.equal(service.getEnvelope(EV, 1).verificationStatus, "VERIFIED");
+}));
+
+test("S2 SoD: the verifier cannot accept the evidence it verified", () => withHarness(({ service }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  service.recordVerification(EV, 1, VERIFIER, "pass");
+  denies(() => service.acceptEvidence(EV, 1, VERIFIER, APPROVALS), "DENY_SOD");
+  assert.equal(service.getEnvelope(EV, 1).verificationStatus, "VERIFIED");
+}));
+
+test("S2 undefined transitions: skip-ahead, verify-before-request, accept-before-verify, re-verify, re-accept", () => withHarness(({ service }) => {
+  // request before seal (status CAPTURED)
+  service.registerEnvelope(envelope());
+  denies(() => service.requestVerification(EV, 1, REQUESTER), "DENY_UNDEFINED_TRANSITION");
+
+  service.sealEnvelope(EV, 1);
+  // verify before request (status SEALED) — fail verdict must NOT quarantine straight from SEALED
+  denies(() => service.recordVerification(EV, 1, VERIFIER, "fail"), "DENY_UNDEFINED_TRANSITION");
+  // accept before verify (status SEALED)
+  denies(() => service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS), "DENY_UNDEFINED_TRANSITION");
+
+  service.requestVerification(EV, 1, REQUESTER);
+  // accept before verify (status VERIFICATION_PENDING)
+  denies(() => service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS), "DENY_UNDEFINED_TRANSITION");
+
+  service.recordVerification(EV, 1, VERIFIER, "pass");
+  // re-verify (status VERIFIED)
+  denies(() => service.recordVerification(EV, 1, VERIFIER, "pass"), "DENY_UNDEFINED_TRANSITION");
+
+  service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+  // re-accept (status ACCEPTED)
+  denies(() => service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS), "DENY_UNDEFINED_TRANSITION");
+}));
+
+test("S2 audit-first: a throwing ledger denies requestVerification and leaves SEALED", () => withWrappedLedger((real) => throwingOn(real, "EVIDENCE_VERIFICATION_REQUEST"), ({ service }) => {
+  toSealed(service);
+  denies(() => service.requestVerification(EV, 1, REQUESTER), "DENY_LEDGER_APPEND");
+  assert.equal(service.getEnvelope(EV, 1).verificationStatus, "SEALED");
+}));
+
+test("S2 audit-first: a throwing ledger denies recordVerification and leaves VERIFICATION_PENDING", () => withWrappedLedger((real) => throwingOn(real, "EVIDENCE_VERIFICATION"), ({ service }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  denies(() => service.recordVerification(EV, 1, VERIFIER, "pass"), "DENY_LEDGER_APPEND");
+  assert.equal(service.getEnvelope(EV, 1).verificationStatus, "VERIFICATION_PENDING");
+}));
+
+test("S2 audit-first: a throwing ledger denies acceptEvidence and leaves VERIFIED", () => withWrappedLedger((real) => throwingOn(real, "EVIDENCE_ACCEPTANCE"), ({ service }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  service.recordVerification(EV, 1, VERIFIER, "pass");
+  denies(() => service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS), "DENY_LEDGER_APPEND");
+  assert.equal(service.getEnvelope(EV, 1).verificationStatus, "VERIFIED");
+}));
+
+test("S2 chain coverage: a ladder receipt dropped from a self-consistent chain is DENY_CHAIN_BROKEN", () => withWrappedLedger(null, ({ service, path }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  service.recordVerification(EV, 1, VERIFIER, "pass");
+  service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+  // Truncate to only the seal line: a valid single-entry chain, but the
+  // record's stored verify/accept receipts are now unbacked.
+  const [sealLine] = readFileSync(path, "utf8").trim().split(/\r?\n/);
+  writeFileSync(path, `${sealLine}\n`, "utf8");
+  denies(() => service.verifyChain(EV), "DENY_CHAIN_BROKEN");
+}));
+
+test("S2 chain coverage: a mutated ladder ledger entry is DENY_CHAIN_BROKEN", () => withHarness(({ service, path }) => {
+  toSealed(service);
+  service.requestVerification(EV, 1, REQUESTER);
+  service.recordVerification(EV, 1, VERIFIER, "pass");
+  service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+  writeFileSync(path, readFileSync(path, "utf8").replace(ACCEPTOR, "attacker"), "utf8");
+  denies(() => service.verifyChain(EV), "DENY_CHAIN_BROKEN");
+}));
+
+test("S2 malformed and unknown-evidence denials across the ladder", () => withHarness(({ service }) => {
+  toSealed(service);
+  denies(() => service.requestVerification("", 1, REQUESTER), "DENY_MALFORMED_REQUEST");
+  denies(() => service.requestVerification(EV, 1, "  "), "DENY_MALFORMED_REQUEST");
+  denies(() => service.requestVerification("ev_ghost", 1, REQUESTER), "DENY_UNKNOWN_EVIDENCE");
+  service.requestVerification(EV, 1, REQUESTER);
+  denies(() => service.recordVerification(EV, 1, VERIFIER, "maybe"), "DENY_MALFORMED_REQUEST");
+  denies(() => service.recordVerification(EV, 1, VERIFIER, true), "DENY_MALFORMED_REQUEST");
+  denies(() => service.recordVerification(EV, 1, "", "pass"), "DENY_MALFORMED_REQUEST");
+  service.recordVerification(EV, 1, VERIFIER, "pass");
+  denies(() => service.acceptEvidence(EV, 1, ACCEPTOR, []), "DENY_MALFORMED_REQUEST");
+  denies(() => service.acceptEvidence(EV, 1, ACCEPTOR, ["ok", "  "]), "DENY_MALFORMED_REQUEST");
+  denies(() => service.acceptEvidence(EV, 1, "", APPROVALS), "DENY_MALFORMED_REQUEST");
+  denies(() => service.resolveAcceptedStatus("ev_ghost", 1), "DENY_UNKNOWN_EVIDENCE");
+}));
+
+test("S2 ladder outputs are deeply frozen", () => withHarness(({ service }) => {
+  toSealed(service);
+  const requested = service.requestVerification(EV, 1, REQUESTER);
+  const verified = service.recordVerification(EV, 1, VERIFIER, "pass");
+  const accepted = service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+  const resolved = service.resolveAcceptedStatus(EV, 1);
+  for (const output of [requested, verified, accepted, resolved]) {
+    assert.equal(Object.isFrozen(output), true);
+  }
+  assert.equal(Object.isFrozen(accepted.approvals), true);
+  assert.throws(() => { accepted.approvals.push("x"); }, TypeError);
+}));
