@@ -328,3 +328,27 @@ A2A-S3 adds no schema (disjoint file set) — no sequencing conflict; it can mer
 for the operator. Adoption/wiring of all three remains SEC/GOV-gated (behind the P0-20 HOLD).
 
 **Coordination 001 — EXECUTED (2026-07-21):** all three slices merged — MEM-S2 (#97), A2A-S3 (#98), SKILL-S2 (#100, rebased 18->19). Main @ ca965e6: 19 schemas, 1200/1197/0/3. Cross-provider review gate held; schema-sequencing (MEM before SKILL, deterministic rebase+repin) executed with no guard false-fails. All three land as reviewed candidates; adoption remains SEC/GOV-gated behind the P0-20 HOLD.
+
+## Coordination 002 — MOD-INTEG / MOD-UI cross-lane (2026-07-21)
+
+**Same division:** Codex lane produces (each slice self-reviewed); Claude lane provides
+the cross-provider review gate + staging. One-producer-per-file-set holds.
+
+- **MOD-INTEG** (Integration Queue): Codex produced the COMPLETE S1+S2 stack on
+  `bst/mod-integ-queue-s2-collision-forecast` @ 1dd13e1 (S1 queue-entry contract +
+  IntegrationQueueLedger + status-transition gate; S2 collision-forecast reusing the
+  ratified overlap-policy read-only; all self-reviewed). Adds ONE schema
+  (integration-queue-entry, 19->20). Claude cross-review DISPATCHED
+  (`claude-immune-crossrev-integ-01`) — reviews the whole stack, re-derives the 3 own-reviews.
+  On pass, Claude stages S1+S2 as one PR. No other schema-adder pending -> no sequencing
+  conflict at present (if MOD-UI or another adds a schema concurrently, sequence).
+- **MOD-UI** (Command Center): Codex producing LOCALLY (`codex/mod-ui-s1-command-center-snapshot`
+  + rework; last state "[TASK-021] Dispatch MOD-UI S1 independent assurance" — its OWN review
+  in progress, NOT yet on origin, NOT settled). Claude cross-reviews when it SETTLES + is
+  PUSHED to origin. **PRODUCT-LAYER BOUNDARY:** the interactive Command Center (network
+  surface / service process) crosses the "no service process" bootstrap boundary and is
+  R3/R4-gated; only the bounded READ-ONLY snapshot/projection slice is candidate-able. The
+  interactive app itself is not agent-buildable without operator/SEC-GOV.
+
+**Handoff:** Claude cross-reviews + stages each on settle; MOD-INTEG now, MOD-UI when pushed.
+Adoption/wiring of both remains SEC/GOV-gated behind the P0-20 HOLD.
