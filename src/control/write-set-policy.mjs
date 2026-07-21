@@ -20,10 +20,11 @@
 //        concrete candidate write set supplied by the caller.
 //   B3 — reuses the SAME subset/traversal semantics as
 //        src/services/context-federation-service.mjs:43-48 `pathSubset`
-//        (DENY_SCOPE_WIDENING) VERBATIM. That source is not modified; a
-//        byte-identity guard test pins it, and a config-equivalence parity test
-//        proves this matcher agrees with it on a shared fixture table so the two
-//        cannot drift.
+//        (DENY_SCOPE_WIDENING) for canonical repository-relative paths. That
+//        source is not modified; a byte-identity guard test pins it, and a
+//        config-equivalence parity test proves agreement on its valid domain.
+//        This mutation-plane evaluator additionally denies non-canonical aliases
+//        (`.` segments, repeated separators, and backslashes) before comparison.
 //
 // House style: result objects. Deny-by-default on any malformed input; every
 // return value is a deep-frozen `{ ok: true }` or `{ ok: false, code, message }`.
@@ -61,12 +62,12 @@ const ARRAY_ITERATOR = Array.prototype[Symbol.iterator];
 //   - Rejects a tampered iterator (any override of the default array iterator) as
 //     malformed rather than trusting OR invoking it, so a poisoned Symbol.iterator
 //     cannot execute. The read of `value[Symbol.iterator]` happens here; a THROWING
-//     iterator getter propagates to the single guard in evaluateWriteSet (-> denial).
+//     iterator getter propagates to the extraction guard below (-> denial).
 //   - Reads length once and each index exactly once via [[Get]] (no iterator
 //     protocol, no element read repeated). A throwing length/index accessor or a
 //     Proxy get trap likewise propagates to the guard and becomes a denial.
 // Returns NOT_ARRAY for a non-array/tampered/degenerate-length input, or a plain
-// snapshot array otherwise. May throw ONLY into evaluateWriteSet's try/catch.
+// snapshot array otherwise. May throw ONLY into the extraction try/catch.
 function snapshotArray(value) {
   if (!Array.isArray(value)) return NOT_ARRAY;
   if (value[Symbol.iterator] !== ARRAY_ITERATOR) return NOT_ARRAY;
@@ -89,9 +90,9 @@ function snapshotArray(value) {
 // the traversal check as DENY_WRITE_SET_TRAVERSAL, and "." is a benign current-dir
 // ref. Every other trailing-space/dot component is a non-canonical, caller-
 // precondition-violating path and is treated as malformed input (see rationale in
-// the DENY code choice below). NOTE: repeated-separator ("//") and interior "./"
-// alias bypasses (Codex REV-001) are a separate, parallel rework and are NOT
-// closed here.
+// the DENY code choice below). Repeated-separator ("//") and interior "./" alias
+// bypasses (Codex REV-001) are closed by the canonical-grammar check below, which
+// runs over the SAME plain-string snapshots after this check.
 const isCanonicalDotSegment = (seg) => seg === "." || seg === "..";
 const endsWithSpaceOrDot = (seg) => seg.endsWith(" ") || seg.endsWith(".");
 const hasWindowsCollapsibleComponent = (p) =>
@@ -99,16 +100,39 @@ const hasWindowsCollapsibleComponent = (p) =>
     (seg) => seg.length > 0 && !isCanonicalDotSegment(seg) && endsWithSpaceOrDot(seg)
   );
 
-// --- Semantics reused VERBATIM from context-federation-service.mjs:43-48 ------
+// --- Semantics reused from context-federation-service.mjs:43-48 ---------------
 // `pathSubset` there does: reject any candidate with a `..` segment (split on
 // either separator), strip trailing forward-slashes from each bound, and accept
-// a path iff it equals a bound or sits under `${bound}/`. These three helpers
-// are that exact logic, factored so the distinct deny codes below can name which
-// clause failed while remaining bit-for-bit equivalent to the source matcher.
+// a path iff it equals a bound or sits under `${bound}/`. The helpers below keep
+// that behavior on canonical inputs while applying one lexical grammar to both
+// candidates and bounds before either prohibited or allowed matching occurs.
 const hasParentSegment = (p) => p.split(/[\\/]/).includes("..");
 const stripTrailingSlashes = (bound) => bound.replace(/\/+$/, "");
 const withinBound = (p, bounds) =>
-  bounds.map(stripTrailingSlashes).some((e) => p === e || p.startsWith(`${e}/`));
+  bounds.some((e) => p === e || p.startsWith(`${e}/`));
+
+const canonicalizePath = (p) => {
+  const canonical = stripTrailingSlashes(p);
+  if (canonical.length === 0 || canonical.includes("\\") || canonical.normalize("NFC") !== canonical) return null;
+  const segments = canonical.split("/");
+  if (segments.some((segment) =>
+    segment === "" ||
+    segment === "." ||
+    segment.trim() !== segment ||
+    segment.endsWith(".") ||
+    segment.includes(":"))) return null;
+  return canonical;
+};
+
+const canonicalizePaths = (paths) => {
+  const canonical = [];
+  for (const path of paths) {
+    const normalized = canonicalizePath(path);
+    if (normalized === null) return null;
+    canonical.push(normalized);
+  }
+  return canonical;
+};
 
 // Absolute escape: a POSIX/UNC leading separator (`/x`, `\x`, `\\server`,
 // `//server`) OR a Windows drive-letter prefix (`C:`, `c:/x`, `C:\x`). Any of
@@ -128,14 +152,15 @@ const allEntriesClean = (list) => list.every(isCleanEntry);
 // Deny-by-default: a malformed shape never coerces to a permissive default.
 // Check precedence (most structural first; prohibited beats allowed):
 //   1. malformed input shape          -> DENY_WRITE_SET_MALFORMED
-//   2. hostile/unreadable fields      -> DENY_WRITE_SET_MALFORMED  (contained, never thrown)
+//   2. hostile/unreadable fields      -> DENY_WRITE_SET_MALFORMED  (contained, never thrown; Codex REV-002)
 //   3. empty candidate set            -> DENY_WRITE_SET_EMPTY
 //   4. malformed path entries         -> DENY_WRITE_SET_MALFORMED
 //   5. Windows-collapsible component  -> DENY_WRITE_SET_MALFORMED  (Claude REV N1)
-//   6. any `..` traversal segment     -> DENY_WRITE_SET_TRAVERSAL
-//   7. any absolute / drive / UNC     -> DENY_WRITE_SET_ABSOLUTE
-//   8. any prohibited-prefix hit      -> DENY_WRITE_SET_PROHIBITED  (wins over allowed)
-//   9. any path outside allowed set   -> DENY_WRITE_SET_OUTSIDE_ALLOWED
+//   6. any `..` traversal segment     -> DENY_WRITE_SET_TRAVERSAL  (all three lists)
+//   7. any absolute / drive / UNC     -> DENY_WRITE_SET_ABSOLUTE   (all three lists)
+//   8. non-canonical path alias       -> DENY_WRITE_SET_MALFORMED  (all three lists; Codex REV-001)
+//   9. any prohibited-prefix hit      -> DENY_WRITE_SET_PROHIBITED  (wins over allowed; case-fold safe)
+//  10. any path outside allowed set   -> DENY_WRITE_SET_OUTSIDE_ALLOWED
 //   else                              -> ok
 //
 // FAIL-CLOSED EXTRACTION (Codex REV-002): the three fields are destructured from
@@ -146,8 +171,10 @@ const allEntriesClean = (list) => list.every(isCleanEntry);
 // propagate an exception out of this function — each is converted to the frozen
 // DENY_WRITE_SET_MALFORMED result. No accessor is invoked more than once, so a
 // getter that returns a different array on repeated reads cannot influence the
-// decision: only the single snapshot is ever consulted.
-export function evaluateWriteSet(input) {
+// decision: only the single snapshot is ever consulted. Containment runs FIRST:
+// every later step — including the REV-001 canonical-grammar check — operates
+// only on the plain-string snapshot copies, never on caller-controlled objects.
+function evaluateWriteSetInternal(input) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     return deny("DENY_WRITE_SET_MALFORMED", "input must be a plain object");
   }
@@ -163,9 +190,11 @@ export function evaluateWriteSet(input) {
     prohibitedPaths = snapshotArray(prohibitedPaths);
   } catch {
     // Any throw from a hostile getter / Proxy trap / iterator accessor lands here.
+    // Message unified with the outer belt-and-braces guard (Lane B) so hostile
+    // inputs are indistinguishable by which containment layer caught them.
     return deny(
       "DENY_WRITE_SET_MALFORMED",
-      "write-set fields could not be read as arrays"
+      "input could not be safely inspected"
     );
   }
 
@@ -202,25 +231,51 @@ export function evaluateWriteSet(input) {
     }
   }
 
-  for (const p of candidatePaths) {
+  const allPaths = [...candidatePaths, ...allowedPaths, ...prohibitedPaths];
+  for (const p of allPaths) {
     if (hasParentSegment(p)) {
-      return deny("DENY_WRITE_SET_TRAVERSAL", `candidate path escapes via '..': ${p}`);
+      return deny("DENY_WRITE_SET_TRAVERSAL", `path escapes via '..': ${p}`);
     }
   }
-  for (const p of candidatePaths) {
+  for (const p of allPaths) {
     if (isAbsolute(p)) {
       return deny("DENY_WRITE_SET_ABSOLUTE", `absolute path not permitted: ${p}`);
     }
   }
-  for (const p of candidatePaths) {
-    if (withinBound(p, prohibitedPaths)) {
+
+  const canonicalCandidates = canonicalizePaths(candidatePaths);
+  const canonicalAllowed = canonicalizePaths(allowedPaths);
+  const canonicalProhibited = canonicalizePaths(prohibitedPaths);
+  if (canonicalCandidates === null || canonicalAllowed === null || canonicalProhibited === null) {
+    return deny(
+      "DENY_WRITE_SET_MALFORMED",
+      "paths must use canonical repository-relative forward-slash form"
+    );
+  }
+
+  const caseFoldedProhibited = canonicalProhibited.map((path) => path.toLowerCase());
+  for (const p of canonicalCandidates) {
+    if (withinBound(p, canonicalProhibited) || withinBound(p.toLowerCase(), caseFoldedProhibited)) {
       return deny("DENY_WRITE_SET_PROHIBITED", `candidate path is within a prohibited prefix: ${p}`);
     }
   }
-  for (const p of candidatePaths) {
-    if (!withinBound(p, allowedPaths)) {
+  for (const p of canonicalCandidates) {
+    if (!withinBound(p, canonicalAllowed)) {
       return deny("DENY_WRITE_SET_OUTSIDE_ALLOWED", `candidate path is outside the allowed set: ${p}`);
     }
   }
   return ALLOW;
+}
+
+// Outer belt-and-braces guard (Lane B, REV-002 defense in depth): the targeted
+// extraction try/catch above already contains every known hostile-input throw,
+// so this catch is expected to be unreachable — it exists so that ANY future
+// throw introduced anywhere in the evaluator still degrades to the frozen
+// malformed denial instead of propagating past the structured-denial boundary.
+export function evaluateWriteSet(input) {
+  try {
+    return evaluateWriteSetInternal(input);
+  } catch {
+    return deny("DENY_WRITE_SET_MALFORMED", "input could not be safely inspected");
+  }
 }
