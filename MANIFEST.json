@@ -174,6 +174,8 @@
     "tests/risk-registry.test.mjs",
     "src/control/write-set-policy.mjs",
     "tests/write-set-policy.test.mjs",
+    "src/control/workspace-lease-policy.mjs",
+    "tests/workspace-lease-policy.test.mjs",
     "docs/03-project-control/candidates/mod-wspace-s1-rework-001.md",
     "src/control/policy-decision-point.mjs",
     "tests/policy-decision-point.test.mjs",
