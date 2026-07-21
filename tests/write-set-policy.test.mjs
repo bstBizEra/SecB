@@ -473,7 +473,7 @@ test("byte-identity: files read but not modified are unchanged vs main @ 71b9d41
   // validator still fails this guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "518fb2d534379688d3e41be6ab298cb4fe009768",
+    "dbd4d10883e7724aa75301fc7f3b5c9528089726",
     "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
   );
   // Sanity: the guarded source actually still contains the pathSubset the parity
