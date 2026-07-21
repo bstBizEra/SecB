@@ -232,17 +232,63 @@ export function classifyEventType(input) {
 // value. Each element is probed with one `Object.hasOwn` and at most ONE
 // contained property read (fail-closed extraction; invocation count of any
 // getter is exactly 1). The event is never mutated.
+//
+// ATOMIC PRESENCE SNAPSHOT (closes N1, second independent review of this
+// slice, docs/03-project-control/candidates/
+// mod-live-s1-event-family-second-independent-review-001.md): the ORIGINAL
+// per-field loop did a fresh `Object.hasOwn` + value read for each element
+// AT THAT POINT in the iteration, so a getter invoked while reading an
+// earlier-checked element (e.g. `trace_id`) could delete or inject a
+// later-checked sibling element (e.g. `sequence`) before it was itself
+// probed, fabricating or suppressing that sibling's finding. This is now a
+// two-pass, TOCTOU-safe read:
+//   Pass 1 (snapshot): capture every doctrine element's OWN property
+//     descriptor via `Object.getOwnPropertyDescriptor`, for all 8 elements,
+//     in one uninterrupted loop, BEFORE any conditional logic or value read
+//     runs. Reading a property descriptor never invokes a getter — it only
+//     inspects property metadata — so no getter runs during this pass and no
+//     side effect can occur here.
+//   Pass 2 (decide): for each element, decide presence from ITS OWN
+//     snapshotted descriptor only. A data property's value was already
+//     captured in the descriptor (no live re-read of the envelope). An
+//     accessor property's getter is invoked exactly once, directly off the
+//     captured descriptor (`descriptor.get.call(envelope)`) rather than via
+//     a fresh `envelope[element]` lookup, so the read targets the exact
+//     function captured at snapshot time regardless of what the live object
+//     looks like by then.
+// Net effect: every element's presence is fixed by the state of the object
+// at the single instant the snapshot was taken, not by whatever the object
+// happens to look like when that element's turn in the loop arrives. A
+// getter's side effect on a sibling element can no longer change that
+// sibling's presence determination — behavior for ordinary (non-getter)
+// envelopes is unchanged, since a plain data property's snapshotted value
+// equals what `envelope[element]` would have returned anyway.
 export function assessEnvelopeConformance(envelope) {
   const findings = [];
   try {
     if (!isPlainAssessableObject(envelope)) {
       return deny(DENY_EVENT_ENVELOPE_MALFORMED, "envelope must be a plain object");
     }
-    for (const spec of DOCTRINE_CONFORMANCE_ELEMENTS) {
+
+    // Pass 1: atomic snapshot. No getter is invoked in this loop.
+    const descriptors = DOCTRINE_CONFORMANCE_ELEMENTS.map((spec) =>
+      Object.getOwnPropertyDescriptor(envelope, spec.element)
+    );
+
+    // Pass 2: decide presence from the frozen-in-time snapshot only.
+    DOCTRINE_CONFORMANCE_ELEMENTS.forEach((spec, index) => {
+      const descriptor = descriptors[index];
       let present = false;
-      if (Object.hasOwn(envelope, spec.element)) {
-        // SINGLE contained read of the element value.
-        const value = envelope[spec.element];
+      if (descriptor !== undefined) {
+        // SINGLE contained read of the element value, sourced from the
+        // snapshot descriptor (its own captured data value, or its own
+        // captured getter function) — never a fresh property lookup on the
+        // live envelope.
+        const value = Object.hasOwn(descriptor, "value")
+          ? descriptor.value
+          : typeof descriptor.get === "function"
+            ? descriptor.get.call(envelope)
+            : undefined;
         present = value !== undefined && value !== null;
       }
       if (!present) {
@@ -255,7 +301,7 @@ export function assessEnvelopeConformance(envelope) {
           })
         );
       }
-    }
+    });
   } catch {
     return deny(DENY_EVENT_ENVELOPE_MALFORMED, "envelope assessment failed (hostile accessor contained)");
   }
