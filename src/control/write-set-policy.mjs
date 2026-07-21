@@ -20,10 +20,11 @@
 //        concrete candidate write set supplied by the caller.
 //   B3 — reuses the SAME subset/traversal semantics as
 //        src/services/context-federation-service.mjs:43-48 `pathSubset`
-//        (DENY_SCOPE_WIDENING) VERBATIM. That source is not modified; a
-//        byte-identity guard test pins it, and a config-equivalence parity test
-//        proves this matcher agrees with it on a shared fixture table so the two
-//        cannot drift.
+//        (DENY_SCOPE_WIDENING) for canonical repository-relative paths. That
+//        source is not modified; a byte-identity guard test pins it, and a
+//        config-equivalence parity test proves agreement on its valid domain.
+//        This mutation-plane evaluator additionally denies non-canonical aliases
+//        (`.` segments, repeated separators, and backslashes) before comparison.
 //
 // House style: result objects. Deny-by-default on any malformed input; every
 // return value is a deep-frozen `{ ok: true }` or `{ ok: false, code, message }`.
@@ -47,16 +48,39 @@ const NULL_BYTE = "\0";
 const isNonBlankString = (v) => typeof v === "string" && v.length > 0;
 const isCleanEntry = (v) => isNonBlankString(v) && !v.includes(NULL_BYTE);
 
-// --- Semantics reused VERBATIM from context-federation-service.mjs:43-48 ------
+// --- Semantics reused from context-federation-service.mjs:43-48 ---------------
 // `pathSubset` there does: reject any candidate with a `..` segment (split on
 // either separator), strip trailing forward-slashes from each bound, and accept
-// a path iff it equals a bound or sits under `${bound}/`. These three helpers
-// are that exact logic, factored so the distinct deny codes below can name which
-// clause failed while remaining bit-for-bit equivalent to the source matcher.
+// a path iff it equals a bound or sits under `${bound}/`. The helpers below keep
+// that behavior on canonical inputs while applying one lexical grammar to both
+// candidates and bounds before either prohibited or allowed matching occurs.
 const hasParentSegment = (p) => p.split(/[\\/]/).includes("..");
 const stripTrailingSlashes = (bound) => bound.replace(/\/+$/, "");
 const withinBound = (p, bounds) =>
-  bounds.map(stripTrailingSlashes).some((e) => p === e || p.startsWith(`${e}/`));
+  bounds.some((e) => p === e || p.startsWith(`${e}/`));
+
+const canonicalizePath = (p) => {
+  const canonical = stripTrailingSlashes(p);
+  if (canonical.length === 0 || canonical.includes("\\") || canonical.normalize("NFC") !== canonical) return null;
+  const segments = canonical.split("/");
+  if (segments.some((segment) =>
+    segment === "" ||
+    segment === "." ||
+    segment.trim() !== segment ||
+    segment.endsWith(".") ||
+    segment.includes(":"))) return null;
+  return canonical;
+};
+
+const canonicalizePaths = (paths) => {
+  const canonical = [];
+  for (const path of paths) {
+    const normalized = canonicalizePath(path);
+    if (normalized === null) return null;
+    canonical.push(normalized);
+  }
+  return canonical;
+};
 
 // Absolute escape: a POSIX/UNC leading separator (`/x`, `\x`, `\\server`,
 // `//server`) OR a Windows drive-letter prefix (`C:`, `c:/x`, `C:\x`). Any of
@@ -80,10 +104,11 @@ const allEntriesClean = (list) => list.every(isCleanEntry);
 //   3. malformed path entries         -> DENY_WRITE_SET_MALFORMED
 //   4. any `..` traversal segment     -> DENY_WRITE_SET_TRAVERSAL
 //   5. any absolute / drive / UNC     -> DENY_WRITE_SET_ABSOLUTE
-//   6. any prohibited-prefix hit      -> DENY_WRITE_SET_PROHIBITED  (wins over allowed)
-//   7. any path outside allowed set   -> DENY_WRITE_SET_OUTSIDE_ALLOWED
+//   6. non-canonical path alias       -> DENY_WRITE_SET_MALFORMED
+//   7. any prohibited-prefix hit      -> DENY_WRITE_SET_PROHIBITED  (wins over allowed)
+//   8. any path outside allowed set   -> DENY_WRITE_SET_OUTSIDE_ALLOWED
 //   else                              -> ok
-export function evaluateWriteSet(input) {
+function evaluateWriteSetInternal(input) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     return deny("DENY_WRITE_SET_MALFORMED", "input must be a plain object");
   }
@@ -105,25 +130,46 @@ export function evaluateWriteSet(input) {
     );
   }
 
-  for (const p of candidatePaths) {
+  const allPaths = [...candidatePaths, ...allowedPaths, ...prohibitedPaths];
+  for (const p of allPaths) {
     if (hasParentSegment(p)) {
-      return deny("DENY_WRITE_SET_TRAVERSAL", `candidate path escapes via '..': ${p}`);
+      return deny("DENY_WRITE_SET_TRAVERSAL", `path escapes via '..': ${p}`);
     }
   }
-  for (const p of candidatePaths) {
+  for (const p of allPaths) {
     if (isAbsolute(p)) {
       return deny("DENY_WRITE_SET_ABSOLUTE", `absolute path not permitted: ${p}`);
     }
   }
-  for (const p of candidatePaths) {
-    if (withinBound(p, prohibitedPaths)) {
+
+  const canonicalCandidates = canonicalizePaths(candidatePaths);
+  const canonicalAllowed = canonicalizePaths(allowedPaths);
+  const canonicalProhibited = canonicalizePaths(prohibitedPaths);
+  if (canonicalCandidates === null || canonicalAllowed === null || canonicalProhibited === null) {
+    return deny(
+      "DENY_WRITE_SET_MALFORMED",
+      "paths must use canonical repository-relative forward-slash form"
+    );
+  }
+
+  const caseFoldedProhibited = canonicalProhibited.map((path) => path.toLowerCase());
+  for (const p of canonicalCandidates) {
+    if (withinBound(p, canonicalProhibited) || withinBound(p.toLowerCase(), caseFoldedProhibited)) {
       return deny("DENY_WRITE_SET_PROHIBITED", `candidate path is within a prohibited prefix: ${p}`);
     }
   }
-  for (const p of candidatePaths) {
-    if (!withinBound(p, allowedPaths)) {
+  for (const p of canonicalCandidates) {
+    if (!withinBound(p, canonicalAllowed)) {
       return deny("DENY_WRITE_SET_OUTSIDE_ALLOWED", `candidate path is outside the allowed set: ${p}`);
     }
   }
   return ALLOW;
+}
+
+export function evaluateWriteSet(input) {
+  try {
+    return evaluateWriteSetInternal(input);
+  } catch {
+    return deny("DENY_WRITE_SET_MALFORMED", "input could not be safely inspected");
+  }
 }

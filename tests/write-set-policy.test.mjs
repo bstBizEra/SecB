@@ -63,6 +63,32 @@ test("DENY_WRITE_SET_MALFORMED: non-string, blank, null-byte and non-primitive e
   assert.equal(evalWS({ candidatePaths: ["src/a"], allowedPaths: ["src"], prohibitedPaths: ["\0"] }).code, "DENY_WRITE_SET_MALFORMED");
 });
 
+test("DENY_WRITE_SET_MALFORMED: hostile accessors and proxies are contained and read once", () => {
+  let reads = 0;
+  const hostile = Object.defineProperty({}, "candidatePaths", {
+    get() {
+      reads += 1;
+      throw new Error("getter boom");
+    }
+  });
+  const accessorResult = evaluateWriteSet(hostile);
+  assert.deepEqual(accessorResult, {
+    ok: false,
+    code: "DENY_WRITE_SET_MALFORMED",
+    message: "input could not be safely inspected"
+  });
+  assert.equal(reads, 1, "hostile accessor must not be retried");
+  assert.equal(Object.isFrozen(accessorResult), true);
+
+  const proxyResult = evaluateWriteSet(new Proxy({}, {
+    get() {
+      throw new Error("proxy boom");
+    }
+  }));
+  assert.equal(proxyResult.code, "DENY_WRITE_SET_MALFORMED");
+  assert.equal(Object.isFrozen(proxyResult), true);
+});
+
 test("prototype-key path strings are ordinary strings, not smuggled keys", () => {
   // "__proto__" / "constructor" are just path segments; deny-by-default puts
   // them OUTSIDE_ALLOWED, never a silent allow, and never mutate any prototype.
@@ -92,6 +118,60 @@ test("DENY_WRITE_SET_ABSOLUTE: leading slash, drive letter, UNC", () => {
     assert.equal(res.ok, false, `path ${p}`);
     assert.equal(res.code, "DENY_WRITE_SET_ABSOLUTE", `path ${p}`);
   }
+});
+
+test("non-canonical aliases cannot bypass prohibited-prefix matching", () => {
+  const allowedPaths = ["src"];
+  const prohibitedPaths = ["src/gateway"];
+  for (const p of [
+    "src//gateway/secret.mjs",
+    "src/./gateway/secret.mjs",
+    "src\\gateway\\secret.mjs",
+    "src/gateway//secret.mjs",
+    "src/gateway/./secret.mjs"
+  ]) {
+    const res = evalWS({ candidatePaths: [p], allowedPaths, prohibitedPaths });
+    assert.equal(res.ok, false, `alias ${p}`);
+    assert.equal(res.code, "DENY_WRITE_SET_MALFORMED", `alias ${p}`);
+  }
+});
+
+test("Windows-equivalent aliases and alternate-data-stream syntax fail closed", () => {
+  const allowedPaths = ["src"];
+  const prohibitedPaths = ["src/gateway"];
+  assert.equal(evalWS({
+    candidatePaths: ["src/GATEWAY/secret.mjs"],
+    allowedPaths,
+    prohibitedPaths
+  }).code, "DENY_WRITE_SET_PROHIBITED", "prohibited comparison is case-safe");
+
+  for (const p of [
+    "src/gateway./secret.mjs",
+    "src/gateway /secret.mjs",
+    "src/gateway/secret.mjs:stream",
+    "src/ gateway/secret.mjs"
+  ]) {
+    assert.equal(evalWS({ candidatePaths: [p], allowedPaths, prohibitedPaths: [] }).code,
+      "DENY_WRITE_SET_MALFORMED", `Windows alias ${p}`);
+  }
+});
+
+test("non-canonical allowed and prohibited bounds fail closed before matching", () => {
+  assert.equal(evalWS({
+    candidatePaths: ["src/gateway/secret.mjs"],
+    allowedPaths: ["src"],
+    prohibitedPaths: ["src//gateway"]
+  }).code, "DENY_WRITE_SET_MALFORMED");
+  assert.equal(evalWS({
+    candidatePaths: ["src/control/x.mjs"],
+    allowedPaths: ["src/./control"],
+    prohibitedPaths: []
+  }).code, "DENY_WRITE_SET_MALFORMED");
+  assert.equal(evalWS({
+    candidatePaths: ["src/control/x.mjs"],
+    allowedPaths: ["src\\control"],
+    prohibitedPaths: []
+  }).code, "DENY_WRITE_SET_MALFORMED");
 });
 
 test("DENY_WRITE_SET_PROHIBITED: prohibited match wins over allowed (deny precedence)", () => {
