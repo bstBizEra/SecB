@@ -34,8 +34,21 @@ export class RegistryError extends Error {
   }
 }
 
+// Normalize an agent_instance_id for duplicate-identity comparison only: trim
+// surrounding whitespace, apply Unicode NFC normalization (so visually
+// identical NFC/NFD-confusable forms compare equal), then case-fold. This is
+// used exclusively to detect "same-looking" identities at registration time
+// (F-IDNORM); the registry continues to store and key every entry on the
+// caller's original, unmodified agent_instance_id, so all other lookups
+// (get/resolve/transition*) are unaffected and existing exact-match behavior
+// is preserved.
+function normalizeIdentifierForComparison(value) {
+  return typeof value === "string" ? value.trim().normalize("NFC").toLowerCase() : value;
+}
+
 export class RuntimeRegistry {
   #entries = new Map();
+  #normalizedIds = new Map();
   #policyCeiling;
 
   constructor({ policyCeiling = "A0" } = {}) {
@@ -54,7 +67,8 @@ export class RuntimeRegistry {
       );
     }
 
-    if (this.#entries.has(candidate.agent_instance_id)) {
+    const normalizedId = normalizeIdentifierForComparison(candidate.agent_instance_id);
+    if (this.#entries.has(candidate.agent_instance_id) || this.#normalizedIds.has(normalizedId)) {
       throw new RegistryError("DENY_DUPLICATE_INSTANCE", `Instance already registered: ${candidate.agent_instance_id}`);
     }
 
@@ -74,6 +88,7 @@ export class RuntimeRegistry {
 
     const versioned = Object.freeze({ ...candidate, _version: 1 });
     this.#entries.set(candidate.agent_instance_id, versioned);
+    this.#normalizedIds.set(normalizedId, candidate.agent_instance_id);
     return { registered: true, agent_instance_id: candidate.agent_instance_id, version: 1 };
   }
 

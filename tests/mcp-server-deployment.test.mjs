@@ -17,6 +17,7 @@ import {
   seedRegistry,
   validateSeed
 } from "../tools/secb-mcp-server-wiring.mjs";
+import { RuntimeRegistry } from "../src/registry/runtime-registry.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const EXAMPLE_SEED_PATH = resolve(HERE, "fixtures", "valid", "mcp-registry-seed.example.json");
@@ -270,5 +271,63 @@ test("wired end-to-end: an invocation-ledger write failure denies the call (fail
     assert.equal(responses[0].error.data.code, "DENY_AUDIT_UNAVAILABLE");
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// F-VER (mod-reg-qa-001): seedRegistry threads expectedVersion through the
+// approve/activate transitions of the one real (non-test) caller of
+// transitionEvaluation/transitionLifecycle.
+// ---------------------------------------------------------------------------
+
+test("F-VER: seedRegistry passes the exact expectedVersion it observed to each transition", () => {
+  const calls = [];
+  const originalTransitionEvaluation = RuntimeRegistry.prototype.transitionEvaluation;
+  const originalTransitionLifecycle = RuntimeRegistry.prototype.transitionLifecycle;
+  RuntimeRegistry.prototype.transitionEvaluation = function (id, status, opts) {
+    calls.push({ method: "transitionEvaluation", status, expectedVersion: opts && opts.expectedVersion });
+    return originalTransitionEvaluation.call(this, id, status, opts);
+  };
+  RuntimeRegistry.prototype.transitionLifecycle = function (id, state, opts) {
+    calls.push({ method: "transitionLifecycle", state, expectedVersion: opts && opts.expectedVersion });
+    return originalTransitionLifecycle.call(this, id, state, opts);
+  };
+  try {
+    seedRegistry(loadRegistrySeed(EXAMPLE_SEED_PATH));
+  } finally {
+    RuntimeRegistry.prototype.transitionEvaluation = originalTransitionEvaluation;
+    RuntimeRegistry.prototype.transitionLifecycle = originalTransitionLifecycle;
+  }
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].method, "transitionEvaluation");
+  assert.equal(calls[0].expectedVersion, 1);
+  assert.equal(calls[1].method, "transitionLifecycle");
+  assert.equal(calls[1].expectedVersion, 2);
+});
+
+test("F-VER: seedRegistry now fails closed instead of silently overwriting a concurrent transition", () => {
+  // Simulate a concurrent writer that approves then suspends the same
+  // instance immediately after register(), before seedRegistry's own
+  // approve step runs. Both of those transitions are individually legal
+  // (CANDIDATE to APPROVED, APPROVED to SUSPENDED), and SUSPENDED to
+  // APPROVED is also a legal transition target -- so before this fix (no
+  // expectedVersion passed), the seed loop's own approve call would have
+  // silently succeeded on the stale version, overwriting the concurrent
+  // SUSPENDED state (a lost update). With expectedVersion threaded through,
+  // it is now caught as a version conflict and fails closed.
+  const originalRegister = RuntimeRegistry.prototype.register;
+  RuntimeRegistry.prototype.register = function (record) {
+    const result = originalRegister.call(this, record);
+    this.transitionEvaluation(result.agent_instance_id, "APPROVED");
+    this.transitionEvaluation(result.agent_instance_id, "SUSPENDED");
+    return result;
+  };
+  try {
+    assert.throws(
+      () => seedRegistry(loadRegistrySeed(EXAMPLE_SEED_PATH)),
+      (error) => error instanceof DeploymentError && error.code === "DENY_SEED_REGISTER" && /DENY_VERSION_CONFLICT/.test(error.message)
+    );
+  } finally {
+    RuntimeRegistry.prototype.register = originalRegister;
   }
 });
