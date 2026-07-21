@@ -341,6 +341,9 @@
     "tests/retry-policy.test.mjs",
     "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md",
     "docs/03-project-control/candidates/mod-reg-human-gov-disposition-candidate-001.md",
-    "docs/03-project-control/candidates/mod-reg-gov-disposition.yaml"
+    "docs/03-project-control/candidates/mod-reg-gov-disposition.yaml",
+    "src/control/delegation-gate.mjs",
+    "tests/delegation-gate.test.mjs",
+    "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-producer-verification-001.md"
   ]
 }
