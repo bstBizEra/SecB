@@ -278,3 +278,59 @@ current `main` @ `fc0e5af`. Not pushed, no PR opened, no merge — per AMD-002 r
 advise-and-proceed, this candidate is prepared and ready for asynchronous GOV
 ratification at operator merge review; it carries no authority to self-declare complete
 or production.
+
+---
+
+## Addendum — independent REV + fast-follow (appended 2026-07-21, extend-only, not a rewrite)
+
+**Appended by:** Claude-Sonnet5-Motor (separate BST-SA session from this record's original
+producer, `claude-sonnet-main`).
+
+An independent REV was dispatched against commit `108bd0f` on this same branch, given the
+change's blast radius (shared `DurableLedger` base class). Findings committed to
+`docs/03-project-control/candidates/mod-wspace-s3-single-writer-toctou-fix-independent-review-001.md`
+at commit `c0e3d0c` (isolated detached-HEAD worktree + `git update-ref`, not pushed).
+Verdict: **APPROVE_WITH_NOTES**. The reviewer independently reproduced the pre-fix bypass
+and post-fix denial from a fresh script, audited every `DurableLedger` subclass call site
+directly (confirmed byte-identical no-hook behavior), ran a real cross-process OS-level
+lock race (two separate Node processes, 6 trials, invariant held every time), and confirmed
+`structuredClone(records)` defensiveness.
+
+**One real, non-blocking finding**: `preWriteCheck` received the live `entry` object
+(only `records` was cloned). Since `entryHash` (line ~152, computed before the hook runs)
+is derived from the pre-hook `entry`, a hook that mutated `entry` in place before returning
+falsy would desync the persisted, now-mutated `entry` from its own `entryHash` — surfacing
+as `LEDGER_INTEGRITY_FAILURE` on every later `read()`/`verify()` of that ledger. Dormant for
+the only real caller (`WorkspaceLeaseLedger`'s hook never touches `entry`), but a landmine
+in a base class shared by 8 subclasses.
+
+**Fast-follow fix (commit `338ba04`, same branch):** `preWriteCheck` now receives
+`structuredClone(entry)`, matching the existing `records` clone. The original producer's own
+test asserting `assert.equal(seenEntry, entry2)` (reference equality) encoded the now-corrected
+unsafe assumption; updated to assert deep-equality + explicit non-reference-equality. Added a
+dedicated regression test that has the hook mutate `entry` in place and confirms (a) the
+caller's own object is untouched, (b) `ledger.verify()` still passes, (c) the persisted entry
+matches the original, unmutated values.
+
+**Test counts, independently re-run in this same worktree:** 1088/1083/0/5 (was
+1087/1082/0/5 before this addendum; +1 new test, 0 regressions, 0 change to any other
+subclass's suite).
+
+**Status update:**
+```yaml
+truth_status: verified_true
+authority_status: advisory_only
+implementation_status: existing
+risk_class: low
+self_certification:
+  agent_id: Claude-Sonnet5-Motor
+  peer_agent_id: "claude-sonnet-main (original producer) / independent REV c0e3d0c (this addendum's own trigger)"
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+No push, no merge, no PR — same authority boundary as the record above. This addendum
+does not alter the original producer's disposition; it closes the one finding the
+independent REV raised against it.
