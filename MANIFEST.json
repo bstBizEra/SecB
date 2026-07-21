@@ -361,6 +361,17 @@
     "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md",
     "src/live/access-mode-policy.mjs",
     "tests/access-mode-policy.test.mjs",
-    "docs/03-project-control/candidates/mod-live-s2-access-mode-rev-001.md"
+    "docs/03-project-control/candidates/mod-live-s2-access-mode-rev-001.md",
+    "src/control/write-set-policy.mjs",
+    "tests/write-set-policy.test.mjs",
+    "docs/03-project-control/candidates/mod-wspace-s1-rework-001.md",
+    "docs/03-project-control/candidates/mod-wspace-s1-rev-001.md",
+    "docs/03-project-control/candidates/mod-wspace-s1-rework-002-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-wspace-s1-consolidation-001.md",
+    "docs/03-project-control/candidates/mod-wspace-s1-regate-001.md",
+    "docs/03-project-control/candidates/mod-live-s1-event-family-second-independent-review-001.md",
+    "src/ops/kpi-registry.mjs",
+    "tests/kpi-registry.test.mjs",
+    "docs/03-project-control/candidates/mod-ops-s1-kpi-registry-rev-001.md"
   ]
 }
