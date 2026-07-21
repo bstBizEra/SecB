@@ -348,6 +348,23 @@
     "docs/03-project-control/candidates/mod-wspace-s1-rev-001.md",
     "docs/03-project-control/candidates/mod-wspace-s1-rework-002-producer-verification-001.md",
     "docs/03-project-control/candidates/mod-wspace-s1-consolidation-001.md",
-    "docs/03-project-control/candidates/mod-wspace-s1-regate-001.md"
+    "docs/03-project-control/candidates/mod-wspace-s1-regate-001.md",
+    "docs/03-project-control/candidates/mod-reg-f-ver-f-idnorm-fix-rev-001.md",
+    "src/control/delegation-gate.mjs",
+    "tests/delegation-gate.test.mjs",
+    "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-rev-001.md",
+    "src/live/event-family-policy.mjs",
+    "tests/event-family-policy.test.mjs",
+    "docs/03-project-control/candidates/mod-live-s1-event-family-rev-001.md",
+    "docs/03-project-control/candidates/module-completion-tracker-reconciliation-002.md",
+    "src/control/approval-binding.mjs",
+    "tests/approval-binding.test.mjs",
+    "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-runtime-s3-rework-001.md",
+    "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-rev-001.md",
+    "docs/03-project-control/candidates/mod-runtime-s3-regate-001.md",
+    "docs/03-project-control/candidates/mod-runtime-completion-rev-001.md",
+    "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md"
   ]
 }
