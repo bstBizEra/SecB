@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/memory-record.schema.json",
+  "title": "SecB Memory Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memory_record_id",
+    "version",
+    "project_id",
+    "work_package_id",
+    "session_id",
+    "actor_id",
+    "layer",
+    "source",
+    "statement",
+    "classification",
+    "confidence",
+    "provenance",
+    "valid_from",
+    "valid_until",
+    "retention_policy",
+    "admitted_at",
+    "content_hash"
+  ],
+  "properties": {
+    "memory_record_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "actor_id": {"type": "string", "minLength": 1},
+    "layer": {"enum": ["session", "work", "project"]},
+    "source": {"enum": ["DecisionLedger", "KnowledgeLedger", "OutcomeLedger", "MemoryGatewayService"]},
+    "statement": {"type": "string", "minLength": 1},
+    "classification": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_refs", "origin_record_id"],
+      "properties": {
+        "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "origin_record_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "valid_from": {"type": "string", "format": "date-time"},
+    "valid_until": {"type": "string", "format": "date-time"},
+    "retention_policy": {"type": "string", "minLength": 1},
+    "admitted_at": {"type": "string", "format": "date-time"},
+    "supersedes": {"type": "string", "minLength": 1},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}
