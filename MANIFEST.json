@@ -348,6 +348,7 @@
     "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-producer-verification-001.md",
     "docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-rev-001.md",
     "src/live/event-family-policy.mjs",
-    "tests/event-family-policy.test.mjs"
+    "tests/event-family-policy.test.mjs",
+    "docs/03-project-control/candidates/mod-live-s1-event-family-rev-001.md"
   ]
 }
