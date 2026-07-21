@@ -27,6 +27,8 @@ import {
   REPLAY_FINDING_TYPES,
   REPLAY_DENY_CODES,
   DENY_REPLAY_MALFORMED,
+  MAX_SEQUENCE_GAP_SPAN,
+  GAP_ANALYSIS_SPAN_EXCEEDED,
   assembleReplayPackage
 } from "../src/live/replay-assembler.mjs";
 
@@ -90,7 +92,8 @@ test("exports: finding types, deny codes, and stream names are frozen and comple
     "ORDER_DISORDER",
     "ORDER_DUPLICATE",
     "ORDER_CONTRADICTION",
-    "SEQUENCE_GAP"
+    "SEQUENCE_GAP",
+    "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED"
   ]);
   assert.deepEqual([...REPLAY_DENY_CODES], [DENY_REPLAY_MALFORMED]);
   assert.deepEqual([...STREAM_NAMES], [
@@ -249,6 +252,136 @@ test("gap: holes in the declared sequence range are a finding and surface in gap
   const gapFindings = result.package.findings.filter((f) => f.type === "SEQUENCE_GAP");
   assert.equal(gapFindings.length, 1);
   assert.deepEqual(gapFindings[0].missing, [3, 4]);
+});
+
+// ---------------------------------------------------------------------------
+// F1 fix: resource-bounded gap analysis (mod-live-s3-second-independent-
+// review-001). `sequenceGaps()` used to compute `Math.min(...set)`/
+// `Math.max(...set)` and then unconditionally fill every integer in
+// [min..max]. Both are unbounded on ordinary, non-adversarial numeric input —
+// no Proxies or hostile getters needed. These regressions reproduce the
+// reviewer's three exact scenarios first-hand and assert each now completes
+// quickly without throwing, per the module's own "never throws" invariant.
+// ---------------------------------------------------------------------------
+
+test("F1: MAX_SEQUENCE_GAP_SPAN is documented, positive, and comfortably covers the gap-assessment's own named plausible scale (131k-200k distinct sequence values)", () => {
+  assert.equal(typeof MAX_SEQUENCE_GAP_SPAN, "number");
+  assert.ok(Number.isSafeInteger(MAX_SEQUENCE_GAP_SPAN));
+  assert.ok(MAX_SEQUENCE_GAP_SPAN > 200_000, "ceiling exceeds the assessment's named 131k-200k scale");
+});
+
+test("F1 regression (a): sequence 0 and 1e8 — over the ceiling; completes quickly, never throws, gaps===null with an explicit span-exceeded finding (previously: ok:true after ~3.6s, 100M-element array)", () => {
+  const t0 = Date.now();
+  let result;
+  assert.doesNotThrow(() => {
+    result = assembleReplayPackage(
+      {
+        eventRecords: [
+          { sourceClass: "observed_fact", sequence: 0 },
+          { sourceClass: "observed_fact", sequence: 1e8 }
+        ]
+      },
+      { now: clock }
+    );
+  });
+  const elapsedMs = Date.now() - t0;
+  assert.equal(result.ok, true);
+  assert.equal(result.package.gaps, null, "gaps is null (not []) — not analyzed, not lied about");
+  const exceeded = result.package.findings.filter((f) => f.type === "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED");
+  assert.equal(exceeded.length, 1);
+  assert.equal(exceeded[0].code, GAP_ANALYSIS_SPAN_EXCEEDED);
+  assert.equal(exceeded[0].boundedOut, true);
+  assert.equal(exceeded[0].min, 0);
+  assert.equal(exceeded[0].max, 1e8);
+  assert.equal(exceeded[0].span, 1e8);
+  assert.equal(exceeded[0].limit, MAX_SEQUENCE_GAP_SPAN);
+  // Timing regression guard: the reviewer measured ~3.6s wall-clock for this
+  // exact input before the fix. A generous 1s ceiling here still catches any
+  // future regression back toward the unbounded synchronous fill, without
+  // being flaky on a slow CI box.
+  assert.ok(elapsedMs < 1000, `expected < 1000ms, got ${elapsedMs}ms`);
+});
+
+test("F1 regression (b): sequence 0 and 1e9 — previously an uncaught RangeError: Invalid array length; now completes quickly, never throws", () => {
+  const t0 = Date.now();
+  let result;
+  assert.doesNotThrow(() => {
+    result = assembleReplayPackage(
+      {
+        eventRecords: [
+          { sourceClass: "observed_fact", sequence: 0 },
+          { sourceClass: "observed_fact", sequence: 1e9 }
+        ]
+      },
+      { now: clock }
+    );
+  });
+  const elapsedMs = Date.now() - t0;
+  assert.equal(result.ok, true);
+  assert.equal(result.package.gaps, null);
+  const exceeded = result.package.findings.filter((f) => f.type === "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED");
+  assert.equal(exceeded.length, 1);
+  assert.equal(exceeded[0].min, 0);
+  assert.equal(exceeded[0].max, 1e9);
+  assert.equal(exceeded[0].span, 1e9);
+  assert.ok(elapsedMs < 1000, `expected < 1000ms, got ${elapsedMs}ms`);
+});
+
+test("F1 regression (c): 200,000 distinct declared sequence values, no gap — previously an uncaught RangeError: Maximum call stack size exceeded from the Math.min/max spread; now completes quickly, never throws, and correctly reports no gaps (span is under the ceiling)", () => {
+  const n = 200000;
+  const events = Array.from({ length: n }, (_, i) => ({ sourceClass: "observed_fact", sequence: i }));
+  const t0 = Date.now();
+  let result;
+  assert.doesNotThrow(() => {
+    result = assembleReplayPackage({ eventRecords: events }, { now: clock });
+  });
+  const elapsedMs = Date.now() - t0;
+  assert.equal(result.ok, true);
+  // span (199,999) is under MAX_SEQUENCE_GAP_SPAN: this is a real, completed
+  // gap analysis, not a span-exceeded outcome — the record-count crash mode
+  // is fixed without changing the (correct, empty) gap-analysis result.
+  assert.deepEqual(result.package.gaps, []);
+  assert.equal(
+    result.package.findings.some((f) => f.type === "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED"),
+    false
+  );
+  // Timing regression guard for this exact crash class (record-count driven,
+  // distinct from the magnitude-driven scenarios above).
+  assert.ok(elapsedMs < 2000, `expected < 2000ms, got ${elapsedMs}ms`);
+});
+
+test("F1: the span-exceeded ceiling is exact — a span exactly at MAX_SEQUENCE_GAP_SPAN is fully analyzed; one past it is span-exceeded", () => {
+  const atCeiling = assembleReplayPackage(
+    {
+      eventRecords: [
+        { sourceClass: "observed_fact", sequence: 0 },
+        { sourceClass: "observed_fact", sequence: MAX_SEQUENCE_GAP_SPAN }
+      ]
+    },
+    { now: clock }
+  );
+  assert.equal(atCeiling.ok, true);
+  assert.ok(Array.isArray(atCeiling.package.gaps));
+  assert.equal(
+    atCeiling.package.findings.some((f) => f.type === "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED"),
+    false
+  );
+
+  const overCeiling = assembleReplayPackage(
+    {
+      eventRecords: [
+        { sourceClass: "observed_fact", sequence: 0 },
+        { sourceClass: "observed_fact", sequence: MAX_SEQUENCE_GAP_SPAN + 1 }
+      ]
+    },
+    { now: clock }
+  );
+  assert.equal(overCeiling.ok, true);
+  assert.equal(overCeiling.package.gaps, null);
+  assert.equal(
+    overCeiling.package.findings.some((f) => f.type === "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED"),
+    true
+  );
 });
 
 test("reconciliation runs over the EVENT stream only (B3/B7): evidence sequences never gap-checked against events", () => {
