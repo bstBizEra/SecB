@@ -35,6 +35,22 @@ import { DurableLedger, LedgerError } from "./durable-ledger.mjs";
 // invariant, NOT a live gateway enforcement path — it gates what this ledger will
 // persist, and nothing downstream yet consults it to block a live write (that
 // remains B5, R3, out of scope).
+//
+// TOCTOU FIX (mod-wspace-s3-single-writer-toctou-fix-001). The second
+// independent review of this merged slice (docs/03-project-control/candidates/
+// mod-wspace-s3-second-independent-review-001.md §3) found that the ORIGINAL
+// version of this gate scanned via an unlocked `this.read()` taken BEFORE
+// calling `this.append(...)` — two independent reads not coupled by any lock,
+// so a caller whose single-writer check ran against a stale view but whose
+// write used a correctly-fresh `expectedSequence` could land two simultaneously
+// -active leases for one session, defeating the exact invariant this gate
+// exists to enforce. Fixed by moving the scan INSIDE `DurableLedger.append`'s
+// own lock via the `preWriteCheck` hook (see durable-ledger.mjs): the base
+// class does its normal locked read+verify, then hands THAT SAME
+// freshly-read, freshly-verified `records` snapshot to the hook before it
+// hands it to the write. `#detectSingleWriterConflict` no longer calls
+// `this.read()` at all — there is no longer a second, independent,
+// overridable read for the gate to race against.
 
 // Map a validated workspace-lease record onto the DurableLedger entry envelope.
 // entryId/idempotencyKey drive the base class's duplicate-id + idempotent-replay
@@ -129,33 +145,45 @@ export class WorkspaceLeaseLedger extends DurableLedger {
       throw new LedgerError("DENY_LEASE_INVALID_NOW", "now must be a non-negative safe-integer epoch-ms reading");
     }
 
-    const conflict = this.#detectSingleWriterConflict(snapshot, now);
-    if (conflict) {
-      return deny(
-        "DENY_LEASE_SINGLE_WRITER",
-        `session ${snapshot.session_id} already holds active lease ${conflict.leaseId}`,
-        { sessionId: snapshot.session_id, conflictingLeaseId: conflict.leaseId }
-      );
-    }
+    // The single-writer scan runs as `preWriteCheck`, INSIDE DurableLedger's own
+    // lock, against the SAME freshly-read+verified `records` the base class is
+    // about to write against — not a separate, earlier, unlocked `this.read()`.
+    // This is the TOCTOU fix: see the SCOPE NOTE above.
+    const result = this.append(workspaceLeaseEntry(snapshot, idempotencyKey), {
+      expectedSequence,
+      preWriteCheck: (records) => {
+        const conflict = this.#detectSingleWriterConflict(snapshot, now, records);
+        if (!conflict) return null;
+        return deny(
+          "DENY_LEASE_SINGLE_WRITER",
+          `session ${snapshot.session_id} already holds active lease ${conflict.leaseId}`,
+          { sessionId: snapshot.session_id, conflictingLeaseId: conflict.leaseId }
+        );
+      }
+    });
 
-    const record = this.append(workspaceLeaseEntry(snapshot, idempotencyKey), { expectedSequence });
-    return Object.freeze({ ok: true, record });
+    if (result && result.ok === false) return result;
+    return Object.freeze({ ok: true, record: result });
   }
 
-  // Single-writer-per-session gate. Scans the verified chain for a DIFFERENT
-  // lease (a different lease_id) that is still active (now < expires_at) under
-  // the SAME session_id. A re-append of the same lease_id (idempotent replay or a
-  // renewal that re-anchors the same lease) is NOT a conflict — that is the same
-  // writer, not a second one. read() verifies the chain first, so a tampered
-  // ledger fails closed here too.
+  // Single-writer-per-session gate. Scans `records` — the exact, already
+  // locked+verified snapshot `DurableLedger.append` just read for this same
+  // write (passed in via the `preWriteCheck` hook, never fetched independently
+  // here) — for a DIFFERENT lease (a different lease_id) that is still active
+  // (now < expires_at) under the SAME session_id. A re-append of the same
+  // lease_id (idempotent replay or a renewal that re-anchors the same lease) is
+  // NOT a conflict — that is the same writer, not a second one. Because
+  // `records` comes from inside the locked critical section, a tampered ledger
+  // still fails closed before this method ever runs (verifyRecords throws
+  // first).
   //
   // Fail-closed expiry direction: an unparseable stored `expires_at` is treated
   // as STILL ACTIVE, so an ambiguous existing lease blocks the second writer
   // rather than being silently assumed dead. (resolveActiveLease takes the
   // opposite, equally deny-by-default direction: an unparseable expiry there is
   // treated as NOT active, so it never grants an ambiguous authorization.)
-  #detectSingleWriterConflict(lease, now) {
-    for (const record of this.read()) {
+  #detectSingleWriterConflict(lease, now, records) {
+    for (const record of records) {
       const held = record.entry.payload;
       if (held.session_id !== lease.session_id) continue;
       if (held.lease_id === lease.lease_id) continue;
