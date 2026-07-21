@@ -416,6 +416,103 @@ test("attack: poisoned Symbol.iterator on the envelope is inert (assessor never 
 });
 
 // ---------------------------------------------------------------------------
+// 4a. N1 TOCTOU regressions (second independent review,
+//     mod-live-s1-event-family-second-independent-review-001.md): a getter
+//     on one doctrine-checked field must not be able to influence the
+//     presence determination of a DIFFERENT, sibling doctrine-checked field
+//     by mutating the envelope as a side effect mid-assessment. Both of the
+//     reviewer's exact exploits (deletion and injection) are reproduced
+//     here and asserted closed.
+// ---------------------------------------------------------------------------
+
+test("N1 regression: a getter on an earlier-checked field cannot delete a later-checked field out of the result (deletion exploit)", () => {
+  // `sequence` (checked 3rd) is genuinely present at call time. `trace_id`
+  // (checked 1st) is a getter whose side effect deletes `sequence` before
+  // the loop would otherwise reach it. Pre-fix, this fabricated a false
+  // MISSING_SEQUENCE finding even though sequence was present when the
+  // caller invoked the function. Post-fix, presence for every element is
+  // decided from the atomic snapshot taken before any getter runs, so the
+  // deletion (which happens during the snapshotted `trace_id` getter's
+  // invocation, i.e. strictly after the snapshot) cannot retroactively
+  // change `sequence`'s already-fixed presence determination.
+  const envelope = minimalSchemaValidEvent();
+  envelope.sequence = 42;
+  let deleted = false;
+  Object.defineProperty(envelope, "trace_id", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      deleted = true;
+      delete envelope.sequence;
+      return "trace-01";
+    }
+  });
+
+  const result = assessEnvelopeConformance(envelope);
+
+  assert.equal(result.ok, true);
+  assert.ok(deleted, "the hostile trace_id getter did run (sanity check on the exploit itself)");
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(
+    !codes.includes("MISSING_SEQUENCE"),
+    "sequence was present at call time; a sibling getter's later deletion must not fabricate MISSING_SEQUENCE"
+  );
+  assert.ok(!codes.includes("MISSING_TRACE_ID"), "trace_id itself is present (via its getter) and must not be flagged");
+});
+
+test("N1 regression: a getter on an earlier-checked field cannot inject a later-checked field to suppress its finding (injection exploit)", () => {
+  // `evidence_candidate` (checked 8th, last) is never supplied by the
+  // caller. `trace_id` (checked 1st) is a getter whose side effect injects
+  // `evidence_candidate` before the loop would otherwise reach it. Pre-fix,
+  // this suppressed the correct MISSING_EVIDENCE_CANDIDATE_FLAG finding even
+  // though the caller never supplied that field. Post-fix, evidence_candidate
+  // is absent from the atomic snapshot taken before any getter runs, so the
+  // later injection (which happens strictly after the snapshot) cannot
+  // retroactively manufacture presence for it.
+  const envelope = minimalSchemaValidEvent();
+  let injected = false;
+  Object.defineProperty(envelope, "trace_id", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      injected = true;
+      envelope.evidence_candidate = true;
+      return "trace-01";
+    }
+  });
+
+  const result = assessEnvelopeConformance(envelope);
+
+  assert.equal(result.ok, true);
+  assert.ok(injected, "the hostile trace_id getter did run (sanity check on the exploit itself)");
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(
+    codes.includes("MISSING_EVIDENCE_CANDIDATE_FLAG"),
+    "evidence_candidate was never supplied by the caller; a sibling getter's later injection must not suppress this finding"
+  );
+  assert.ok(!codes.includes("MISSING_TRACE_ID"), "trace_id itself is present (via its getter) and must not be flagged");
+});
+
+test("N1 regression: control case — the same two envelopes without the hostile getter behave exactly as the presence rule dictates", () => {
+  // Same shapes as the two exploits above, minus the side-effecting getter,
+  // to pin down that the fix does not change ordinary (non-adversarial)
+  // outcomes: a plainly-present sequence is never flagged, and a plainly-
+  // absent evidence_candidate is always flagged.
+  const withSequence = minimalSchemaValidEvent();
+  withSequence.sequence = 42;
+  withSequence.trace_id = "trace-01";
+  const codesA = assessEnvelopeConformance(withSequence).findings.map((finding) => finding.code);
+  assert.ok(!codesA.includes("MISSING_SEQUENCE"));
+  assert.ok(!codesA.includes("MISSING_TRACE_ID"));
+
+  const withoutEvidenceCandidate = minimalSchemaValidEvent();
+  withoutEvidenceCandidate.trace_id = "trace-01";
+  const codesB = assessEnvelopeConformance(withoutEvidenceCandidate).findings.map((finding) => finding.code);
+  assert.ok(codesB.includes("MISSING_EVIDENCE_CANDIDATE_FLAG"));
+  assert.ok(!codesB.includes("MISSING_TRACE_ID"));
+});
+
+// ---------------------------------------------------------------------------
 // 5. Byte-identity guards (main @ 280d32c)
 // ---------------------------------------------------------------------------
 
