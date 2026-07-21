@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/integration-queue-entry.schema.json",
+  "title": "SecB Integration Queue Entry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queue_entry_id", "version", "project_id", "work_package_id", "session_id", "candidate_branch", "candidate_tip_commit", "base_ref", "declared_write_set", "status", "submitted_by", "submitted_at", "content_hash"],
+  "properties": {
+    "queue_entry_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "candidate_branch": {"type": "string", "minLength": 1},
+    "candidate_tip_commit": {"type": "string", "pattern": "^[a-f0-9]{7,40}$"},
+    "base_ref": {"type": "string", "minLength": 1},
+    "declared_write_set": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "status": {"type": "string", "enum": ["SUBMITTED", "IN_REVIEW", "MERGED", "REJECTED"]},
+    "submitted_by": {"type": "string", "minLength": 1},
+    "submitted_at": {"type": "string", "format": "date-time"},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

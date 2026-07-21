@@ -394,20 +394,21 @@ test("attack: each assessed envelope field is read exactly once (invocation-coun
   }
 });
 
-// N2 hardening (mod-live-s1-toctou-fix-rev-001): the assessor no longer probes
-// per-field descriptors. Presence is derived from a single Reflect.ownKeys
-// structural snapshot + one contained value read per field, so a
-// getOwnPropertyDescriptor trap is NEVER invoked and is fully inert — it can
-// neither deny, mutate a sibling, nor perturb findings. This REPLACES the prior
-// "throwing descriptor trap -> malformed denial" expectation, which encoded the
-// exact per-field descriptor probe the N2 fix removes; the new guarantee is
-// strictly stronger (the hostile trap can no longer even run). "Never throws"
-// is preserved.
-test("attack: a throwing Proxy getOwnPropertyDescriptor trap is INERT — never invoked, never denies, never throws (N2)", () => {
-  let descriptorInvocations = 0;
+// N2 hardening (mod-live-s1-toctou-fix-rev-001) + N3 hardening (this slice,
+// mod-live-s1-value-mutation-fix-001): key PRESENCE is still derived ONLY
+// from a single Reflect.ownKeys structural snapshot, unconditionally
+// unaffected by anything a descriptor trap does. VALUES are now captured via
+// one descriptor read per PRESENT doctrine field (Phase 1) before any getter
+// runs (Phase 2) — this is what closes N3 (see the PoC A-D suite below). A
+// throwing descriptor trap is still fully contained (denial, never a throw);
+// it is no longer literally "never invoked" (that was the prior revision's
+// mechanism), because invoking it — safely, once per present field, gated by
+// the immutable ownKeys Set — is exactly how this revision now also captures
+// VALUES without the N3 gap. Key-presence itself remains exactly as
+// impervious to this trap as before.
+test("attack: a throwing Proxy getOwnPropertyDescriptor trap is CONTAINED — denies, never throws, never perturbs presence (N2)", () => {
   const descriptorTrap = new Proxy(minimalSchemaValidEvent(), {
     getOwnPropertyDescriptor() {
-      descriptorInvocations += 1;
       throw new Error("hostile descriptor trap");
     }
   });
@@ -415,23 +416,24 @@ test("attack: a throwing Proxy getOwnPropertyDescriptor trap is INERT — never 
   assert.doesNotThrow(() => {
     result = assessEnvelopeConformance(descriptorTrap);
   });
-  assert.equal(descriptorInvocations, 0, "getOwnPropertyDescriptor trap never invoked");
-  assert.equal(result.ok, true, "throwing descriptor trap is inert; assessment proceeds on the ownKeys snapshot");
-  // minimalSchemaValidEvent carries no doctrine element -> all eight surfaced,
-  // exactly as the structural snapshot dictates.
+  // minimalSchemaValidEvent carries no doctrine element, so the ownKeys gate
+  // never even calls the trap for this input -- the trap is dead code here.
+  assert.equal(result.ok, true, "no doctrine element is present, so the descriptor trap is never reached");
   assert.equal(result.findings.length, DOCTRINE_CONFORMANCE_ELEMENTS.length);
 });
 
-test("N2 regression: a getOwnPropertyDescriptor trap that would INJECT a sibling cannot fabricate presence (trap never fires)", () => {
+test("N2 regression: a getOwnPropertyDescriptor trap that would INJECT a sibling cannot fabricate presence", () => {
   // trace_id present, evidence_candidate absent in the structural snapshot.
   const target = { ...minimalSchemaValidEvent(), trace_id: "t" };
   let descriptorInvocations = 0;
   const proxy = new Proxy(target, {
     getOwnPropertyDescriptor(t, key) {
       descriptorInvocations += 1;
-      // Under the OLD per-field probe (in element order), a trap fired for an
-      // earlier field would inject evidence_candidate before its own descriptor
-      // was captured, SUPPRESSING MISSING_EVIDENCE_CANDIDATE_FLAG.
+      // A trap fired for trace_id (the only present doctrine field) injects
+      // evidence_candidate as a side effect. Because presence is decided
+      // ONLY from the Reflect.ownKeys Set captured BEFORE this trap could
+      // ever run, the injected key is never looked up at all -- the ownKeys
+      // gate excludes it unconditionally.
       t.evidence_candidate = true;
       return Reflect.getOwnPropertyDescriptor(t, key);
     }
@@ -440,33 +442,40 @@ test("N2 regression: a getOwnPropertyDescriptor trap that would INJECT a sibling
   const structuralKeys = new Set(Reflect.ownKeys(target));
   assert.ok(!structuralKeys.has("evidence_candidate"), "evidence_candidate absent at snapshot time");
   const result = assessEnvelopeConformance(proxy);
-  assert.equal(descriptorInvocations, 0, "descriptor trap never invoked by the assessor");
+  assert.equal(descriptorInvocations, 1, "descriptor trap invoked exactly once, gated to the one present field (trace_id)");
   assert.equal(result.ok, true);
   const codes = result.findings.map((finding) => finding.code);
   assert.ok(codes.includes("MISSING_EVIDENCE_CANDIDATE_FLAG"), "sibling injection suppressed no finding");
   assert.ok(!codes.includes("MISSING_TRACE_ID"), "trace_id (present at snapshot) is not flagged");
 });
 
-test("N2 regression: a getOwnPropertyDescriptor trap that would DELETE a sibling cannot fabricate a finding (trap never fires)", () => {
-  // sequence present in the structural snapshot with a live value.
+test("N2/N3 boundary: a getOwnPropertyDescriptor trap that DELETES a not-yet-read sibling's data fails CLOSED (deny), never fabricates a finding", () => {
+  // span_id and sequence both present in the structural snapshot. The trap
+  // deletes `sequence`'s underlying data as a side effect of ANY descriptor
+  // call (fired here while resolving span_id, which is read first). This is
+  // a genuine structural inconsistency: Reflect.ownKeys said sequence was
+  // present, but its own descriptor call (moments later, same Phase 1 pass)
+  // comes back undefined. Rather than silently reporting a false
+  // MISSING_SEQUENCE (fail-safe but factually wrong -- sequence WAS present),
+  // the assessor treats this as proof the input is unstable under read and
+  // denies the whole assessment. No finding is ever fabricated by this path.
   const target = { ...minimalSchemaValidEvent(), span_id: "s", sequence: 7 };
   let descriptorInvocations = 0;
   const proxy = new Proxy(target, {
     getOwnPropertyDescriptor(t, key) {
       descriptorInvocations += 1;
-      // Under the OLD per-field probe, a trap fired for an earlier field would
-      // delete sequence before its descriptor was captured, FABRICATING
-      // MISSING_SEQUENCE though sequence was on the object at snapshot time.
       delete t.sequence;
       return Reflect.getOwnPropertyDescriptor(t, key);
     }
   });
-  const result = assessEnvelopeConformance(proxy);
-  assert.equal(descriptorInvocations, 0, "descriptor trap never invoked by the assessor");
-  assert.equal(result.ok, true);
-  const codes = result.findings.map((finding) => finding.code);
-  assert.ok(!codes.includes("MISSING_SEQUENCE"), "sibling deletion fabricated no finding");
-  assert.ok(!codes.includes("MISSING_SPAN_ID"));
+  let result;
+  assert.doesNotThrow(() => {
+    result = assessEnvelopeConformance(proxy);
+  });
+  assert.ok(descriptorInvocations >= 1, "descriptor trap was invoked");
+  assert.equal(result.ok, false, "structural inconsistency between ownKeys snapshot and descriptor read denies the assessment");
+  assert.equal(result.code, DENY_EVENT_ENVELOPE_MALFORMED);
+  assert.ok(Object.isFrozen(result));
 });
 
 test("N2 regression: the assessor captures the own-key set in EXACTLY ONE ownKeys invocation (single structural snapshot)", () => {
@@ -481,6 +490,131 @@ test("N2 regression: the assessor captures the own-key set in EXACTLY ONE ownKey
   assert.equal(result.ok, true);
   assert.equal(ownKeysInvocations, 1, "own-key set captured in exactly one Reflect.ownKeys call");
   assert.equal(result.findings.length, DOCTRINE_CONFORMANCE_ELEMENTS.length);
+});
+
+// ---------------------------------------------------------------------------
+// 4a. N3 value-mutation regressions (mod-live-s1-value-mutation-fix-001) —
+// reproducing the independent review's exact PoC A-D
+// (docs/03-project-control/candidates/mod-live-s1-atomic-snapshot-hardening-independent-review-001.md,
+// review of commit cc63e9a). trace_id is iterated before span_id / sequence /
+// evidence_candidate in DOCTRINE_CONFORMANCE_ELEMENTS, so it is used as the
+// "earlier field" in every probe below, exactly as the review constructed it.
+// ---------------------------------------------------------------------------
+
+test("N3 PoC A: a plain-object getter cannot SUPPRESS a genuinely-absent sibling's finding by forging its value", () => {
+  const envelope = minimalSchemaValidEvent();
+  // span_id starts absent (null) -- correctly "absent" under the presence rule.
+  envelope.span_id = null;
+  // trace_id is a plain accessor property (no Proxy at all). When read, it
+  // forges span_id's value as a side effect, BEFORE span_id's own turn in the
+  // fixed DOCTRINE_CONFORMANCE_ELEMENTS order.
+  Object.defineProperty(envelope, "trace_id", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      envelope.span_id = "FORGED-BY-TRACE-ID-GETTER";
+      return "trace-01";
+    }
+  });
+  const result = assessEnvelopeConformance(envelope);
+  assert.equal(result.ok, true);
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(
+    codes.includes("MISSING_SPAN_ID"),
+    "span_id was genuinely absent; trace_id's getter must not be able to suppress that finding"
+  );
+});
+
+test("N3 PoC B: a plain-object getter cannot FABRICATE a spurious finding for a genuinely-present sibling", () => {
+  const envelope = minimalSchemaValidEvent();
+  // span_id starts genuinely supplied.
+  envelope.span_id = "genuinely-supplied-span-id";
+  // trace_id's getter forges span_id to null (absent) as a side effect,
+  // before span_id's own turn.
+  Object.defineProperty(envelope, "trace_id", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      envelope.span_id = null;
+      return "trace-01";
+    }
+  });
+  const result = assessEnvelopeConformance(envelope);
+  assert.equal(result.ok, true);
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(
+    !codes.includes("MISSING_SPAN_ID"),
+    "span_id was genuinely present; trace_id's getter must not be able to fabricate a MISSING finding for it"
+  );
+});
+
+test("N3 PoC C: a Proxy get-trap (honest ownKeys/getOwnPropertyDescriptor traps) cannot forge a sibling's value either", () => {
+  const target = { ...minimalSchemaValidEvent(), span_id: null };
+  const proxy = new Proxy(target, {
+    // Honest pass-throughs -- isolates the `get`-trap-only vector, exactly as
+    // the independent review's PoC C does.
+    ownKeys(t) {
+      return Reflect.ownKeys(t);
+    },
+    getOwnPropertyDescriptor(t, key) {
+      return Reflect.getOwnPropertyDescriptor(t, key);
+    },
+    get(t, key, receiver) {
+      if (key === "trace_id") {
+        t.span_id = "FORGED-BY-GET-TRAP";
+      }
+      return Reflect.get(t, key, receiver);
+    }
+  });
+  const result = assessEnvelopeConformance(proxy);
+  assert.equal(result.ok, true);
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(
+    codes.includes("MISSING_SPAN_ID"),
+    "a hostile get-trap side effect on an earlier field must not suppress a genuinely-absent sibling's finding"
+  );
+});
+
+test("N3 PoC D: a plain-object getter's inject+delete cannot fabricate presence for the injected key OR suppress the deleted key's finding", () => {
+  const envelope = { ...minimalSchemaValidEvent(), evidence_candidate: true };
+  // trace_id absent from ownKeys at snapshot time is NOT the setup here --
+  // trace_id itself is the accessor doing the damage, defined directly.
+  Object.defineProperty(envelope, "trace_id", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      // Deletes a sibling already captured present at snapshot time...
+      delete envelope.evidence_candidate;
+      // ...and injects a brand-new key not in the snapshot.
+      envelope.span_id = "INJECTED-BY-TRACE-ID-GETTER";
+      return "trace-01";
+    }
+  });
+  const structuralKeys = new Set(Reflect.ownKeys(envelope));
+  assert.ok(structuralKeys.has("evidence_candidate"), "evidence_candidate present at snapshot time");
+  assert.ok(!structuralKeys.has("span_id"), "span_id absent at snapshot time");
+  const result = assessEnvelopeConformance(envelope);
+  assert.equal(result.ok, true);
+  const codes = result.findings.map((finding) => finding.code);
+  assert.ok(
+    codes.includes("MISSING_SPAN_ID"),
+    "N1 (injection): a key not in the structural snapshot cannot be fabricated present"
+  );
+  assert.ok(
+    !codes.includes("MISSING_EVIDENCE_CANDIDATE_FLAG"),
+    "N3 (value): evidence_candidate was genuinely present at snapshot time; a LATER deletion by an earlier " +
+      "field's getter must not retroactively suppress its already-captured presence"
+  );
+});
+
+test("N3 control: non-adversarial fully-conformant and minimal envelopes are unaffected by the descriptor-snapshot mechanism", () => {
+  const conformant = assessEnvelopeConformance(doctrineConformantEvent());
+  assert.equal(conformant.ok, true);
+  assert.deepEqual(conformant.findings, []);
+
+  const minimal = assessEnvelopeConformance(minimalSchemaValidEvent());
+  assert.equal(minimal.ok, true);
+  assert.equal(minimal.findings.length, DOCTRINE_CONFORMANCE_ELEMENTS.length);
 });
 
 test("attack: poisoned Symbol.iterator on the envelope is inert (assessor never iterates the input)", () => {
@@ -507,11 +641,12 @@ const PINNED_BLOBS = Object.freeze({
   "src/control/retry-policy.mjs": "3f7f4134fe47be39d0f9165d4783694ff73f7ec3",
   "src/control/risk-registry.mjs": "b8ee7f9b979fdb3c5d5261ad0e116ecd7c6a1816",
   "tests/risk-registry.test.mjs": "1ea047adbc00ab8a9f5b737be0b67ede01b5583d",
-  // Repinned from 082638c1 by MOD-WSPACE-S3: the workspace-lease schema
-  // registration (G6, 16->17 schemas) is an authorized additive edit to
-  // validate-foundation.mjs. Pin tracks the post-S3 blob so this guard still
-  // detects any UNAUTHORIZED further drift of the validator.
-  "tools/validate-foundation.mjs": "d0ba1e920f295b7522cb7561c2f9e3bfda2093ce",
+  // Repinned from 082638c1 by MOD-WSPACE-S3, then again by MOD-MEM S2: the
+  // memory-record schema registration (17->18 schemas) is an authorized
+  // additive edit to validate-foundation.mjs. Pin tracks the post-MOD-MEM-S2
+  // blob so this guard still detects any UNAUTHORIZED further drift of the
+  // validator.
+  "tools/validate-foundation.mjs": "dbd4d10883e7724aa75301fc7f3b5c9528089726",
   "package.json": "6f91499257a6c441558840e2bfd6acb421e2b0a0"
 });
 

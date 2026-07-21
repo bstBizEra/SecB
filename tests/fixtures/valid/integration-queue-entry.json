@@ -1,0 +1,15 @@
+{
+  "queue_entry_id": "iq_mod_integ_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_mod_integ_s1",
+  "session_id": "ses_local_integ_001",
+  "candidate_branch": "bst/example-candidate-001",
+  "candidate_tip_commit": "0123456789abcdef0123456789abcdef01234567",
+  "base_ref": "main",
+  "declared_write_set": ["src/example", "tests/example"],
+  "status": "SUBMITTED",
+  "submitted_by": "claude-motor-modintegqueue-s1",
+  "submitted_at": "2026-07-21T18:00:00+07:00",
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
