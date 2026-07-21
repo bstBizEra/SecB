@@ -451,10 +451,20 @@ test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE
     "src/control/workspace-lease-policy.mjs",
     "src/control/write-set-policy.mjs"
   ];
-  // Every contract schema EXCEPT the newly added workspace-lease one must be
-  // byte-identical to the base commit — proof this slice touched no other schema.
+  // Every contract schema that EXISTED AT THIS SLICE'S OWN BASE, except the
+  // newly added workspace-lease one, must be byte-identical to that base
+  // commit — proof this slice touched no other schema. Schemas added by
+  // LATER, separately-scoped slices (e.g. MOD-INTEG S1's
+  // integration-queue-entry.schema.json) postdate BASE and are outside this
+  // guard's remit by construction — checked for existence-at-BASE first so a
+  // later additive schema never breaks this test.
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
     if (file === "workspace-lease.schema.json") continue;
+    try {
+      execFileSync("git", ["cat-file", "-e", `${BASE}:contracts/${file}`], { cwd: root, encoding: "utf8" });
+    } catch {
+      continue; // did not exist at BASE — added by a later slice, not this guard's concern
+    }
     guarded.push(`contracts/${file}`);
   }
   for (const rel of guarded) {
