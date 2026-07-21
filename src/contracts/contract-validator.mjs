@@ -18,6 +18,7 @@ const schemaPaths = {
   skillManifest: "skill-manifest.schema.json",
   skillCandidate: "skill-candidate.schema.json",
   goal: "goal.schema.json",
+  delegationRequest: "delegation-request.schema.json",
   checkpoint: "checkpoint.schema.json"
 };
 
