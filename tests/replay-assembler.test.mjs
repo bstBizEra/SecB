@@ -577,7 +577,11 @@ const PINNED_BLOBS = Object.freeze({
   "src/live/event-family-policy.mjs": "75b30a38fc1b4948f9ce586b4b3a7b3e0168ec38",
   "src/ops/scorecard-assembler.mjs": "9be7e9db992b4aa14f0030652c86c58548e0e5f5",
   "src/control/write-set-policy.mjs": "5f1e119c8089ba8250f3596164c0974662587449",
-  "tools/validate-foundation.mjs": "082638c16e0c158d01e61ac067d60f0847633895",
+  // Repinned from 082638c1 by MOD-WSPACE-S3: the workspace-lease schema
+  // registration (G6, 16->17 schemas) is an authorized additive edit to
+  // validate-foundation.mjs. Pin tracks the post-S3 blob so this guard still
+  // detects any UNAUTHORIZED further drift of the validator.
+  "tools/validate-foundation.mjs": "d0ba1e920f295b7522cb7561c2f9e3bfda2093ce",
   "package.json": "6f91499257a6c441558840e2bfd6acb421e2b0a0"
 });
 
