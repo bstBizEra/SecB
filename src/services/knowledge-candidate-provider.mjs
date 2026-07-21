@@ -199,6 +199,16 @@ export function createKnowledgeCandidateProvider({ claimService, linkageService,
         })
       };
     }
+    if (!isPlainObject(currency.claim)) {
+      return {
+        failed: exclude(
+          ref,
+          "KNOWLEDGE_UNRESOLVED",
+          "DENY_LINKAGE_MALFORMED_CLAIM",
+          "Currency walk returned ALLOW with a malformed claim"
+        )
+      };
+    }
     return { claim: currency.claim, contradictions: Array.isArray(currency.contradictions) ? currency.contradictions : [] };
   }
 

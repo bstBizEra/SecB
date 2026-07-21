@@ -260,6 +260,50 @@ test("S3 a non-broken currency denial folds to KNOWLEDGE_UNRESOLVED with its cod
   assert.equal(result.exclusions[0].code, "DENY_TEMPORAL_BOUNDARY");
 });
 
+// Regression: mod-know-s3-second-independent-review-001 finding 3 (LOW). A
+// linkage service that returns ALLOW with current_claim_id === ref but a
+// malformed (undefined) claim must be denied per-ref, never thrown, and must
+// NOT crash the batch for other, well-formed refs alongside it — mirroring
+// resolveClaim's isPlainObject(resolution.claim) guard exactly.
+test("S3 resolveCurrency denies a malformed ALLOW claim per-ref instead of crashing the batch", () => {
+  const kc_ok = baseClaim({ claim_id: "kc_ok" });
+  const claimService = fakeClaimService({
+    kc_bad: { claim: baseClaim({ claim_id: "kc_bad" }) },
+    kc_ok: { claim: kc_ok }
+  });
+  // Hand-built fake linkageService reproducing the reviewer's exact probe:
+  // {decision: "ALLOW", current_claim_id: ref, claim: undefined}.
+  const linkageService = {
+    resolveCurrent(ref) {
+      if (ref === "kc_bad") {
+        return { decision: "ALLOW", code: "CURRENT_RESOLVED", current_claim_id: ref, contradictions: [], claim: undefined };
+      }
+      return { decision: "ALLOW", code: "CURRENT_RESOLVED", current_claim_id: ref, contradictions: [], claim: kc_ok };
+    }
+  };
+  const provider = createKnowledgeCandidateProvider({ claimService, linkageService, now: () => FIXED });
+
+  let result;
+  assert.doesNotThrow(() => {
+    result = provider.toCandidateSources({ project_id: PROJECT, refs: ["kc_bad", "kc_ok"] });
+  }, "malformed claim on ALLOW must never crash toCandidateSources");
+
+  // The whole batch survives: accounting invariant holds, 1 excluded + 1 included.
+  assert.deepEqual(result.accounting, { requested: 2, included: 1, excluded: 1 });
+
+  // kc_bad is cleanly denied per-ref with a typed KNOWLEDGE_UNRESOLVED code.
+  const excluded = result.exclusions.find((e) => e.ref === "kc_bad");
+  assert.ok(excluded, "kc_bad must be excluded, not silently dropped");
+  assert.equal(excluded.reason, "KNOWLEDGE_UNRESOLVED");
+  assert.equal(excluded.code, "DENY_LINKAGE_MALFORMED_CLAIM");
+
+  // The OTHER well-formed ref in the same batch still resolves correctly —
+  // this is the whole point of the fix: isolate the failure per-ref.
+  assert.equal(result.sources.length, 1);
+  assert.equal(result.sources[0].id, "kc_ok");
+  assert.equal(result.sources[0].project_id, PROJECT);
+});
+
 // --- Contested annotation ---------------------------------------------------
 
 test("S3 a contested current claim is INCLUDED but honestly marked verified:false with lowered relevance", () => {
