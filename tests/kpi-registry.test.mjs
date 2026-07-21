@@ -364,18 +364,65 @@ test("purity: module imports nothing and references no I/O, clock, or timers", (
   }
 });
 
-test("purity: nothing in src/ or tools/ imports the registry (unwired)", () => {
+test("purity: the registry's only sanctioned importer is the S2 scorecard-assembler (otherwise unwired)", () => {
+  // GOVERNED GUARD WIDENING — mod-ops-s2-scorecard-rework-001.
+  //
+  // At S1 this guard asserted the registry had ZERO importers across src/ and
+  // tools/ (an empty set). That premise was correct AT S1. It is now superseded
+  // by exactly ONE authorized consumer: S2's scorecard-assembler. Per the OPS
+  // gap assessment (bst/mod-ops-assessment:mod-ops-gap-assessment-001, §4
+  // sequencing), S2 *composes over* S1 — the assembler reads the KPI vocabulary
+  // from the registry — and that inter-slice dependency is the single sanctioned
+  // importer. So `src/ops/scorecard-assembler.mjs` is allowed; nothing else is.
+  //
+  // This assertion is STRICTLY MORE PRECISE than the old zero-importer check,
+  // not weaker: it still fails LOUDLY on ANY unsanctioned importer, and the
+  // registry itself (kpi-registry.mjs) must still stay unwired to every live /
+  // gateway / report path (adoption of the assembler is later, separately
+  // governed work — assessment §5 #4).
+  //
+  // Detection note (rework finding): the assembler's real dependency is the
+  // ESM import on scorecard-assembler.mjs — `import { ... } from
+  // "./kpi-registry.mjs"` — a RELATIVE path with no "ops/" segment. The old
+  // guard grepped the substring "ops/kpi-registry", which matched only the
+  // module's header COMMENT, never that import line. Removing the comment would
+  // therefore have "passed" the old guard while the file still genuinely
+  // imported the registry — a false fix. This guard instead enumerates on the
+  // module BASENAME `kpi-registry`, which catches any real import form
+  // (./kpi-registry.mjs, ../ops/kpi-registry.mjs, src/ops/kpi-registry.mjs)
+  // regardless of importer location, then asserts the importer set is a subset
+  // of the single sanctioned consumer.
+  const SANCTIONED = ["src/ops/scorecard-assembler.mjs"];
   let hits = [];
   try {
     hits = execFileSync(
-      "git", ["grep", "-l", "ops/kpi-registry", "--", "src", "tools"],
+      "git", ["grep", "-l", "kpi-registry", "--", "src", "tools"],
       { cwd: root, encoding: "utf8" }
     ).trim().split(/\r?\n/).filter(Boolean);
   } catch (err) {
-    if (err.status !== 1) throw err; // git grep exits 1 on zero matches — the expected unwired state
+    if (err.status !== 1) throw err; // git grep exits 1 on zero matches
     hits = [];
   }
-  assert.deepEqual(hits, [], "no src/ or tools/ file references the registry module path");
+  // A module is not an "importer" of itself; drop the registry's own file(s).
+  const importers = hits
+    .map((p) => p.replace(/\\/g, "/"))
+    .filter((p) => p !== "src/ops/kpi-registry.mjs");
+  // Every importer must be sanctioned — any OTHER file fails loudly here.
+  const unsanctioned = importers.filter((p) => !SANCTIONED.includes(p));
+  assert.deepEqual(
+    unsanctioned,
+    [],
+    `unsanctioned src/ or tools/ file imports the registry: ${JSON.stringify(unsanctioned)}`
+  );
+  // And the sanctioned consumer's dependency must be a REAL import statement,
+  // not a stray textual mention — so the guard tracks an actual wiring edge and
+  // cannot be satisfied by a comment alone.
+  const assemblerSrc = readFileSync(resolve(root, "src/ops/scorecard-assembler.mjs"), "utf8");
+  assert.match(
+    assemblerSrc,
+    /import\s+[^;]*from\s+["'][^"']*kpi-registry\.mjs["']/,
+    "the sanctioned consumer must actually import the registry module"
+  );
 });
 
 // ============================================================================

@@ -371,6 +371,7 @@
     "tests/kpi-registry.test.mjs",
     "docs/03-project-control/candidates/mod-ops-s1-kpi-registry-rev-001.md",
     "src/ops/scorecard-assembler.mjs",
-    "tests/scorecard-assembler.test.mjs"
+    "tests/scorecard-assembler.test.mjs",
+    "docs/03-project-control/candidates/mod-ops-s2-scorecard-rework-001.md"
   ]
 }
