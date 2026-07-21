@@ -507,6 +507,109 @@ export class EvidenceEnvelopeService {
     });
   }
 
+  // ---- MOD-EVID S3 (R3, additive): accepted-evidence resolver -------------
+  //
+  // Closes G5 (evidence -> decision/knowledge linkage): a citing ref no longer
+  // binds to nothing. resolveAccepted(ref) resolves a bare evidence_id to its
+  // ACCEPTED, chain-verified envelope in the EXACT port shape the two existing
+  // consumers already speak — so the same object binds both:
+  //   (a) knowledge-claim-service's injected `evidenceResolver` port:
+  //         resolveAccepted(ref) -> { ok: true, envelope } | { ok: false, ... }
+  //   (b) temporal-ledgers KnowledgeLedger's `evidenceLookup(ref)` via
+  //       toEvidenceLookup(): (ref) -> envelope | undefined, where the ledger
+  //       identity-binds `envelope.evidence_id === ref` and requires
+  //       verification_status ∈ {VERIFIED, ACCEPTED}.
+  //
+  // REF FORMAT (documented honestly from what exists, NOT invented):
+  //   ref === the bare `evidence_id`. This is FORCED, not chosen:
+  //   temporal-ledgers.mjs identity-binds `evidence.evidence_id !== ref`
+  //   against an envelope whose `evidence_id` is bare (no version), and
+  //   knowledgeClaim.evidence_refs are plain non-empty strings. The SAME ref
+  //   string flows to BOTH the port and the ledger lookup, so an
+  //   `evidence_id@version` ref could never satisfy the existing bare-id
+  //   identity binding — it is therefore rejected as unresolvable, not parsed.
+  //   Version disambiguation is internal: among a ref's ACCEPTED versions the
+  //   resolver binds the highest (latest accepted); a bare id never resolves to
+  //   a superseded/older envelope while a newer accepted one exists.
+  //
+  // LIVE-STATUS PROJECTION (essential correctness point): the registered
+  // envelope content is immutable and keeps its registration-time
+  // verification_status (CAPTURED) forever — the authoritative lifecycle status
+  // lives on the service record. The resolver therefore returns the stored
+  // envelope with its verification_status PROJECTED to the live ACCEPTED status,
+  // so the ledger's ACCEPTED_EVIDENCE_STATUSES check reads the true state, not
+  // the frozen entry marker.
+  //
+  // Fail-closed & non-throwing (port discipline): resolveAccepted RETURNS a
+  // structured deny — never throws — so a resolver fault can only deny a
+  // citation, never crash the citing pipeline. Deny vocabulary is exactly:
+  //   DENY_UNKNOWN_EVIDENCE  — ref blank/non-string or no such registered id
+  //   DENY_NOT_ACCEPTED      — id exists but no ACCEPTED version (carries the
+  //                            actual current status of the latest version)
+  //   DENY_CHAIN_BROKEN      — the accepted envelope fails verifyChain
+  resolveAccepted(ref) {
+    if (isBlank(ref)) {
+      return frozenClone({ ok: false, code: "DENY_UNKNOWN_EVIDENCE", reason: "Evidence ref must be a non-blank evidence_id string" });
+    }
+
+    // Bind by bare evidence_id (the only shape the ledger identity-binds).
+    const matches = [];
+    for (const record of this.#records.values()) {
+      if (record.envelope.evidence_id === ref) matches.push(record);
+    }
+    if (matches.length === 0) {
+      return frozenClone({ ok: false, code: "DENY_UNKNOWN_EVIDENCE", reason: `No registered evidence for ref: ${ref}`, evidenceId: ref });
+    }
+
+    // Latest-first ordering; disambiguate to the highest ACCEPTED version.
+    matches.sort((a, b) => b.envelope.version - a.envelope.version);
+    const accepted = matches.find((record) => record.status === ACCEPTED_STATE);
+    if (!accepted) {
+      const latest = matches[0];
+      return frozenClone({
+        ok: false,
+        code: "DENY_NOT_ACCEPTED",
+        reason: `Evidence ${ref} is not ACCEPTED (latest version ${latest.envelope.version} is ${latest.status})`,
+        evidenceId: ref,
+        version: latest.envelope.version,
+        status: latest.status
+      });
+    }
+
+    // Chain integrity: the accepted envelope must chain-verify green. verifyChain
+    // re-verifies the full durable chain and every ladder receipt for this id;
+    // any tamper/truncation throws and is converted to a structured deny.
+    try {
+      this.verifyChain(ref);
+    } catch (error) {
+      return frozenClone({
+        ok: false,
+        code: "DENY_CHAIN_BROKEN",
+        reason: `Evidence ${ref} v${accepted.envelope.version} failed chain verification: ${error?.message ?? error}`,
+        evidenceId: ref,
+        version: accepted.envelope.version
+      });
+    }
+
+    // Success: the bound envelope with its live ACCEPTED status projected on
+    // (evidence_id === ref, verification_status === ACCEPTED). Frozen so no
+    // consumer can mutate the resolved evidence.
+    const envelope = frozenClone({ ...structuredClone(accepted.envelope), verification_status: ACCEPTED_STATE });
+    return frozenClone({ ok: true, envelope, evidenceId: ref, version: accepted.envelope.version });
+  }
+
+  // temporal-ledgers-compatible adapter: returns the exact function shape
+  // KnowledgeLedger's `evidenceLookup` consumes — (ref) -> envelope | undefined.
+  // Single source of truth: it delegates to resolveAccepted, returning the
+  // bound accepted envelope on success and a falsy value on any deny (the
+  // ledger converts falsy to its verbatim DENY_EVIDENCE_CHAIN boundary).
+  toEvidenceLookup() {
+    return (ref) => {
+      const resolution = this.resolveAccepted(ref);
+      return resolution.ok === true ? resolution.envelope : undefined;
+    };
+  }
+
   // ---- shared internals for the S2 ladder ---------------------------------
 
   #assertIdentity(evidenceId, version) {
