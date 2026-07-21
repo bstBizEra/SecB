@@ -363,11 +363,91 @@ test("a non-object lease fails closed as DENY_LEASE_MALFORMED (deny-by-default)"
   }
 }));
 
+// --- Single-writer TOCTOU fix (mod-wspace-s3-single-writer-toctou-fix-001) --
+//
+// Regression for docs/03-project-control/candidates/
+// mod-wspace-s3-second-independent-review-001.md §3: the single-writer gate
+// used to scan via an unlocked `this.read()` called BEFORE `this.append(...)`,
+// so a caller whose pre-check ran against a stale view (here: the PUBLIC
+// `read()` accessor overridden to return a stale/empty snapshot) but whose
+// write used a correctly-fresh `expectedSequence` could land two
+// simultaneously-active leases for one session. The fix moves the scan inside
+// DurableLedger.append's own lock via a `preWriteCheck` hook, so the gate no
+// longer calls `read()` at all — overriding it now has no effect.
+
+test("single-writer gate is now atomic with the write: overriding the public read() accessor to fake a stale view no longer lets a second active lease land for the same session (regression, second-independent-review §3)", () => withTempLedger((directory) => {
+  const path = join(directory, "leases.ndjson");
+
+  // "Process A": real, unmodified path. Chain length -> 1.
+  const a = new WorkspaceLeaseLedger({ filePath: path });
+  const appendedA = a.appendLease(
+    lease({ lease_id: "wl_A", session_id: "ses_race" }),
+    { expectedSequence: 0, idempotencyKey: "idem_A", now: WITHIN }
+  );
+  assert.equal(appendedA.ok, true);
+
+  // "Process B": fresh instance, same file. Reproduce the reviewer's PROBE1 —
+  // override the PUBLIC read() accessor used only by the (former) unlocked
+  // pre-check to return a stale/empty view, while `expectedSequence` is
+  // sourced correctly/freshly (1), exactly matching the reviewer's scenario of
+  // "the second writer's expectedSequence sourced independently of a read
+  // taken at the exact same instant as its own single-writer check."
+  const b = new WorkspaceLeaseLedger({ filePath: path });
+  b.read = () => { throw new Error("stale/hostile read() must not be consulted by the single-writer gate"); };
+
+  const resultB = b.appendLease(
+    lease({ lease_id: "wl_B", session_id: "ses_race" }),
+    { expectedSequence: 1, idempotencyKey: "idem_B", now: WITHIN }
+  );
+
+  // Correctly denied now, instead of the pre-fix bypass (bResult.ok === true).
+  assert.equal(resultB.ok, false);
+  assert.equal(resultB.code, "DENY_LEASE_SINGLE_WRITER");
+  assert.equal(resultB.conflictingLeaseId, "wl_A");
+  assert.equal(resultB.sessionId, "ses_race");
+
+  // Only wl_A was ever persisted — no second active lease landed for ses_race.
+  const reopened = new WorkspaceLeaseLedger({ filePath: path });
+  assert.equal(reopened.verify().count, 1);
+}));
+
+test("the ordinary, non-racing case is unaffected by the fix: a ledger whose read() accessor is overridden to throw still allows a legitimate, non-conflicting append (no false deny introduced)", () => withTempLedger((directory) => {
+  const path = join(directory, "leases.ndjson");
+  const ledger = new WorkspaceLeaseLedger({ filePath: path });
+  ledger.read = () => { throw new Error("the single-writer gate must never call read() anymore"); };
+
+  const appended = ledger.appendLease(
+    lease({ lease_id: "wl_solo", session_id: "ses_solo" }),
+    { expectedSequence: 0, idempotencyKey: "idem_solo", now: WITHIN }
+  );
+  assert.equal(appended.ok, true);
+  assert.equal(appended.record.sequence, 1);
+
+  // A legitimate renewal (same lease_id, higher version) for the same session
+  // also still succeeds — same-writer re-append is never a conflict.
+  const renewed = ledger.appendLease(
+    lease({ lease_id: "wl_solo", session_id: "ses_solo", version: 2, expires_at: "2026-07-21T11:00:00+07:00", ttl: Date.parse("2026-07-21T11:00:00+07:00") - ISSUED_MS }),
+    { expectedSequence: 1, idempotencyKey: "idem_solo_v2", now: WITHIN }
+  );
+  assert.equal(renewed.ok, true);
+  assert.equal(renewed.record.sequence, 2);
+}));
+
 // --- Byte-identity guard: this additive slice modified no file it read -------
 
-test(`byte-identity: base ledger, lease primitive, and all OTHER contracts unchanged vs ${BASE}`, () => {
+test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE}`, () => {
+  // NOTE: src/ledger/durable-ledger.mjs is DELIBERATELY EXCLUDED from this
+  // guard as of mod-wspace-s3-single-writer-toctou-fix-001. This slice's
+  // original scope was purely additive against the base class; the TOCTOU fix
+  // (see the SCOPE NOTE in workspace-lease-ledger.mjs and the producer
+  // verification record mod-wspace-s3-single-writer-toctou-fix-producer-
+  // verification-001.md) legitimately extends DurableLedger.append with an
+  // optional `preWriteCheck` hook. That change is covered by its own direct
+  // tests in tests/durable-ledger.test.mjs and is behavior-preserving for
+  // every OTHER subclass (CheckpointLedger, DelegationLedger, EventLedger,
+  // EvidenceLedger, DecisionLedger, KnowledgeLedger, OutcomeLedger), none of
+  // which pass `preWriteCheck` and so see byte-for-byte identical behavior.
   const guarded = [
-    "src/ledger/durable-ledger.mjs",
     "src/control/workspace-lease-policy.mjs",
     "src/control/write-set-policy.mjs"
   ];
