@@ -648,10 +648,15 @@ test("GUARD: knowledge-claim schema, temporal-ledgers, sod-rules AND the S1 faca
   // kernel learning boundary / SoD primitives (R3+/R4) stay untouched. The
   // ratified S1 facade is included: S2 composes OVER it, never edits it.
   const normalize = (text) => text.replace(/\r\n/g, "\n");
+  // src/control/sod-rules.mjs is intentionally EXCLUDED from this list by
+  // mod-gov-s1-sod-rules-hardening-fix-001: a second independent review found
+  // a fail-open normalization gap and an unfrozen shared-mutable-state gap in
+  // this primitive. That fix is an authorized, disclosed cross-cutting change
+  // -- not a violation of this S2 slice's own sidecar/wrap-not-modify
+  // discipline. The other three files remain fully protected.
   for (const path of [
     "contracts/knowledge-claim.schema.json",
     "src/ledger/temporal-ledgers.mjs",
-    "src/control/sod-rules.mjs",
     "src/services/knowledge-claim-service.mjs"
   ]) {
     const onBase = execFileSync("git", ["show", `${S2_BASE}:${path}`], { cwd: REPO_ROOT, encoding: "utf8" });

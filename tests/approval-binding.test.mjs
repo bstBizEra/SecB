@@ -696,8 +696,14 @@ test("F2: the two colliding binds produce DISTINCT evidence_refs entries", () =>
 // (the candidate's base) AND current main @ 71b9d41. Any drift fails here.
 
 const BYTE_IDENTITY_BASELINES = ["beebfe8", "71b9d41"];
+// src/control/sod-rules.mjs is intentionally EXCLUDED here by
+// mod-gov-s1-sod-rules-hardening-fix-001: a second independent review found
+// a fail-open normalization gap and an unfrozen shared-mutable-state gap in
+// this primitive (see mod-gov-s1-sod-rules-hardening-fix-producer-verification-001.md).
+// That fix is an authorized, disclosed cross-cutting change to this file --
+// not drift this guard should protect against. The other four files remain
+// fully protected.
 const PROTECTED_SOURCE_FILES = [
-  "src/control/sod-rules.mjs",
   "src/control/risk-registry.mjs",
   "src/control/policy-decision-point.mjs",
   "src/gateway/capability-registry-service.mjs",
