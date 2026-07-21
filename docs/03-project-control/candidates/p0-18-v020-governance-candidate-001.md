@@ -124,7 +124,7 @@ approval is fabricated.
 ### Verification results (this candidate)
 
 - `npm run validate` → **exit 0** (17 schemas: 7 canonical bootstrap + 10 governed extensions).
-- `npm test` full suite → **1116 tests / 1113 pass / 0 fail / 3 skipped**
+- `npm test` full suite → **1123 tests / 1120 pass / 0 fail / 3 skipped**
   (baseline was 1115 / 1113 / 0 / 2). Delta: +7 passing V-020 adversarial/
   negative/byte-identity cases and +1 honest pending skip (the activation-gated
   positive half).
