@@ -340,6 +340,8 @@
     "src/control/retry-policy.mjs",
     "tests/retry-policy.test.mjs",
     "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md",
-    "docs/03-project-control/candidates/mod-reg-f-ver-f-idnorm-fix-rev-001.md"
+    "docs/03-project-control/candidates/mod-reg-f-ver-f-idnorm-fix-rev-001.md",
+    "docs/03-project-control/candidates/mod-reg-human-gov-disposition-candidate-001.md",
+    "docs/03-project-control/candidates/mod-reg-gov-disposition.yaml"
   ]
 }
