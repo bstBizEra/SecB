@@ -99,3 +99,76 @@ self_certification:
   approval_authority: false
   ready_for_operator_review: true
 ```
+
+---
+
+## Addendum 001: grant.history VALUE-shape fast-follow (S3-N1, one level deeper)
+
+- record_id: MOD-GOV-S3-PDP-GRANT-SHAPE-FIX-PRODUCER-VERIFICATION-001-ADD-001
+- status: CANDIDATE (advisory work product; operator ratification required — no push, no merge, no live branch touched)
+- producer: claude-motor (BST-SA motor role: execution planning, implementation, receipts)
+- team_id: BST-SA
+- worker role: advisory/implementation only. This session neither approves nor authorizes merge/production.
+- branch: `bst/mod-gov-s3-pdp-grant-shape-fix-001` (built on top of `2ee971c`, not a new branch)
+- source finding: `docs/03-project-control/candidates/mod-gov-s3-pdp-grant-shape-fix-independent-review-001.md` (independent review of the fix above, commit `2ee971c`), §2b "RESIDUAL GAP CONFIRMED"
+- reviewer of the prior fix: claude (REV/SEC role), verdict APPROVE_WITH_NOTES with this one open item
+
+### Extends, does not restate
+
+This addendum does not rewrite anything above. The original fix (`507b24d`), fast-follow (`95bdbcc`), and this producer-verification record's account of them stand unchanged. This addendum covers only the second-layer gap the independent review found in the fix described above.
+
+### Root cause (one level deeper than the original fix)
+
+The original fix validates `grant.history` **key names** against the closed vocabulary (`producer`/`reviewer`/`qa`/`evidenceVerifier`) but not key **values**. `sod-rules.mjs`'s `collectProhibited()` adds any truthy `history[key]` value to the prohibited set AS-IS:
+
+```js
+// sod-rules.mjs, collectProhibited()
+} else if (value) {
+  prohibited.add(value);        // a truthy non-string value (object, number) is added AS-IS
+}
+```
+
+`prohibited.has(actorId)` then compares by strict equality. A syntactically valid key (e.g. `"producer"`) paired with a malformed value — an object such as `{ agentInstanceId: "agent-x-01" }`, or a number — can never strictly-equal the string `actor_id` the PDP is checking, so a genuine same-actor prohibition silently never fires. This reproduces the identical S3-N1 silent-ALLOW bug class one level deeper than the key-shape check reaches.
+
+### The fix
+
+In `src/control/policy-decision-point.mjs`, inside the existing `isPlainObject(grant.history)` block (same fail-fast location as the key-vocabulary check, still strictly before the SoD `try` block), added a second check: every one of `grant.history`'s own (already-vocabulary-validated) keys must have a value that is either a non-blank string, or an Array/Set whose every element is a non-blank string. This is the same actor-id convention already used elsewhere in this codebase — `sod-rules.mjs`'s `checkProhibitedActors()` (`typeof actorId !== "string" || actorId.length === 0` denies as malformed) and this same file's own `isBlank()` helper (`typeof value !== "string" || value.trim() === ""`) — not a new, invented format. Any value that fails this check denies with the **same** `DENY_MALFORMED_GRANT_SHAPE` code used by the key-shape check, since this is the same bug class, not a new one; the reason string names the offending key(s). An empty Array/Set value is accepted (vacuously well-formed — no actors named, no restriction), matching `collectProhibited()`'s own treatment of an empty collection.
+
+No other file changed. `sod-rules.mjs` remains read-only imported, not modified.
+
+### Regression tests (reviewer's exact scenario, reproduced first-hand)
+
+Added to `tests/policy-decision-point.test.mjs`:
+
+- **Reviewer's exact scenario**: `history: { producer: { agentInstanceId: "agent-x-01" } }`, requester `actor_id: "agent-x-01"`, role `REV` — pre-fix (confirmed by reading the unpatched value-consumption path) this returns `ALLOW`; post-fix this returns `DENY` / `DENY_MALFORMED_GRANT_SHAPE`. **Closed.**
+- Same scenario with a number (`producer: 12345`) instead of an object — same closure.
+- `producer` as a blank/whitespace-only string — denies as malformed rather than silently falling through as "no restriction."
+- `producer` as an Array containing one well-formed and one malformed (object) entry — denies (any malformed element inside a collection value still denies).
+- Well-shaped values unaffected: a plain actor-id string reproduces the reviewer's scenario A shape and still denies via the real `DENY_SOD` path (not swallowed as a false `DENY_MALFORMED_GRANT_SHAPE`).
+- Well-shaped Array/Set-of-actor-id-string values are still accepted with no new false denial.
+- An empty Array value is accepted (no actors named, no restriction) with no new false denial.
+
+### Test counts
+
+- Module file (`tests/policy-decision-point.test.mjs`): **36 tests (before this addendum) -> 43 tests (after, +7 new)**, all passing both before and after.
+- Full repo suite (`node --test tests/*.test.mjs`), re-run in this same worktree both before and after this addendum's change:
+  - **Before**: 1106 tests / 1101 pass / 0 fail / 5 skip (matches the independent review's independently-reproduced count exactly).
+  - **After**: 1113 tests / 1108 pass / 0 fail / 5 skip.
+- `node tools/validate-foundation.mjs`: exit 0 both before and after (no FAIL entries).
+- Hardcoded test-ID branching: none found — re-grepped `src/control/policy-decision-point.mjs` and `src/` broadly for actor-id/decision-id literals and `NODE_ENV`/test-mode conditionals; no matches outside inert doc comments.
+
+### Status
+
+- Local commit only on `bst/mod-gov-s3-pdp-grant-shape-fix-001`, built directly on top of `2ee971c` (same branch, not a new one). No push, no merge, no operator ratification yet.
+- Still UNWIRED — no change to the PDP's export surface, no new deny code (reuses `DENY_MALFORMED_GRANT_SHAPE`), no new import anywhere, `state-machine.mjs` untouched.
+- The independent review's other findings (§2c empty-array-vs-undefined, §2d sibling-collaborator check, §2e fail-fast ordering, §2.4 cross-primitive snapshot gap deferred to K-14) are unaffected by and out of scope for this addendum; none of them called for a code change.
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: claude-rev-sec
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```

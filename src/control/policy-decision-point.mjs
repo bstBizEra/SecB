@@ -24,7 +24,13 @@
 //     mod-gov-s2-s3-second-independent-review-001): `grantResolver`'s
 //     `roles` must be an Array or Set, and `history` must be a plain object
 //     keyed ONLY from the vocabulary `producer`/`reviewer`/`qa`/
-//     `evidenceVerifier` (S1's AUTHORIZE_TIME_LADDER convention). Any other
+//     `evidenceVerifier` (S1's AUTHORIZE_TIME_LADDER convention), and each
+//     PRESENT history value must itself be a well-formed actor-id (a
+//     non-blank string, or an Array/Set of non-blank strings) — a
+//     syntactically valid key paired with a malformed VALUE (an object, a
+//     number) reproduces the identical bug one level deeper (S3-N1,
+//     independent review of the fix,
+//     mod-gov-s3-pdp-grant-shape-fix-independent-review-001 §2b). Any other
 //     shape denies with DENY_MALFORMED_GRANT_SHAPE — it is never silently
 //     coerced to "absent/empty", because that coercion is what let a
 //     malformed or differently-keyed grantResolver output silently disable
@@ -363,6 +369,36 @@ export function createPolicyDecisionPoint({
         return deny(
           "DENY_MALFORMED_GRANT_SHAPE",
           `grantResolver returned grant.history with unrecognized key(s): ${unknownHistoryKeys.join(", ")}`,
+          grant.decisionId
+        );
+      }
+      // Validate each PRESENT key's VALUE, not just its name (S3-N1, one
+      // level deeper: mod-gov-s3-pdp-grant-shape-fix-independent-review-001
+      // §2b). sod-rules.mjs's collectProhibited() adds a truthy history
+      // value to the prohibited set AS-IS, whatever its type, then compares
+      // it to the requester's actor_id by strict equality. A syntactically
+      // valid key (e.g. "producer") paired with a malformed value -- an
+      // object, a number, anything that is not itself an actor-id string or
+      // a collection of actor-id strings -- can never strictly-equal that
+      // string actor_id, so a genuine same-actor prohibition silently never
+      // fires. That is the identical silent-ALLOW bug class the key-name
+      // check above exists to close, reproduced one level deeper, so it
+      // denies with the SAME code, not a new one. Same actor-id convention
+      // already used by sod-rules.mjs's checkProhibitedActors() (a
+      // non-empty string) and this file's own isBlank(): a non-blank
+      // string, or an Array/Set of non-blank strings.
+      const isWellFormedActorId = (value) => !isBlank(value);
+      const isWellFormedHistoryValue = (value) =>
+        Array.isArray(value) || value instanceof Set
+          ? [...value].every(isWellFormedActorId)
+          : isWellFormedActorId(value);
+      const malformedHistoryValueKeys = Object.keys(grant.history).filter(
+        (key) => !isWellFormedHistoryValue(grant.history[key])
+      );
+      if (malformedHistoryValueKeys.length > 0) {
+        return deny(
+          "DENY_MALFORMED_GRANT_SHAPE",
+          `grantResolver returned grant.history with malformed value(s) for key(s): ${malformedHistoryValueKeys.join(", ")} (each must be a non-blank actor-id string, or an Array/Set of non-blank actor-id strings)`,
           grant.decisionId
         );
       }

@@ -325,6 +325,123 @@ test("grant.history that is an array (not a plain object) denies with DENY_MALFO
   assert.equal(result.code, "DENY_MALFORMED_GRANT_SHAPE");
 });
 
+// --- Grant-history VALUE-shape validation (S3-N1, one level deeper) ---------
+//
+// Reproduces mod-gov-s3-pdp-grant-shape-fix-independent-review-001's §2b
+// finding exactly: the key-shape fix above validates `grant.history` key
+// NAMES against the closed vocabulary but not key VALUES. A syntactically
+// valid key (e.g. "producer") paired with a malformed value reproduces the
+// identical silent-bypass bug class the key-shape fix exists to close:
+// sod-rules.mjs's collectProhibited() adds any truthy value to the
+// prohibited set AS-IS, so a non-string value can never strictly-equal the
+// requester's actor_id and the prohibition silently never fires.
+
+test("reviewer's exact scenario: grant.history.producer as an object (not an actor-id string) must deny, not silently ALLOW", () => {
+  // Requester genuinely IS the recorded producer (actor_id "agent-x-01"),
+  // but the grantResolver emits the fact as { agentInstanceId: "agent-x-01" }
+  // instead of the plain string "agent-x-01". Before this fix,
+  // collectProhibited() would add that object (truthy) to the prohibited
+  // set, prohibited.has("agent-x-01") would be false (object !== string),
+  // and the genuine same-actor conflict would silently ALLOW.
+  const grantResolver = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: { agentInstanceId: "agent-x-01" } }
+  });
+  const pdp = createPolicyDecisionPoint(happyResolvers({ grantResolver }));
+  const result = pdp.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(result.decision, "DENY");
+  assert.equal(result.code, "DENY_MALFORMED_GRANT_SHAPE");
+  assert.match(result.reason, /producer/);
+});
+
+test("grant.history.producer as a number (not an actor-id string) must deny, not silently ALLOW", () => {
+  const grantResolver = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: 12345 }
+  });
+  const pdp = createPolicyDecisionPoint(happyResolvers({ grantResolver }));
+  const result = pdp.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(result.decision, "DENY");
+  assert.equal(result.code, "DENY_MALFORMED_GRANT_SHAPE");
+});
+
+test("grant.history.producer as a blank string must deny as malformed, not silently treat as no restriction", () => {
+  const grantResolver = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: "   " }
+  });
+  const pdp = createPolicyDecisionPoint(happyResolvers({ grantResolver }));
+  const result = pdp.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(result.decision, "DENY");
+  assert.equal(result.code, "DENY_MALFORMED_GRANT_SHAPE");
+});
+
+test("grant.history.producer as an Array containing a malformed (non-string) entry must deny", () => {
+  const grantResolver = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: ["agent-other-01", { agentInstanceId: "agent-x-01" }] }
+  });
+  const pdp = createPolicyDecisionPoint(happyResolvers({ grantResolver }));
+  const result = pdp.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(result.decision, "DENY");
+  assert.equal(result.code, "DENY_MALFORMED_GRANT_SHAPE");
+});
+
+test("well-shaped grant.history values (plain actor-id strings) remain unaffected: real conflict still denies via DENY_SOD", () => {
+  const grantResolver = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: "agent-x-01" }
+  });
+  const pdp = createPolicyDecisionPoint(happyResolvers({ grantResolver }));
+  const result = pdp.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(result.decision, "DENY");
+  assert.equal(result.code, "DENY_SOD");
+});
+
+test("well-shaped grant.history values (Array/Set of actor-id strings) remain unaffected: no false denial", () => {
+  const grantResolverArray = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: ["agent-other-01", "agent-other-02"] }
+  });
+  const pdpArray = createPolicyDecisionPoint(happyResolvers({ grantResolver: grantResolverArray }));
+  const resultArray = pdpArray.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(resultArray.decision, "ALLOW");
+
+  const grantResolverSet = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: new Set(["agent-other-01"]) }
+  });
+  const pdpSet = createPolicyDecisionPoint(happyResolvers({ grantResolver: grantResolverSet }));
+  const resultSet = pdpSet.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(resultSet.decision, "ALLOW");
+});
+
+test("an empty Array grant.history value is well-shaped (no actors named, no restriction) — not a false denial", () => {
+  const grantResolver = () => ({
+    allowed: true,
+    decisionId: "dec_grant_001",
+    roles: ["REV"],
+    history: { producer: [] }
+  });
+  const pdp = createPolicyDecisionPoint(happyResolvers({ grantResolver }));
+  const result = pdp.decide(request({ role: "REV", actor_id: "agent-x-01" }));
+  assert.equal(result.decision, "ALLOW");
+});
+
 test("a throwing SoD collaborator denies with DENY_SOD", () => {
   const sodRules = {
     normalizeRole: () => { throw new Error("sod down"); },
