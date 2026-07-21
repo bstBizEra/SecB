@@ -132,6 +132,59 @@ import { checkProhibitedActors } from "../control/sod-rules.mjs";
 // payload.next_status is cross-checked against that derived target rather
 // than trusted on its own -- so a forged REJECTED/ACCEPTED next_status is
 // denied even when paired with a superficially-legal verdict.
+//
+// ENVELOPE-ESTABLISHMENT CONVERGENCE (round-4 fast-follow, independent
+// review of the round-3 convergence fix above, docs/03-project-control/
+// candidates/mod-evid-s2-s3-rehydration-guard-parity-fix-independent-review-001.md,
+// section 6): round 3 converged rehydration with every live method's
+// TRANSITION guard, but every one of those guards only ever runs on a
+// record that ALREADY EXISTS in #records. None of them cover the one
+// event that CREATES a record in the first place. On the live path,
+// registerEnvelope() is that creation gate -- schema validation (18
+// required fields, closed object), a content_hash recomputation check,
+// and a forge-on-entry check that verification_status is the ladder's
+// one entry state -- and it runs BEFORE any record is ever admitted.
+// registerEnvelope() itself never reaches the durable ledger (see the
+// SCOPE NOTE above), so in the ledger-only world #rehydrate() replays,
+// the first EVIDENCE_SEAL entry for a given (evidence_id, version) key
+// is the SOLE durable proxy for that entire creation event -- yet
+// #rehydrate()'s SEAL branch was, until this fix, gating that first
+// sighting on nothing but "does envelope.evidence_id/version look like
+// a string/integer" (see the loose pre-check below the fold's opening
+// line). An actor with direct DurableLedger.append() access could
+// therefore inject a single, wholly fabricated EVIDENCE_SEAL entry --
+// missing most required envelope fields, an arbitrary non-matching
+// content_hash, any actor_id of their choosing -- for an identity that
+// was NEVER registered through registerEnvelope() at all, and it
+// rehydrated as a fully legitimate SEALED record; three more
+// forged-but-internally-consistent entries walked it all the way to
+// ACCEPTED, with resolveAccepted() (the real S3 consumption port)
+// returning ok: true for a completely fabricated record. The SoD checks
+// provided no protection because the attacker also controls `producer`
+// via the fabricated envelope's own actor_id -- there was no
+// independently-anchored identity anywhere once the founding envelope
+// itself was unverified. This is a materially different, and more
+// severe, axis than the round-3 residual (which assumes the established
+// envelope is trustworthy and only asks whether a LATER entry's embedded
+// copy matches it): this gap is in the establishment itself.
+//
+// FIX (same "single source of truth" principle as round 3, applied one
+// level earlier): registerEnvelope()'s full creation-time validation --
+// schema gate, content_hash self-consistency, forge-on-entry check -- is
+// now factored into one shared private method, #assertEnvelopeEstablishment,
+// called by BOTH registerEnvelope() (its own live argument) AND
+// #rehydrate()'s EVIDENCE_SEAL branch, but ONLY on true first sighting of
+// a key (no existing record) -- exactly the one point at which a
+// legitimate registerEnvelope() call would ever have had to occur for
+// that identity to reach the ledger at all. A second EVIDENCE_SEAL entry
+// for an ALREADY-established key is not re-subjected to this guard (an
+// established record's envelope is immutable, exactly as on the live
+// path, where registerEnvelope() can only ever be called once per key);
+// it is instead denied unconditionally by #assertSealTransition, because
+// STATE_MACHINES.Evidence makes SEALED reachable from CAPTURED alone --
+// no already-advanced status has an edge back to SEALED -- so a forged
+// re-seal attempting to swap an established envelope's content can never
+// pass the pre-existing transition guard regardless of this fix.
 
 const EVIDENCE_MACHINE = STATE_MACHINES.Evidence;
 const REACHABLE_STATES = new Set(Object.values(EVIDENCE_MACHINE).flat());
@@ -285,6 +338,23 @@ export class EvidenceEnvelopeService {
         // ever write, rather than either trusting it verbatim (the round-2
         // gap) or silently substituting the literal and continuing.
         const existing = this.#records.get(key);
+
+        // ENVELOPE-ESTABLISHMENT GUARD (round-4 fast-follow, see header
+        // comment): on TRUE first sighting of this key (no existing
+        // record), this SEAL entry's embedded envelope is the only
+        // ledger-visible proxy for a legitimate registerEnvelope() call,
+        // so it must pass the SAME schema/content-hash/forge-on-entry
+        // guard registerEnvelope() itself calls -- BEFORE the transition
+        // guard below, mirroring the live path where registration always
+        // precedes sealing. An already-established key's SEAL entry
+        // never re-runs this (an established envelope is immutable, same
+        // as live); it is denied unconditionally by #assertSealTransition
+        // instead, because SEALED has no inbound edge except from
+        // CAPTURED.
+        if (!existing) {
+          this.#assertEnvelopeEstablishment(envelope);
+        }
+
         const fromStatus = existing ? existing.status : entryState;
         this.#assertSealTransition(fromStatus, line.entry.payload.sealed_status);
 
@@ -378,30 +448,14 @@ export class EvidenceEnvelopeService {
       deny("DENY_MALFORMED_REQUEST", "Evidence envelope must be an object");
     }
 
-    // Schema gate first: the evidenceEnvelope contract kind must exist and
-    // the candidate must satisfy it (closed object, 18 required fields).
-    this.#validate("evidenceEnvelope", envelope);
+    // Full creation-time validation (schema gate, content_hash
+    // self-consistency, forge-on-entry status check), shared with
+    // #rehydrate()'s EVIDENCE_SEAL first-sighting branch (round-4
+    // convergence fix, see header comment's "ENVELOPE-ESTABLISHMENT
+    // CONVERGENCE" note).
+    this.#assertEnvelopeEstablishment(envelope);
 
-    // Self-verification: recompute content_hash over the envelope with the
-    // hash excluded (repo-wide convention). NOTE (honesty): the caller
-    // controls both envelope and hash, so this is tamper-evidence for the
-    // STORED envelope, not registration-time source authentication.
-    const { content_hash, ...sealBody } = envelope;
-    if (fingerprint(sealBody) !== content_hash) {
-      deny("DENY_CONTENT_HASH_MISMATCH", "Envelope content_hash does not match the server recomputation");
-    }
-
-    // Forge-on-entry guard: registration admits ONLY the ladder's start
-    // state. Any caller-supplied advanced status (SEALED, VERIFIED,
-    // ACCEPTED, ...) is a forged lifecycle claim, not a registration.
     const [entryState] = ENTRY_STATES;
-    if (envelope.verification_status !== entryState) {
-      deny(
-        "DENY_STATUS_FORGERY",
-        `Registration requires verification_status ${entryState}; got ${envelope.verification_status}`
-      );
-    }
-
     const key = recordKey(envelope.evidence_id, envelope.version);
     if (this.#records.has(key)) {
       deny("DENY_DUPLICATE", `Evidence already registered: ${envelope.evidence_id} v${envelope.version}`);
@@ -869,6 +923,53 @@ export class EvidenceEnvelopeService {
   #assertEdge(from, to) {
     if (!EVIDENCE_MACHINE[from]?.includes(to)) {
       deny("DENY_UNDEFINED_TRANSITION", `Evidence cannot transition from ${from} to ${to}`);
+    }
+  }
+
+  // ---- shared transition guards (round-3 convergence fix) -----------------
+  //
+  // Single source of truth for each ladder edge's FULL legality, not just its
+  // graph-edge legality: every live ladder method below calls exactly one of
+  // these with its own live arguments, and #rehydrate() calls the SAME
+  // method with values folded from the ledger entry's payload plus the
+  // currently-accumulated record. See the header comment's "TRANSITION-GUARD
+  // CONVERGENCE" note for the full rationale. Each method either returns
+  // (silently, or with the derived target status) or throws via deny() —
+  // never returns a "denied" value, matching this file's fail-closed
+  // convention throughout.
+
+  // ---- shared envelope-establishment guard (round-4 convergence fix) ------
+  //
+  // registerEnvelope()'s full creation-time validation, factored out so
+  // #rehydrate()'s EVIDENCE_SEAL first-sighting branch can replay the exact
+  // same scrutiny a live registration would have received. See the header
+  // comment's "ENVELOPE-ESTABLISHMENT CONVERGENCE" note. Throws via deny()
+  // on any failure; never returns a "denied" value.
+  #assertEnvelopeEstablishment(envelope) {
+    // Schema gate first: the evidenceEnvelope contract kind must exist and
+    // the candidate must satisfy it (closed object, all required fields).
+    this.#validate("evidenceEnvelope", envelope);
+
+    // Self-verification: recompute content_hash over the envelope with the
+    // hash excluded (repo-wide convention). NOTE (honesty): the caller
+    // (or, in the rehydration fold, whoever appended the ledger entry)
+    // controls both envelope and hash, so this is tamper-evidence for the
+    // STORED envelope, not source authentication.
+    const { content_hash, ...sealBody } = envelope;
+    if (fingerprint(sealBody) !== content_hash) {
+      deny("DENY_CONTENT_HASH_MISMATCH", "Envelope content_hash does not match the server recomputation");
+    }
+
+    // Forge-on-entry guard: establishment admits ONLY the ladder's start
+    // state. Any envelope carrying an advanced status (SEALED, VERIFIED,
+    // ACCEPTED, ...) at the point of establishment is a forged lifecycle
+    // claim, not a genuine registration.
+    const [entryState] = ENTRY_STATES;
+    if (envelope.verification_status !== entryState) {
+      deny(
+        "DENY_STATUS_FORGERY",
+        `Registration requires verification_status ${entryState}; got ${envelope.verification_status}`
+      );
     }
   }
 

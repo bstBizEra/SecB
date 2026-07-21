@@ -234,3 +234,88 @@ self_certification:
 Advisory only. This addendum certifies the producer-side verification of the round-3 transition-guard convergence fast-follow is complete and reports it for operator/independent-review disposition. It does not itself authorize, merge, push, or ratify. Operator authority remains sole.
 
 *Provenance — source: round-3 independent review of the rehydration edge-legality fast-follow (`72dc4f4`, reviewer `claude-rev-modevid-s2s3-rehydration-edge-legality-fix-independent-01`) §5 finding, fixed on the same branch `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (on top of `72dc4f4`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*
+
+---
+
+## Addendum 3: round-4 envelope-establishment convergence fast-follow (independent review of the round-3 fix, closed) — exhaustive entry-type audit
+
+**Reviewer:** claude-rev-modevid-s2s3-rehydration-guard-parity-fix-independent-01 (BST-SA independent worker, advisory-only), record `docs/03-project-control/candidates/mod-evid-s2-s3-rehydration-guard-parity-fix-independent-review-001.md` @ `7aa7930`, verdict **REQUEST_CHANGES** (all four round-3 variants confirmed genuinely closed; one new escalation-class gap found, outside round 3's own scope).
+**Fixed by:** claude-motor (this producer), same branch, on top of `7aa7930`.
+
+### Root cause
+
+The reviewer's §6 finding: round 3 converged rehydration with every live method's *transition* guard, but every one of those four guards (`#assertSealTransition`, `#assertRequestVerificationTransition`, `#assertRecordVerificationTransition`, `#assertAcceptEvidenceTransition`) only ever runs on a record that **already exists** in `#records`. None of them cover the event that **creates** a record in the first place. On the live path, `registerEnvelope()` is that creation gate — full schema validation (17 required fields, closed object per `contracts/evidence-envelope.schema.json`), a `content_hash` recomputation cross-check, and a forge-on-entry check that `verification_status` is the ladder's one entry state (`CAPTURED`) — and it runs before any record is ever admitted. `registerEnvelope()` itself never reaches the durable ledger (the pre-existing, disclosed SCOPE NOTE, unchanged by any round), so in the ledger-only world `#rehydrate()` replays, the **first `EVIDENCE_SEAL` entry** for a given `(evidence_id, version)` key is the *sole* durable proxy for that entire creation event. Pre-fix, `#rehydrate()`'s only gate on that first sighting was `!envelope || typeof envelope.evidence_id !== "string" || !Number.isInteger(envelope.version)` — no schema check, no content-hash check, no forge-on-entry check.
+
+I independently reproduced the reviewer's exact construction: a single forged `EVIDENCE_SEAL` entry for a never-registered identity, with a 5-field envelope (missing 12 of 17 required fields) and `content_hash: "deadbeef".repeat(8)` (valid hex, not a fingerprint of anything), rehydrated pre-fix as a fully legitimate `SEALED` record; three more forged-but-internally-consistent entries (`VERIFICATION_REQUEST` → `VERIFICATION(pass)` → `ACCEPTANCE`, attacker choosing three distinct actor ids) walked it to `ACCEPTED`, with `resolveAccepted()` — the real S3 consumption port — reporting `ok: true` for a completely fabricated record with no legitimate founding envelope at all.
+
+### Fix mechanism — same "single source of truth" principle as round 3, one level earlier
+
+`registerEnvelope()`'s full creation-time validation — schema gate, `content_hash` self-consistency, forge-on-entry status check — is now factored into one shared private method, `#assertEnvelopeEstablishment(envelope)` (`src/services/evidence-envelope-service.mjs`, "shared envelope-establishment guard" section), called by:
+- `registerEnvelope()`, with its own live argument (unchanged behavior — same three checks, same order, same codes), and
+- `#rehydrate()`'s `EVIDENCE_SEAL` branch, but **only when `!existing`** (true first sighting of the key) — run *before* `#assertSealTransition`, mirroring the live path's order (registration always precedes sealing).
+
+A second `EVIDENCE_SEAL` entry for an **already-established** key is not re-subjected to this guard — an established record's envelope is immutable, exactly as on the live path (`registerEnvelope()` can only ever be called once per key; `DENY_DUPLICATE` blocks a second). It is instead denied unconditionally by the pre-existing `#assertSealTransition`, because `STATE_MACHINES.Evidence` makes `SEALED` reachable from `CAPTURED` alone (`CAPTURED: ["SEALED","QUARANTINED"]`; no other state lists `SEALED` as a target) — so a forged re-seal attempting to swap an established envelope's content can never pass the transition guard regardless of this fix. I verified this structurally (read every edge in `STATE_MACHINES.Evidence`) and empirically (new regression test below).
+
+No new deny code was introduced (`DENY_CONTRACT_INVALID`/`DENY_CONTENT_HASH_MISMATCH`/`DENY_STATUS_FORGERY` all pre-exist from `registerEnvelope()`); no other method's behavior changed.
+
+### Reviewer's exact scenario reproduced fresh and confirmed closed
+
+1. **Experiment A** (malformed envelope, missing 12/17 fields, non-matching `content_hash`, as the first/only entry): pre-fix, rehydrated to `SEALED`. Post-fix: `#assertEnvelopeEstablishment`'s schema gate runs first and denies `DENY_CONTRACT_INVALID` before any record is created — the whole construction fails closed. Reproduced in `tests/evidence-envelope-service.test.mjs`, test `"REHYDRATION SECURITY (round 4): the reviewer's exact scenario -- a forged EVIDENCE_SEAL entry with a malformed envelope..."` — confirmed denied.
+2. **Experiment B** (the same forged founding SEAL, walked to `ACCEPTED` via three more forged-but-self-consistent entries, three distinct attacker-chosen actor ids): pre-fix, reached `ACCEPTED` with `resolveAccepted()` returning `ok: true`. Post-fix: construction denies at the founding SEAL entry — none of the other three forged entries are ever folded. Reproduced in the same test file, test `"...walked to ACCEPTED via three more forged-but-internally-consistent entries..."` — confirmed denied.
+
+### Additional creation-time and re-entry gaps checked for (per the task's step-4 audit) — none found beyond the reviewer's one named scenario
+
+Two more, narrower variants of the same establishment axis were probed to confirm each individual check in `#assertEnvelopeEstablishment` is independently load-bearing, not just the schema check the reviewer's own PoC happened to trip first:
+3. **Schema-valid envelope, non-matching `content_hash`** (all 17 fields present and well-typed, but `content_hash` is not a fingerprint of the body): denied `DENY_CONTENT_HASH_MISMATCH`. Test: `"...a forged EVIDENCE_SEAL entry with a schema-valid envelope but a non-matching content_hash..."`.
+4. **Schema-valid, content-hash-consistent envelope whose `verification_status` is already `ACCEPTED`** (forge-on-entry), with the entry's own `payload.sealed_status` set to the one legal literal `"SEALED"` — i.e. a case the round-3 transition guard alone would **not** catch, since `#assertSealTransition` never inspects `envelope.verification_status` at all, only `payload.sealed_status`: denied `DENY_STATUS_FORGERY`. Test: `"...whose verification_status is already ACCEPTED (forge-on-entry)..."`. This confirms the establishment guard does genuinely new work, not work the existing transition guard already happened to cover.
+5. **Re-seal / content-swap on an already-established key**: a genuine SEAL through the live API, then a second forged `EVIDENCE_SEAL` entry for the *same* key embedding a different, malformed envelope — confirmed denied by the pre-existing `#assertSealTransition` (`DENY_UNDEFINED_TRANSITION`), never reaching (and not needing) the establishment guard. Test: `"...a SECOND forged EVIDENCE_SEAL entry for an ALREADY-established key..."`.
+6. **Parity, not just point examples**: `"ENVELOPE-ESTABLISHMENT PARITY: registerEnvelope() (live) and #rehydrate()'s first-sighting SEAL branch enforce IDENTICAL creation-time rules..."` drives the same three failure inputs (malformed schema, hash mismatch, forge-on-entry) through *both* `registerEnvelope()` directly and a forged first-sighting ledger entry, asserting the *same* error class and deny code from both paths — the single-source-of-truth property demonstrated directly, not inferred.
+
+### Exhaustive entry-type-by-entry-type completeness enumeration (task requirement — every entry type this service can ever write, cross-checked against what `#rehydrate()` now does)
+
+This service writes exactly **four** ledger entry types (grepped every `this.#ledger.append(` / `#appendLadder(` call site in `src/services/evidence-envelope-service.mjs`; there are no others). `registerEnvelope()` is a fifth lifecycle event but is **not** a ledger entry type — it never calls `append()` at all (pre-existing, disclosed SCOPE NOTE, unchanged by this fix).
+
+| # | Entry type | Live method | Live validation performed | `#rehydrate()` coverage | Status |
+|---|---|---|---|---|---|
+| 1 | `EVIDENCE_SEAL` (**first sighting** — the only path that ever creates a record) | `sealEnvelope()`, fed by a prior `registerEnvelope()` | (a) `registerEnvelope()`'s schema gate, (b) content_hash self-consistency, (c) forge-on-entry status check [all now in `#assertEnvelopeEstablishment`], (d) `sealEnvelope()`'s own source-status pin + literal-target check + graph edge (`#assertSealTransition`) | (a)(b)(c) now replayed via `#assertEnvelopeEstablishment(envelope)` when `!existing`; (d) replayed via `#assertSealTransition`, unchanged since round 3 | **CLOSED this round** (a)(b)(c); (d) already closed round 3 |
+| 2 | `EVIDENCE_SEAL` (**re-occurrence** for an already-established key) | Live: `sealEnvelope()` always denies `DENY_UNDEFINED_TRANSITION` for this case (a sealed-or-further record has no path back through `#assertSealTransition`'s literal-target check even before the edge check) — this ledger shape is **structurally unreachable** via the live API | N/A (unreachable live) | Denied unconditionally by `#assertSealTransition` (`SEALED` has no inbound edge except from `CAPTURED` per `STATE_MACHINES.Evidence`); establishment guard correctly NOT invoked for this case (would be meaningless — the record's envelope is already established and immutable) | **Confirmed closed** (round 3 mechanism, independently re-verified this round with a fresh adversarial test) |
+| 3 | `EVIDENCE_VERIFICATION_REQUEST` | `requestVerification()` | Source-status pin (`SEALED` only) + literal-target check + graph edge (`#assertRequestVerificationTransition`); performs **no** envelope-content validation (does not read or re-derive `envelope` at all) | Replayed via `#assertRequestVerificationTransition`, unchanged since round 3 | **Already closed round 3**; no creation-time surface exists for this type (never creates a record, only mutates one that a valid `EVIDENCE_SEAL` already established under the new guard) |
+| 4 | `EVIDENCE_VERIFICATION` | `recordVerification()` | Verdict-format validation (`#verdictTarget`), source-status pin (`VERIFICATION_PENDING` only), verdict-derived-target cross-check, graph edge, verifier≠producer SoD (`#assertRecordVerificationTransition`) | Replayed via `#assertRecordVerificationTransition` with `producer` sourced from the record's own (now establishment-guarded) `envelope.actor_id`, unchanged since round 3 | **Already closed round 3**; SoD's `producer` anchor is now itself trustworthy because the founding envelope is establishment-guarded (this round closes the reviewer's specific complaint that "the attacker also controls producer via the fabricated envelope's actor_id" — that fabricated envelope can no longer exist) |
+| 5 | `EVIDENCE_ACCEPTANCE` | `acceptEvidence()` | Approvals-shape validation (`#assertApprovals`), source-status pin (`VERIFIED` only), literal-target check, graph edge, acceptor≠producer/verifier SoD (`#assertAcceptEvidenceTransition`) | Replayed via `#assertApprovals` + `#assertAcceptEvidenceTransition` with `producer`/`verifier` sourced from the record's own ledger-established fields, unchanged since round 3 | **Already closed round 3**; same producer-anchor strengthening as row 4 |
+
+**`registerEnvelope()` itself (CAPTURED, pre-SEAL):** confirmed, again, to have zero durable footprint — it never calls `append()` (grepped: the only `append`/`#appendLadder` call sites in the file are inside `sealEnvelope()` and `#appendLadder()`, the latter called only by `requestVerification()`/`recordVerification()`/`acceptEvidence()`). A CAPTURED-only record is unknown again after a restart, exactly as before this round; this is unchanged, disclosed, non-regression behavior, not a gap this round introduces or leaves newly open.
+
+**Any ledger entry type this service does not own** (foreign types written by some other service sharing the same ledger file): still correctly skipped, not denied, by the pre-existing `continue` fall-through at the bottom of the fold loop — read-only rehydration must never fail closed over content it does not own. Unchanged by this fix.
+
+**Conclusion of the audit:** every one of the four entry types this service can ever write now has full parity between its live-write validation and its rehydration validation, including the one creation path (row 1) that was the sole remaining gap after three rounds of transition-guard convergence. I did not find any additional creation-time or re-entry validation gap beyond the reviewer's one named scenario.
+
+### Genuine ledger histories: no false denials
+
+All 48 pre-existing tests in `evidence-envelope-service.test.mjs` (including all 16 pre-existing `REHYDRATION`/`REHYDRATION SECURITY`/`REHYDRATION PARITY`-prefixed tests) continue to pass **unmodified** (byte-identical test bodies) — every legitimate `registerEnvelope()` → `sealEnvelope()` history produced through the real live API is, by construction, already schema-valid, content-hash-consistent, and carries `verification_status: CAPTURED` at seal time, so no genuine history is newly denied.
+
+### Test counts
+
+- Module suite (`evidence-envelope-service.test.mjs`): **48/48 pass (before this fast-follow) → 54/54 pass (after)** — +6 new tests (2 reproducing the reviewer's exact scenario, 2 covering the other two establishment-guard clauses individually, 1 re-seal/content-swap defense-in-depth confirmation, 1 explicit live-vs-rehydration parity check), 0 regressions.
+- Full suite (`npm test`, includes `node tools/validate-foundation.mjs`): **1165 tests / 1162 pass / 0 fail / 3 skip (before) → 1171 tests / 1168 pass / 0 fail / 3 skip (after)** — matches this producer's own prior claimed post-fix baseline exactly before this fast-follow; +6, all new, all passing, 0 regressions.
+- `node tools/validate-foundation.mjs`: PASS / exit 0, both before and after.
+- Grepped `src/services/evidence-envelope-service.mjs` for `ev_modevid|test-id|testId|NODE_ENV|process\.env`: zero hits. No hardcoded test-ID branching introduced.
+
+### One incidental, disclosed test-fixture update (fourth one on this branch)
+
+`tests/p0-19-self-pilot.test.mjs`'s `PINNED_BLOBS` byte-identity guard pins `src/services/evidence-envelope-service.mjs` to a git blob hash. This fast-follow is a fourth intentional, disclosed, security-relevant change to that same file on this branch, so the pin necessarily advances again: `b4ea87196e239d590711b4c7acd0f17b7f331afb` → `264b1c24ab78f427b6a4f0fbcfe55140bc953485`. Updated only that one entry, added a fourth disclosure comment (the first three pin-update comments were left untouched, extend-only), and left every other pinned hash in that list unchanged.
+
+### Self-certification
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: claude-rev-modevid-s2s3-rehydration-guard-parity-fix-independent-01
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+Advisory only. This addendum certifies the producer-side verification of the round-4 envelope-establishment convergence fast-follow is complete and reports it, together with the exhaustive entry-type-by-entry-type completeness enumeration requested for this round, for operator/independent-review disposition. It does not itself authorize, merge, push, or ratify. Operator authority remains sole. No production declaration, no ADR/policy/schema mutation, no self-authorization of execution is implied or made by this record.
+
+*Provenance — source: round-4 independent review of the round-3 transition-guard convergence fast-follow (`7aa7930`, reviewer `claude-rev-modevid-s2s3-rehydration-guard-parity-fix-independent-01`) §6 finding, fixed on the same branch `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (on top of `7aa7930`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*

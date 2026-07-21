@@ -1028,6 +1028,263 @@ test("REHYDRATION PARITY: a rehydrated instance's full observable state matches 
   }
 });
 
+// ---------------------------------------------------------------------------
+// ROUND 4: envelope-establishment convergence (independent review of the
+// round-3 transition-guard convergence, docs/03-project-control/candidates/
+// mod-evid-s2-s3-rehydration-guard-parity-fix-independent-review-001.md,
+// section 6) -- round 3 converged every live method's TRANSITION guard with
+// #rehydrate(), but none of those guards ever run on the record's CREATION:
+// the very first EVIDENCE_SEAL entry for a never-before-seen key. On the
+// live path, registerEnvelope() gates creation with schema validation,
+// content_hash self-consistency, and a forge-on-entry status check, BEFORE
+// any record is ever admitted -- and registerEnvelope() itself never
+// reaches the ledger, so the first EVIDENCE_SEAL entry is the SOLE
+// ledger-visible proxy for that whole creation event. Pre-fix, #rehydrate()
+// gated first-sighting SEAL entries on nothing but "does envelope have a
+// string evidence_id and an integer version" -- a wholly fabricated
+// envelope (missing most required fields, an arbitrary non-matching
+// content_hash, an attacker-chosen actor_id) rehydrated as a legitimate
+// SEALED record, and three more forged-but-internally-consistent entries
+// walked it all the way to ACCEPTED with resolveAccepted() reporting
+// ok: true for a completely fabricated record with no legitimate founding
+// envelope at all.
+// ---------------------------------------------------------------------------
+
+function appendRaw(ledgerPath, entry, expectedSequence) {
+  const ledger = new DurableLedger({ filePath: ledgerPath, ledgerId: "secb-evidence-seal-ledger" });
+  ledger.append(entry, { expectedSequence });
+}
+
+function forgedSealEntry(envelope, { sealedStatus = "SEALED", timestamp = "2026-07-21T10:05:00+07:00" } = {}) {
+  return {
+    entryId: JSON.stringify([envelope.evidence_id, envelope.version, "SEAL", "forged"]),
+    projectId: "unknown",
+    workPackageId: "unknown",
+    sessionId: "unknown",
+    actorId: "attacker",
+    type: "EVIDENCE_SEAL",
+    payload: {
+      envelope,
+      previous_status: "CAPTURED",
+      sealed_status: sealedStatus,
+      content_hash: envelope.content_hash
+    },
+    timestamp,
+    idempotencyKey: JSON.stringify(["evidence-seal-forged", envelope.evidence_id, envelope.version])
+  };
+}
+
+test("REHYDRATION SECURITY (round 4): the reviewer's exact scenario -- a forged EVIDENCE_SEAL entry with a malformed envelope (missing most required fields) and a non-matching content_hash, as the FIRST/ONLY entry -- is denied, not silently rehydrated to SEALED", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-round4-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    // A never-registered identity: only 5 of the 17 required envelope
+    // fields present, and a content_hash that is not a fingerprint of
+    // anything -- exactly the reviewer's construction.
+    const forgedEnvelope = {
+      evidence_id: "ev_round4_forged",
+      version: 1,
+      actor_id: "attacker-controlled-producer",
+      verification_status: "CAPTURED",
+      content_hash: "deadbeef".repeat(8)
+    };
+    appendRaw(path, forgedSealEntry(forgedEnvelope), 0);
+
+    // Pre-fix: this rehydrated as a fully legitimate SEALED record.
+    // Post-fix: #assertEnvelopeEstablishment's schema gate runs first and
+    // denies before any record is ever created -- the whole construction
+    // fails closed, matching this file's established convention.
+    assert.throws(
+      () => freshInstance(path, () => new Date("2026-07-21T10:05:00+07:00")),
+      (e) => e instanceof ContractValidationError && e.code === "DENY_CONTRACT_INVALID"
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY (round 4): the reviewer's exact scenario walked to ACCEPTED via three more forged-but-internally-consistent entries -- denied at the founding SEAL, never reaches ACCEPTED", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-round4-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const EVX = "ev_round4_forged_ladder";
+    const forgedEnvelope = {
+      evidence_id: EVX,
+      version: 1,
+      actor_id: "attacker-producer",
+      verification_status: "CAPTURED",
+      content_hash: "deadbeef".repeat(8)
+    };
+
+    appendRaw(path, forgedSealEntry(forgedEnvelope), 0);
+    appendRaw(path, {
+      entryId: JSON.stringify([EVX, 1, "VERIFICATION_REQUEST", "forged"]),
+      projectId: "unknown", workPackageId: "unknown", sessionId: "unknown",
+      actorId: "attacker-requester",
+      type: "EVIDENCE_VERIFICATION_REQUEST",
+      payload: { envelope: forgedEnvelope, previous_status: "SEALED", next_status: "VERIFICATION_PENDING", requested_by: "attacker-requester" },
+      timestamp: "2026-07-21T10:06:00+07:00",
+      idempotencyKey: JSON.stringify(["evidence-verification-request-forged", EVX, 1])
+    }, 1);
+    appendRaw(path, {
+      entryId: JSON.stringify([EVX, 1, "VERIFICATION", "forged"]),
+      projectId: "unknown", workPackageId: "unknown", sessionId: "unknown",
+      actorId: "attacker-verifier",
+      type: "EVIDENCE_VERIFICATION",
+      payload: { envelope: forgedEnvelope, previous_status: "VERIFICATION_PENDING", next_status: "VERIFIED", verifier: "attacker-verifier", verdict: "pass", producer: "attacker-producer" },
+      timestamp: "2026-07-21T10:07:00+07:00",
+      idempotencyKey: JSON.stringify(["evidence-verification-forged", EVX, 1])
+    }, 2);
+    appendRaw(path, {
+      entryId: JSON.stringify([EVX, 1, "ACCEPTANCE", "forged"]),
+      projectId: "unknown", workPackageId: "unknown", sessionId: "unknown",
+      actorId: "attacker-acceptor",
+      type: "EVIDENCE_ACCEPTANCE",
+      payload: { envelope: forgedEnvelope, previous_status: "VERIFIED", next_status: "ACCEPTED", acceptor: "attacker-acceptor", approvals: ["forged-approval"], producer: "attacker-producer", verifier: "attacker-verifier" },
+      timestamp: "2026-07-21T10:08:00+07:00",
+      idempotencyKey: JSON.stringify(["evidence-acceptance-forged", EVX, 1])
+    }, 3);
+
+    // Pre-fix: this fully fabricated identity -- three distinct
+    // attacker-controlled actor ids, no genuine founding envelope
+    // whatsoever -- reached ACCEPTED, and resolveAccepted() (the actual S3
+    // consumption port) returned ok: true. Post-fix: construction denies
+    // at the founding SEAL entry before any of the other three forged
+    // entries are ever folded.
+    assert.throws(
+      () => freshInstance(path, () => new Date("2026-07-21T10:08:00+07:00")),
+      (e) => e instanceof ContractValidationError && e.code === "DENY_CONTRACT_INVALID"
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY (round 4): a forged EVIDENCE_SEAL entry with a schema-valid envelope but a non-matching content_hash, as the FIRST/ONLY entry, is denied (DENY_CONTENT_HASH_MISMATCH)", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-round4-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    // Schema-complete (all 17 required fields present, satisfies the
+    // contract), but content_hash was never recomputed over this exact
+    // body -- a swapped/tampered envelope presented as a fresh seal.
+    const forgedEnvelope = { ...envelope({ evidence_id: "ev_round4_hash_mismatch", version: 1 }), content_hash: "1".repeat(64) };
+    appendRaw(path, forgedSealEntry(forgedEnvelope), 0);
+
+    assert.throws(
+      () => freshInstance(path, () => new Date("2026-07-21T10:05:00+07:00")),
+      (e) => e instanceof EvidenceEnvelopeServiceError && e.code === "DENY_CONTENT_HASH_MISMATCH"
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY (round 4): a forged EVIDENCE_SEAL entry with a schema-valid, content-hash-consistent envelope whose verification_status is already ACCEPTED (forge-on-entry), as the FIRST/ONLY entry, is denied (DENY_STATUS_FORGERY) even though the entry's OWN sealed_status literal is the legal SEALED value", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-round4-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    // The entry's payload.sealed_status is the one literal
+    // #assertSealTransition ever accepts (SEALED) -- the round-3 guard
+    // alone would NOT catch this, because it never inspects
+    // envelope.verification_status at all. Only the establishment guard's
+    // forge-on-entry check (the same one registerEnvelope() runs) does.
+    const forgedEnvelope = envelope({ evidence_id: "ev_round4_status_forgery", version: 1, verification_status: "ACCEPTED" });
+    appendRaw(path, forgedSealEntry(forgedEnvelope, { sealedStatus: "SEALED" }), 0);
+
+    assert.throws(
+      () => freshInstance(path, () => new Date("2026-07-21T10:05:00+07:00")),
+      (e) => e instanceof EvidenceEnvelopeServiceError && e.code === "DENY_STATUS_FORGERY"
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY (round 4): a SECOND forged EVIDENCE_SEAL entry for an ALREADY-established key, embedding a DIFFERENT (malformed, non-matching) envelope, is still denied by the pre-existing transition guard -- establishment is asserted ONLY on true first sighting, re-seal remains structurally impossible regardless", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-round4-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-21T10:05:00+07:00");
+
+    // A genuine, legitimately-established SEAL through the real live API.
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope({ evidence_id: "ev_round4_reseal", version: 1 }));
+    serviceA.sealEnvelope("ev_round4_reseal", 1);
+    assert.equal(serviceA.getEnvelope("ev_round4_reseal", 1).verificationStatus, "SEALED");
+
+    // Append a SECOND, wholly-forged SEAL entry for the SAME key,
+    // attempting to swap the established envelope's content -- this
+    // record already exists, so #assertEnvelopeEstablishment is never
+    // even called for it (see the "only on true first sighting" comment
+    // in #rehydrate()); it must instead be denied by #assertSealTransition,
+    // because SEALED has no inbound edge except from CAPTURED.
+    const swapEnvelope = {
+      evidence_id: "ev_round4_reseal",
+      version: 1,
+      actor_id: "attacker",
+      verification_status: "CAPTURED",
+      content_hash: "deadbeef".repeat(8)
+    };
+    appendRaw(path, forgedSealEntry(swapEnvelope), 1);
+
+    assert.throws(
+      () => freshInstance(path, clock),
+      (e) => e instanceof EvidenceEnvelopeServiceError && e.code === "DENY_UNDEFINED_TRANSITION"
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("ENVELOPE-ESTABLISHMENT PARITY: registerEnvelope() (live) and #rehydrate()'s first-sighting SEAL branch enforce IDENTICAL creation-time rules, same deny codes for the same malformed input", () => {
+  const cases = [
+    {
+      name: "malformed/missing-fields envelope",
+      build: () => ({ evidence_id: "ev_parity_estab_1", version: 1, actor_id: "x", verification_status: "CAPTURED", content_hash: "deadbeef".repeat(8) }),
+      code: "DENY_CONTRACT_INVALID",
+      errorClass: ContractValidationError
+    },
+    {
+      name: "content_hash mismatch",
+      build: () => ({ ...envelope({ evidence_id: "ev_parity_estab_2", version: 1 }), content_hash: "2".repeat(64) }),
+      code: "DENY_CONTENT_HASH_MISMATCH",
+      errorClass: EvidenceEnvelopeServiceError
+    },
+    {
+      name: "forge-on-entry (verification_status already ACCEPTED)",
+      build: () => envelope({ evidence_id: "ev_parity_estab_3", version: 1, verification_status: "ACCEPTED" }),
+      code: "DENY_STATUS_FORGERY",
+      errorClass: EvidenceEnvelopeServiceError
+    }
+  ];
+
+  for (const { name, build, code, errorClass } of cases) {
+    // Live path.
+    withHarness(({ service }) => {
+      assert.throws(
+        () => service.registerEnvelope(build()),
+        (e) => e instanceof errorClass && e.code === code,
+        `registerEnvelope() must deny ${code} for: ${name}`
+      );
+    });
+
+    // Rehydration path: the same envelope, as a forged first-sighting SEAL
+    // entry, must be denied with the SAME code.
+    const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-round4-parity-"));
+    try {
+      const path = join(directory, "evidence-seals.ndjson");
+      appendRaw(path, forgedSealEntry(build()), 0);
+      assert.throws(
+        () => freshInstance(path, () => new Date("2026-07-21T10:05:00+07:00")),
+        (e) => e instanceof errorClass && e.code === code,
+        `#rehydrate() must deny ${code} for: ${name}`
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+});
+
 test("REHYDRATION: normal single-instance lifecycle is entirely unaffected (no double-rehydration drift)", () => withHarness(({ service }) => {
   // The construction-time rehydrate() on an empty, freshly-created ledger
   // must be a no-op: identical to pre-fix behavior for the common case of a
