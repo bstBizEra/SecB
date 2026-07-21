@@ -253,7 +253,7 @@ const PINNED_BLOBS = Object.freeze({
   "src/live/event-family-policy.mjs": "47ebc9bb7e5190c6f0f78232884379b3c284248d",
   "src/live/replay-assembler.mjs": "6ba6e4b143ad3662c7dc2f364a8ff665002667d6",
   "src/contracts/canonical-fingerprint.mjs": "721e99032ce7040312e77138c8f156b649fd996e",
-  "src/contracts/contract-validator.mjs": "c3b37776ad1c928395fe681a3e9934c6decff42e"
+  "src/contracts/contract-validator.mjs": "306a3d23ef748ffb987cd35d9ab4cf60264f32bc"
 });
 
 // git blob hash: sha1("blob <byteLength>\0" + content). CRLF normalized to LF
