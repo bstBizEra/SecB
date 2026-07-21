@@ -47,6 +47,58 @@ const NULL_BYTE = "\0";
 const isNonBlankString = (v) => typeof v === "string" && v.length > 0;
 const isCleanEntry = (v) => isNonBlankString(v) && !v.includes(NULL_BYTE);
 
+// --- Fail-closed extraction (REV-002 containment) ---------------------------
+// A sentinel returned by snapshotArray for anything that is not a genuine,
+// untampered array. It is compared by identity only; it is never emitted.
+const NOT_ARRAY = Symbol("write-set-not-array");
+// The canonical array iterator captured once at module load, before any hostile
+// input can be constructed. snapshotArray compares against this to reject arrays
+// whose Symbol.iterator has been overridden, WITHOUT ever invoking it.
+const ARRAY_ITERATOR = Array.prototype[Symbol.iterator];
+
+// Defensive, single-read snapshot of a field into a fresh own-data array.
+//   - Gates on Array.isArray so array-likes / Proxies-of-non-arrays are rejected.
+//   - Rejects a tampered iterator (any override of the default array iterator) as
+//     malformed rather than trusting OR invoking it, so a poisoned Symbol.iterator
+//     cannot execute. The read of `value[Symbol.iterator]` happens here; a THROWING
+//     iterator getter propagates to the single guard in evaluateWriteSet (-> denial).
+//   - Reads length once and each index exactly once via [[Get]] (no iterator
+//     protocol, no element read repeated). A throwing length/index accessor or a
+//     Proxy get trap likewise propagates to the guard and becomes a denial.
+// Returns NOT_ARRAY for a non-array/tampered/degenerate-length input, or a plain
+// snapshot array otherwise. May throw ONLY into evaluateWriteSet's try/catch.
+function snapshotArray(value) {
+  if (!Array.isArray(value)) return NOT_ARRAY;
+  if (value[Symbol.iterator] !== ARRAY_ITERATOR) return NOT_ARRAY;
+  const len = value.length;
+  if (!Number.isSafeInteger(len) || len < 0) return NOT_ARRAY;
+  const out = new Array(len);
+  for (let i = 0; i < len; i++) {
+    out[i] = value[i];
+  }
+  return out;
+}
+
+// --- Windows component-collapse hazard (Claude REV N1) ----------------------
+// A path component that ends in a space or a dot is normalized away by the
+// Windows filesystem — e.g. "foo." -> "foo", "foo " -> "foo", ".. " -> "..",
+// "..." -> "" / current-dir — so the literal string the evaluator validates can
+// resolve on disk to a DIFFERENT target than the one it checked (the ".. "
+// -> ".." case is a parent escape). The exact canonical dot-segments "." and ".."
+// are excluded here because they are not name-collapse aliases: ".." is handled by
+// the traversal check as DENY_WRITE_SET_TRAVERSAL, and "." is a benign current-dir
+// ref. Every other trailing-space/dot component is a non-canonical, caller-
+// precondition-violating path and is treated as malformed input (see rationale in
+// the DENY code choice below). NOTE: repeated-separator ("//") and interior "./"
+// alias bypasses (Codex REV-001) are a separate, parallel rework and are NOT
+// closed here.
+const isCanonicalDotSegment = (seg) => seg === "." || seg === "..";
+const endsWithSpaceOrDot = (seg) => seg.endsWith(" ") || seg.endsWith(".");
+const hasWindowsCollapsibleComponent = (p) =>
+  p.split(/[\\/]/).some(
+    (seg) => seg.length > 0 && !isCanonicalDotSegment(seg) && endsWithSpaceOrDot(seg)
+  );
+
 // --- Semantics reused VERBATIM from context-federation-service.mjs:43-48 ------
 // `pathSubset` there does: reject any candidate with a `..` segment (split on
 // either separator), strip trailing forward-slashes from each bound, and accept
@@ -76,20 +128,48 @@ const allEntriesClean = (list) => list.every(isCleanEntry);
 // Deny-by-default: a malformed shape never coerces to a permissive default.
 // Check precedence (most structural first; prohibited beats allowed):
 //   1. malformed input shape          -> DENY_WRITE_SET_MALFORMED
-//   2. empty candidate set            -> DENY_WRITE_SET_EMPTY
-//   3. malformed path entries         -> DENY_WRITE_SET_MALFORMED
-//   4. any `..` traversal segment     -> DENY_WRITE_SET_TRAVERSAL
-//   5. any absolute / drive / UNC     -> DENY_WRITE_SET_ABSOLUTE
-//   6. any prohibited-prefix hit      -> DENY_WRITE_SET_PROHIBITED  (wins over allowed)
-//   7. any path outside allowed set   -> DENY_WRITE_SET_OUTSIDE_ALLOWED
+//   2. hostile/unreadable fields      -> DENY_WRITE_SET_MALFORMED  (contained, never thrown)
+//   3. empty candidate set            -> DENY_WRITE_SET_EMPTY
+//   4. malformed path entries         -> DENY_WRITE_SET_MALFORMED
+//   5. Windows-collapsible component  -> DENY_WRITE_SET_MALFORMED  (Claude REV N1)
+//   6. any `..` traversal segment     -> DENY_WRITE_SET_TRAVERSAL
+//   7. any absolute / drive / UNC     -> DENY_WRITE_SET_ABSOLUTE
+//   8. any prohibited-prefix hit      -> DENY_WRITE_SET_PROHIBITED  (wins over allowed)
+//   9. any path outside allowed set   -> DENY_WRITE_SET_OUTSIDE_ALLOWED
 //   else                              -> ok
+//
+// FAIL-CLOSED EXTRACTION (Codex REV-002): the three fields are destructured from
+// `input` EXACTLY ONCE and each is snapshotted into a fresh own-data array inside
+// a single try/catch, BEFORE any validation logic runs. A throwing property
+// getter, a Proxy get/has trap that throws, a throwing array-element accessor
+// (Object.defineProperty on an index), or a poisoned Symbol.iterator can never
+// propagate an exception out of this function — each is converted to the frozen
+// DENY_WRITE_SET_MALFORMED result. No accessor is invoked more than once, so a
+// getter that returns a different array on repeated reads cannot influence the
+// decision: only the single snapshot is ever consulted.
 export function evaluateWriteSet(input) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     return deny("DENY_WRITE_SET_MALFORMED", "input must be a plain object");
   }
-  const { candidatePaths, allowedPaths, prohibitedPaths } = input;
 
-  if (!Array.isArray(candidatePaths) || !Array.isArray(allowedPaths) || !Array.isArray(prohibitedPaths)) {
+  let candidatePaths, allowedPaths, prohibitedPaths;
+  try {
+    // Each property getter is invoked exactly once here, into a local.
+    ({ candidatePaths, allowedPaths, prohibitedPaths } = input);
+    // Snapshot defensively (single read per element, no iterator protocol) so no
+    // later step can re-trigger a hostile accessor.
+    candidatePaths = snapshotArray(candidatePaths);
+    allowedPaths = snapshotArray(allowedPaths);
+    prohibitedPaths = snapshotArray(prohibitedPaths);
+  } catch {
+    // Any throw from a hostile getter / Proxy trap / iterator accessor lands here.
+    return deny(
+      "DENY_WRITE_SET_MALFORMED",
+      "write-set fields could not be read as arrays"
+    );
+  }
+
+  if (candidatePaths === NOT_ARRAY || allowedPaths === NOT_ARRAY || prohibitedPaths === NOT_ARRAY) {
     return deny(
       "DENY_WRITE_SET_MALFORMED",
       "candidatePaths, allowedPaths and prohibitedPaths must all be arrays"
@@ -103,6 +183,23 @@ export function evaluateWriteSet(input) {
       "DENY_WRITE_SET_MALFORMED",
       "every path entry must be a non-blank string with no null byte"
     );
+  }
+
+  // Claude REV N1: reject non-canonical components a Windows filesystem would
+  // collapse (trailing space/dot) as malformed input. Chose DENY_WRITE_SET_MALFORMED
+  // over DENY_WRITE_SET_TRAVERSAL deliberately: (a) the offending string is not a
+  // literal `..` segment (".. " !== ".."), so classing it as TRAVERSAL would
+  // overload that code and diverge from the context-federation `pathSubset`
+  // semantics the parity/byte-identity guards pin; (b) it is fundamentally a
+  // caller-precondition / well-formedness violation (a non-OS-canonical path),
+  // which is exactly the malformed-input class alongside blank/null-byte entries.
+  for (const p of candidatePaths) {
+    if (hasWindowsCollapsibleComponent(p)) {
+      return deny(
+        "DENY_WRITE_SET_MALFORMED",
+        `candidate path has a component a Windows filesystem would collapse (trailing space or dot): ${p}`
+      );
+    }
   }
 
   for (const p of candidatePaths) {

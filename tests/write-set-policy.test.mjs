@@ -167,6 +167,157 @@ test("WRITE_SET_DENY_CODES is the frozen closed set actually emitted", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Fail-closed extraction (Codex REV-002) — hostile property/element access on the
+// input must be CONTAINED: a throwing getter, Proxy trap, throwing element
+// accessor, or poisoned Symbol.iterator must yield the frozen
+// DENY_WRITE_SET_MALFORMED result and NEVER propagate an exception. Each field is
+// read exactly once and snapshotted before any validation runs.
+// ---------------------------------------------------------------------------
+
+test("fail-closed: a throwing getter on any of the three fields -> MALFORMED, never throws", () => {
+  const good = { candidatePaths: ["src/a"], allowedPaths: ["src"], prohibitedPaths: [] };
+  for (const field of ["candidatePaths", "allowedPaths", "prohibitedPaths"]) {
+    const input = { ...good };
+    Object.defineProperty(input, field, {
+      configurable: true,
+      enumerable: true,
+      get() { throw new Error(`getter boom on ${field}`); }
+    });
+    let res;
+    assert.doesNotThrow(() => { res = evaluateWriteSet(input); }, `throwing getter on ${field} must not propagate`);
+    assert.equal(res.ok, false, field);
+    assert.equal(res.code, "DENY_WRITE_SET_MALFORMED", field);
+    assert.equal(Object.isFrozen(res), true, field);
+  }
+});
+
+test("fail-closed: Proxy with throwing get/has traps -> MALFORMED, never throws", () => {
+  // (a) Proxy wrapping the whole input: reading input.candidatePaths hits the get trap.
+  const throwingHandler = {
+    get() { throw new Error("get trap boom"); },
+    has() { throw new Error("has trap boom"); }
+  };
+  const proxyInput = new Proxy({}, throwingHandler);
+  let r1;
+  assert.doesNotThrow(() => { r1 = evaluateWriteSet(proxyInput); });
+  assert.equal(r1.code, "DENY_WRITE_SET_MALFORMED");
+
+  // (b) Proxy wrapping an array field: Array.isArray is true (target is an array),
+  //     but the defensive snapshot's property reads hit the throwing get trap.
+  const proxyArray = new Proxy(["src/a"], throwingHandler);
+  let r2;
+  assert.doesNotThrow(() => {
+    r2 = evaluateWriteSet({ candidatePaths: proxyArray, allowedPaths: ["src"], prohibitedPaths: [] });
+  });
+  assert.equal(r2.code, "DENY_WRITE_SET_MALFORMED");
+  assert.equal(Object.isFrozen(r2), true);
+});
+
+test("fail-closed: array with a throwing element getter (defineProperty on index) -> MALFORMED, never throws", () => {
+  const hostile = ["src/a"];
+  Object.defineProperty(hostile, 0, {
+    configurable: true,
+    enumerable: true,
+    get() { throw new Error("element getter boom"); }
+  });
+  let res;
+  assert.doesNotThrow(() => {
+    res = evaluateWriteSet({ candidatePaths: hostile, allowedPaths: ["src"], prohibitedPaths: [] });
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.code, "DENY_WRITE_SET_MALFORMED");
+  assert.equal(Object.isFrozen(res), true);
+});
+
+test("single-read: each field getter is invoked EXACTLY ONCE", () => {
+  const counts = { candidatePaths: 0, allowedPaths: 0, prohibitedPaths: 0 };
+  const values = { candidatePaths: ["src/a"], allowedPaths: ["src"], prohibitedPaths: [] };
+  const input = {};
+  for (const field of Object.keys(values)) {
+    Object.defineProperty(input, field, {
+      enumerable: true,
+      get() { counts[field] += 1; return values[field]; }
+    });
+  }
+  const res = evaluateWriteSet(input);
+  assert.deepEqual(res, { ok: true });
+  assert.equal(counts.candidatePaths, 1, "candidatePaths read once");
+  assert.equal(counts.allowedPaths, 1, "allowedPaths read once");
+  assert.equal(counts.prohibitedPaths, 1, "prohibitedPaths read once");
+});
+
+test("single-read: a getter returning DIFFERENT arrays per read cannot influence the decision", () => {
+  // First read is the safe value; a second read (if it happened) would be a
+  // traversal escape. Single-read semantics mean only the first is ever consulted.
+  let n = 0;
+  const input = {
+    get candidatePaths() { n += 1; return n === 1 ? ["src/a"] : ["../escape"]; },
+    allowedPaths: ["src"],
+    prohibitedPaths: []
+  };
+  const res = evaluateWriteSet(input);
+  assert.equal(n, 1, "candidatePaths read exactly once");
+  assert.deepEqual(res, { ok: true }, "decision reflects only the single first snapshot");
+});
+
+test("fail-closed: a poisoned Symbol.iterator -> MALFORMED, never throws (iterator never invoked)", () => {
+  // (a) Iterator overridden as a data property to a generator that throws if run.
+  const dataPoisoned = ["src/a"];
+  dataPoisoned[Symbol.iterator] = function* () { throw new Error("poisoned iterator ran"); };
+  let r1;
+  assert.doesNotThrow(() => {
+    r1 = evaluateWriteSet({ candidatePaths: dataPoisoned, allowedPaths: ["src"], prohibitedPaths: [] });
+  });
+  assert.equal(r1.code, "DENY_WRITE_SET_MALFORMED", "tampered iterator is rejected as malformed");
+
+  // (b) Iterator overridden as a THROWING accessor: reading it is contained.
+  const getterPoisoned = ["src/a"];
+  Object.defineProperty(getterPoisoned, Symbol.iterator, {
+    configurable: true,
+    get() { throw new Error("iterator getter boom"); }
+  });
+  let r2;
+  assert.doesNotThrow(() => {
+    r2 = evaluateWriteSet({ candidatePaths: getterPoisoned, allowedPaths: ["src"], prohibitedPaths: [] });
+  });
+  assert.equal(r2.code, "DENY_WRITE_SET_MALFORMED");
+  assert.equal(Object.isFrozen(r2), true);
+});
+
+// ---------------------------------------------------------------------------
+// Windows component-collapse hazard (Claude REV N1) — a candidate component that
+// ends in a space or dot is normalized away by the Windows filesystem and can
+// resolve to a different on-disk target; deny it as malformed. The canonical "."
+// and ".." segments are excluded (".." stays TRAVERSAL; "." is a benign ref).
+// ---------------------------------------------------------------------------
+
+test("N1: candidate components ending in a space or dot are MALFORMED", () => {
+  const allowed = ["src"];
+  for (const p of [
+    "src/.. /x",     // ".. " collapses to ".." on Windows -> parent escape (the REV probe)
+    "src/foo /x",    // trailing space
+    "src/foo./x",    // trailing dot on an ordinary name
+    "src/.../x",     // "..." collapses
+    "src/bar. ",     // trailing dot+space at the tail component
+    "src/baz "       // trailing space at the tail component
+  ]) {
+    const res = evalWS({ candidatePaths: [p], allowedPaths: allowed });
+    assert.equal(res.ok, false, `path ${JSON.stringify(p)}`);
+    assert.equal(res.code, "DENY_WRITE_SET_MALFORMED", `path ${JSON.stringify(p)}`);
+  }
+});
+
+test("N1 boundary: canonical '..' stays TRAVERSAL; '..foo' and clean names are unaffected", () => {
+  // The N1 exclusion must not reclassify a real '..' segment away from TRAVERSAL.
+  assert.equal(evalWS({ candidatePaths: [".."], allowedPaths: ["src"] }).code, "DENY_WRITE_SET_TRAVERSAL");
+  assert.equal(evalWS({ candidatePaths: ["src/../x"], allowedPaths: ["src"] }).code, "DENY_WRITE_SET_TRAVERSAL");
+  // '..foo' ends in 'o' — not collapsible, not a traversal segment.
+  assert.notEqual(evalWS({ candidatePaths: ["src/..foo"], allowedPaths: ["src"] }).code, "DENY_WRITE_SET_MALFORMED");
+  // Ordinary names with interior dots are fine (must still ALLOW under their prefix).
+  assert.deepEqual(evalWS({ candidatePaths: ["src/write-set-policy.mjs"], allowedPaths: ["src"] }), { ok: true });
+});
+
+// ---------------------------------------------------------------------------
 // Config-equivalence parity — the write-set matcher must agree with the live
 // `pathSubset` in context-federation-service.mjs (B3). The reference below is
 // that function copied VERBATIM from src/services/context-federation-service.mjs:43-48;
