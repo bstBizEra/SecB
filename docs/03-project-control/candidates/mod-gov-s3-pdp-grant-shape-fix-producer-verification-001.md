@@ -172,3 +172,90 @@ self_certification:
   approval_authority: false
   ready_for_operator_review: true
 ```
+
+---
+
+## Addendum 002: grant.roles ELEMENT-shape fast-follow (S3-N1, round 4)
+
+- record_id: MOD-GOV-S3-PDP-GRANT-SHAPE-FIX-PRODUCER-VERIFICATION-001-ADD-002
+- status: CANDIDATE (advisory work product; operator ratification required — no push, no merge, no live branch touched)
+- producer: claude-motor (BST-SA motor role: execution planning, implementation, receipts)
+- team_id: BST-SA
+- worker role: advisory/implementation only. This session neither approves nor authorizes merge/production.
+- branch: `bst/mod-gov-s3-pdp-grant-shape-fix-001` (built on top of `037da18`, not a new branch)
+- source finding: `docs/03-project-control/candidates/mod-gov-s3-pdp-grant-shape-fix-round3-independent-review-001.md` (independent review of Addendum 001's fix, commit `037da18`), §2b "Round-4 probe: `grant.roles`' OWN elements — NOT checked. Confirmed real gap", scenario T3b
+- reviewer of the prior fix: claude-rev-sec (REV/SEC role), verdict APPROVE_WITH_NOTES with this one open item, recommended as a named round-4 fast-follow
+
+### Extends, does not restate
+
+This addendum does not rewrite anything above. The original fix (`507b24d`), fast-follows (`95bdbcc`, `037da18`), and this record's own account of them (including Addendum 001) stand unchanged. This addendum covers only the fourth-layer gap the round-3 independent review found.
+
+### Root cause (round 1's container-only mistake, repeated one field over)
+
+The round-1 fix validates `grant.roles`' **container** type (`Array.isArray(...) || grant.roles instanceof Set`) but never its own **elements**. `grant.roles` then flows unchanged into `new Set(grant.roles ?? [])`, and `sod.checkConflictingRoles(roleSet, { normalize: true })` (`sod-rules.mjs:96-114`) maps every element through `normalizeRole()` (`sod-rules.mjs:68-71`), which returns `null` for any non-string input:
+
+```js
+// sod-rules.mjs, normalizeRole()
+export function normalizeRole(role) {
+  if (typeof role !== "string" || role.length === 0) return null;
+  return ROLE_ALIASES[role] ?? role;
+}
+```
+
+`null` can never equal a `CONFLICTING_ROLE_PAIRS` entry (all literal role strings), so a malformed element is silently treated as "no role" instead of denying. The round-3 review's `T3b` scenario (`roles:[{shouldHaveBeen:"ENGIN"}]`, requester role `REV`) demonstrates this is not harmless noise: when the malformed element is the ONLY element, the real conflict it stands in for is entirely lost and the result flips to a clean `ALLOW` — the identical coercion-to-permissive-absence bug class rounds 1-3 each closed one field/level at a time (`grant.roles` container type -> `grant.history` key names -> `grant.history` values), now confirmed for `grant.roles`' own elements.
+
+### The fix
+
+In `src/control/policy-decision-point.mjs`, immediately after the existing `grant.roles` container-type check (same fail-fast location, still strictly before the SoD `try` block), added: when `grant.roles` IS an Array or Set, every one of its elements must be a well-formed (non-blank) role string. This reuses the **exact same well-formedness convention already used throughout this file** — `isBlank()` (`typeof value !== "string" || value.trim() === ""`), the same predicate this file already applies to the top-level request's own `role` field in `validateShape()` and to `grant.history` values in Addendum 001 — not a new, invented format. `sod-rules.mjs`'s own role/actor-shape checks (`checkProhibitedActors()`'s `typeof role !== "string" || role.length === 0`) confirm the same non-blank-string convention is what this codebase treats as "well-formed" for role tokens; `CANONICAL_ROLES` (the closed vocabulary of role names) is documentation only and is not enforced as a membership check anywhere in `sod-rules.mjs`, so restricting to that enumeration would have been inventing a new, stricter convention rather than reusing the existing one — deliberately not done here. Any malformed element denies with the **same** `DENY_MALFORMED_GRANT_SHAPE` code used by every prior round, since this is the same bug class, not a new one. An empty Array/Set is accepted (vacuously well-formed — no roles granted, no restriction), matching the existing treatment of empty collections elsewhere in this fix line.
+
+No other file changed. `sod-rules.mjs` remains read-only imported, not modified.
+
+### Regression tests (reviewer's exact scenario, reproduced first-hand)
+
+Added to `tests/policy-decision-point.test.mjs`:
+
+- **Reviewer's exact scenario (T3b)**: `roles:[{shouldHaveBeen:"ENGIN"}]`, requester role `REV` — pre-fix (confirmed by reading the unpatched element-consumption path through `normalizeRole()`) this returns `ALLOW`; post-fix this returns `DENY` / `DENY_MALFORMED_GRANT_SHAPE`. **Closed.**
+- T3's shape (`roles:["ENGIN", {fake:"role"}]`, a genuine conflicting string alongside a malformed element) — still denies post-fix, now via `DENY_MALFORMED_GRANT_SHAPE` (shape validation runs before the SoD check) rather than `SOD_ROLE_CONFLICT`; fail-closed either way, never `ALLOW`.
+- A blank/whitespace-only string element (`["ENGIN", "   "]`) denies as malformed, not silently treated as no role.
+- A Set containing a malformed non-string element (`new Set(["ENGIN", 42])`) denies as malformed.
+- Well-shaped `roles` (all valid role strings, both Array and Set forms) remain unaffected: a genuine conflict still denies via `SOD_ROLE_CONFLICT`, and a genuinely non-conflicting well-shaped grant still `ALLOW`s — no new false denials.
+- An empty Array/Set `grant.roles` is accepted (no roles granted, no restriction) — no new false denial.
+
+### Test counts
+
+- Module file (`tests/policy-decision-point.test.mjs`): **43 tests (before this addendum) -> 49 tests (after, +6 new)**, all passing both before and after.
+- Full repo suite (`node --test tests/*.test.mjs`), re-run in this same worktree both before and after this addendum's change:
+  - **Before**: 1113 tests / 1108 pass / 0 fail / 5 skip (matches the round-3 independent review's independently-reproduced count exactly).
+  - **After**: 1119 tests / 1114 pass / 0 fail / 5 skip.
+- `node tools/validate-foundation.mjs`: exit 0 both before and after (no FAIL entries).
+- Hardcoded test-ID branching: none found — re-grepped `src/control/policy-decision-point.mjs` and `src/control/sod-rules.mjs` for `NODE_ENV`/`process.env`, and `policy-decision-point.mjs` for literal actor-id/decision-id equality branching; repo-wide `grep -rl "NODE_ENV" src/` also empty.
+
+### Explicitly out of scope: Unicode/whitespace-confusable actor-id concern (not touched)
+
+The round-3 review's §4 finding (a zero-width space, U+200B, passes `isBlank()`'s shape check as "well-formed" yet is semantically inert against real actor-ids) is **deliberately not addressed by this addendum**, per the review's own correct assessment: this is an identity-canonicalization concern, not a shape-validation defect, and there is no convention mismatch to close — `sod-rules.mjs`'s `collectProhibited()`/`checkProhibitedActors()` performs **zero normalization** of its own (raw strict equality), so the PDP's `isBlank` check and the SoD module's comparison are already mutually consistent (neither normalizes). Adding Unicode-aware trimming or normalization at the shape-validation boundary would introduce an inconsistency between what the gate accepts and what the matcher expects, not close one. This producer concurs with the reviewer's disposition and has not touched it; it remains an out-of-scope, undeferred-elsewhere note for any future K-14-activation-time identity-canonicalization slice, should the PDP ever be wired to real, external-string actor-ids.
+
+### Recursion assessment: does round 5 exist?
+
+The round-3 independent review's own conclusion: **no.** Its reasoning, endorsed here after independently re-deriving it from the current source rather than merely re-stating it:
+
+- Every nested field `decide()` reads from an injected collaborator is now shape-checked: the caller's `request` envelope has been validated since the module's original merge (closed-key, non-blank-string, nested `target`/`context` shapes); `grant.roles` now has both its container type (round 1, `507b24d`) AND its own elements (this round 4) validated; `grant.history` now has its key names (round 1, `507b24d`) AND its values, including element-level checks inside Array/Set values (round 2 / Addendum 001, `037da18`), validated.
+- `grant.decisionId` is already `isBlank`-checked; `grant.allowed` is already strict-`=== true`-checked; the round-3 review's own prior round confirmed no sibling-collaborator gap on `identity`/`contract`/`risk`.
+- No further nested field inside the `grant` object exists that `sod-rules.mjs` dereferences without an existing PDP-side check. The shape-validation dimension of this fix line is, as of this commit, structurally complete.
+
+This producer's own confirmation, independent of merely trusting the reviewer's prose: reading `decide()` top to bottom, every value passed to `sod.checkConflictingRoles`/`sod.checkProhibitedActors` (the only two SoD-facing collaborator outputs) is now shape-validated at every level the SoD primitives themselves dereference (`roleSet` elements; `history` keys and, per-key, values and their own Array/Set elements). No round 5 is anticipated for this fix line; a future change to `sod-rules.mjs`'s own dereferencing pattern (e.g. a new field consumed by a new SoD primitive) would be a new charter, not a continuation of this one.
+
+### Status
+
+- Local commit only on `bst/mod-gov-s3-pdp-grant-shape-fix-001`, built directly on top of `037da18` (same branch, not a new one). No push, no merge, no operator ratification yet.
+- Still UNWIRED — no change to the PDP's export surface, no new deny code (reuses `DENY_MALFORMED_GRANT_SHAPE`), no new import anywhere, `state-machine.mjs` untouched.
+- The round-3 review's Unicode/whitespace-confusable-actor-id finding (§4) is explicitly out of scope, per above — not attempted, not deferred elsewhere as a fast-follow of this fix line, left as a standing identity-canonicalization note.
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: claude-rev-sec
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```

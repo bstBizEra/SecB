@@ -30,9 +30,17 @@
 //     syntactically valid key paired with a malformed VALUE (an object, a
 //     number) reproduces the identical bug one level deeper (S3-N1,
 //     independent review of the fix,
-//     mod-gov-s3-pdp-grant-shape-fix-independent-review-001 §2b). Any other
-//     shape denies with DENY_MALFORMED_GRANT_SHAPE — it is never silently
-//     coerced to "absent/empty", because that coercion is what let a
+//     mod-gov-s3-pdp-grant-shape-fix-independent-review-001 §2b). `roles`'
+//     own elements, when it is an Array/Set, must likewise each be a
+//     well-formed (non-blank) role string — the round-1 fix only checked the
+//     CONTAINER type, so a malformed element (e.g. an object where a role
+//     string belonged) silently normalized to `null` inside
+//     sod-rules.mjs's checkConflictingRoles()/normalizeRole() and could never
+//     match a conflicting-role pair, masking a genuine SOD_ROLE_CONFLICT as a
+//     false ALLOW (round-3 independent review,
+//     mod-gov-s3-pdp-grant-shape-fix-round3-independent-review-001 §2b, T3b).
+//     Any other shape denies with DENY_MALFORMED_GRANT_SHAPE — it is never
+//     silently coerced to "absent/empty", because that coercion is what let a
 //     malformed or differently-keyed grantResolver output silently disable
 //     the SoD check and flip a real conflict/prohibition into a false ALLOW.
 //
@@ -355,6 +363,29 @@ export function createPolicyDecisionPoint({
         "grantResolver returned grant.roles that is neither an Array nor a Set",
         grant.decisionId
       );
+    }
+    // Validate each ELEMENT of an Array/Set grant.roles, not just the
+    // container type (S3-N1, round-4 fast-follow: round-3 independent review
+    // mod-gov-s3-pdp-grant-shape-fix-round3-independent-review-001 §2b, T3b).
+    // sod-rules.mjs's checkConflictingRoles({ normalize: true }) maps every
+    // element through normalizeRole(), which returns null for any non-string
+    // input; null can never match a CONFLICTING_ROLE_PAIRS entry, so a
+    // malformed element (e.g. an object where a role string belonged) is
+    // silently treated as "no role" instead of denying — the identical
+    // coercion-to-permissive-absence bug class the container-type check and
+    // the grant.history checks above exist to close, one field over. Same
+    // well-formedness convention already used throughout this file (isBlank)
+    // and by sod-rules.mjs's own role/actor checks (non-empty string) — not a
+    // new format. Denies with the SAME DENY_MALFORMED_GRANT_SHAPE code.
+    if (Array.isArray(grant.roles) || grant.roles instanceof Set) {
+      const malformedRoleElementCount = [...grant.roles].filter((value) => isBlank(value)).length;
+      if (malformedRoleElementCount > 0) {
+        return deny(
+          "DENY_MALFORMED_GRANT_SHAPE",
+          "grantResolver returned grant.roles containing element(s) that are not well-formed (non-blank) role strings",
+          grant.decisionId
+        );
+      }
     }
     if (grant.history !== undefined && !isPlainObject(grant.history)) {
       return deny(
