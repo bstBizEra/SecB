@@ -464,7 +464,6 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
     "src/control/write-set-policy.mjs",
     "src/services/context-federation-service.mjs",
     "src/control/risk-registry.mjs",
-    "tools/validate-foundation.mjs",
     "package.json"
   ];
   for (const rel of guarded) {
@@ -472,6 +471,15 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, baseBlob, `${rel} blob differs from ${BASE}`);
   }
+  // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
+  // workspace-lease schema registration, 16->17 schemas), so it is no longer
+  // blob-identical to ${BASE}. Pin it to its post-S3 blob instead of dropping
+  // the guard, so any UNAUTHORIZED further drift of the validator still fails.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
+    "d0ba1e920f295b7522cb7561c2f9e3bfda2093ce",
+    "validate-foundation.mjs pinned to its post-MOD-WSPACE-S3 blob"
+  );
   // Sanity: the reused primitive actually still exports the containment evaluator
   // this module leans on, so the guard protects the right thing.
   const wsp = readFileSync(resolve(root, "src/control/write-set-policy.mjs"), "utf8");
