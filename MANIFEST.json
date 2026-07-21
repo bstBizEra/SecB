@@ -460,6 +460,20 @@
     "tests/fixtures/invalid/skill-promotion-missing-id.json",
     "docs/03-project-control/candidates/mod-skill-s2-governed-promotion-producer-verification-001.md",
     "docs/03-project-control/candidates/mod-skill-s2-governed-promotion-independent-review-001.md",
-    "docs/03-project-control/candidates/mod-skill-s2-crossrev-001.md"
+    "docs/03-project-control/candidates/mod-skill-s2-crossrev-001.md",
+    "contracts/integration-queue-entry.schema.json",
+    "tests/fixtures/valid/integration-queue-entry.json",
+    "tests/fixtures/invalid/integration-queue-entry-missing-id.json",
+    "src/ledger/integration-queue-ledger.mjs",
+    "tests/integration-queue-ledger.test.mjs",
+    "src/control/integration-collision-forecast.mjs",
+    "tests/integration-collision-forecast.test.mjs",
+    "docs/03-project-control/candidates/mod-integ-queue-s1-ledger-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-integ-queue-s1-ledger-independent-review-001.md",
+    "docs/03-project-control/candidates/mod-integ-queue-s1-status-transition-fix-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-integ-queue-s1-status-transition-fix-independent-review-001.md",
+    "docs/03-project-control/candidates/mod-integ-queue-s2-collision-forecast-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-integ-queue-s2-collision-forecast-independent-review-001.md",
+    "docs/03-project-control/candidates/mod-integ-s1-s2-crossrev-001.md"
   ]
 }
