@@ -401,3 +401,250 @@ test("S2 ladder outputs are deeply frozen", () => withHarness(({ service }) => {
   assert.equal(Object.isFrozen(accepted.approvals), true);
   assert.throws(() => { accepted.approvals.push("x"); }, TypeError);
 }));
+
+// ---------------------------------------------------------------------------
+// LEDGER REHYDRATION FIX: closes the second independent review's finding #4
+// (docs/03-project-control/candidates/mod-evid-s2-s3-second-independent-review-001.md).
+// Reproduces the reviewer's exact restart/new-instance scenario: a "process A"
+// instance runs the full lifecycle, then a FRESH "process B" instance is
+// constructed against the SAME ledger file (the ordinary consequence of a
+// restart, redeploy, or crash recovery) with an empty starting Map of its own.
+// Pre-fix, process B saw nothing, silently re-admitted a forged registration,
+// and verifyChain() lied (`valid: true`, empty accepted/sealed arrays).
+// ---------------------------------------------------------------------------
+
+function freshInstance(path, now) {
+  const ledger = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+  return new EvidenceEnvelopeService({ durableLedger: ledger, now });
+}
+
+test("REHYDRATION: a fresh instance over the same ledger sees the true ACCEPTED status, not CAPTURED", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    // Process A: full lifecycle to ACCEPTED with distinct actors.
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    serviceA.recordVerification(EV, 1, VERIFIER, "pass");
+    serviceA.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+    assert.equal(serviceA.getEnvelope(EV, 1).verificationStatus, "ACCEPTED");
+
+    // Process B: brand-new instance, same ledger file, simulating a restart.
+    // The reviewer's reproduction: pre-fix this threw DENY_UNKNOWN_EVIDENCE
+    // (the fresh Map had no record at all).
+    const serviceB = freshInstance(path, clock);
+    const fetched = serviceB.getEnvelope(EV, 1);
+    assert.equal(fetched.verificationStatus, "ACCEPTED");
+    assert.equal(fetched.verifierActorId, VERIFIER);
+    assert.equal(fetched.acceptorActorId, ACCEPTOR);
+    assert.equal(fetched.verdict, "pass");
+    assert.deepEqual(fetched.approvals, APPROVALS);
+
+    // resolveAccepted must likewise see the real, live ACCEPTED state.
+    const resolved = serviceB.resolveAccepted(EV);
+    assert.equal(resolved.ok, true);
+    assert.equal(resolved.envelope.verification_status, "ACCEPTED");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION: the duplicate-registration guard on a fresh instance is enforced against the real ledger history", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    serviceA.recordVerification(EV, 1, VERIFIER, "pass");
+    serviceA.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+
+    // Process B: the reviewer's exact attack. Pre-fix, this SUCCEEDED (no
+    // DENY_DUPLICATE) and silently reset the identity's live view to a fresh
+    // CAPTURED record carrying attacker-controlled content and a forged actor.
+    const serviceB = freshInstance(path, clock);
+    const forged = envelope({ actor_id: "attacker-evil", result: "FORGED" });
+    denies(() => serviceB.registerEnvelope(forged), "DENY_DUPLICATE");
+
+    // The real ACCEPTED history must remain visible and untouched by the
+    // forgery attempt.
+    const fetched = serviceB.getEnvelope(EV, 1);
+    assert.equal(fetched.verificationStatus, "ACCEPTED");
+    assert.equal(fetched.envelope.result, "PASS");
+    assert.equal(fetched.envelope.actor_id, PRODUCER);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION: verifyChain on a fresh instance reports the TRUE state, not empty accepted/sealed arrays", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    serviceA.recordVerification(EV, 1, VERIFIER, "pass");
+    serviceA.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+    const chainA = serviceA.verifyChain(EV);
+
+    const serviceB = freshInstance(path, clock);
+    const chainB = serviceB.verifyChain(EV);
+
+    // Pre-fix reproduction: serviceB.verifyChain(EV) returned
+    // `{ valid: true, sealedVersions: [], acceptedVersions: [], quarantinedVersions: [], ledger: { count: 4 } }`
+    // -- reporting a governed, previously-ACCEPTED identity as never-sealed/
+    // never-accepted. Post-fix it must match process A's own view exactly.
+    assert.equal(chainB.valid, true);
+    assert.deepEqual(chainB.registeredVersions, chainA.registeredVersions);
+    assert.deepEqual(chainB.acceptedVersions, [1]);
+    assert.deepEqual(chainB.verifiedVersions, chainA.verifiedVersions);
+    assert.deepEqual(chainB.sealedVersions, chainA.sealedVersions);
+    assert.deepEqual(chainB.quarantinedVersions, chainA.quarantinedVersions);
+    assert.equal(chainB.ledger.count, 4);
+    assert.equal(chainB.ledger.headHash, chainA.ledger.headHash);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION: a fresh instance mid-ladder (SEALED only) continues the SAME lifecycle correctly", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+
+    // Restart mid-ladder: instance B only ever sees the SEAL entry.
+    const serviceB = freshInstance(path, clock);
+    assert.equal(serviceB.getEnvelope(EV, 1).verificationStatus, "SEALED");
+
+    // The ladder continues correctly on the rehydrated record, including SoD.
+    serviceB.requestVerification(EV, 1, REQUESTER);
+    denies(() => serviceB.recordVerification(EV, 1, PRODUCER, "pass"), "DENY_VERIFIER_IS_PRODUCER");
+    serviceB.recordVerification(EV, 1, VERIFIER, "pass");
+    denies(() => serviceB.acceptEvidence(EV, 1, VERIFIER, APPROVALS), "DENY_SOD");
+    const accepted = serviceB.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+    assert.equal(accepted.verificationStatus, "ACCEPTED");
+
+    // A THIRD instance, restarted again after full acceptance, sees it all.
+    const serviceC = freshInstance(path, clock);
+    const chain = serviceC.verifyChain(EV);
+    assert.deepEqual(chain.acceptedVersions, [1]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION: a QUARANTINED-only restart is visible and re-registration is still denied", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    serviceA.recordVerification(EV, 1, VERIFIER, "fail");
+
+    const serviceB = freshInstance(path, clock);
+    assert.equal(serviceB.getEnvelope(EV, 1).verificationStatus, "QUARANTINED");
+    denies(() => serviceB.registerEnvelope(envelope()), "DENY_DUPLICATE");
+    denies(() => serviceB.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS), "DENY_UNDEFINED_TRANSITION");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION: multiple evidence identities and versions all rehydrate independently", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    const serviceA = freshInstance(path, clock);
+    // v1: full accept.
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    serviceA.recordVerification(EV, 1, VERIFIER, "pass");
+    serviceA.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+    // v2 of the same evidence_id: only sealed.
+    serviceA.registerEnvelope(envelope({ version: 2 }));
+    serviceA.sealEnvelope(EV, 2);
+    // A second, distinct evidence_id: only registered+sealed, never verified.
+    const OTHER = "ev_modevid_s1_other";
+    serviceA.registerEnvelope(envelope({ evidence_id: OTHER }));
+    serviceA.sealEnvelope(OTHER, 1);
+
+    const serviceB = freshInstance(path, clock);
+    assert.equal(serviceB.getEnvelope(EV, 1).verificationStatus, "ACCEPTED");
+    assert.equal(serviceB.getEnvelope(EV, 2).verificationStatus, "SEALED");
+    assert.equal(serviceB.getEnvelope(OTHER, 1).verificationStatus, "SEALED");
+    const chain = serviceB.verifyChain(EV);
+    assert.deepEqual(chain.acceptedVersions, [1]);
+    assert.deepEqual(chain.sealedVersions, [2]);
+    assert.deepEqual(chain.registeredVersions, [1, 2]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION: construction against a chain-broken ledger fails closed (DENY_CHAIN_BROKEN)", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    writeFileSync(path, readFileSync(path, "utf8").replace("PASS", "FAIL"), "utf8");
+
+    denies(() => freshInstance(path, clock), "DENY_CHAIN_BROKEN");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION: construction with a ledger whose read() throws an unrecognized error denies DENY_LEDGER_REHYDRATION", () => {
+  const throwingLedger = {
+    read: () => { throw new Error("disk unavailable"); },
+    verify: () => ({ valid: true, count: 0, headHash: "0".repeat(64) }),
+    append: () => { throw new Error("disk unavailable"); }
+  };
+  denies(() => new EvidenceEnvelopeService({ durableLedger: throwingLedger }), "DENY_LEDGER_REHYDRATION");
+});
+
+test("REHYDRATION: normal single-instance lifecycle is entirely unaffected (no double-rehydration drift)", () => withHarness(({ service }) => {
+  // The construction-time rehydrate() on an empty, freshly-created ledger
+  // must be a no-op: identical to pre-fix behavior for the common case of a
+  // single continuously-running instance.
+  const registered = service.registerEnvelope(envelope());
+  assert.equal(registered.verificationStatus, "CAPTURED");
+  const sealed = service.sealEnvelope(EV, 1);
+  assert.equal(sealed.verificationStatus, "SEALED");
+  const requested = service.requestVerification(EV, 1, REQUESTER);
+  assert.equal(requested.verificationStatus, "VERIFICATION_PENDING");
+  const verified = service.recordVerification(EV, 1, VERIFIER, "pass");
+  assert.equal(verified.verificationStatus, "VERIFIED");
+  const accepted = service.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+  assert.equal(accepted.verificationStatus, "ACCEPTED");
+  const chain = service.verifyChain(EV);
+  assert.equal(chain.valid, true);
+  assert.deepEqual(chain.acceptedVersions, [1]);
+}));

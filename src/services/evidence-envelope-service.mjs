@@ -29,6 +29,39 @@ import { checkProhibitedActors } from "../control/sod-rules.mjs";
 // sealing convention (handoff-service, context-federation-service):
 // sha-256 canonical fingerprint over the envelope with content_hash itself
 // excluded.
+//
+// LEDGER REHYDRATION (fast-follow, second independent review of S2/S3,
+// docs/03-project-control/candidates/mod-evid-s2-s3-second-independent-review-001.md,
+// finding #4): #records used to start as an empty Map on every construction,
+// trusting only whatever the current process happened to remember. A second
+// instance pointed at the SAME ledger file (an ordinary process restart,
+// redeploy, or crash recovery) therefore saw a governed, previously-ACCEPTED
+// identity as unregistered -- silently defeating the DENY_DUPLICATE guard
+// (registerEnvelope re-admitted the identity as fresh CAPTURED with
+// attacker-controlled content) and making verifyChain() report `valid: true`
+// with empty accepted/sealed arrays despite the ledger still holding the
+// real history. The fix: #rehydrate() below reconstructs #records from the
+// durable ledger's own SEAL/VERIFICATION_REQUEST/VERIFICATION/ACCEPTANCE
+// entries at the END of construction, so the duplicate guard, status reads,
+// and SoD checks are always evaluated against ledger-derived truth, never an
+// empty process-lifetime Map. No other ledger-backed service in this repo
+// (context-federation-service, handoff-service, work-package-service,
+// goal-graph-service, knowledge-linkage-service) injects a full
+// append+read+verify DurableLedger AND keeps an in-memory lifecycle
+// projection over it the way this one does, so there was no existing
+// rehydrate-on-construct pattern to reuse; this introduces one, scoped to
+// this service.
+//
+// SCOPE NOTE (honest limitation, not a new gap): registerEnvelope() itself
+// still does not append to the ledger -- only sealEnvelope() and the S2
+// ladder methods do (audit-before-effect, unchanged by this fix). A record
+// that is registered (CAPTURED) but never sealed therefore has no durable
+// trace anywhere and cannot be rehydrated; after a restart it is simply
+// unknown again, exactly as if it had never been registered. This is not a
+// security regression: no governed lifecycle event was ever durably
+// recorded for a CAPTURED-only record, so there is nothing for a restart to
+// silently erase or for a forged re-registration to overwrite. Rehydration
+// begins at SEALED, the first durable event in this service's lifecycle.
 
 const EVIDENCE_MACHINE = STATE_MACHINES.Evidence;
 const REACHABLE_STATES = new Set(Object.values(EVIDENCE_MACHINE).flat());
@@ -106,6 +139,84 @@ export class EvidenceEnvelopeService {
     this.#validate = schemaValidator;
     this.#ledger = durableLedger;
     this.#now = now;
+    this.#rehydrate();
+  }
+
+  // Reconstructs #records from the durable ledger's own entries (see the
+  // header comment's LEDGER REHYDRATION note). Runs once, at the end of
+  // construction, so every instance -- the first one ever created against a
+  // ledger file, or the tenth one after nine restarts -- starts from the
+  // same ledger-derived truth instead of an empty Map. Read-only: never
+  // appends, never mutates the ledger, and denies fail-closed (rather than
+  // silently starting from a partially-rehydrated state) if the ledger
+  // itself cannot be read and verified.
+  #rehydrate() {
+    let records;
+    try {
+      records = this.#ledger.read();
+    } catch (error) {
+      if (["LEDGER_INTEGRITY_FAILURE", "LEDGER_CORRUPT"].includes(error?.code)) {
+        deny("DENY_CHAIN_BROKEN", `Durable ledger chain is broken; cannot rehydrate: ${error.message}`);
+      }
+      deny("DENY_LEDGER_REHYDRATION", `Durable ledger read failed; cannot rehydrate: ${error?.message ?? error}`);
+    }
+
+    // Ledger lines are append-only and DurableLedger#verifyRecords enforces
+    // strictly increasing `sequence`, so `records` (as returned by read())
+    // is already in chronological append order; folding over it in order
+    // reproduces exactly the same field-by-field record shape each live
+    // ladder method builds when it appends, with no re-ordering needed.
+    for (const line of records) {
+      const type = line?.entry?.type;
+      const envelope = line?.entry?.payload?.envelope;
+      if (!envelope || typeof envelope.evidence_id !== "string" || !Number.isInteger(envelope.version)) continue;
+
+      const key = recordKey(envelope.evidence_id, envelope.version);
+      const ledgerReceipt = { sequence: line.sequence, recordHash: line.recordHash };
+
+      if (type === SEAL_ENTRY_TYPE) {
+        // The SEAL entry is the earliest durable event for any identity, so
+        // it is where the record scaffold is first created. registeredAt is
+        // reconstructed as this seal timestamp -- a documented best-effort
+        // proxy, since registerEnvelope() itself never reaches the ledger
+        // (see the SCOPE NOTE above); it is informational output only and
+        // is never consulted by any guard or SoD check.
+        this.#records.set(key, {
+          envelope: frozenClone(envelope),
+          status: line.entry.payload.sealed_status,
+          registeredAt: line.entry.timestamp,
+          sealedAt: line.entry.timestamp,
+          ledgerSequence: ledgerReceipt.sequence,
+          ledgerRecordHash: ledgerReceipt.recordHash
+        });
+      } else if (type === VERIFICATION_REQUEST_ENTRY_TYPE) {
+        const record = this.#records.get(key);
+        if (!record) continue; // no seal entry precedes it; unreachable on a self-consistent ledger
+        record.status = line.entry.payload.next_status;
+        record.verificationRequestedAt = line.entry.timestamp;
+        record.verificationRequestedBy = line.entry.payload.requested_by;
+        record.verificationRequestLedger = ledgerReceipt;
+      } else if (type === VERIFICATION_ENTRY_TYPE) {
+        const record = this.#records.get(key);
+        if (!record) continue;
+        record.status = line.entry.payload.next_status;
+        record.verifiedAt = line.entry.timestamp;
+        record.verifierActorId = line.entry.payload.verifier;
+        record.verdict = line.entry.payload.verdict;
+        record.verificationLedger = ledgerReceipt;
+      } else if (type === ACCEPTANCE_ENTRY_TYPE) {
+        const record = this.#records.get(key);
+        if (!record) continue;
+        record.status = line.entry.payload.next_status;
+        record.acceptedAt = line.entry.timestamp;
+        record.acceptorActorId = line.entry.payload.acceptor;
+        record.approvals = Object.freeze([...(line.entry.payload.approvals ?? [])]);
+        record.acceptanceLedger = ledgerReceipt;
+      }
+      // Any other entry type in the same ledger file is not this service's
+      // concern and is skipped rather than denied -- read-only rehydration
+      // must never fail closed over content it does not own.
+    }
   }
 
   registerEnvelope(envelope) {
