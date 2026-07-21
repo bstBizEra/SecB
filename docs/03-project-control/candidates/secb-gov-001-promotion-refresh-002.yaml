@@ -1,0 +1,30 @@
+artifact_id: SECB-GOV-001-PROMOTION-REFRESH-002
+artifact_type: exact_sha_promotion_refresh
+status: READY_FOR_INDEPENDENT_REVIEW
+authority_status: advisory_only
+baseline:
+  commit: c4a5f364c2a4d221439454df9818840164cdbae6
+  branch: producer/codex/mcp/p0a-gateway-core-rework-011
+  prior_queue_record: docs/03-project-control/candidates/secb-gov-001-promotion-queue-001.yaml
+scope: bounded_local_read_only_activation
+acceptance:
+  npm_test:
+    tests: 559
+    pass: 554
+    fail: 0
+    skipped: 5
+    exit_code: 0
+  exact_sha_review_required: true
+  independent_rev: pending
+  independent_qa: pending
+  independent_sec: pending
+  evidence_acceptance: pending
+  human_gov: pending
+hard_denials:
+  - no_push
+  - no_merge_to_main
+  - no_release
+  - no_deployment
+  - no_activation
+  - no_stable_claim
+recommendation: HOLD_UNTIL_EXACT_SHA_REV_QA_SEC_AND_HUMAN_GOV
