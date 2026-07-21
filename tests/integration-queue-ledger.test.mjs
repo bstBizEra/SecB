@@ -157,14 +157,183 @@ test("a status-transition version bump on the SAME queue_entry_id is not a dupli
 test("after MERGED/REJECTED, the same candidate_branch may be resubmitted under a NEW queue_entry_id", () => withTempLedger((directory) => {
   const ledger = newLedger(directory);
   ledger.appendEntry(entry(), { expectedSequence: 0, idempotencyKey: "idem_1" });
-  ledger.appendEntry(entry({ version: 2, status: "REJECTED" }), { expectedSequence: 1, idempotencyKey: "idem_2" });
+  // SUBMITTED -> IN_REVIEW -> REJECTED: the only legal path to a terminal
+  // status (a direct SUBMITTED -> REJECTED skip is itself an invalid
+  // transition now denied by DENY_INVALID_STATUS_TRANSITION; covered
+  // separately below).
+  ledger.appendEntry(entry({ version: 2, status: "IN_REVIEW" }), { expectedSequence: 1, idempotencyKey: "idem_2" });
+  ledger.appendEntry(entry({ version: 3, status: "REJECTED" }), { expectedSequence: 2, idempotencyKey: "idem_3" });
 
   const resubmitted = ledger.appendEntry(
     entry({ queue_entry_id: "iq_test_002", version: 1 }),
-    { expectedSequence: 2, idempotencyKey: "idem_3" }
+    { expectedSequence: 3, idempotencyKey: "idem_4" }
   );
   assert.equal(resubmitted.ok, true);
-  assert.equal(resubmitted.record.sequence, 3);
+  assert.equal(resubmitted.record.sequence, 4);
+}));
+
+// --- Status-transition validity (atomic preWriteCheck-based gate) ----------
+//
+// Regression coverage for the exact gap disclosed in the independent review
+// (docs/03-project-control/candidates/
+// mod-integ-queue-s1-ledger-independent-review-001.md §2): neither the
+// schema nor the ledger enforced any status-TRANSITION discipline, so a
+// caller could insert `status: "MERGED"` directly as version 1, or walk a
+// terminal (MERGED/REJECTED) entry backward to an active status under the
+// SAME queue_entry_id. Both scenarios are reproduced here exactly as the
+// reviewer described them, then closed by DENY_INVALID_STATUS_TRANSITION.
+
+test("appendEntry denies status: MERGED inserted directly as version 1 (reviewer scenario a)", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+  const result = ledger.appendEntry(
+    entry({ queue_entry_id: "q1", version: 1, status: "MERGED" }),
+    { expectedSequence: 0, idempotencyKey: "idem_1" }
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "DENY_INVALID_STATUS_TRANSITION");
+  assert.equal(result.queueEntryId, "q1");
+  assert.equal(result.fromStatus, null);
+  assert.equal(result.toStatus, "MERGED");
+  assert.equal(Object.isFrozen(result), true);
+  // Nothing was persisted by the denied append.
+  assert.equal(ledger.verify().count, 0);
+}));
+
+test("appendEntry denies version 1 inserted directly as REJECTED, or as IN_REVIEW", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+  for (const status of ["REJECTED", "IN_REVIEW"]) {
+    const result = ledger.appendEntry(
+      entry({ queue_entry_id: `q_${status}`, version: 1, status }),
+      { expectedSequence: 0, idempotencyKey: `idem_${status}` }
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "DENY_INVALID_STATUS_TRANSITION");
+    assert.equal(result.fromStatus, null);
+    assert.equal(result.toStatus, status);
+  }
+  assert.equal(ledger.verify().count, 0);
+}));
+
+test("appendEntry denies a terminal (MERGED) entry followed by any new version under the same queue_entry_id (reviewer scenario b)", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+  ledger.appendEntry(entry({ queue_entry_id: "q1" }), { expectedSequence: 0, idempotencyKey: "idem_v1" });
+  ledger.appendEntry(entry({ queue_entry_id: "q1", version: 2, status: "IN_REVIEW" }), { expectedSequence: 1, idempotencyKey: "idem_v2" });
+  ledger.appendEntry(entry({ queue_entry_id: "q1", version: 3, status: "MERGED" }), { expectedSequence: 2, idempotencyKey: "idem_v3" });
+
+  // Reviewer's exact repro: a terminal entry walked backward to SUBMITTED
+  // under the SAME queue_entry_id.
+  const backward = ledger.appendEntry(
+    entry({ queue_entry_id: "q1", version: 4, status: "SUBMITTED" }),
+    { expectedSequence: 3, idempotencyKey: "idem_v4" }
+  );
+  assert.equal(backward.ok, false);
+  assert.equal(backward.code, "DENY_INVALID_STATUS_TRANSITION");
+  assert.equal(backward.fromStatus, "MERGED");
+  assert.equal(backward.toStatus, "SUBMITTED");
+  // Any further version is denied regardless of claimed status, not just SUBMITTED.
+  const reaffirmed = ledger.appendEntry(
+    entry({ queue_entry_id: "q1", version: 4, status: "MERGED" }),
+    { expectedSequence: 3, idempotencyKey: "idem_v4b" }
+  );
+  assert.equal(reaffirmed.ok, false);
+  assert.equal(reaffirmed.code, "DENY_INVALID_STATUS_TRANSITION");
+  // Only the 3 legitimate versions were ever persisted.
+  assert.equal(ledger.verify().count, 3);
+}));
+
+test("appendEntry denies a terminal (REJECTED) entry followed by any new version under the same queue_entry_id", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+  ledger.appendEntry(entry({ queue_entry_id: "q2" }), { expectedSequence: 0, idempotencyKey: "idem_v1" });
+  ledger.appendEntry(entry({ queue_entry_id: "q2", version: 2, status: "IN_REVIEW" }), { expectedSequence: 1, idempotencyKey: "idem_v2" });
+  ledger.appendEntry(entry({ queue_entry_id: "q2", version: 3, status: "REJECTED" }), { expectedSequence: 2, idempotencyKey: "idem_v3" });
+
+  const afterTerminal = ledger.appendEntry(
+    entry({ queue_entry_id: "q2", version: 4, status: "IN_REVIEW" }),
+    { expectedSequence: 3, idempotencyKey: "idem_v4" }
+  );
+  assert.equal(afterTerminal.ok, false);
+  assert.equal(afterTerminal.code, "DENY_INVALID_STATUS_TRANSITION");
+  assert.equal(afterTerminal.fromStatus, "REJECTED");
+  assert.equal(ledger.verify().count, 3);
+}));
+
+test("appendEntry denies SUBMITTED skipping directly to MERGED or REJECTED (must pass through IN_REVIEW)", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+  ledger.appendEntry(entry({ queue_entry_id: "q3" }), { expectedSequence: 0, idempotencyKey: "idem_v1" });
+
+  const skipToMerged = ledger.appendEntry(
+    entry({ queue_entry_id: "q3", version: 2, status: "MERGED" }),
+    { expectedSequence: 1, idempotencyKey: "idem_v2" }
+  );
+  assert.equal(skipToMerged.ok, false);
+  assert.equal(skipToMerged.code, "DENY_INVALID_STATUS_TRANSITION");
+  assert.equal(skipToMerged.fromStatus, "SUBMITTED");
+  assert.equal(skipToMerged.toStatus, "MERGED");
+  assert.equal(ledger.verify().count, 1);
+}));
+
+test("legitimate lifecycle paths still succeed: SUBMITTED -> IN_REVIEW -> MERGED and SUBMITTED -> IN_REVIEW -> REJECTED", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+
+  const mergedPath = [
+    ledger.appendEntry(entry({ queue_entry_id: "q_merged_path" }), { expectedSequence: 0, idempotencyKey: "idem_m1" }),
+    ledger.appendEntry(entry({ queue_entry_id: "q_merged_path", version: 2, status: "IN_REVIEW" }), { expectedSequence: 1, idempotencyKey: "idem_m2" }),
+    ledger.appendEntry(entry({ queue_entry_id: "q_merged_path", version: 3, status: "MERGED" }), { expectedSequence: 2, idempotencyKey: "idem_m3" })
+  ];
+  for (const step of mergedPath) assert.equal(step.ok, true);
+  assert.equal(ledger.resolveEntry("q_merged_path").entry.status, "MERGED");
+
+  const rejectedPath = [
+    ledger.appendEntry(entry({ queue_entry_id: "q_rejected_path", candidate_branch: "bst/rejected-path" }), { expectedSequence: 3, idempotencyKey: "idem_r1" }),
+    ledger.appendEntry(entry({ queue_entry_id: "q_rejected_path", candidate_branch: "bst/rejected-path", version: 2, status: "IN_REVIEW" }), { expectedSequence: 4, idempotencyKey: "idem_r2" }),
+    ledger.appendEntry(entry({ queue_entry_id: "q_rejected_path", candidate_branch: "bst/rejected-path", version: 3, status: "REJECTED" }), { expectedSequence: 5, idempotencyKey: "idem_r3" })
+  ];
+  for (const step of rejectedPath) assert.equal(step.ok, true);
+  assert.equal(ledger.resolveEntry("q_rejected_path").entry.status, "REJECTED");
+}));
+
+test("a new version re-affirming the SAME non-terminal status (stay) is a legal transition", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+  ledger.appendEntry(entry({ queue_entry_id: "q_stay" }), { expectedSequence: 0, idempotencyKey: "idem_1" });
+  const staySubmitted = ledger.appendEntry(
+    entry({ queue_entry_id: "q_stay", version: 2 }),
+    { expectedSequence: 1, idempotencyKey: "idem_2" }
+  );
+  assert.equal(staySubmitted.ok, true);
+  const toReview = ledger.appendEntry(
+    entry({ queue_entry_id: "q_stay", version: 3, status: "IN_REVIEW" }),
+    { expectedSequence: 2, idempotencyKey: "idem_3" }
+  );
+  assert.equal(toReview.ok, true);
+  const stayReview = ledger.appendEntry(
+    entry({ queue_entry_id: "q_stay", version: 4, status: "IN_REVIEW" }),
+    { expectedSequence: 3, idempotencyKey: "idem_4" }
+  );
+  assert.equal(stayReview.ok, true);
+  assert.equal(ledger.resolveEntry("q_stay").version, 4);
+}));
+
+test("idempotent re-append of the exact same version is unaffected by the new status-transition gate (base-class replay path)", () => withTempLedger((directory) => {
+  const ledger = newLedger(directory);
+  const first = ledger.appendEntry(entry({ queue_entry_id: "q_replay" }), { expectedSequence: 0, idempotencyKey: "idem_replay" });
+  assert.equal(first.ok, true);
+
+  // Exact same entry + same idempotencyKey: DurableLedger.append's own
+  // idempotency-key replay check intercepts this BEFORE preWriteCheck (and
+  // therefore before #detectInvalidStatusTransition) is ever invoked again.
+  const replay = ledger.appendEntry(entry({ queue_entry_id: "q_replay" }), { expectedSequence: 0, idempotencyKey: "idem_replay" });
+  assert.equal(replay.ok, true);
+  assert.equal(replay.record.replayed, true);
+  assert.equal(replay.record.recordHash, first.record.recordHash);
+  assert.equal(ledger.verify().count, 1);
+
+  // A legitimate subsequent version transition after the replay still works normally.
+  const advanced = ledger.appendEntry(
+    entry({ queue_entry_id: "q_replay", version: 2, status: "IN_REVIEW" }),
+    { expectedSequence: 1, idempotencyKey: "idem_replay_v2" }
+  );
+  assert.equal(advanced.ok, true);
+  assert.equal(ledger.verify().count, 2);
 }));
 
 // --- Duplicate-claim denial (atomic preWriteCheck-based gate) ---------------
@@ -189,11 +358,15 @@ test("appendEntry denies a SECOND active queue_entry_id claiming the same candid
 
 test("duplicate-claim gate also fires while the incumbent is IN_REVIEW (not just SUBMITTED)", () => withTempLedger((directory) => {
   const ledger = newLedger(directory);
-  ledger.appendEntry(entry({ queue_entry_id: "iq_A", status: "IN_REVIEW" }), { expectedSequence: 0, idempotencyKey: "idem_A" });
+  // version 1 must be SUBMITTED (state-machine rule); advance to IN_REVIEW
+  // via a legitimate version-2 transition before exercising the
+  // duplicate-claim gate against the IN_REVIEW incumbent.
+  ledger.appendEntry(entry({ queue_entry_id: "iq_A" }), { expectedSequence: 0, idempotencyKey: "idem_A_v1" });
+  ledger.appendEntry(entry({ queue_entry_id: "iq_A", version: 2, status: "IN_REVIEW" }), { expectedSequence: 1, idempotencyKey: "idem_A" });
 
   const conflict = ledger.appendEntry(
     entry({ queue_entry_id: "iq_B" }),
-    { expectedSequence: 1, idempotencyKey: "idem_B" }
+    { expectedSequence: 2, idempotencyKey: "idem_B" }
   );
   assert.equal(conflict.ok, false);
   assert.equal(conflict.code, "DENY_QUEUE_DUPLICATE_CLAIM");

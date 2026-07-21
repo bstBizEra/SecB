@@ -83,6 +83,24 @@ import { DurableLedger, LedgerError } from "./durable-ledger.mjs";
 
 const ACTIVE_STATUSES = new Set(["SUBMITTED", "IN_REVIEW"]);
 
+// Status-transition validity — closes the gap disclosed in the independent
+// review (docs/03-project-control/candidates/
+// mod-integ-queue-s1-ledger-independent-review-001.md, "status" finding):
+// neither this contract nor this ledger enforced any transition discipline,
+// so a caller could insert `status: "MERGED"` directly as version 1, or walk
+// a terminal (MERGED/REJECTED) entry backward to an active status under the
+// SAME queue_entry_id. The only legal path for one queue_entry_id's lifecycle
+// is version 1 = SUBMITTED, then SUBMITTED -> IN_REVIEW -> {MERGED,
+// REJECTED}; a new version may also re-affirm (stay at) SUBMITTED or
+// IN_REVIEW, but MERGED/REJECTED are terminal — no further version is ever
+// valid once reached, regardless of the status it claims. Keyed by
+// FROM-status; a `from` with no entry here (MERGED, REJECTED, or anything
+// unrecognized) has zero legal next states.
+const VALID_STATUS_TRANSITIONS = {
+  SUBMITTED: new Set(["SUBMITTED", "IN_REVIEW"]),
+  IN_REVIEW: new Set(["IN_REVIEW", "MERGED", "REJECTED"])
+};
+
 function integrationQueueEntry(entry, idempotencyKey) {
   return {
     entryId: `${entry.queue_entry_id}@v${entry.version}`,
@@ -160,15 +178,17 @@ export class IntegrationQueueLedger extends DurableLedger {
   // inherited UNMODIFIED from DurableLedger.append — nothing below
   // reimplements or weakens any of it (mirrors CheckpointLedger.
   // appendCheckpoint / WorkspaceLeaseLedger.appendLease exactly). This method
-  // adds two things on top: an atomic single-read snapshot of the caller
-  // entry, and the duplicate-claim gate.
+  // adds three things on top: an atomic single-read snapshot of the caller
+  // entry, the status-transition-validity gate, and the duplicate-claim gate
+  // — the latter two both evaluated inside the SAME `preWriteCheck` call.
   //
-  // Returns a frozen allow/deny envelope for the duplicate-claim decision:
+  // Returns a frozen allow/deny envelope for the business-rule decision:
   //   { ok: true, record }  — where record is the base append result
+  //   { ok: false, code: "DENY_INVALID_STATUS_TRANSITION", message, ... }
   //   { ok: false, code: "DENY_QUEUE_DUPLICATE_CLAIM", message, ... }
   // Structural problems (unreadable entry, contract-invalid, missing
   // idempotencyKey) fail closed by THROWING a typed error, exactly as the
-  // sibling ledgers do; only the duplicate-claim business rule returns a
+  // sibling ledgers do; only the two business rules above return a
   // structured deny.
   appendEntry(entry, { expectedSequence, idempotencyKey } = {}) {
     const snapshot = snapshotEntry(entry);
@@ -177,14 +197,26 @@ export class IntegrationQueueLedger extends DurableLedger {
       throw new LedgerError("DENY_MISSING_ENTRY_FIELDS", "idempotencyKey is required for integration-queue-entry append");
     }
 
-    // The duplicate-claim scan runs as `preWriteCheck`, INSIDE
+    // Both business-rule gates run as ONE `preWriteCheck`, INSIDE
     // DurableLedger's own lock, against the SAME freshly-read+verified
-    // `records` the base class is about to write against — not a separate,
-    // earlier, unlocked `this.read()`. This is the atomic-from-day-one
-    // design the module header above cites the mod-wspace-s3 fix for.
+    // `records` the base class is about to write against — not two separate,
+    // differently-timed checks (this project has already paid for that
+    // mistake once; see the mod-wspace-s3 single-writer-toctou-fix citation
+    // above). A true idempotent replay (same queue_entry_id, version, AND
+    // idempotencyKey) never reaches either gate below — DurableLedger.append
+    // intercepts it earlier via its own idempotency-key replay check, before
+    // preWriteCheck is invoked at all.
     const result = this.append(integrationQueueEntry(snapshot, idempotencyKey), {
       expectedSequence,
       preWriteCheck: (records) => {
+        const invalidTransition = this.#detectInvalidStatusTransition(snapshot, records);
+        if (invalidTransition) {
+          return deny(
+            "DENY_INVALID_STATUS_TRANSITION",
+            `queue entry ${snapshot.queue_entry_id} cannot move from ${invalidTransition.fromStatus ?? "(no prior version)"} to ${invalidTransition.toStatus}`,
+            { queueEntryId: snapshot.queue_entry_id, fromStatus: invalidTransition.fromStatus, toStatus: invalidTransition.toStatus }
+          );
+        }
         const conflict = this.#detectDuplicateClaim(snapshot, records);
         if (!conflict) return null;
         return deny(
@@ -197,6 +229,32 @@ export class IntegrationQueueLedger extends DurableLedger {
 
     if (result && result.ok === false) return result;
     return Object.freeze({ ok: true, record: result });
+  }
+
+  // Status-transition validity gate. Runs against the SAME `records`
+  // parameter #detectDuplicateClaim (below) consumes — the locked,
+  // freshly-verified snapshot `preWriteCheck` receives, never a separate
+  // `this.read()`. Reduces `records` to the CURRENT (highest-version) record
+  // for THIS entry's OWN queue_entry_id only (a different id is irrelevant
+  // here; that cross-entry concern is #detectDuplicateClaim's job), then
+  // checks whether `entry.status` is a legal next state from there:
+  //   no prior version  -> only SUBMITTED is legal (this is version 1 of
+  //                         this queue_entry_id's lifecycle)
+  //   prior status X     -> only VALID_STATUS_TRANSITIONS[X] is legal;
+  //                         MERGED/REJECTED have no entry in that table, so
+  //                         ANY further version is denied once reached —
+  //                         terminal really means terminal, forever.
+  // Returns null (no problem) or { fromStatus, toStatus } describing the
+  // illegal move. `fromStatus` is null when there is no prior version.
+  #detectInvalidStatusTransition(entry, records) {
+    const current = latestByEntryId(records).get(entry.queue_entry_id);
+    if (!current) {
+      return entry.status === "SUBMITTED" ? null : { fromStatus: null, toStatus: entry.status };
+    }
+    const fromStatus = current.entry.payload.status;
+    const toStatus = entry.status;
+    const allowed = VALID_STATUS_TRANSITIONS[fromStatus];
+    return allowed && allowed.has(toStatus) ? null : { fromStatus, toStatus };
   }
 
   // Duplicate-claim gate. Scans `records` — the exact, already
