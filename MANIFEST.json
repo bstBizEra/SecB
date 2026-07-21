@@ -337,6 +337,7 @@
     "src/services/memory-candidate-provider.mjs",
     "tests/memory-candidate-provider.test.mjs",
     "docs/03-project-control/candidates/mod-mem-s3-candidate-provider-producer-verification-001.md",
+    "docs/03-project-control/candidates/mod-mem-s3-crossrev-001.md",
     "contracts/skill-candidate.schema.json",
     "src/registry/skill-candidate-registry.mjs",
     "tests/skill-candidate-registry.test.mjs",
