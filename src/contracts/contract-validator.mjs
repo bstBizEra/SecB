@@ -17,7 +17,9 @@ const schemaPaths = {
   outcomeReceipt: "outcome-receipt.schema.json",
   skillManifest: "skill-manifest.schema.json",
   skillCandidate: "skill-candidate.schema.json",
-  goal: "goal.schema.json"
+  goal: "goal.schema.json",
+  delegationRequest: "delegation-request.schema.json",
+  checkpoint: "checkpoint.schema.json"
 };
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });

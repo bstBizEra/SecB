@@ -323,6 +323,21 @@
     "docs/03-project-control/candidates/mod-know-s1-rev-001.md",
     "docs/03-project-control/candidates/mod-know-completion-rev-001.md",
     "docs/03-project-control/candidates/mod-evid-s2-gate-001.md",
-    "docs/03-project-control/candidates/mod-evid-s3-gate-001.md"
+    "docs/03-project-control/candidates/mod-evid-s3-gate-001.md",
+    "contracts/checkpoint.schema.json",
+    "tests/fixtures/valid/checkpoint.json",
+    "tests/fixtures/invalid/checkpoint-missing-id.json",
+    "src/ledger/checkpoint-ledger.mjs",
+    "tests/checkpoint-ledger.test.mjs",
+    "docs/03-project-control/candidates/mod-runtime-s1-checkpoint-ledger-producer-verification-001.md",
+    "contracts/delegation-request.schema.json",
+    "src/ledger/delegation-ledger.mjs",
+    "tests/delegation-ledger.test.mjs",
+    "tests/fixtures/valid/delegation-request.json",
+    "tests/fixtures/invalid/delegation-request-missing-budget.json",
+    "docs/03-project-control/candidates/mod-a2a-s1-delegation-ledger-producer-verification-001.md",
+    "src/control/retry-policy.mjs",
+    "tests/retry-policy.test.mjs",
+    "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md"
   ]
 }

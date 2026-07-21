@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/checkpoint.schema.json",
+  "title": "SecB Checkpoint",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["checkpoint_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "source_ledger_id", "sequence_at_checkpoint", "state_snapshot_ref", "created_at", "content_hash"],
+  "properties": {
+    "checkpoint_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "actor_id": {"type": "string", "minLength": 1},
+    "source_ledger_id": {"type": "string", "minLength": 1},
+    "sequence_at_checkpoint": {"type": "integer", "minimum": 0},
+    "state_snapshot_ref": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

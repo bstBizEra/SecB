@@ -22,7 +22,9 @@ const validFixtures = {
   outcomeReceipt: "valid/outcome-receipt.json",
   skillManifest: "valid/skill-manifest.json",
   skillCandidate: "valid/skill-candidate.json",
-  goal: "valid/goal.json"
+  goal: "valid/goal.json",
+  delegationRequest: "valid/delegation-request.json",
+  checkpoint: "valid/checkpoint.json"
 };
 
 const invalidFixtures = {
@@ -39,7 +41,9 @@ const invalidFixtures = {
   outcomeReceipt: "invalid/outcome-receipt-bad-status.json",
   skillManifest: "invalid/skill-manifest-bad-status.json",
   skillCandidate: "invalid/skill-candidate-bad-status.json",
-  goal: "invalid/goal-missing-id.json"
+  goal: "invalid/goal-missing-id.json",
+  delegationRequest: "invalid/delegation-request-missing-budget.json",
+  checkpoint: "invalid/checkpoint-missing-id.json"
 };
 
 test("all canonical contract kinds have valid fixtures", () => {
