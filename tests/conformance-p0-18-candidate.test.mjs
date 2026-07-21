@@ -373,6 +373,17 @@ test("V-016 recovery (partial): resume-point resolves; unknown fails closed; tam
 // Byte-identity guard (main @ 4abfff2)
 //   Proves every primitive this candidate composes is unmodified. If any pinned
 //   blob drifts, the candidate has silently mutated a primitive and this fails.
+//
+//   DISCLOSED, ATTRIBUTED UPDATE (bst/mod-runtime-s1-checkpoint-ordering-fix-001):
+//   src/ledger/checkpoint-ledger.mjs's pin below is intentionally re-pinned to
+//   this branch's post-fix blob, for the same reason documented at the
+//   analogous guard in conformance-v016-drift.test.mjs: this branch closes
+//   mod-runtime-s1-checkpoint-ledger-second-independent-review-001 §1 by
+//   deliberately modifying checkpoint-ledger.mjs itself (resolveLatest now
+//   resolves by sequence_at_checkpoint content order; appendCheckpoint gained
+//   a preWriteCheck-based write-side regression + actor_id-continuity gate).
+//   Every other pinned blob below is unchanged and still pinned to main @
+//   4abfff2, proving this fix touched only its intended target.
 // ---------------------------------------------------------------------------
 
 function repoPath(rel) {
@@ -393,7 +404,7 @@ const PINNED_BLOBS = Object.freeze({
   "src/live/access-mode-policy.mjs": "5d96eec7af6e717218a81ea5563e09c6b18d191b",
   "src/control/risk-registry.mjs": "b8ee7f9b979fdb3c5d5261ad0e116ecd7c6a1816",
   "src/gateway/mcp-gateway-core.mjs": "ec22a296e280d1c15a26840fba12afb34765c8d8",
-  "src/ledger/checkpoint-ledger.mjs": "4df391f892f8bac2b569c5bf9fd627ee0101c542",
+  "src/ledger/checkpoint-ledger.mjs": "c072a6207e2fa409a498429be76d95df4f363cf7",
   "src/ledger/durable-ledger.mjs": "6be08fc14ff31a7c871c5e86888af42285d40529",
   "src/contracts/contract-validator.mjs": "c3b37776ad1c928395fe681a3e9934c6decff42e",
   "src/contracts/canonical-fingerprint.mjs": "721e99032ce7040312e77138c8f156b649fd996e"
