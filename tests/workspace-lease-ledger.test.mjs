@@ -460,9 +460,12 @@ test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE
   // skill-promotion.schema.json is ALSO excluded for the same reason: it was
   // added by MOD-SKILL S2, another unrelated later slice, and does not exist at
   // ${BASE}; its additive-only nature is proven by its own ledger + contract
-  // coverage.)
+  // coverage. integration-queue-entry.schema.json is ALSO excluded for the same
+  // reason: it was added by MOD-INTEG S1, another unrelated later slice, and
+  // does not exist at ${BASE}; its additive-only nature is proven by its own
+  // ledger + contract coverage.)
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json" || file === "skill-promotion.schema.json") continue;
+    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json" || file === "skill-promotion.schema.json" || file === "integration-queue-entry.schema.json") continue;
     guarded.push(`contracts/${file}`);
   }
   for (const rel of guarded) {
