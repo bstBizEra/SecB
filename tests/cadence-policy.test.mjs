@@ -517,12 +517,14 @@ test(`byte-identity: files read but not modified are unchanged vs main @ ${BASE_
     assert.equal(worktreeBlob, baseBlob, `${rel} blob differs from base`);
   }
   // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
-  // workspace-lease schema registration, 16->17 schemas), so it is no longer
-  // blob-identical to the base commit. Pin it to its post-S3 blob so any
-  // UNAUTHORIZED further drift of the validator still fails this guard.
+  // workspace-lease schema registration, 16->17 schemas), then again by
+  // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), so it is
+  // no longer blob-identical to the base commit. Pin it to its post-MOD-MEM-S2
+  // blob so any UNAUTHORIZED further drift of the validator still fails this
+  // guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "d0ba1e920f295b7522cb7561c2f9e3bfda2093ce",
-    "validate-foundation.mjs pinned to its post-MOD-WSPACE-S3 blob"
+    "dbd4d10883e7724aa75301fc7f3b5c9528089726",
+    "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
   );
 });
