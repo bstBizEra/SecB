@@ -79,6 +79,28 @@
 // A throw anywhere in extraction is contained to the structured malformed
 // denial — the assembler never throws.
 //
+// RESOURCE-BOUNDED GAP ANALYSIS (F1 fix, mod-live-s3-second-independent-
+// review-001, applied on bst/mod-live-s3-resource-exhaustion-fix-001):
+// `sequenceGaps` used to compute `Math.min(...set)`/`Math.max(...set)` over
+// every declared `sequence` value and then synchronously fill every integer in
+// `[min..max]`. Both steps are unbounded on ordinary, non-adversarial numeric
+// input: a spread of >~100k distinct values overflows V8's call-argument limit
+// (`RangeError: Maximum call stack size exceeded`), and a large declared span
+// (e.g. two records with `sequence` 0 and 1e9) either stalls for seconds or
+// throws `RangeError: Invalid array length` — silently contradicting this
+// file's own "never throws" invariant on input this module itself labels
+// DATA_UNTRUSTED. The fix keeps two properties: (1) min/max are now computed
+// with a manual reduce loop, which has no call-argument limit regardless of
+// set size; (2) before materializing `[min..max]`, the SPAN (`max - min`) is
+// checked against `MAX_SEQUENCE_GAP_SPAN` (see its own comment for the exact
+// value and rationale). A span over the ceiling does NOT throw and does NOT
+// silently report "no gaps" — it returns a distinct, explicitly-flagged
+// `SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED` finding and `package.gaps === null`
+// (never `[]`, so a caller cannot mistake "not analyzed" for "no gaps"),
+// fail-closed and observable rather than crashing or lying. This is the only
+// behavior change in this module; every previously-analyzable sequence range
+// (span <= MAX_SEQUENCE_GAP_SPAN) produces byte-identical findings/gaps.
+//
 // House style (matches scorecard-assembler.mjs, report-projections.mjs,
 // event-family-policy.mjs): result objects — deep-frozen { ok: true, ... } on
 // success, deep-frozen { ok: false, code, message } deny-by-default on any
@@ -116,12 +138,24 @@ export const REPLAY_DENY_CODES = Object.freeze([DENY_REPLAY_MALFORMED]);
 //                         content — a finding, never a silent overwrite.
 //   SEQUENCE_GAP        — holes in the event stream's declared sequence range
 //                         [min..max]: missing sequence numbers.
+//   SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED — the declared sequence range's span
+//                         (max - min) exceeds MAX_SEQUENCE_GAP_SPAN; gap
+//                         analysis was not performed for this range (fail-
+//                         closed, not silently reported as gapless, and never
+//                         a throw or a multi-second synchronous stall — F1
+//                         fix, mod-live-s3-second-independent-review-001).
 export const REPLAY_FINDING_TYPES = Object.freeze([
   "ORDER_DISORDER",
   "ORDER_DUPLICATE",
   "ORDER_CONTRADICTION",
-  "SEQUENCE_GAP"
+  "SEQUENCE_GAP",
+  "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED"
 ]);
+
+// The distinct, explicitly-flagged outcome code returned (never thrown) when
+// a declared sequence span is too large to bound-safely gap-fill. See
+// MAX_SEQUENCE_GAP_SPAN below for the exact ceiling and its rationale.
+export const GAP_ANALYSIS_SPAN_EXCEEDED = "GAP_ANALYSIS_SPAN_EXCEEDED";
 
 // --- Doctrine data (verbatim; doc-parity enforced) --------------------------
 
@@ -363,21 +397,60 @@ function correlationFindings(eventDescriptors) {
   return findings;
 }
 
-// Gaps: holes in the event stream's declared sequence range [min..max]. Returns
-// the ascending list of missing sequence numbers (empty if none / <1 sequence).
+// F1 fix ceiling (mod-live-s3-second-independent-review-001): the maximum
+// [min..max] SPAN `sequenceGaps` will synchronously materialize. Chosen so
+// that:
+//   - it comfortably covers the plausible scale the module's own governing
+//     gap-assessment names for this exact reconciliation function — "a long-
+//     running session's event history" in the "entirely plausible... not a
+//     contrived edge case" 131k-200k-distinct-declared-sequence-values range
+//     (docs/03-project-control/candidates/mod-live-gap-assessment-001.md, G4;
+//     reproduced first-hand at 200k in the F1 finding) — with roughly 5x
+//     headroom above that named scale;
+//   - it stays measured, first-hand, at low tens of milliseconds on this
+//     ceiling (a 1,000,000-element fill measured ~20ms in this repo's own
+//     environment; the F1 finding's own table shows 1e6 at ~31ms), several
+//     orders of magnitude under any reasonable synchronous-stall budget, and
+//     bounds the `missing[]` allocation to at most 1,000,000 small-integer
+//     entries (a few MB, not the ~100M-entry / multi-second stall the F1
+//     finding reproduced at 1e8);
+//   - it is far below the 1e8 (~3.6s stall) and 1e9 (`RangeError`) magnitudes
+//     the F1 finding reproduced, so both of those scenarios land safely on
+//     the "span exceeded, not analyzed" side rather than the "attempt it and
+//     hope" side.
+// A future slice may make this configurable; today it is a single documented
+// constant so the bound is auditable in one place.
+export const MAX_SEQUENCE_GAP_SPAN = 1_000_000;
+
+// Gaps: holes in the event stream's declared sequence range [min..max].
+// Returns { boundedOut: false, missing } with the ascending list of missing
+// sequence numbers (empty if none / <1 sequence), or — when the declared span
+// exceeds MAX_SEQUENCE_GAP_SPAN — { boundedOut: true, min, max, span, limit }
+// WITHOUT ever materializing the range. Never throws: min/max are computed by
+// a manual reduce (not `Math.min(...set)`/`Math.max(...set)`, which overflows
+// V8's call-argument limit once `present` holds roughly >100k distinct values
+// — the second crash mode the F1 finding reproduced at 200k).
 function sequenceGaps(eventDescriptors) {
   const present = new Set();
   for (const d of eventDescriptors) {
     if (d.sequence !== undefined) present.add(d.sequence);
   }
-  if (present.size === 0) return [];
-  const min = Math.min(...present);
-  const max = Math.max(...present);
+  if (present.size === 0) return { boundedOut: false, missing: [] };
+  let min = Infinity;
+  let max = -Infinity;
+  for (const s of present) {
+    if (s < min) min = s;
+    if (s > max) max = s;
+  }
+  const span = max - min;
+  if (span > MAX_SEQUENCE_GAP_SPAN) {
+    return { boundedOut: true, min, max, span, limit: MAX_SEQUENCE_GAP_SPAN };
+  }
   const missing = [];
   for (let s = min; s <= max; s += 1) {
     if (!present.has(s)) missing.push(s);
   }
-  return missing;
+  return { boundedOut: false, missing };
 }
 
 // --- Assembler --------------------------------------------------------------
@@ -404,7 +477,18 @@ function sequenceGaps(eventDescriptors) {
 //       streams: { <name>: <count> },          // per-stream record counts
 //       sourceClasses: { <class>: [ {stream,index}, ... ] },  // segregation
 //       findings: [ ...ordering/dup/contradiction/gap ],       // advisory data
-//       gaps: [ ...missing sequence numbers ]                   // also in findings
+//       gaps: [ ...missing sequence numbers ] | null           // also in findings;
+//                                                               // null means the
+//                                                               // declared span
+//                                                               // exceeded
+//                                                               // MAX_SEQUENCE_GAP_SPAN
+//                                                               // and was NOT
+//                                                               // analyzed (see the
+//                                                               // SEQUENCE_GAP_
+//                                                               // ANALYSIS_SPAN_
+//                                                               // EXCEEDED finding) —
+//                                                               // never conflate this
+//                                                               // with "no gaps".
 //     }
 //   }
 //
@@ -449,21 +533,47 @@ export function assembleReplayPackage(input, options) {
   // context, handoff, and policy records are segregated above but never
   // sequence-reconciled against events.
   const eventDescriptors = descriptorsByStream.eventRecords;
-  const gaps = sequenceGaps(eventDescriptors);
+  const gapResult = sequenceGaps(eventDescriptors);
   const findings = [
     ...orderingDisorderFindings(eventDescriptors),
     ...correlationFindings(eventDescriptors)
   ];
-  if (gaps.length > 0) {
+  // `gaps` is `null` (never `[]`) when the span exceeded the ceiling, so a
+  // caller cannot mistake "not analyzed" for "analyzed, no gaps found" (F1
+  // fix: fail-closed and observable, not a silent lie about completeness).
+  let gaps;
+  if (gapResult.boundedOut) {
+    gaps = null;
     findings.push(
       Object.freeze({
-        type: "SEQUENCE_GAP",
-        missing: Object.freeze([...gaps]),
+        type: "SEQUENCE_GAP_ANALYSIS_SPAN_EXCEEDED",
+        code: GAP_ANALYSIS_SPAN_EXCEEDED,
+        boundedOut: true,
+        min: gapResult.min,
+        max: gapResult.max,
+        span: gapResult.span,
+        limit: gapResult.limit,
         note:
-          "the event stream's declared sequence range has holes; " +
-          "surfaced as a gap finding (SECB-LIVE-EVENT-001), never backfilled."
+          `the event stream's declared sequence range spans ${gapResult.span} ` +
+          `(min ${gapResult.min}, max ${gapResult.max}), exceeding the ` +
+          `${gapResult.limit}-wide MAX_SEQUENCE_GAP_SPAN ceiling; gap analysis ` +
+          "was not performed for this range rather than crashing or silently " +
+          "reporting it as gapless (F1 fix, SECB-LIVE-EVENT-001)."
       })
     );
+  } else {
+    gaps = gapResult.missing;
+    if (gaps.length > 0) {
+      findings.push(
+        Object.freeze({
+          type: "SEQUENCE_GAP",
+          missing: Object.freeze([...gaps]),
+          note:
+            "the event stream's declared sequence range has holes; " +
+            "surfaced as a gap finding (SECB-LIVE-EVENT-001), never backfilled."
+        })
+      );
+    }
   }
 
   return deepFreeze({
