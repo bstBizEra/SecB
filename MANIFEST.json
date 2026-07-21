@@ -365,6 +365,7 @@
     "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-rev-001.md",
     "docs/03-project-control/candidates/mod-runtime-s3-regate-001.md",
     "docs/03-project-control/candidates/mod-runtime-completion-rev-001.md",
-    "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md"
+    "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md",
+    "docs/03-project-control/candidates/mod-live-s1-toctou-fix-rev-001.md"
   ]
 }
