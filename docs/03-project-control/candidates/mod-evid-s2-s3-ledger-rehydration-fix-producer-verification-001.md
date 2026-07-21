@@ -90,3 +90,61 @@ Advisory only. This record certifies the producer-side verification of the ledge
 ---
 
 *Provenance — source: second independent MOD-EVID S2/S3 review (`5d78c65`, reviewer `claude-immune-rev-modevid-s2s3-second-01`) finding #4, fixed on `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (base `origin/main` @ `24274b0`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*
+
+---
+
+## Addendum: rehydration edge-legality fast-follow (independent review of this fix, closed)
+
+**Reviewer:** claude-rev-modevid-s2s3-rehydration-fix-independent-01 (BST-SA independent worker, advisory-only), record `docs/03-project-control/candidates/mod-evid-s2-s3-ledger-rehydration-fix-independent-review-001.md` @ `3fb0e6b`, verdict **APPROVE_WITH_NOTES**.
+**Fixed by:** claude-motor (this producer), same branch, on top of `3fb0e6b`.
+
+### Root cause
+
+The reviewer's §4 finding: `#rehydrate()` copied `payload.sealed_status` / `payload.next_status` **verbatim** from ledger entries into `record.status` with no state-machine edge-legality check — unlike every live ladder method in this same file (`sealEnvelope`, `requestVerification`, `recordVerification`, `acceptEvidence`), which all run the existing `#assertEdge` helper before accepting a status transition. `DurableLedger.append()`'s `validateEntry()` only checks structural shape (required top-level fields, `payload` is an object), never payload semantics per `entry.type`, so an actor with direct `DurableLedger.append()` access — bypassing `EvidenceEnvelopeService`'s own API entirely — could append a structurally valid, hash-chain-legitimate entry whose payload content the live service would never itself produce for that entry type. This is a narrower, higher-privilege attack surface than the original restart bug (it requires a reference to the injected ledger instance, not just an ordinary process restart), but the same silent-wrong-state defect class.
+
+### Fix mechanism
+
+`#rehydrate()` (`src/services/evidence-envelope-service.mjs`) now calls the **same, pre-existing `#assertEdge(from, to)` private method** the live ladder already trusts — no new or separate check was invented. For each status-bearing ledger entry, as the fold walks the ledger's own chronological (`sequence`) order:
+
+- **`EVIDENCE_SEAL`**: `fromStatus` is the ladder's single entry state (`CAPTURED`) if no record yet exists for that `(evidence_id, version)` key, or the record's current accumulated status if one already does (defends the same double-seal/re-seal case `sealEnvelope()` itself denies live); `toStatus` is `payload.sealed_status`. `this.#assertEdge(fromStatus, toStatus)` runs before the record is created/overwritten.
+- **`EVIDENCE_VERIFICATION_REQUEST` / `EVIDENCE_VERIFICATION` / `EVIDENCE_ACCEPTANCE`**: `this.#assertEdge(record.status, payload.next_status)` runs before `record.status` is updated, using whatever status the fold has accumulated so far for that key — i.e., validated against ledger-derived truth exactly as if that same sequence of transitions had happened through the live API.
+
+Per this file's established fail-closed convention (see the pre-existing `DENY_CHAIN_BROKEN` handling in the same method), `#assertEdge` **throws** `EvidenceEnvelopeServiceError` with the existing `DENY_UNDEFINED_TRANSITION` code on an illegal edge — this propagates out of the constructor and denies the **whole** rehydration, not just the offending entry. Skipping only the bad entry and continuing was deliberately rejected (per the task's explicit instruction and this file's own convention for other structural inconsistencies): a partially-rehydrated state built by ignoring one bad entry could itself be a different wrong state.
+
+No new deny code was introduced; no other method's behavior changed.
+
+### Both reviewer exploits reproduced and confirmed closed (by this producer, independently)
+
+1. **Forged `EVIDENCE_SEAL` with `sealed_status: "ACCEPTED"` as the first entry** (no verification/acceptance entries at all): pre-fix, a fresh instance rehydrated straight to `ACCEPTED`. Post-fix: `fromStatus = CAPTURED` (no prior record), `assertEdge(CAPTURED, ACCEPTED)` — `ACCEPTED` is not in `CAPTURED`'s edge set (`["SEALED","QUARANTINED"]`) — constructor throws `DENY_UNDEFINED_TRANSITION`. Reproduced in `tests/evidence-envelope-service.test.mjs`, test `"REHYDRATION SECURITY: a forged EVIDENCE_SEAL entry claiming sealed_status ACCEPTED as the FIRST entry is denied..."` — confirmed denied.
+2. **Forged `EVIDENCE_VERIFICATION` with illegal `next_status: "ACCEPTED"`** following a legitimate SEAL + VERIFICATION_REQUEST through the real live API: pre-fix, the record reached `ACCEPTED` with `acceptorActorId: null`, `approvals: null`, no acceptance receipt, and `verifyChain()` passed cleanly. Post-fix: at the point this entry folds, `record.status = VERIFICATION_PENDING` (set by the legitimate request), `assertEdge(VERIFICATION_PENDING, ACCEPTED)` — `ACCEPTED` is not in `VERIFICATION_PENDING`'s edge set (`["VERIFIED","REJECTED","QUARANTINED"]`) — constructor throws `DENY_UNDEFINED_TRANSITION`. Reproduced in the same test file, test `"REHYDRATION SECURITY: a forged EVIDENCE_VERIFICATION entry claiming an illegal next_status ACCEPTED is denied..."` — confirmed denied.
+
+### Genuine ledger histories: no false denials
+
+All 8 pre-existing `REHYDRATION` tests (exact restart to `ACCEPTED`, duplicate-guard post-restart, `verifyChain` truth post-restart, mid-ladder restart, `QUARANTINED`-only restart, multiple identities/versions, chain-broken construction-time deny, ledger-read-failure deny) and all 33 other pre-existing tests in this file continue to pass **unmodified** (byte-identical test bodies) — every legitimate transition produced through the real live API (`CAPTURED→SEALED`, `SEALED→VERIFICATION_PENDING`, `VERIFICATION_PENDING→{VERIFIED,QUARANTINED}`, `VERIFIED→ACCEPTED`) is, by construction, already a legal `#assertEdge` edge, so no genuine history is newly denied.
+
+### Test counts
+
+- Module suite (`evidence-envelope-service.test.mjs`): **41/41 pass (before this fast-follow) → 43/43 pass (after)** — +2 new adversarial regression tests, 0 regressions.
+- Full suite (`npm test`, includes `node tools/validate-foundation.mjs`): **1158 tests / 1155 pass / 0 fail / 3 skip (before) → 1160 tests / 1157 pass / 0 fail / 3 skip (after)** — matches this producer's own prior claimed post-fix baseline exactly before this fast-follow; +2, all new, all passing, 0 regressions.
+- `node tools/validate-foundation.mjs`: PASS / exit 0, both before and after.
+- Grepped `src/services/evidence-envelope-service.mjs` for `ev_modevid|test-id|testId|NODE_ENV|process\.env`: zero hits, same result as both this producer's original grep and the independent reviewer's own grep. No hardcoded test-ID branching introduced.
+
+### One incidental, disclosed test-fixture update (second one on this branch)
+
+`tests/p0-19-self-pilot.test.mjs`'s `PINNED_BLOBS` byte-identity guard pins `src/services/evidence-envelope-service.mjs` to a git blob hash. This fast-follow is a second intentional, disclosed, security-relevant change to that same file on this branch, so the pin necessarily advances again: `c7ea62a20e093415fb90b5321eceb71453d037bd` → `0843d4a9b0c966c13135890ec91a87c823911d30`. Updated only that one entry, added a second disclosure comment (the first pin-update comment from the original fix was left untouched, extend-only), and left every other pinned hash in that list unchanged.
+
+### Self-certification
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: claude-rev-modevid-s2s3-rehydration-fix-independent-01
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+Advisory only. This addendum certifies the producer-side verification of the rehydration-edge-legality fast-follow is complete and reports it for operator/independent-review disposition. It does not itself authorize, merge, push, or ratify. Operator authority remains sole.
+
+*Provenance — source: independent review of the rehydration fix (`3fb0e6b`, reviewer `claude-rev-modevid-s2s3-rehydration-fix-independent-01`) finding #4, fixed on the same branch `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (on top of `3fb0e6b`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*

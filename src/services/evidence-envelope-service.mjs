@@ -62,6 +62,27 @@ import { checkProhibitedActors } from "../control/sod-rules.mjs";
 // recorded for a CAPTURED-only record, so there is nothing for a restart to
 // silently erase or for a forged re-registration to overwrite. Rehydration
 // begins at SEALED, the first durable event in this service's lifecycle.
+//
+// EDGE-LEGALITY FAST-FOLLOW (independent review of the rehydration fix
+// above, docs/03-project-control/candidates/
+// mod-evid-s2-s3-ledger-rehydration-fix-independent-review-001.md, finding
+// #4): #rehydrate() originally copied payload.sealed_status / payload.next_
+// status verbatim from ledger entries with no state-machine edge-legality
+// check, unlike every live ladder method below (sealEnvelope,
+// requestVerification, recordVerification, acceptEvidence), which all run
+// #assertEdge before accepting a transition. Since DurableLedger.append()
+// only validates structural shape (see validateEntry() in
+// durable-ledger.mjs), not payload semantics per entry.type, an actor with
+// direct append() access -- bypassing this service's own API -- could
+// forge a single EVIDENCE_SEAL entry with sealed_status: "ACCEPTED", or a
+// forged EVIDENCE_VERIFICATION entry with an illegal next_status, and
+// rehydrate an identity straight to ACCEPTED with no verification/
+// acceptance trail. #rehydrate() now calls the SAME #assertEdge helper on
+// every status-bearing entry as it folds through the ledger's chronological
+// history, validating each claimed transition against the currently-
+// accumulated status exactly as the live API would -- no new/separate
+// check. An illegal edge denies the whole rehydration (fail-closed, this
+// file's established convention), not just the offending entry.
 
 const EVIDENCE_MACHINE = STATE_MACHINES.Evidence;
 const REACHABLE_STATES = new Set(Object.values(EVIDENCE_MACHINE).flat());
@@ -150,6 +171,29 @@ export class EvidenceEnvelopeService {
   // appends, never mutates the ledger, and denies fail-closed (rather than
   // silently starting from a partially-rehydrated state) if the ledger
   // itself cannot be read and verified.
+  //
+  // EDGE-LEGALITY FIX (fast-follow, independent review of the rehydration
+  // fix itself, docs/03-project-control/candidates/
+  // mod-evid-s2-s3-ledger-rehydration-fix-independent-review-001.md, finding
+  // #4): the fold below used to copy payload.sealed_status / payload.next_
+  // status VERBATIM into record.status with no revalidation, unlike every
+  // live ladder method (sealEnvelope, requestVerification, recordVerification,
+  // acceptEvidence), which all run the claimed transition through
+  // #assertEdge before accepting it. That let a ledger entry appended
+  // directly through DurableLedger.append() (bypassing this service's own
+  // API entirely -- a narrower, higher-privilege attack surface than the
+  // original restart bug, but the same silent-wrong-state defect class)
+  // rehydrate straight to an illegal status such as ACCEPTED with zero
+  // verification/acceptance trail. The fix reuses the SAME #assertEdge
+  // helper the live ladder already trusts -- no new/separate check -- and
+  // calls it on every status-bearing entry as the fold walks the ledger's
+  // own chronological order, so each claimed transition is validated
+  // against #records' currently-accumulated status exactly as if that same
+  // sequence of transitions had happened through the live API. Per this
+  // file's established fail-closed convention (see DENY_CHAIN_BROKEN above),
+  // an illegal edge denies the WHOLE rehydration rather than being silently
+  // skipped -- skipping just the bad entry and continuing could itself
+  // produce a different, equally wrong reconstructed state.
   #rehydrate() {
     let records;
     try {
@@ -161,11 +205,15 @@ export class EvidenceEnvelopeService {
       deny("DENY_LEDGER_REHYDRATION", `Durable ledger read failed; cannot rehydrate: ${error?.message ?? error}`);
     }
 
+    const [entryState] = ENTRY_STATES;
+
     // Ledger lines are append-only and DurableLedger#verifyRecords enforces
     // strictly increasing `sequence`, so `records` (as returned by read())
     // is already in chronological append order; folding over it in order
     // reproduces exactly the same field-by-field record shape each live
-    // ladder method builds when it appends, with no re-ordering needed.
+    // ladder method builds when it appends, with no re-ordering needed --
+    // and, per the edge-legality fix above, the same #assertEdge gate each
+    // live method runs before it accepts that shape.
     for (const line of records) {
       const type = line?.entry?.type;
       const envelope = line?.entry?.payload?.envelope;
@@ -176,15 +224,29 @@ export class EvidenceEnvelopeService {
 
       if (type === SEAL_ENTRY_TYPE) {
         // The SEAL entry is the earliest durable event for any identity, so
-        // it is where the record scaffold is first created. registeredAt is
-        // reconstructed as this seal timestamp -- a documented best-effort
-        // proxy, since registerEnvelope() itself never reaches the ledger
-        // (see the SCOPE NOTE above); it is informational output only and
-        // is never consulted by any guard or SoD check.
+        // it is where the record scaffold is first created -- UNLESS a
+        // record already exists for this key (a second SEAL entry for the
+        // same evidence_id+version, which the live sealEnvelope() can never
+        // produce: re-sealing an already-sealed-or-further record always
+        // denies DENY_UNDEFINED_TRANSITION). Either way, the claimed
+        // transition is asserted against the currently-accumulated status
+        // (the ladder's entry state if this is the first sighting, else the
+        // record's current status) before it is accepted, exactly as
+        // sealEnvelope()'s own edge check would evaluate it live.
+        const existing = this.#records.get(key);
+        const fromStatus = existing ? existing.status : entryState;
+        const toStatus = line.entry.payload.sealed_status;
+        this.#assertEdge(fromStatus, toStatus);
+
+        // registeredAt is reconstructed as this seal timestamp -- a
+        // documented best-effort proxy, since registerEnvelope() itself
+        // never reaches the ledger (see the SCOPE NOTE above); it is
+        // informational output only and is never consulted by any guard or
+        // SoD check.
         this.#records.set(key, {
           envelope: frozenClone(envelope),
-          status: line.entry.payload.sealed_status,
-          registeredAt: line.entry.timestamp,
+          status: toStatus,
+          registeredAt: existing?.registeredAt ?? line.entry.timestamp,
           sealedAt: line.entry.timestamp,
           ledgerSequence: ledgerReceipt.sequence,
           ledgerRecordHash: ledgerReceipt.recordHash
@@ -192,14 +254,18 @@ export class EvidenceEnvelopeService {
       } else if (type === VERIFICATION_REQUEST_ENTRY_TYPE) {
         const record = this.#records.get(key);
         if (!record) continue; // no seal entry precedes it; unreachable on a self-consistent ledger
-        record.status = line.entry.payload.next_status;
+        const toStatus = line.entry.payload.next_status;
+        this.#assertEdge(record.status, toStatus);
+        record.status = toStatus;
         record.verificationRequestedAt = line.entry.timestamp;
         record.verificationRequestedBy = line.entry.payload.requested_by;
         record.verificationRequestLedger = ledgerReceipt;
       } else if (type === VERIFICATION_ENTRY_TYPE) {
         const record = this.#records.get(key);
         if (!record) continue;
-        record.status = line.entry.payload.next_status;
+        const toStatus = line.entry.payload.next_status;
+        this.#assertEdge(record.status, toStatus);
+        record.status = toStatus;
         record.verifiedAt = line.entry.timestamp;
         record.verifierActorId = line.entry.payload.verifier;
         record.verdict = line.entry.payload.verdict;
@@ -207,7 +273,9 @@ export class EvidenceEnvelopeService {
       } else if (type === ACCEPTANCE_ENTRY_TYPE) {
         const record = this.#records.get(key);
         if (!record) continue;
-        record.status = line.entry.payload.next_status;
+        const toStatus = line.entry.payload.next_status;
+        this.#assertEdge(record.status, toStatus);
+        record.status = toStatus;
         record.acceptedAt = line.entry.timestamp;
         record.acceptorActorId = line.entry.payload.acceptor;
         record.approvals = Object.freeze([...(line.entry.payload.approvals ?? [])]);

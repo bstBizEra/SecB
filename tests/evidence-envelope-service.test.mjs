@@ -630,6 +630,116 @@ test("REHYDRATION: construction with a ledger whose read() throws an unrecognize
   denies(() => new EvidenceEnvelopeService({ durableLedger: throwingLedger }), "DENY_LEDGER_REHYDRATION");
 });
 
+// ---------------------------------------------------------------------------
+// REHYDRATION EDGE-LEGALITY FIX: closes the independent review's finding #4
+// (docs/03-project-control/candidates/
+// mod-evid-s2-s3-ledger-rehydration-fix-independent-review-001.md). Both
+// reproductions forge a ledger entry DIRECTLY through DurableLedger.append(),
+// bypassing EvidenceEnvelopeService's own API entirely -- a narrower,
+// higher-privilege attack surface than the original restart bug, but the
+// same silent-wrong-state defect class. Pre-fix, #rehydrate() copied
+// payload.sealed_status / payload.next_status verbatim with no edge-legality
+// check; post-fix it reuses #assertEdge, the same helper every live ladder
+// method already trusts.
+// ---------------------------------------------------------------------------
+
+test("REHYDRATION SECURITY: a forged EVIDENCE_SEAL entry claiming sealed_status ACCEPTED as the FIRST entry is denied, not silently rehydrated to ACCEPTED", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const ledger = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+    const env = envelope();
+
+    // The reviewer's exact exploit #1: a single forged EVIDENCE_SEAL entry
+    // with sealed_status: "ACCEPTED" and NOTHING else in the ledger -- no
+    // verification, no acceptance entries at all.
+    const forgedSeal = {
+      entryId: JSON.stringify([env.evidence_id, env.version, "SEAL"]),
+      projectId: env.project_id,
+      workPackageId: env.work_package_id,
+      sessionId: env.session_id,
+      actorId: "attacker",
+      type: "EVIDENCE_SEAL",
+      payload: {
+        envelope: env,
+        previous_status: "CAPTURED",
+        sealed_status: "ACCEPTED", // forged: never a legal edge from CAPTURED
+        content_hash: env.content_hash
+      },
+      timestamp: "2026-07-20T10:05:00+07:00",
+      idempotencyKey: JSON.stringify(["evidence-seal", env.evidence_id, env.version])
+    };
+    ledger.append(forgedSeal, { expectedSequence: 0 });
+
+    // Pre-fix: a fresh instance rehydrated straight to ACCEPTED, verifyChain()
+    // reported valid: true with the identity in acceptedVersions, and
+    // resolveAccepted() returned ok: true. Post-fix: construction itself
+    // must fail closed via the same #assertEdge the live ladder uses.
+    denies(
+      () => new EvidenceEnvelopeService({
+        durableLedger: new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" })
+      }),
+      "DENY_UNDEFINED_TRANSITION"
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY: a forged EVIDENCE_VERIFICATION entry claiming an illegal next_status ACCEPTED is denied, not silently rehydrated past verification", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    // Legitimate SEAL + VERIFICATION_REQUEST through the real live API.
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    assert.equal(serviceA.getEnvelope(EV, 1).verificationStatus, "VERIFICATION_PENDING");
+
+    // The reviewer's exact exploit #2: a forged EVIDENCE_VERIFICATION entry
+    // with next_status: "ACCEPTED" -- never a legal VERDICT_TARGETS output
+    // (only VERIFIED or QUARANTINED are) -- appended directly through the
+    // ledger, bypassing recordVerification()'s edge check and SoD gate
+    // entirely.
+    const env = envelope();
+    const ledger = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+    const expectedSequence = ledger.read().length;
+    const forgedVerification = {
+      entryId: JSON.stringify([EV, 1, "VERIFICATION", "forged"]),
+      projectId: env.project_id,
+      workPackageId: env.work_package_id,
+      sessionId: env.session_id,
+      actorId: "attacker",
+      type: "EVIDENCE_VERIFICATION",
+      payload: {
+        envelope: env,
+        previous_status: "VERIFICATION_PENDING",
+        next_status: "ACCEPTED", // forged: not a legal edge from VERIFICATION_PENDING
+        content_hash: env.content_hash,
+        verifier: "attacker",
+        verdict: "pass",
+        producer: PRODUCER
+      },
+      timestamp: clock().toISOString(),
+      idempotencyKey: JSON.stringify(["VERIFICATION-forged", EV, 1])
+    };
+    ledger.append(forgedVerification, { expectedSequence });
+
+    // Pre-fix: the record reached ACCEPTED with acceptorActorId: null,
+    // approvals: null, and no acceptanceLedger receipt -- the entire
+    // acceptEvidence() SoD gate and approvals requirement silently bypassed,
+    // and verifyChain()'s ladder-coverage loop passed cleanly since it only
+    // validates receipts that are already set. Post-fix: construction must
+    // fail closed via #assertEdge before the illegal status is ever adopted.
+    denies(() => freshInstance(path, clock), "DENY_UNDEFINED_TRANSITION");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("REHYDRATION: normal single-instance lifecycle is entirely unaffected (no double-rehydration drift)", () => withHarness(({ service }) => {
   // The construction-time rehydrate() on an empty, freshly-created ledger
   // must be a no-op: identical to pre-fix behavior for the common case of a
