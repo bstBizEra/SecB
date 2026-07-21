@@ -344,6 +344,7 @@
     "src/control/approval-binding.mjs",
     "tests/approval-binding.test.mjs",
     "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-producer-verification-001.md",
-    "docs/03-project-control/candidates/mod-runtime-s3-rework-001.md"
+    "docs/03-project-control/candidates/mod-runtime-s3-rework-001.md",
+    "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-rev-001.md"
   ]
 }
