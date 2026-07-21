@@ -403,6 +403,7 @@
     "docs/03-project-control/candidates/mod-wspace-completion-rev-001.md",
     "docs/03-project-control/candidates/mod-wspace-completion-rev-002.md",
     "docs/03-project-control/candidates/mod-ops-completion-rev-001.md",
-    "docs/03-project-control/candidates/mod-live-completion-rev-001.md"
+    "docs/03-project-control/candidates/mod-live-completion-rev-001.md",
+    "docs/03-project-control/candidates/mod-wspace-s3-single-writer-crossrev-001.md"
   ]
 }
