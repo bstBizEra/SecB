@@ -1,8 +1,8 @@
 # Module Completion Tracker Reconciliation 002
 
-**Record ID:** SECB-MODULE-TRACKER-RECON-002  
-**Status:** DRAFT / NOT EFFECTIVE  
-**Date:** 2026-07-21  
+**Record ID:** SECB-MODULE-TRACKER-RECON-002
+**Status:** DRAFT / NOT EFFECTIVE
+**Date:** 2026-07-21
 **Agent ID:** Codex `/root`
 
 ## Reason
