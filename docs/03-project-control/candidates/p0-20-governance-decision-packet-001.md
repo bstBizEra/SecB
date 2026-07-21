@@ -149,9 +149,9 @@ activation proceeds without closure.
 | R-5 | **Command Center UI absent.** MOD-UI is QUEUED — missing (only a V-011 display-plane seed exists). No fleet/workflow/terminal/diff/evidence live UI. | MEDIUM | verified_true | medium | missing |
 | R-6 | **MOD-INTEG is process-not-system.** Serialized-merge/operator-merge practice exists operationally; the integration-queue **service** is missing. | MEDIUM | verified_true | medium | missing (module proper QUEUED) |
 | R-7 | **P0-18 still-blocked positive halves.** V-020 human-decision positive half (activation-gated, PENDING); V-011 storage-plane redaction-before-append (BLOCKED — no primitive redacts RESTRICTED before ledger append); V-016 restore-drift comparator (BLOCKED — checkpoint-ledger non-goal #3). | HIGH (for P0-18 sign-off) | verified_true | high | blocked; sign-off gated |
-| R-8 | **SECB-GOV-001 promotion packet found NOT_READY — 9 gaps.** `secb-gov-001-promotion-readiness-rev-001.md` (independent readiness review on main, NOT_READY, 9 gaps). (A second independent readiness review reached the same NOT_READY on an unmerged branch efb9157; not counted as trunk evidence here.) Gaps: no completed REV/QA/SEC verdict for the packet; five conflicting off-main baseline SHAs (packet 141 commits behind main); self-reported (unreproduced) test evidence; no evidence-acceptance record; Project Contract DRAFT/NOT EFFECTIVE; no STABLE/demotion/rollback policy; empty human-GOV template. | HIGH | verified_true | high | NOT_READY; promotion is operator-only |
+| R-8 | **SECB-GOV-001 promotion packet twice found NOT_READY — 9 gaps (+NEW-1).** `secb-gov-001-promotion-readiness-rev-001.md` (independent, NOT_READY, 9 gaps) and `secb-gov-001-second-independent-readiness-review-001.md` (independent second pass on trunk, all 9 gaps re-derived from cold + confirmed, plus NEW-1). Gaps: no completed REV/QA/SEC verdict for the packet; five conflicting off-main baseline SHAs (packet 141 commits behind main); self-reported (unreproduced) test evidence; no evidence-acceptance record; Project Contract DRAFT/NOT EFFECTIVE; no STABLE/demotion/rollback policy; empty human-GOV template. | HIGH | verified_true | high | NOT_READY (twice); promotion is operator-only |
 | R-9 | **Doc pack DRAFT / NOT EFFECTIVE.** Two packs coexist (`docs/README.md`): OM v0.1 (`SECB-GOV-001`, DRAFT) and the legacy Phase 0 constitution (pinned baseline). Root `AGENTS.md` states the Phase 0 pack remains DRAFT/NOT EFFECTIVE; the v0.1 candidate `AGENTS.md` replacement is NON-ACTIVE. Until acceptance, the legacy document is authoritative. | MEDIUM | verified_true | medium | DRAFT / NOT EFFECTIVE by design |
-| R-10 | **No CI/SAST/coverage gates.** Enforcement is `npm run validate` + `node --test` run by producers/reviewers; no CI pipeline, no SAST, no coverage-threshold gate is wired (CLAUDE.md Rules #15/#18 list these as ongoing, not implemented). | MEDIUM | verified_true | medium | missing (governance tooling exists as scripts, not enforced gates) |
+| R-10 | **No CI/SAST/coverage gates.** Enforcement is `npm run validate` + `node --test` run by producers/reviewers; no CI pipeline, no SAST, no coverage-threshold gate is wired (CLAUDE.md Rules #15/#18 list these as ongoing, not implemented). The second readiness review (NEW-1) found the on-main `module-completion-tracker-001.md` stale relative to origin/main by ~4 completion reviews / ~15 merged PRs — understating landed work; a process-integrity gap. | MEDIUM | verified_true | medium | missing (governance tooling exists as scripts, not enforced gates) |
 | R-11 | **Tracked MEDIUM security follow-ups on the merged MCP surface.** MOD-MCP FU-1 (promotion SoD collapses to one-non-producer-actor) and FU-2 (gateway output secret-screen misses underscore token families) are MEDIUM, non-blocking, tracked — but open on the one module whose scope is a real permission surface. | MEDIUM | verified_true | medium | tracked follow-ups; secondary boundary (broker screen already correct) |
 
 **Register truth note:** every row above was read first-hand from the cited record
@@ -205,7 +205,7 @@ demonstrated — eleven modules carry independently-reviewed completion verdicts
 read-only self-pilot proves the governed chain composes and gates fail-closed
 end-to-end, and the V-020 deny-half proves agents cannot self-activate — but the
 operational chain is entirely **unwired**, there is no live runtime adapter or real
-host agent, the SECB-GOV-001 promotion packet has been found **NOT_READY**
+host agent, the SECB-GOV-001 promotion packet has been found **NOT_READY twice**
 against nine unmet gaps, and the reversibility, CI/SAST/coverage, and doc-pack
 effectiveness gates are still open. On this state a worker would advise the human
 GOV **against** a `PASS_FOR_P0_CONTROLLED_ACTIVATION` verdict now, and would advise
@@ -263,7 +263,7 @@ p0_20_governance_decision:
 truth_status: verified_true            # trunk totals (1149/1146/0/3), validator exit 0, 17 schemas, and every cited record reproduced/read first-hand at main @ 24274b0
 authority_status: execution_requires_operator   # the P0-20 verdict + any activation are human-GOV-only; the §6 decision record is blocked to agents
 implementation_status: partial         # substrate + 11 module verdicts + read-only self-pilot demonstrated; operational chain unwired, no live adapter/host agent, UI absent
-risk_class: high                       # if activated on this state it would cross an authority boundary with an unwired chain, open reversibility gate, and a NOT_READY promotion packet; currently contained by unmet gates
+risk_class: high                       # if activated on this state it would cross an authority boundary with an unwired chain, open reversibility gate, and a twice-NOT_READY promotion packet; currently contained by unmet gates
 ```
 
 ```yaml
