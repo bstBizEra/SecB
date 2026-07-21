@@ -214,7 +214,8 @@ test("preWriteCheck receives the SAME freshly-read, freshly-verified records thi
   });
 
   assert.equal(seenRecordsLength, 1, "preWriteCheck must see the just-appended prior record");
-  assert.equal(seenEntry, entry2);
+  assert.deepEqual(seenEntry, entry2, "preWriteCheck must see the same entry content");
+  assert.notEqual(seenEntry, entry2, "preWriteCheck must receive a clone, not the caller's own entry object");
   assert.equal(result, veto, "a truthy preWriteCheck return value is returned as-is from append()");
   assert.equal(ledger.read().length, 1, "the vetoed entry must NOT be persisted");
 }));
@@ -249,6 +250,31 @@ test("preWriteCheck receives a structuredClone of records, not internal mutable 
   const stored = ledger.read();
   assert.equal(stored.length, 2);
   assert.equal(stored[0].entry.entryId, "entry_001");
+}));
+
+test("preWriteCheck mutating its entry argument in place must not corrupt the persisted record", () => withTempLedger((directory) => {
+  const ledger = new DurableLedger({ filePath: join(directory, "generic.ndjson"), ledgerId: "test-ledger" });
+  ledger.append(genericEntry(), { expectedSequence: 0 });
+
+  const entry2 = genericEntry({ entryId: "entry_002", idempotencyKey: "idem2" });
+  const result = ledger.append(entry2, {
+    expectedSequence: 1,
+    preWriteCheck: (records, entry) => {
+      entry.payload = { tampered: true };
+      entry.entryId = "tampered_entry";
+      return null;
+    }
+  });
+
+  // The hook's in-place mutation must not desync entryHash (computed before
+  // the hook runs) from the persisted entry, and must not affect the caller's
+  // own entry2 object.
+  assert.equal(result.replayed, false);
+  assert.equal(entry2.entryId, "entry_002", "the caller's own entry object must be untouched");
+  assert.equal(entry2.payload.tampered, undefined);
+  ledger.verify();
+  const stored = ledger.read();
+  assert.equal(stored[1].entry.entryId, "entry_002");
   assert.equal(stored[1].entry.entryId, "entry_002");
 }));
 

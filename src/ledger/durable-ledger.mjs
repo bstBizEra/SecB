@@ -114,8 +114,12 @@ export class DurableLedger {
   // this same lock-held, freshly-read-and-verified critical section, after the
   // base structural checks (idempotency replay, duplicate entryId, optimistic
   // sequence) and immediately before the record is persisted. It receives a
-  // structuredClone of the just-verified `records` (so a subclass cannot
-  // mutate append()'s internal working state) and the candidate `entry`. If it
+  // structuredClone of the just-verified `records` and a structuredClone of
+  // the candidate `entry` (so a subclass cannot mutate append()'s internal
+  // working state in either argument — `entryHash` above is computed from
+  // the pre-hook `entry`, so an in-place mutation of the original object
+  // would otherwise desync `entryHash` from the persisted `entry` and cause
+  // LEDGER_INTEGRITY_FAILURE on every later read()/verify()). If it
   // returns a truthy value, that value is returned AS-IS from append() and
   // NOTHING is written — the lock is still released via `finally` below. If it
   // returns a falsy value (or is omitted entirely), the append proceeds
@@ -167,7 +171,7 @@ export class DurableLedger {
         );
       }
       if (preWriteCheck) {
-        const veto = preWriteCheck(structuredClone(records), entry);
+        const veto = preWriteCheck(structuredClone(records), structuredClone(entry));
         if (veto) return veto;
       }
 
