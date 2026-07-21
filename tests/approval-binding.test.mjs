@@ -16,6 +16,7 @@
 //   3. bindApprovalDecision / verifyApprovalBinding tests, including genuine
 //      DecisionLedger recording (mirrors tests/retry-policy.test.mjs).
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +31,7 @@ import {
   evaluateApprovalBinding,
   verifyApprovalBinding
 } from "../src/control/approval-binding.mjs";
+import { riskProfile } from "../src/control/risk-registry.mjs";
 import { DecisionLedger } from "../src/ledger/temporal-ledgers.mjs";
 import { validateContract } from "../src/contracts/contract-validator.mjs";
 import { CapabilityRegistryService } from "../src/gateway/capability-registry-service.mjs";
@@ -379,7 +381,8 @@ test("bindApprovalDecision mints a GOVERNANCE candidate with outcome APPROVAL_BO
   const record = bindApprovalDecision(evaluation, identity({ boundAction: "PROMOTE", boundObjectVersion: "filesystem.read@1.0.0" }));
   assert.equal(record.decision_type, "GOVERNANCE");
   assert.equal(record.outcome, APPROVAL_BOUND);
-  assert.deepEqual(record.evidence_refs, ["approval-binding:PROMOTE@filesystem.read@1.0.0"]);
+  // F2: injective JSON-array encoding of the (action, objectVersion) pair.
+  assert.deepEqual(record.evidence_refs, ['approval-binding:["PROMOTE","filesystem.read@1.0.0"]']);
   assert.ok(record.rationale.length > 0);
 });
 
@@ -550,4 +553,187 @@ test("verifyApprovalBinding denies a malformed verification request (blank actio
   assert.deepEqual(verifyApprovalBinding(record, { exactAction: "", objectVersion: "filesystem.read@1.0.0" }), { ok: false, code: "DENY_MALFORMED_VERIFICATION_REQUEST" });
   assert.deepEqual(verifyApprovalBinding(record, { exactAction: "PROMOTE", objectVersion: "" }), { ok: false, code: "DENY_MALFORMED_VERIFICATION_REQUEST" });
   assert.deepEqual(verifyApprovalBinding(record, {}), { ok: false, code: "DENY_MALFORMED_VERIFICATION_REQUEST" });
+});
+
+// ---------------------------------------------------------------------------
+// 5. F1 (HIGH): risk-registry.humanApproval short-circuit composition
+// ---------------------------------------------------------------------------
+// Spec §S3: "Composes risk-registry.riskProfile(riskClass).humanApproval to
+// short-circuit ALLOW when no human gate is required." Deny-by-default: ONLY an
+// explicit humanApproval === false short-circuits; true / undefined / null /
+// unknown-class all require the bound human decision (fail-closed).
+
+// Parity pin against risk-registry's ACTUAL table — if MOD-GOV S2's
+// humanApproval flags ever drift, this test fails rather than the short-circuit
+// silently changing meaning.
+test("F1 parity: risk-registry humanApproval table is R0/R1/R2=false, R3/R4=true", () => {
+  assert.equal(riskProfile("R0").value.humanApproval, false);
+  assert.equal(riskProfile("R1").value.humanApproval, false);
+  assert.equal(riskProfile("R2").value.humanApproval, false);
+  assert.equal(riskProfile("R3").value.humanApproval, true);
+  assert.equal(riskProfile("R4").value.humanApproval, true);
+  assert.equal(riskProfile("R9").ok, false); // unknown class denies
+});
+
+test("F1: explicit humanApproval:false (R0/R1/R2) short-circuits to ALLOW with NO bound human decision", () => {
+  // No resolved decision at all — the short-circuit must still allow, because
+  // an R0/R1/R2 class carries no human gate to satisfy.
+  for (const riskClass of ["R0", "R1", "R2"]) {
+    assert.deepEqual(
+      verifyApprovalBinding(null, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0", riskClass }),
+      { ok: true, humanApprovalRequired: false },
+      `expected ${riskClass} to short-circuit ALLOW`
+    );
+  }
+});
+
+test("F1: humanApproval:true (R3/R4) REQUIRES the bound decision — allows only with a matching bound approval", () => {
+  const record = bindApprovalDecision(evaluateApprovalBinding(strictBundle()), identity({
+    boundAction: "PROMOTE",
+    boundObjectVersion: "filesystem.read@1.0.0"
+  }));
+  for (const riskClass of ["R3", "R4"]) {
+    // With a valid bound decision, the normal verification path allows.
+    assert.deepEqual(
+      verifyApprovalBinding(record, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0", riskClass }),
+      { ok: true },
+      `expected ${riskClass} with a bound decision to ALLOW via the full path`
+    );
+    // Without any bound decision, it fails closed (no short-circuit).
+    assert.deepEqual(
+      verifyApprovalBinding(null, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0", riskClass }),
+      { ok: false, code: "DENY_UNKNOWN_APPROVAL" },
+      `expected ${riskClass} with no bound decision to DENY`
+    );
+  }
+});
+
+test("F1: undefined / null / unknown-class riskClass all fail-closed (require the bound decision, DENY without it)", () => {
+  // undefined riskClass (not passed) — normal path requires a bound decision.
+  assert.deepEqual(
+    verifyApprovalBinding(null, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0" }),
+    { ok: false, code: "DENY_UNKNOWN_APPROVAL" }
+  );
+  // explicit null riskClass — riskProfile(null) denies, no short-circuit.
+  assert.deepEqual(
+    verifyApprovalBinding(null, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0", riskClass: null }),
+    { ok: false, code: "DENY_UNKNOWN_APPROVAL" }
+  );
+  // unknown class — riskProfile denies, no short-circuit.
+  assert.deepEqual(
+    verifyApprovalBinding(null, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0", riskClass: "R9" }),
+    { ok: false, code: "DENY_UNKNOWN_APPROVAL" }
+  );
+});
+
+test("F1: the short-circuit never overrides a malformed verification request", () => {
+  // Even for an R0 (humanApproval:false) class, a blank action/version request
+  // is rejected before the short-circuit — the request itself is malformed.
+  assert.deepEqual(
+    verifyApprovalBinding(null, { exactAction: "", objectVersion: "filesystem.read@1.0.0", riskClass: "R0" }),
+    { ok: false, code: "DENY_MALFORMED_VERIFICATION_REQUEST" }
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 6. F2 (MEDIUM): injective binding encoding — collision regression
+// ---------------------------------------------------------------------------
+// The reviewer's exact collision probe (rev-001 §P8): an approval minted for
+// action "PROMOTE@filesystem.read" + version "1.0.0" must NOT verify for action
+// "PROMOTE" + version "filesystem.read@1.0.0" (and vice versa). Under the prior
+// `${action}@${version}` encoding both flattened to the same string and the
+// second verify ALLOWED — the whole exact-action/version bind (MR-3) was
+// defeatable. Both directions must now DENY.
+
+test("F2 collision probe: (PROMOTE@filesystem.read, 1.0.0) must NOT verify as (PROMOTE, filesystem.read@1.0.0)", () => {
+  const record = bindApprovalDecision(evaluateApprovalBinding(strictBundle()), identity({
+    boundAction: "PROMOTE@filesystem.read",
+    boundObjectVersion: "1.0.0"
+  }));
+  // The exact pair it was bound to still verifies.
+  assert.deepEqual(
+    verifyApprovalBinding(record, { exactAction: "PROMOTE@filesystem.read", objectVersion: "1.0.0" }),
+    { ok: true }
+  );
+  // The colliding split must DENY.
+  assert.deepEqual(
+    verifyApprovalBinding(record, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0" }),
+    { ok: false, code: "DENY_ACTION_VERSION_MISMATCH" }
+  );
+});
+
+test("F2 collision probe (reverse): (PROMOTE, filesystem.read@1.0.0) must NOT verify as (PROMOTE@filesystem.read, 1.0.0)", () => {
+  const record = bindApprovalDecision(evaluateApprovalBinding(strictBundle()), identity({
+    boundAction: "PROMOTE",
+    boundObjectVersion: "filesystem.read@1.0.0"
+  }));
+  assert.deepEqual(
+    verifyApprovalBinding(record, { exactAction: "PROMOTE", objectVersion: "filesystem.read@1.0.0" }),
+    { ok: true }
+  );
+  assert.deepEqual(
+    verifyApprovalBinding(record, { exactAction: "PROMOTE@filesystem.read", objectVersion: "1.0.0" }),
+    { ok: false, code: "DENY_ACTION_VERSION_MISMATCH" }
+  );
+});
+
+test("F2: the two colliding binds produce DISTINCT evidence_refs entries", () => {
+  const a = bindApprovalDecision(evaluateApprovalBinding(strictBundle()), identity({
+    boundAction: "PROMOTE@filesystem.read", boundObjectVersion: "1.0.0"
+  }));
+  const b = bindApprovalDecision(evaluateApprovalBinding(strictBundle()), identity({
+    boundAction: "PROMOTE", boundObjectVersion: "filesystem.read@1.0.0"
+  }));
+  assert.notDeepEqual(a.evidence_refs, b.evidence_refs);
+});
+
+// ---------------------------------------------------------------------------
+// 7. F4 (LOW/INFO): byte-identity guard for the protected files
+// ---------------------------------------------------------------------------
+// The rework must not touch any of the six protected source files or the 16
+// contracts. This guard compares the WORKING-TREE blob hash of each protected
+// path (git hash-object) against the blob hash stored at both main @ beebfe8
+// (the candidate's base) AND current main @ 71b9d41. Any drift fails here.
+
+const BYTE_IDENTITY_BASELINES = ["beebfe8", "71b9d41"];
+const PROTECTED_SOURCE_FILES = [
+  "src/control/sod-rules.mjs",
+  "src/control/risk-registry.mjs",
+  "src/control/policy-decision-point.mjs",
+  "src/gateway/capability-registry-service.mjs",
+  "src/services/goal-graph-service.mjs"
+];
+
+function gitBlobHashAtRef(ref, path) {
+  return execFileSync("git", ["rev-parse", `${ref}:${path}`], { encoding: "utf8" }).trim();
+}
+function gitWorkingBlobHash(path) {
+  return execFileSync("git", ["hash-object", path], { encoding: "utf8" }).trim();
+}
+function contractPathsAt(ref) {
+  return execFileSync("git", ["ls-tree", "--name-only", ref, "contracts/"], { encoding: "utf8" })
+    .split(/\r?\n/).filter((line) => line.endsWith(".json")).sort();
+}
+
+test("F4 byte-identity: protected source files are byte-identical to main @ beebfe8 AND @ 71b9d41", () => {
+  for (const path of PROTECTED_SOURCE_FILES) {
+    const working = gitWorkingBlobHash(path);
+    for (const ref of BYTE_IDENTITY_BASELINES) {
+      assert.equal(working, gitBlobHashAtRef(ref, path), `${path} drifted from main @ ${ref}`);
+    }
+  }
+});
+
+test("F4 byte-identity: every contracts/*.json is byte-identical to main @ beebfe8 AND @ 71b9d41 (same file set)", () => {
+  const baseContracts = contractPathsAt(BYTE_IDENTITY_BASELINES[0]);
+  assert.ok(baseContracts.length >= 16, "expected at least 16 contract schemas");
+  for (const ref of BYTE_IDENTITY_BASELINES) {
+    assert.deepEqual(contractPathsAt(ref), baseContracts, `contract file set differs at main @ ${ref}`);
+  }
+  for (const path of baseContracts) {
+    const working = gitWorkingBlobHash(path);
+    for (const ref of BYTE_IDENTITY_BASELINES) {
+      assert.equal(working, gitBlobHashAtRef(ref, path), `${path} drifted from main @ ${ref}`);
+    }
+  }
 });

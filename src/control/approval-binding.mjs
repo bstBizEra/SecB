@@ -89,8 +89,37 @@
 // service.mjs` nor `goal-graph-service.mjs` imports anything from this
 // module. Adoption/wiring is explicitly out of scope (see the producer
 // verification record for this slice).
+//
+// SPEC-NAME MAPPING (disclosed deviation, review finding F3 — LOW/naming):
+// this module's file and API names differ from the assessment's S3 sketch.
+// The deviation is DISCLOSED and intentionally NOT reconciled by rename in
+// this rework: renaming would be pure churn (touching every call site and
+// test) with no safety gain, and the current names match THIS dispatch/branch
+// (`bst/mod-runtime-s3-approval-binding`). The mapping is recorded here and in
+// the rework record so a future consumer can resolve either vocabulary:
+//   spec `approval-rules.mjs`  -> this file `approval-binding.mjs`
+//   spec `bindApproval(...)`    -> `bindApprovalDecision(...)`
+//   spec `verifyApproval(...)`  -> `verifyApprovalBinding(...)`
+// Behavior, not names, is what the acceptance checks bind to; the behavior
+// matches the spec (see the risk-registry composition below, review F1).
+//
+// RISK-REGISTRY COMPOSITION (review finding F1 — HIGH/spec-conformance):
+// `verifyApprovalBinding` composes `risk-registry.riskProfile(riskClass)
+// .humanApproval` to short-circuit ALLOW when — and ONLY when — the bound risk
+// class carries an EXPLICIT `humanApproval === false` (no human gate is
+// required for that class). Deny-by-default: ANY other value — `true`,
+// `undefined`, a missing field, or an unknown risk class — requires the bound
+// human decision and denies without it. This mirrors
+// `policy-decision-point.mjs`'s own invariant ("anything other than an
+// explicit false requires the human gate; the PDP never substitutes for a
+// human approval") — this primitive does not substitute for a human approval
+// either; the short-circuit only reflects that a `humanApproval:false` class
+// never needed one. `risk-registry.mjs` is imported READ-ONLY and left
+// byte-identical (no edit); its R0-R4 `humanApproval` table is the single
+// source of truth this module parity-pins against.
 
 import { normalizeRole, checkPairwiseDistinct } from "./sod-rules.mjs";
+import { riskProfile } from "./risk-registry.mjs";
 
 // Literal role tokens capability-registry-service.mjs matches by exact
 // string equality (its own local constants, reproduced here verbatim so
@@ -208,8 +237,23 @@ function isNonBlankString(value) {
 // object-version bind through the closed decision-record schema (no
 // dedicated field exists for it — see the header note on why this
 // technique was chosen instead of a schema change).
+//
+// INJECTIVE ENCODING (review finding F2 — MEDIUM/integrity): the prior
+// encoding `approval-binding:${action}@${version}` was NON-injective — a `@`
+// inside either field let one `(action, objectVersion)` pair collide with
+// another (e.g. ("PROMOTE@filesystem.read", "1.0.0") and ("PROMOTE",
+// "filesystem.read@1.0.0") both flattened to the same string, and real
+// fixtures bind versions containing `@`). The `(action, objectVersion)` pair
+// is now carried as a canonical JSON array. `JSON.stringify(["a","v"])` is a
+// deterministic, unambiguously-decodable encoding of the ordered pair of
+// strings: because JSON string tokens are self-delimiting (quotes + escaping)
+// and the array has fixed arity 2, distinct pairs ALWAYS produce distinct
+// strings — no split of the payload can collide. `verifyApprovalBinding`
+// reconstructs the identical canonical string for its lookup, so the exact
+// action + exact version bind (gap MR-3) can no longer be defeated by a
+// delimiter-collision.
 function bindingRef(boundAction, boundObjectVersion) {
-  return `approval-binding:${boundAction}@${boundObjectVersion}`;
+  return `approval-binding:${JSON.stringify([boundAction, boundObjectVersion])}`;
 }
 
 // Mints a decision-record CANDIDATE for an approval-binding evaluation.
@@ -289,9 +333,24 @@ export function bindApprovalDecision(evaluation, identity = {}) {
 // wrong type or outcome, or an action/version that does not match the
 // bound evidence_refs entry all deny. Never converts a mismatch into an
 // allow.
-export function verifyApprovalBinding(resolvedDecision, { exactAction, objectVersion } = {}) {
+//
+// RISK-REGISTRY humanApproval SHORT-CIRCUIT (review finding F1): when a
+// `riskClass` is supplied AND `risk-registry.riskProfile(riskClass)` resolves
+// a known class whose `humanApproval` is the EXPLICIT boolean `false`, no
+// human gate is required for that class, so verification short-circuits to
+// ALLOW without a bound human decision (returns `{ ok: true,
+// humanApprovalRequired: false }`). EVERY other case is deny-by-default and
+// falls through to require the bound decision: `humanApproval === true`, an
+// absent/undefined `humanApproval`, an unknown risk class (riskProfile denies),
+// or no `riskClass` at all. This is the exact inverse-safe reading of the
+// PDP's "anything other than an explicit false requires the human gate".
+export function verifyApprovalBinding(resolvedDecision, { exactAction, objectVersion, riskClass } = {}) {
   if (!isNonBlankString(exactAction) || !isNonBlankString(objectVersion)) {
     return { ok: false, code: "DENY_MALFORMED_VERIFICATION_REQUEST" };
+  }
+  const profile = riskProfile(riskClass);
+  if (profile.ok && profile.value.humanApproval === false) {
+    return { ok: true, humanApprovalRequired: false };
   }
   if (resolvedDecision === null || resolvedDecision === undefined || typeof resolvedDecision !== "object") {
     return { ok: false, code: "DENY_UNKNOWN_APPROVAL" };
