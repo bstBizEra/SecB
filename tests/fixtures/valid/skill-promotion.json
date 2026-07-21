@@ -1,0 +1,20 @@
+{
+  "decision_id": "dec_skill_promotion_p0_modskill_s2_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_modskill_s2_001",
+  "session_id": "ses_local_modskill_s2_001",
+  "actor_id": "operator.gov.01",
+  "skill_candidate_id": "skill.demo.example",
+  "skill_version": "1.0.0",
+  "status": "PUBLISHED",
+  "producer_actor_id": "claude-motor",
+  "independent_review_actor_id": "agent.claude.rev.01",
+  "governance_actor_id": "operator.gov.01",
+  "bound_action": "PROMOTE_SKILL",
+  "bound_object_version": "skill.demo.example@1.0.0",
+  "evidence_refs": ["evidence:intake:skill.demo.example:0001"],
+  "risk_class": "R3",
+  "decided_at": "2026-07-21T12:00:00Z",
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

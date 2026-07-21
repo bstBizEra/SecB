@@ -1,0 +1,22 @@
+{
+  "memory_record_id": "mem_mod_mem_s2_fixture",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_mod_mem_s2_001",
+  "session_id": "ses_mod_mem_s2_001",
+  "actor_id": "hippocampus-actor",
+  "layer": "project",
+  "source": "KnowledgeLedger",
+  "statement": "Composite-key delimiters must be denied at both service gates",
+  "classification": "INTERNAL",
+  "confidence": 0.82,
+  "provenance": {
+    "evidence_refs": ["ev_verified_001"],
+    "origin_record_id": "kc_p0_14_fixture"
+  },
+  "valid_from": "2026-07-21T10:00:00Z",
+  "valid_until": "2026-10-01T00:00:00Z",
+  "retention_policy": "retain-12-months",
+  "admitted_at": "2026-07-21T10:00:05Z",
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

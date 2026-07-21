@@ -278,7 +278,7 @@ function gitBlobSha1(rel) {
 const PINNED_BLOBS = Object.freeze({
   "src/ledger/checkpoint-ledger.mjs": "4df391f892f8bac2b569c5bf9fd627ee0101c542",
   "src/ledger/durable-ledger.mjs": "6be08fc14ff31a7c871c5e86888af42285d40529",
-  "src/contracts/contract-validator.mjs": "c3b37776ad1c928395fe681a3e9934c6decff42e",
+  "src/contracts/contract-validator.mjs": "860d2b663542e669774ca4e1b09bff01199bc25c",
   "src/contracts/canonical-fingerprint.mjs": "721e99032ce7040312e77138c8f156b649fd996e"
 });
 
