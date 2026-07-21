@@ -25,7 +25,8 @@ const validFixtures = {
   goal: "valid/goal.json",
   delegationRequest: "valid/delegation-request.json",
   checkpoint: "valid/checkpoint.json",
-  "workspace-lease": "valid/workspace-lease.json"
+  "workspace-lease": "valid/workspace-lease.json",
+  memoryRecord: "valid/memory-record.json"
 };
 
 const invalidFixtures = {
@@ -45,7 +46,8 @@ const invalidFixtures = {
   goal: "invalid/goal-missing-id.json",
   delegationRequest: "invalid/delegation-request-missing-budget.json",
   checkpoint: "invalid/checkpoint-missing-id.json",
-  "workspace-lease": "invalid/workspace-lease-missing-id.json"
+  "workspace-lease": "invalid/workspace-lease-missing-id.json",
+  memoryRecord: "invalid/memory-record-missing-id.json"
 };
 
 test("all canonical contract kinds have valid fixtures", () => {

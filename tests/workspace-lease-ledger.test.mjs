@@ -453,8 +453,12 @@ test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE
   ];
   // Every contract schema EXCEPT the newly added workspace-lease one must be
   // byte-identical to the base commit — proof this slice touched no other schema.
+  // (memory-record.schema.json is ALSO excluded: it postdates ${BASE} entirely
+  // — added by MOD-MEM S2, an unrelated later slice — so it cannot be diffed
+  // against a commit where the path does not yet exist; that addition is
+  // proven additive-only by its own contract-validator.test.mjs coverage.)
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "workspace-lease.schema.json") continue;
+    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json") continue;
     guarded.push(`contracts/${file}`);
   }
   for (const rel of guarded) {
