@@ -17,11 +17,11 @@ import { WorkPackageContractService, WorkPackageServiceError } from "../src/serv
 // Each stub documents what it will test and which dependency unblocks it.
 // When a dependency lands, replace the skip with the actual test.
 
-test("V-002 project scope: approved repository enforced", { skip: "MECHANISM DELIVERED (projectResolver binding, unit-tested with the resolution shape of ProjectContractService.resolveEffective); executable conformance with the real P0-08 service unblocks on the merged tree" }, () => {
-  // Positive: work package scoped to approved repository proceeds
-  // Negative: work package referencing unapproved repository rejected
-  // Post-merge: wire projectResolver = (id) => projectService.resolveEffective({ projectId: id })
-});
+// V-002 project scope UNBLOCKED and moved to a live conformance case in
+// tests/conformance-p0-18-candidate.test.mjs (P0-18 candidate): P0-08
+// ProjectContractService is ratified on main @ 4abfff2, so effective-scope
+// resolution is composed for real (positive approved-repo resolve; negative
+// unrelated/unknown; adversarial forged-activation, decision-reuse, revoked).
 
 // V-004 unblocked by P0-10 R2 ContextFederationService (gate waived 2026-07-19).
 test("V-004 context: context receipt federation and retrieval", () => {
@@ -308,10 +308,12 @@ test("V-009 approval: bound approval on work package acceptance", () => {
   );
 });
 
-test("V-010 terminal: observer role in project-scoped session", { skip: "BLOCKED: P0-08 Project Contract service" }, () => {
-  // Positive: read-only observer session within project scope
-  // Negative: observer attempting mutation blocked
-});
+// V-010 terminal (observer) UNBLOCKED and moved to a live conformance case in
+// tests/conformance-p0-18-candidate.test.mjs (P0-18 candidate): the MOD-LIVE S2
+// access-mode ladder is ratified on main @ 4abfff2, so read-only observer
+// authorization is composed for real (positive Observe view; negative
+// escalation-to-Control/Emergency; adversarial prototype-smuggling, hostile
+// getter, unknown token, gated-mode-without-explicit-auth).
 
 test("V-011 redaction: data classification enforcement on events (storage plane)", { skip: "BLOCKED: P0-08 security policy surface - storage-plane redaction only; display plane covered below" }, () => {
   // Positive: RESTRICTED data redacted before ledger append
@@ -473,10 +475,12 @@ test("V-013 skill: skill lifecycle through SkillsHub", () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("V-014 MCP: credential-bounded MCP invocation", { skip: "BLOCKED: P0-10 Context federation + P0-11 A2A" }, () => {
-  // Positive: MCP method invoked with bounded credential
-  // Negative: MCP method without valid credential rejected
-});
+// V-014 MCP UNBLOCKED and moved to a live conformance case in
+// tests/conformance-p0-18-candidate.test.mjs (P0-18 candidate): the
+// SECB-MCP-P0-001 gateway dispatch core is ratified on main @ 4abfff2, so
+// credential-bounded read-only invocation is composed for real (positive
+// bounded read dispatch; negative unknown-capability, non-read, missing
+// authorization_id; adversarial credential-leak, revoked, prototype-pollution).
 
 // V-015 unblocked by P0-11 HandoffService R1 (gate waived 2026-07-19).
 test("V-015 A2A: structured handoff non-escalation", () => {
@@ -535,9 +539,20 @@ test("V-015 A2A: structured handoff non-escalation", () => {
   );
 });
 
-test("V-016 recovery: checkpoint resume and drift detection", { skip: "BLOCKED: P0-10 Checkpoint federation" }, () => {
-  // Positive: verified checkpoint resumes from correct state
-  // Negative: drifted checkpoint detected and denied
+// V-016 recovery is PARTIALLY covered live in
+// tests/conformance-p0-18-candidate.test.mjs (P0-18 candidate): the MOD-RUNTIME
+// S1 CheckpointLedger is ratified on main @ 4abfff2, so the RESUME-POINT half is
+// composed for real (positive latest-resume resolution; negative
+// unknown-session/checkpoint fail-closed; adversarial tamper -> hash-chain
+// LEDGER_INTEGRITY_FAILURE). The DRIFT half below remains genuinely BLOCKED.
+test("V-016 recovery: source-ledger drift comparison denies a drifted checkpoint", { skip: "BLOCKED: checkpoint-ledger non-goal #3 — the restore-execution DRIFT comparator (compare source_ledger_id @ sequence_at_checkpoint against the live source-ledger head to deny a drifted resume) is deferred; no primitive on main @ 4abfff2 performs this comparison" }, () => {
+  // Positive: a checkpoint whose source-ledger head still matches
+  //   sequence_at_checkpoint resumes verified.
+  // Negative: a checkpoint whose source ledger has advanced (drifted) past
+  //   sequence_at_checkpoint is denied — resume-against-drift blocked.
+  // Unblocks when a restore-execution consumer that dereferences
+  //   state_snapshot_ref and compares source-ledger head vs checkpoint sequence
+  //   lands on main.
 });
 
 test("V-017 knowledge: temporal knowledge claim derivation", () => {

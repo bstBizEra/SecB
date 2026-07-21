@@ -20,7 +20,10 @@ const schemaPaths = {
   goal: "goal.schema.json",
   delegationRequest: "delegation-request.schema.json",
   checkpoint: "checkpoint.schema.json",
-  "workspace-lease": "workspace-lease.schema.json"
+  "workspace-lease": "workspace-lease.schema.json",
+  memoryRecord: "memory-record.schema.json",
+  skillPromotion: "skill-promotion.schema.json",
+  integrationQueueEntry: "integration-queue-entry.schema.json"
 };
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
