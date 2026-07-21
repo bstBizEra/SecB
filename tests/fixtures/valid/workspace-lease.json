@@ -1,0 +1,13 @@
+{
+  "lease_id": "wl_p0_wspace_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_wspace_001",
+  "session_id": "ses_local_wspace_001",
+  "actor_id": "claude-motor-wspace-s3-ledger-01",
+  "write_set": ["src/ledger", "contracts", "tests"],
+  "issued_at": "2026-07-21T09:00:00+07:00",
+  "ttl": 3600000,
+  "expires_at": "2026-07-21T10:00:00+07:00",
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

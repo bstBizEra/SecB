@@ -397,6 +397,23 @@
     "docs/03-project-control/candidates/mod-live-s3-replay-rev-001.md",
     "docs/03-project-control/candidates/mod-live-completion-rev-001.md",
     "docs/03-project-control/candidates/mod-live-s3-resource-exhaustion-fix-producer-verification-001.md",
-    "docs/03-project-control/candidates/mod-live-s3-resource-exhaustion-crossrev-001.md"
+    "docs/03-project-control/candidates/mod-live-s3-resource-exhaustion-crossrev-001.md",
+    "docs/03-project-control/candidates/mod-wspace-s3-lease-ledger-rev-001.md",
+    "contracts/workspace-lease.schema.json",
+    "tests/fixtures/valid/workspace-lease.json",
+    "tests/fixtures/invalid/workspace-lease-missing-id.json",
+    "src/ledger/workspace-lease-ledger.mjs",
+    "tests/workspace-lease-ledger.test.mjs",
+    "docs/03-project-control/candidates/mod-wspace-completion-rev-001.md",
+    "docs/03-project-control/candidates/mod-wspace-completion-rev-002.md",
+    "docs/03-project-control/candidates/mod-wspace-s3-single-writer-crossrev-001.md",
+    "docs/03-project-control/candidates/mod-wspace-s3-second-independent-review-001.md",
+    "docs/03-project-control/candidates/secb-gov-001-promotion-readiness-rev-001.md",
+    "docs/03-project-control/candidates/secb-gov-001-human-gov-decision-001.yaml",
+    "docs/03-project-control/candidates/secb-gov-001-independent-review-refresh-002.yaml",
+    "docs/03-project-control/candidates/secb-gov-001-independent-review-request-001.yaml",
+    "docs/03-project-control/candidates/secb-gov-001-promotion-queue-001.yaml",
+    "docs/03-project-control/candidates/secb-gov-001-promotion-readiness-001.md",
+    "docs/03-project-control/candidates/secb-gov-001-promotion-refresh-002.yaml"
   ]
 }

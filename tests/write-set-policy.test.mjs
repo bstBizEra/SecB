@@ -458,7 +458,6 @@ test("byte-identity: files read but not modified are unchanged vs main @ 71b9d41
   const guarded = [
     "src/services/context-federation-service.mjs",
     "src/control/risk-registry.mjs",
-    "tools/validate-foundation.mjs",
     "package.json"
   ];
   for (const rel of guarded) {
@@ -466,6 +465,15 @@ test("byte-identity: files read but not modified are unchanged vs main @ 71b9d41
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, mainBlob, `${rel} blob differs from main`);
   }
+  // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
+  // workspace-lease schema registration, 16->17 schemas), so it no longer
+  // matches main's blob on this pre-merge branch. Pin it to its post-S3 blob so
+  // any UNAUTHORIZED further drift of the validator still fails this guard.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
+    "d0ba1e920f295b7522cb7561c2f9e3bfda2093ce",
+    "validate-foundation.mjs pinned to its post-MOD-WSPACE-S3 blob"
+  );
   // Sanity: the guarded source actually still contains the pathSubset the parity
   // oracle mirrors, so the guard is protecting the right thing.
   const cfs = readFileSync(resolve(root, "src/services/context-federation-service.mjs"), "utf8");

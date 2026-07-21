@@ -1,0 +1,32 @@
+artifact_id: SECB-GOV-001-HUMAN-GOV-DECISION-001
+artifact_type: human_governance_decision_template
+status: PENDING_HUMAN_GOV
+subject: SECB-GOV-001 controlled ACTIVE consideration
+candidate_baseline:
+  commit: e220002
+  source_queue: docs/03-project-control/candidates/secb-gov-001-promotion-queue-001.yaml
+requested_disposition_options:
+  - PASS_FOR_P0_CONTROLLED_ACTIVATION
+  - HOLD_PENDING_REV_QA_SEC_EVIDENCE
+  - REQUEST_CHANGES
+scope_if_passed:
+  environment: local_read_only
+  mutation_authority: false
+  network_and_remote_operations: denied
+  deployment_release_and_publication: denied
+  stable_claim: denied
+preconditions:
+  project_contract_effective: false
+  independent_rev_accepted: false
+  independent_qa_accepted: false
+  sec_review_accepted: false
+  evidence_accepted: false
+  human_gov_decision: pending
+authority:
+  producer_may_fill: false
+  codex_may_activate: false
+  human_gov_required: true
+  approval_authority: false
+notes:
+  - "This is a decision candidate, not an activation record."
+  - "No ACTIVE or STABLE claim is valid until the preconditions are updated by their accountable authorities."

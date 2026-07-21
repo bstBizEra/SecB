@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/workspace-lease.schema.json",
+  "title": "SecB Workspace Lease",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lease_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "write_set", "issued_at", "ttl", "expires_at", "content_hash"],
+  "properties": {
+    "lease_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "work_package_id": {"type": "string", "minLength": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "actor_id": {"type": "string", "minLength": 1},
+    "write_set": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "ttl": {"type": "integer", "minimum": 1},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}
