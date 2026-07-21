@@ -227,68 +227,61 @@ export function classifyEventType(input) {
 //   Object.freeze({ ok: false, code, message })    — only for a malformed
 //     (non-assessable) envelope input; never a throw.
 //
-// Presence rule: an element counts as present only when it is an OWN
-// property (prototype smuggling ignored) with a non-null, non-undefined
-// value. Each element is probed with one `Object.hasOwn` and at most ONE
-// contained property read (fail-closed extraction; invocation count of any
-// getter is exactly 1). The event is never mutated.
+// Presence rule: an element counts as present only when it is an OWN property
+// (prototype smuggling ignored) with a non-null, non-undefined value.
 //
-// ATOMIC PRESENCE SNAPSHOT (closes N1, second independent review of this
-// slice, docs/03-project-control/candidates/
-// mod-live-s1-event-family-second-independent-review-001.md): the ORIGINAL
-// per-field loop did a fresh `Object.hasOwn` + value read for each element
-// AT THAT POINT in the iteration, so a getter invoked while reading an
-// earlier-checked element (e.g. `trace_id`) could delete or inject a
-// later-checked sibling element (e.g. `sequence`) before it was itself
-// probed, fabricating or suppressing that sibling's finding. This is now a
-// two-pass, TOCTOU-safe read:
-//   Pass 1 (snapshot): capture every doctrine element's OWN property
-//     descriptor via `Object.getOwnPropertyDescriptor`, for all 8 elements,
-//     in one uninterrupted loop, BEFORE any conditional logic or value read
-//     runs. Reading a property descriptor never invokes a getter — it only
-//     inspects property metadata — so no getter runs during this pass and no
-//     side effect can occur here.
-//   Pass 2 (decide): for each element, decide presence from ITS OWN
-//     snapshotted descriptor only. A data property's value was already
-//     captured in the descriptor (no live re-read of the envelope). An
-//     accessor property's getter is invoked exactly once, directly off the
-//     captured descriptor (`descriptor.get.call(envelope)`) rather than via
-//     a fresh `envelope[element]` lookup, so the read targets the exact
-//     function captured at snapshot time regardless of what the live object
-//     looks like by then.
-// Net effect: every element's presence is fixed by the state of the object
-// at the single instant the snapshot was taken, not by whatever the object
-// happens to look like when that element's turn in the loop arrives. A
-// getter's side effect on a sibling element can no longer change that
-// sibling's presence determination — behavior for ordinary (non-getter)
-// envelopes is unchanged, since a plain data property's snapshotted value
-// equals what `envelope[element]` would have returned anyway.
+// ATOMIC STRUCTURAL SNAPSHOT — closes the cross-field TOCTOU class: the
+// original getter vector (N1) AND its Proxy-`getOwnPropertyDescriptor`-trap
+// variant (N2 in mod-live-s1-toctou-fix-rev-001). The own-key set is captured
+// in a SINGLE `Reflect.ownKeys(envelope)` call — one structural read — into a
+// plain Set, and key-presence is decided ONLY from that captured set. NO
+// per-field existence probe (`Object.hasOwn` / `Object.getOwnPropertyDescriptor`)
+// is ever issued, so there is no per-field descriptor/`has` trap that could run
+// in the public DOCTRINE_CONFORMANCE_ELEMENTS order and inject or delete a
+// SIBLING field before that sibling is captured: the key set is frozen the
+// instant it is taken, and nothing observed afterward can add to or remove from
+// it.
+//
+// WHAT IS AND IS NOT GUARANTEED (this narrows the earlier over-broad claim that
+// descriptor reads mean "no side effect can occur here" — true only for plain
+// objects and only for the getter vector; L1 in the same review):
+//   - PLAIN object: `Reflect.ownKeys` runs no user code, so the snapshot is
+//     genuinely atomic and side-effect-free, and the exported element order
+//     cannot cross-contaminate any presence decision.
+//   - PROXY: exactly two contained trap surfaces remain, each a single
+//     invocation and NEITHER able to change another field's already-decided
+//     KEY-presence:
+//       (a) the `ownKeys` trap fires EXACTLY ONCE for the whole snapshot. If it
+//           is itself hostile (mutates state on that one call) that is the one
+//           documented residual boundary — a single contained call, not a
+//           per-field amplification.
+//       (b) each present field's value is taken with ONE contained read
+//           (`envelope[element]`), firing a `get` trap at most once; a throwing
+//           `get` trap is contained to the malformed denial, and because
+//           key-presence is already fixed by the snapshot, a `get` trap governs
+//           ONLY its own field's value — it cannot fabricate or suppress a
+//           sibling's key-presence (a value-channel note is recorded in the
+//           hardening record's residual-boundary section).
+//   A `getOwnPropertyDescriptor` trap is never invoked at all and is therefore
+//   fully inert: it can neither deny nor perturb findings. The event is never
+//   mutated.
 export function assessEnvelopeConformance(envelope) {
   const findings = [];
   try {
     if (!isPlainAssessableObject(envelope)) {
       return deny(DENY_EVENT_ENVELOPE_MALFORMED, "envelope must be a plain object");
     }
-
-    // Pass 1: atomic snapshot. No getter is invoked in this loop.
-    const descriptors = DOCTRINE_CONFORMANCE_ELEMENTS.map((spec) =>
-      Object.getOwnPropertyDescriptor(envelope, spec.element)
-    );
-
-    // Pass 2: decide presence from the frozen-in-time snapshot only.
-    DOCTRINE_CONFORMANCE_ELEMENTS.forEach((spec, index) => {
-      const descriptor = descriptors[index];
+    // ONE structural snapshot: the own-key set, captured in a single
+    // Reflect.ownKeys call (one `ownKeys` trap invocation for a Proxy).
+    // Presence is decided from this set alone; no later observation can change
+    // which keys are considered own.
+    const ownKeys = new Set(Reflect.ownKeys(envelope));
+    for (const spec of DOCTRINE_CONFORMANCE_ELEMENTS) {
       let present = false;
-      if (descriptor !== undefined) {
-        // SINGLE contained read of the element value, sourced from the
-        // snapshot descriptor (its own captured data value, or its own
-        // captured getter function) — never a fresh property lookup on the
-        // live envelope.
-        const value = Object.hasOwn(descriptor, "value")
-          ? descriptor.value
-          : typeof descriptor.get === "function"
-            ? descriptor.get.call(envelope)
-            : undefined;
+      if (ownKeys.has(spec.element)) {
+        // SINGLE contained value read; key-presence already fixed above, so
+        // this read cannot alter any sibling's presence decision.
+        const value = envelope[spec.element];
         present = value !== undefined && value !== null;
       }
       if (!present) {
@@ -301,7 +294,7 @@ export function assessEnvelopeConformance(envelope) {
           })
         );
       }
-    });
+    }
   } catch {
     return deny(DENY_EVENT_ENVELOPE_MALFORMED, "envelope assessment failed (hostile accessor contained)");
   }
