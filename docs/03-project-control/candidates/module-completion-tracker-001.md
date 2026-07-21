@@ -1,14 +1,15 @@
-
-## Iteration log (append-only)
-
-- 2026-07-21: MOD-A2A Slice S2 (delegation non-escalation gate, UNWIRED) PRODUCED on `bst/mod-a2a-s2-non-escalation-gate` @ base `main` fc29f58 â€” see `docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-producer-verification-001.md`. Closes gap MA-1's authorization half, MA-4 (non-reuse risk), MA-8 (unwired risk-registry/PDP primitives) per `mod-a2a-gap-assessment-001.md` Â§4 Slice S2. New `src/control/delegation-gate.mjs` (`evaluateDelegation`/`evaluateDelegationRequest`/`buildDelegationDecisionRecord`) reuses `non-escalation-comparator.withinCeiling` and `risk-registry.riskProfile` verbatim (no local reimplementation, confirmed by definition-only grep); dispositions recorded via the existing `DecisionLedger` (`decision_type: "DISPOSITION"`), no new ledger/schema. 24 new tests, all passing; `npm test` 703/698/0/5 (before, `main`@fc29f58) -> 727/722/0/5 (after, this branch); `node tools/validate-foundation.mjs` exit 0 both. Unwired â€” not consumed by `HandoffService` or any live path. Local commit only, no push, no merge, no operator ratification yet. NOTE for GOV: this record found row 17's tracker file (this file, on `main`) unexpectedly blank/reset compared to the populated queue-and-status table + prior iteration-log entries visible on `bst/mod-a2a-assessment` @ `1795998` â€” flagged here as a documentation-consistency finding, not something this bounded S2 slice attempts to reconcile or overwrite (extend-only: only this one line was appended to an otherwise-empty file).
 # Module Completion Tracker 001
+
 **Record ID:** MOD-TRACK-001
 **Status:** DRAFT â€” loop working record, extend-only (append status lines; do not rewrite history)
 **Directive:** Operator, 2026-07-20: "finish all modules one by one with subagents." Serialized per ADR-0007; roles per [module allocation](../../14-delivery/01-module-allocation.md); catalog per [module catalog](../../10-platform/03-module-catalog.md). Governance: AMD-002 advise-and-proceed â€” subagents produce and independently review; operator ratifies at merge.
+
 ## Base strategy
+
 Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsal-3` @ 1c77958 + accepted descendants), which diverged from `main` (now 6b47cf1 with AMD-002, OM v0.1, validator, gateway lineage in PR #3). **Iteration 1 builds the reconciliation merge candidate**; every later module iteration builds on the reconciled base (or its successor after operator merges).
+
 ## Queue and status
+
 | # | Module | Lead | Status |
 |---|--------|------|--------|
 | 1 | MOD-INTEG (reconciliation first) | Codex ENGIN/INTEGRATOR; this iteration prepared by Claude motor (candidate only) | DISPATCHED 2026-07-20 |
@@ -28,6 +29,9 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 | 15 | MOD-UI Command Center UI | Antigravity proto / Codex prod | QUEUED â€” missing (V-011 display plane seed) |
 | 16 | MOD-MCP MCP Control Plane | Codex ENGIN | NEAR-COMPLETE â€” gateway core (PR #3 decision-ready), P0-21 server + deployment candidate; remaining: private registry service, credential broker |
 | 17 | MOD-A2A A2A Gateway | Claude+Codex | QUEUED â€” handoff service P0-11 delivered on lineage; non-escalation gateway missing |
+
+## Iteration log (append-only)
+
 - 2026-07-20: Tracker created. Iteration 1 (reconciliation candidate) dispatched to Claude motor subagent; Codex notified of module queue and its lead assignments.
 - 2026-07-20: Iteration 1 PRODUCED â€” bst/reconcile-main-x-rehearsal3 @ 76d59e2 (merge) + 4349e51 (record): 0 textual conflicts, MANIFEST union 237 entries script-verified, validator 482/0, tests 248/243/0 fail/5 skip, no dropped files or behavior. Independent REV dispatched. NOTE for operator merge ordering: src/gateway lives only on the PR #3 branch (neither parent lineage) â€” after either of PR #3 / reconciliation merges to main, the other needs one trivial main re-merge (disjoint files, MANIFEST union) before its merge.
 - 2026-07-20 (operator directive): MOD-MCP pulled forward as ITERATION 2 (was #16). Scope to FINISH: private capability registry service + credential broker, built on the PR #3 lineage (bst/secb-mcp-p0-001-candidate @ 65935fb) as bst/mcp-registry-broker-candidate. Producer: Claude motor; independent REV to follow; Codex MOD-REG assignment unchanged. Iteration 1 (reconciliation) REV in progress in parallel lane.
@@ -76,7 +80,9 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 - 2026-07-20: PR #17 MERGED â€” MOD-KNOW S1 ratified on main.
 - 2026-07-20: MOD-SKILL S1 REV: APPROVE_FOR_OPERATOR_MERGE @ eb2dd4b; folded onto main 4fef2f1; staged as PR #18.
 - 2026-07-20: PR #18 MERGED â€” MOD-SKILL S1 ratified on main.
+
 ## Status snapshot â€” 2026-07-20 night (append-only refresh of the queue table)
+
 | Module | Status |
 |--------|--------|
 | MOD-INTEG (reconciliation) | DONE â€” unified base merged (PR #5) |
@@ -91,6 +97,7 @@ Delivered P0 services live on the rehearsal-3 lineage (`bst/integration-rehearsa
 | MOD-REG | Triple-approved @ 09d686c; Codex module closure pending |
 | MOD-RUNTIME | Assessment started (bst/mod-runtime-assessment, external lane) |
 | MOD-WSPACE / MOD-LIVE / MOD-OPS / MOD-UI / MOD-A2A / MOD-INTEG-service | QUEUED (Codex-lead or unstarted) |
+
 Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch); EVID-S2 R4; SKILL S2/S3; MEM S2/S3; OP-1..4; WP-index adoption; ADR-0008; K-12 design; P0-21 activation.
 - 2026-07-20: MOD-KNOW S2 PRODUCED @ a67d49e (bst/mod-know-s2-sidecar): knowledge-linkage-service sibling module (S1 provably untouched â€” guard widened to 4 files), supersession/contradiction sidecar records, defense-in-depth lineage (record+walk gates, foreign-writer injection tested), backdated-at resurrection blocked. 589/584/0 fail/5 skip. S2 REV dispatched.
 - 2026-07-20: MOD-KNOW S2 REV: APPROVE_WITH_NOTES @ bbf649b (1 LOW: walker cross-project-edge symmetry, tracked); staged as PR #19. S3 dispatch next.
@@ -119,3 +126,4 @@ Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch
 - 2026-07-21 claude-sonnet-main: RUNTIME-S3 DEDUP RESOLVED (final) â€” Codex lane delivered complete S3 @ 535a4b2 (approval-binding.mjs 311 LOC + 553 test lines + producer record) before the stand-down notice cleared its queue lag; Claude reclaim producer had written nothing and was stopped (zero waste), reclaim branch deleted. Codex product ACCEPTED as the sole S3 candidate. Cross-provider REVs dispatched in parallel: claude-immune-rev-runtime-s3-01 on 535a4b2 (spec conformance, byte-identity vs 5 authority files + contracts, forge/replay/wrong-version probes) and claude-immune-rev-a2a-s2-01 on ac3258c (A2A-S2 delegation non-escalation gate, 214 LOC: escalation/chain/confusable probes). REG-fix REV also in flight. WSPACE assessment attempt 2 continues.
 - 2026-07-21 claude-sonnet-main: MOD-WSPACE OPENED â€” gap assessment @ 5662b11 (bst/mod-wspace-assessment, claude-cortex-wspace-assess-02): G1-G7 mapped; boundary rulings B1-B6 vs WORK/RUNTIME/CONTEXT/MEM (reuse pathSubset semantics, no gateway lease wiring, worktree creation excluded R3/R4). S1 = write-set containment evaluator (write-set-policy.mjs, 6 deny codes, pathSubset parity) â€” R2, producer claude-motor-wspace-s1-01 DISPATCHED from main @ 71b9d41. G2 lease primitive R2 queued next; G3 worktree-creation + G4 kernel session states + gateway wiring = operator-gated. Baseline 703/698/0/5, validator 0.
 - 2026-07-21 claude-sonnet-motor-worker: **TRACKER RESTORATION**: This file was found reduced to a single blank line on `main` @ 71b9d41, introduced by merge commit `4e458483f0230f08f7ac82e3a2fa23471395d20a` ("[MOD-EVID-S3] Fold main (union)", 2026-07-21T11:26:25+07:00) despite BOTH merge parents (d584a7a: 38 lines, eba7851: 41 lines) having substantial, non-conflicting content â€” a merge-resolution bug, not an intentional edit. Restored from `bst/module-loop-plan`'s own actively-maintained copy (127 lines at restoration time, independently confirmed to be a coherent superset containing recognizable content from both truncation-commit parents plus everything logged since). No other file touched. Prepared as a non-main fix branch (`bst/tracker-restoration-fix-001`) for operator merge; not merged to main by this producer.
+- 2026-07-21: MOD-A2A Slice S2 (delegation non-escalation gate, UNWIRED) PRODUCED on `bst/mod-a2a-s2-non-escalation-gate` @ base `main` fc29f58 â€” see `docs/03-project-control/candidates/mod-a2a-s2-non-escalation-gate-producer-verification-001.md`. Closes gap MA-1's authorization half, MA-4 (non-reuse risk), MA-8 (unwired risk-registry/PDP primitives) per `mod-a2a-gap-assessment-001.md` Â§4 Slice S2. New `src/control/delegation-gate.mjs` (`evaluateDelegation`/`evaluateDelegationRequest`/`buildDelegationDecisionRecord`) reuses `non-escalation-comparator.withinCeiling` and `risk-registry.riskProfile` verbatim (no local reimplementation, confirmed by definition-only grep); dispositions recorded via the existing `DecisionLedger` (`decision_type: "DISPOSITION"`), no new ledger/schema. 24 new tests, all passing; `npm test` 703/698/0/5 (before, `main`@fc29f58) -> 727/722/0/5 (after, this branch); `node tools/validate-foundation.mjs` exit 0 both. Unwired â€” not consumed by `HandoffService` or any live path. Local commit only, no push, no merge, no operator ratification yet. NOTE for GOV: this record found row 17's tracker file (this file, on `main`) unexpectedly blank/reset compared to the populated queue-and-status table + prior iteration-log entries visible on `bst/mod-a2a-assessment` @ `1795998` â€” flagged here as a documentation-consistency finding, not something this bounded S2 slice attempts to reconcile or overwrite (extend-only: only this one line was appended to an otherwise-empty file).
