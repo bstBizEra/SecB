@@ -170,6 +170,96 @@ test("generic ledger rejects invalid payloads and timestamps", () => withTempLed
   assert.throws(() => ledger.append({ ...base, timestamp: "not-a-date" }, { expectedSequence: 0 }), (error) => error.code === "DENY_INVALID_TIMESTAMP");
 }));
 
+// --- preWriteCheck hook (mod-wspace-s3-single-writer-toctou-fix-001) --------
+//
+// Added so a subclass business-rule gate (e.g. WorkspaceLeaseLedger's
+// single-writer-per-session check) can run atomically with the write, inside
+// this SAME lock-held, freshly-read-and-verified critical section, instead of
+// the subclass taking its own separate unlocked `read()` snapshot before
+// calling append() (a TOCTOU race — see
+// docs/03-project-control/candidates/mod-wspace-s3-second-independent-review-001.md
+// §3 and the producer verification record for this fix).
+
+function genericEntry(overrides = {}) {
+  return {
+    entryId: "entry_001",
+    projectId: "prj",
+    workPackageId: "wp",
+    sessionId: "ses",
+    actorId: "actor",
+    type: "test",
+    payload: {},
+    timestamp: "2026-07-17T12:50:00+07:00",
+    idempotencyKey: "idem",
+    ...overrides
+  };
+}
+
+test("preWriteCheck receives the SAME freshly-read, freshly-verified records this write is about to use, and a truthy return aborts the write without persisting", () => withTempLedger((directory) => {
+  const ledger = new DurableLedger({ filePath: join(directory, "generic.ndjson"), ledgerId: "test-ledger" });
+  ledger.append(genericEntry(), { expectedSequence: 0 });
+
+  let seenRecordsLength;
+  let seenEntry;
+  const veto = Object.freeze({ ok: false, code: "DENY_TEST_VETO" });
+  const entry2 = genericEntry({ entryId: "entry_002", idempotencyKey: "idem2" });
+
+  const result = ledger.append(entry2, {
+    expectedSequence: 1,
+    preWriteCheck: (records, entry) => {
+      seenRecordsLength = records.length;
+      seenEntry = entry;
+      return veto;
+    }
+  });
+
+  assert.equal(seenRecordsLength, 1, "preWriteCheck must see the just-appended prior record");
+  assert.equal(seenEntry, entry2);
+  assert.equal(result, veto, "a truthy preWriteCheck return value is returned as-is from append()");
+  assert.equal(ledger.read().length, 1, "the vetoed entry must NOT be persisted");
+}));
+
+test("preWriteCheck returning a falsy value lets the append proceed exactly as if no hook were passed", () => withTempLedger((directory) => {
+  const ledger = new DurableLedger({ filePath: join(directory, "generic.ndjson"), ledgerId: "test-ledger" });
+  ledger.append(genericEntry(), { expectedSequence: 0 });
+
+  const entry2 = genericEntry({ entryId: "entry_002", idempotencyKey: "idem2" });
+  const allowed = ledger.append(entry2, { expectedSequence: 1, preWriteCheck: () => null });
+
+  assert.equal(allowed.sequence, 2);
+  assert.equal(allowed.replayed, false);
+  assert.equal(ledger.read().length, 2);
+}));
+
+test("preWriteCheck receives a structuredClone of records, not internal mutable state", () => withTempLedger((directory) => {
+  const ledger = new DurableLedger({ filePath: join(directory, "generic.ndjson"), ledgerId: "test-ledger" });
+  ledger.append(genericEntry(), { expectedSequence: 0 });
+
+  const entry2 = genericEntry({ entryId: "entry_002", idempotencyKey: "idem2" });
+  ledger.append(entry2, {
+    expectedSequence: 1,
+    preWriteCheck: (records) => {
+      records.length = 0; // mutate the hook's own copy
+      records.push({ tampered: true });
+      return null;
+    }
+  });
+
+  // Mutating the hook's argument must not affect what was actually persisted.
+  const stored = ledger.read();
+  assert.equal(stored.length, 2);
+  assert.equal(stored[0].entry.entryId, "entry_001");
+  assert.equal(stored[1].entry.entryId, "entry_002");
+}));
+
+test("append rejects a non-function preWriteCheck", () => withTempLedger((directory) => {
+  const ledger = new DurableLedger({ filePath: join(directory, "generic.ndjson"), ledgerId: "test-ledger" });
+  assert.throws(
+    () => ledger.append(genericEntry(), { expectedSequence: 0, preWriteCheck: "not-a-function" }),
+    (error) => error instanceof LedgerError && error.code === "DENY_INVALID_PRE_WRITE_CHECK"
+  );
+}));
+
 test("invalid JSON and duplicate entry identity fail closed", () => withTempLedger((directory) => {
   const corruptPath = join(directory, "corrupt.ndjson");
   writeFileSync(corruptPath, "{not-json}\n", "utf8");

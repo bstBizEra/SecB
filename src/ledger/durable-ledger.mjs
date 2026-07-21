@@ -110,10 +110,33 @@ export class DurableLedger {
     return structuredClone(records);
   }
 
-  append(entry, { expectedSequence } = {}) {
+  // `preWriteCheck` (optional): a subclass business-rule hook invoked INSIDE
+  // this same lock-held, freshly-read-and-verified critical section, after the
+  // base structural checks (idempotency replay, duplicate entryId, optimistic
+  // sequence) and immediately before the record is persisted. It receives a
+  // structuredClone of the just-verified `records` (so a subclass cannot
+  // mutate append()'s internal working state) and the candidate `entry`. If it
+  // returns a truthy value, that value is returned AS-IS from append() and
+  // NOTHING is written — the lock is still released via `finally` below. If it
+  // returns a falsy value (or is omitted entirely), the append proceeds
+  // exactly as before.
+  //
+  // This exists so a subclass invariant that depends on "what else is
+  // currently in the chain" (e.g. WorkspaceLeaseLedger's single-writer-per-
+  // session gate) can be evaluated atomically with the write, sharing this
+  // lock, instead of the subclass taking its own separate unlocked `read()`
+  // snapshot before calling append() — which is not atomic with the locked
+  // write and admits a TOCTOU race (see the mod-wspace-s3 single-writer-
+  // toctou-fix producer-verification record). Callers that omit
+  // `preWriteCheck` (every other ledger subclass) see byte-for-byte identical
+  // behavior to before this hook existed.
+  append(entry, { expectedSequence, preWriteCheck } = {}) {
     validateEntry(entry);
     if (!Number.isInteger(expectedSequence) || expectedSequence < 0) {
       throw new LedgerError("DENY_INVALID_EXPECTED_SEQUENCE", "expectedSequence must be a non-negative integer");
+    }
+    if (preWriteCheck !== undefined && typeof preWriteCheck !== "function") {
+      throw new LedgerError("DENY_INVALID_PRE_WRITE_CHECK", "preWriteCheck must be a function when provided");
     }
 
     try {
@@ -142,6 +165,10 @@ export class DurableLedger {
           "DENY_SEQUENCE_CONFLICT",
           `Expected sequence ${expectedSequence}, observed ${records.length}`
         );
+      }
+      if (preWriteCheck) {
+        const veto = preWriteCheck(structuredClone(records), entry);
+        if (veto) return veto;
       }
 
       const sequence = records.length + 1;
