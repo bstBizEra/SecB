@@ -690,18 +690,33 @@ test("F2: the two colliding binds produce DISTINCT evidence_refs entries", () =>
 // ---------------------------------------------------------------------------
 // 7. F4 (LOW/INFO): byte-identity guard for the protected files
 // ---------------------------------------------------------------------------
-// The rework must not touch any of the six protected source files or the 16
-// contracts. This guard compares the WORKING-TREE blob hash of each protected
-// path (git hash-object) against the blob hash stored at both main @ beebfe8
-// (the candidate's base) AND current main @ 71b9d41. Any drift fails here.
+// The rework must not touch any of the (now four) protected source files or
+// the 16 contracts. This guard compares the WORKING-TREE blob hash of each
+// protected path (git hash-object) against the blob hash stored at both main
+// @ beebfe8 (the candidate's base) AND current main @ 71b9d41. Any drift
+// fails here.
+//
+// DISCLOSED EXCEPTION (bst/mod-work-sod-version-spoof-fix-001, closes
+// mod-work-second-independent-review-001 §4): `src/services/goal-graph-
+// service.mjs` was REMOVED from this list. It is no longer byte-identical to
+// beebfe8/71b9d41 as of that branch, which fixes a real, reproduced
+// Separation-of-Duties bypass (registerGoal previously let any actor
+// silently overwrite a goal's producerActorId on re-version, defeating
+// retireGoal's N-5 DENY_SELF_APPROVAL gate). This is a deliberate,
+// documented, security-motivated divergence from this F4 scope-discipline
+// guard's original invariant (which asserted the MOD-RUNTIME-S3
+// approval-binding rework specifically left this file untouched) — not an
+// accidental drift the guard was meant to catch. See the "intentional
+// divergence" test immediately below, which keeps that divergence visible
+// and attributed rather than silently dropping the file from coverage.
+// The remaining four protected files are unaffected and still enforced.
 
 const BYTE_IDENTITY_BASELINES = ["beebfe8", "71b9d41"];
 const PROTECTED_SOURCE_FILES = [
   "src/control/sod-rules.mjs",
   "src/control/risk-registry.mjs",
   "src/control/policy-decision-point.mjs",
-  "src/gateway/capability-registry-service.mjs",
-  "src/services/goal-graph-service.mjs"
+  "src/gateway/capability-registry-service.mjs"
 ];
 
 function gitBlobHashAtRef(ref, path) {
@@ -721,6 +736,25 @@ test("F4 byte-identity: protected source files are byte-identical to main @ beeb
     for (const ref of BYTE_IDENTITY_BASELINES) {
       assert.equal(working, gitBlobHashAtRef(ref, path), `${path} drifted from main @ ${ref}`);
     }
+  }
+});
+
+// Disclosed, attributed divergence (see the header comment above): this
+// branch deliberately changes goal-graph-service.mjs to fix a real SoD
+// bypass. This test keeps that fact visible and asserted, rather than
+// letting the file quietly fall out of the byte-identity guard's coverage
+// with no record of why. It fails loudly (drift MUST be present) if a
+// future rebase/merge ever silently reverts the fix back to the pre-fix
+// baseline content.
+test("F4 disclosed exception: goal-graph-service.mjs intentionally drifted from beebfe8/71b9d41 (mod-work SoD fix)", () => {
+  const path = "src/services/goal-graph-service.mjs";
+  const working = gitWorkingBlobHash(path);
+  for (const ref of BYTE_IDENTITY_BASELINES) {
+    assert.notEqual(
+      working,
+      gitBlobHashAtRef(ref, path),
+      `${path} unexpectedly matches the pre-fix baseline @ ${ref} -- the SoD fix appears to be missing`
+    );
   }
 });
 
