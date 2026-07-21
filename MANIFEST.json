@@ -422,6 +422,9 @@
     "tests/fixtures/invalid/integration-queue-entry-missing-id.json",
     "src/ledger/integration-queue-ledger.mjs",
     "tests/integration-queue-ledger.test.mjs",
-    "docs/03-project-control/candidates/mod-integ-queue-s1-ledger-producer-verification-001.md"
+    "docs/03-project-control/candidates/mod-integ-queue-s1-ledger-producer-verification-001.md",
+    "src/control/integration-collision-forecast.mjs",
+    "tests/integration-collision-forecast.test.mjs",
+    "docs/03-project-control/candidates/mod-integ-queue-s2-collision-forecast-producer-verification-001.md"
   ]
 }
