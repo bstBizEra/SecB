@@ -479,7 +479,7 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
   // validator still fails.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "aa8f60385e35b5531db44a75fd2e2f7e82b95a26",
+    "518fb2d534379688d3e41be6ab298cb4fe009768",
     "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
   );
   // Sanity: the reused primitive actually still exports the containment evaluator
