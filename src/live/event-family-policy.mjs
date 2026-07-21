@@ -303,6 +303,40 @@ export function classifyEventType(input) {
 //     module already takes for any other hostile-accessor signal. No finding
 //     is ever fabricated by this path.
 //   The event is never mutated by this function.
+//
+// N4 — DISCLOSED, ACCEPTED, NON-BLOCKING WHILE THIS MODULE STAYS UNWIRED (see
+// docs/03-project-control/candidates/mod-live-s1-toctou-class-scope-disposition-001.md
+// for the full disposition; independent review
+// docs/03-project-control/candidates/mod-live-s1-value-mutation-fix-independent-review-001.md
+// found this against the N3 fix). Phase 1 itself walks doctrine fields
+// ONE-AT-A-TIME (`for (const spec of DOCTRINE_CONFORMANCE_ELEMENTS)`), same as
+// the vulnerable pre-N3 Phase 2 did. A hostile `getOwnPropertyDescriptor`
+// trap fired for an EARLIER field can REDEFINE (not delete) a not-yet-visited
+// sibling's descriptor before Phase 1's own loop reaches it — a fully silent
+// forge that trips neither existing safety net (the key is still present per
+// Reflect.ownKeys; the later descriptor call still returns a well-formed,
+// non-undefined descriptor, just a poisoned one) — functionally identical to
+// N3, one structural layer deeper.
+//
+// This is NOT a fixable-by-one-more-phase bug: reading N named properties off
+// a genuinely adversarial Proxy can never be made atomic in the JS object
+// model. Any per-field read this function could add (a "Phase 0" descriptor-
+// of-descriptors, etc.) gives that same Proxy N sequential chances to observe
+// how far the read has progressed and mutate whatever hasn't been visited
+// yet — the vulnerability recurses one layer for every layer of indirection
+// added to close it. Chasing N5, N6, ... would not converge.
+//
+// THE ACTUAL BOUNDARY: this residual is scoped OUT, not fixed, because it is
+// only reachable when `envelope` is an adversarial Proxy — and this module is
+// PURE + UNWIRED (see file header): no live caller currently supplies any
+// envelope, adversarial or otherwise. Per the scope-disposition record cited
+// above, wiring this module to ANY live/adversarial-input path is gated on
+// first adding a structural admission check (e.g. requiring `envelope` to
+// have passed through `JSON.parse`/`structuredClone` first, which can never
+// produce a Proxy or an accessor property, making the entire N1-N4 class
+// structurally unreachable rather than defended-against-recursively) — that
+// gate is the wiring work's own responsibility, not a change to this PURE
+// evaluator's contract.
 export function assessEnvelopeConformance(envelope) {
   const findings = [];
   try {
