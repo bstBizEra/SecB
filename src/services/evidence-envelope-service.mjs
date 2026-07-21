@@ -83,6 +83,55 @@ import { checkProhibitedActors } from "../control/sod-rules.mjs";
 // accumulated status exactly as the live API would -- no new/separate
 // check. An illegal edge denies the whole rehydration (fail-closed, this
 // file's established convention), not just the offending entry.
+//
+// TRANSITION-GUARD CONVERGENCE (round-3 fast-follow, independent review of
+// the edge-legality fix above, docs/03-project-control/candidates/
+// mod-evid-s2-s3-rehydration-edge-legality-fix-independent-review-001.md,
+// section 5): raw #assertEdge validates the ABSTRACT STATE_MACHINES.Evidence
+// graph, but four live methods each enforce a NARROWER rule than "is this
+// edge graph-legal" -- because QUARANTINED/REJECTED are graph-reachable from
+// several source states (a generic "reject/supersede at any time" shape this
+// service does not fully implement), while every live method that can
+// produce those targets only ever does so from ONE specific source (or with
+// an extra SoD/shape check #assertEdge alone cannot express). Confirmed
+// exploitable in 4 variants: SEALED->QUARANTINED via a forged
+// EVIDENCE_VERIFICATION with no preceding VERIFICATION_REQUEST; a forged
+// EVIDENCE_SEAL claiming sealed_status QUARANTINED as the first entry; a
+// forged EVIDENCE_VERIFICATION claiming next_status REJECTED (a value
+// recordVerification() can never produce -- VERDICT_TARGETS only maps to
+// VERIFIED/QUARANTINED); and, most severely, a forged EVIDENCE_ACCEPTANCE
+// entry retroactively re-targeting an already-legitimately-ACCEPTED record
+// to QUARANTINED, rewriting real governance history.
+//
+// FIX (approach a -- single source of truth, same pattern sod-rules.mjs's
+// AUTHORIZE_TIME_LADDER already established for this repo): every ladder
+// transition's FULL guard -- source-status pin, target derivation, edge
+// check, and SoD check -- is now factored into one shared private method per
+// transition (#assertSealTransition, #assertRequestVerificationTransition,
+// #verdictTarget + #assertRecordVerificationTransition,
+// #assertApprovals + #assertAcceptEvidenceTransition, all in the "shared
+// internals" section below). Each live ladder method calls its own guard
+// with its OWN live arguments; #rehydrate() calls the SAME guard with values
+// folded from the ledger entry's payload plus the currently-accumulated
+// record. There is exactly one place each transition's legality is decided,
+// so a live method and rehydration can never again drift apart on how much
+// of that legality they check -- closing this recursion (round 1: read the
+// ledger at all; round 2: check graph edges; round 3: check the SAME rule
+// the live method itself enforces, not just the graph) rather than
+// point-patching the four reported variants. Two structural consequences
+// worth naming explicitly: (1) for SEAL / VERIFICATION_REQUEST / ACCEPTANCE
+// entries, the live method only EVER writes one hardcoded target status, so
+// the shared guard independently derives that ONE literal target
+// (SEALED_STATE / VERIFICATION_PENDING_STATE / ACCEPTED_STATE) and denies
+// fail-closed, BEFORE the graph-edge check even runs, the instant
+// payload.sealed_status / payload.next_status disagrees with it -- not
+// silently substituting the correct literal and letting a forged claim
+// through unremarked, and not trusting the ledger's claim verbatim either.
+// (2) for VERIFICATION entries, the target is derived from payload.verdict
+// via the same VERDICT_TARGETS map recordVerification() itself consults, and
+// payload.next_status is cross-checked against that derived target rather
+// than trusted on its own -- so a forged REJECTED/ACCEPTED next_status is
+// denied even when paired with a superficially-legal verdict.
 
 const EVIDENCE_MACHINE = STATE_MACHINES.Evidence;
 const REACHABLE_STATES = new Set(Object.values(EVIDENCE_MACHINE).flat());
@@ -229,14 +278,15 @@ export class EvidenceEnvelopeService {
         // same evidence_id+version, which the live sealEnvelope() can never
         // produce: re-sealing an already-sealed-or-further record always
         // denies DENY_UNDEFINED_TRANSITION). Either way, the claimed
-        // transition is asserted against the currently-accumulated status
-        // (the ladder's entry state if this is the first sighting, else the
-        // record's current status) before it is accepted, exactly as
-        // sealEnvelope()'s own edge check would evaluate it live.
+        // transition is asserted via the SAME shared guard sealEnvelope()
+        // itself calls (#assertSealTransition) -- which, per the round-3
+        // convergence fix above, denies fail-closed if payload.sealed_status
+        // disagrees with the ONE literal (SEALED_STATE) sealEnvelope() can
+        // ever write, rather than either trusting it verbatim (the round-2
+        // gap) or silently substituting the literal and continuing.
         const existing = this.#records.get(key);
         const fromStatus = existing ? existing.status : entryState;
-        const toStatus = line.entry.payload.sealed_status;
-        this.#assertEdge(fromStatus, toStatus);
+        this.#assertSealTransition(fromStatus, line.entry.payload.sealed_status);
 
         // registeredAt is reconstructed as this seal timestamp -- a
         // documented best-effort proxy, since registerEnvelope() itself
@@ -245,7 +295,7 @@ export class EvidenceEnvelopeService {
         // SoD check.
         this.#records.set(key, {
           envelope: frozenClone(envelope),
-          status: toStatus,
+          status: SEALED_STATE,
           registeredAt: existing?.registeredAt ?? line.entry.timestamp,
           sealedAt: line.entry.timestamp,
           ledgerSequence: ledgerReceipt.sequence,
@@ -254,31 +304,67 @@ export class EvidenceEnvelopeService {
       } else if (type === VERIFICATION_REQUEST_ENTRY_TYPE) {
         const record = this.#records.get(key);
         if (!record) continue; // no seal entry precedes it; unreachable on a self-consistent ledger
-        const toStatus = line.entry.payload.next_status;
-        this.#assertEdge(record.status, toStatus);
-        record.status = toStatus;
+        // Same shared guard requestVerification() calls; denies fail-closed
+        // if payload.next_status disagrees with the ONE literal
+        // (VERIFICATION_PENDING_STATE) requestVerification() can ever write.
+        this.#assertRequestVerificationTransition(record.status, line.entry.payload.next_status);
+        record.status = VERIFICATION_PENDING_STATE;
         record.verificationRequestedAt = line.entry.timestamp;
         record.verificationRequestedBy = line.entry.payload.requested_by;
         record.verificationRequestLedger = ledgerReceipt;
       } else if (type === VERIFICATION_ENTRY_TYPE) {
         const record = this.#records.get(key);
         if (!record) continue;
-        const toStatus = line.entry.payload.next_status;
-        this.#assertEdge(record.status, toStatus);
-        record.status = toStatus;
+        // Same shared guards recordVerification() calls: the target is
+        // derived from payload.verdict via VERDICT_TARGETS and cross-checked
+        // against payload.next_status (a mismatch -- e.g. verdict "pass"
+        // paired with a forged next_status "REJECTED" -- denies fail-closed
+        // rather than trusting either field alone); the source is pinned to
+        // VERIFICATION_PENDING (not merely graph-legal); and the verifier/
+        // producer SoD check is replayed using the record's own
+        // ledger-established envelope actor_id as producer -- not the
+        // forgeable payload.producer field.
+        const verifier = line.entry.payload.verifier;
+        const verdict = line.entry.payload.verdict;
+        const producer = record.envelope.actor_id;
+        const target = this.#verdictTarget(verdict);
+        this.#assertRecordVerificationTransition({
+          status: record.status,
+          target,
+          claimedStatus: line.entry.payload.next_status,
+          verifier,
+          producer
+        });
+        record.status = target;
         record.verifiedAt = line.entry.timestamp;
-        record.verifierActorId = line.entry.payload.verifier;
-        record.verdict = line.entry.payload.verdict;
+        record.verifierActorId = verifier;
+        record.verdict = verdict;
         record.verificationLedger = ledgerReceipt;
       } else if (type === ACCEPTANCE_ENTRY_TYPE) {
         const record = this.#records.get(key);
         if (!record) continue;
-        const toStatus = line.entry.payload.next_status;
-        this.#assertEdge(record.status, toStatus);
-        record.status = toStatus;
+        // Same shared guards acceptEvidence() calls: approvals shape,
+        // claimedStatus checked against the ONE literal ACCEPTED_STATE
+        // acceptEvidence() can ever write, source pinned to VERIFIED (so a
+        // forged ACCEPTANCE entry can never retroactively re-target an
+        // already-ACCEPTED record -- the round-3 review's most severe
+        // finding), and the acceptor/producer/verifier SoD check replayed
+        // from the record's own ledger-established fields.
+        const acceptor = line.entry.payload.acceptor;
+        const approvals = line.entry.payload.approvals;
+        const producer = record.envelope.actor_id;
+        this.#assertApprovals(approvals);
+        this.#assertAcceptEvidenceTransition({
+          status: record.status,
+          claimedStatus: line.entry.payload.next_status,
+          acceptor,
+          producer,
+          verifier: record.verifierActorId
+        });
+        record.status = ACCEPTED_STATE;
         record.acceptedAt = line.entry.timestamp;
-        record.acceptorActorId = line.entry.payload.acceptor;
-        record.approvals = Object.freeze([...(line.entry.payload.approvals ?? [])]);
+        record.acceptorActorId = acceptor;
+        record.approvals = Object.freeze([...approvals]);
         record.acceptanceLedger = ledgerReceipt;
       }
       // Any other entry type in the same ledger file is not this service's
@@ -349,13 +435,9 @@ export class EvidenceEnvelopeService {
     if (!record) deny("DENY_UNKNOWN_EVIDENCE", `Evidence not registered: ${evidenceId} v${version}`);
 
     // Edge legality per the canonical ladder, read-only (TE-H3 discipline:
-    // an illegal edge never reaches the audit layer).
-    if (!EVIDENCE_MACHINE[record.status]?.includes(SEALED_STATE)) {
-      deny(
-        "DENY_UNDEFINED_TRANSITION",
-        `Evidence cannot transition from ${record.status} to ${SEALED_STATE}`
-      );
-    }
+    // an illegal edge never reaches the audit layer). Shared with
+    // #rehydrate() (round-3 convergence fix, see header comment).
+    this.#assertSealTransition(record.status, SEALED_STATE);
 
     // Audit-before-effect: the seal entry must land on the durable hash
     // chain BEFORE the status flips. Any ledger failure denies and leaves
@@ -528,7 +610,8 @@ export class EvidenceEnvelopeService {
 
     // VERIFICATION_PENDING is reachable ONLY from SEALED, so the read-only
     // edge check alone rejects every skip/replay source (CAPTURED, VERIFIED…).
-    this.#assertEdge(record.status, VERIFICATION_PENDING_STATE);
+    // Shared with #rehydrate() (round-3 convergence fix, see header comment).
+    this.#assertRequestVerificationTransition(record.status, VERIFICATION_PENDING_STATE);
 
     const timestamp = this.#now().toISOString();
     const appended = this.#appendLadder({
@@ -563,26 +646,16 @@ export class EvidenceEnvelopeService {
   recordVerification(evidenceId, version, verifier, verdict) {
     this.#assertIdentity(evidenceId, version);
     if (isBlank(verifier)) deny("DENY_MALFORMED_REQUEST", "verifier must be a non-blank string");
-    const target = typeof verdict === "string" ? VERDICT_TARGETS[verdict] : undefined;
-    if (!target) deny("DENY_MALFORMED_REQUEST", `verdict must be one of: ${Object.keys(VERDICT_TARGETS).join(", ")}`);
+    const target = this.#verdictTarget(verdict);
     const record = this.#requireRecord(evidenceId, version);
 
-    // Source guard: QUARANTINED is reachable from several states, so the
-    // target-edge check alone is insufficient — pin the source to
-    // VERIFICATION_PENDING so a fail verdict cannot quarantine straight from
-    // SEALED (a ladder skip).
-    if (record.status !== VERIFICATION_PENDING_STATE) {
-      deny("DENY_UNDEFINED_TRANSITION", `recordVerification requires status ${VERIFICATION_PENDING_STATE}; current ${record.status}`);
-    }
-    this.#assertEdge(VERIFICATION_PENDING_STATE, target);
-
-    // SoD (config-only): verifier != producer via inline prohibited-actor ladder.
+    // Source guard + edge + SoD, shared with #rehydrate() (round-3
+    // convergence fix, see header comment): QUARANTINED is reachable from
+    // several states in the abstract graph, so the target-edge check alone
+    // is insufficient — pin the source to VERIFICATION_PENDING so a fail
+    // verdict cannot quarantine straight from SEALED (a ladder skip).
     const producer = record.envelope.actor_id;
-    const sod = checkProhibitedActors("EVIDENCE_VERIFIER", verifier, { producer }, {
-      ladder: EVIDENCE_VERIFIER_LADDER,
-      code: "DENY_VERIFIER_IS_PRODUCER"
-    });
-    if (!sod.ok) deny(sod.code, sod.message);
+    this.#assertRecordVerificationTransition({ status: record.status, target, claimedStatus: target, verifier, producer });
 
     const timestamp = this.#now().toISOString();
     const appended = this.#appendLadder({
@@ -620,26 +693,17 @@ export class EvidenceEnvelopeService {
   acceptEvidence(evidenceId, version, acceptor, approvals) {
     this.#assertIdentity(evidenceId, version);
     if (isBlank(acceptor)) deny("DENY_MALFORMED_REQUEST", "acceptor must be a non-blank string");
-    if (!Array.isArray(approvals) || approvals.length === 0 || approvals.some(isBlank)) {
-      deny("DENY_MALFORMED_REQUEST", "approvals must be a non-empty array of non-blank strings");
-    }
+    this.#assertApprovals(approvals);
     const record = this.#requireRecord(evidenceId, version);
 
-    // ACCEPTED is reachable only from VERIFIED; the source guard + read-only
-    // edge check reject accept-before-verify and re-accept alike.
-    if (record.status !== VERIFIED_STATE) {
-      deny("DENY_UNDEFINED_TRANSITION", `acceptEvidence requires status ${VERIFIED_STATE}; current ${record.status}`);
-    }
-    this.#assertEdge(VERIFIED_STATE, ACCEPTED_STATE);
-
-    // SoD (config-only): acceptor != producer AND acceptor != verifier via
-    // sod-rules' default AUTHORIZE_TIME_LADDER.EVIDENCE_ACCEPTOR exclusion.
+    // Source guard + edge + SoD, shared with #rehydrate() (round-3
+    // convergence fix, see header comment): ACCEPTED is reachable only from
+    // VERIFIED, so pinning the source rejects accept-before-verify AND a
+    // retroactive re-target of an already-ACCEPTED record alike, and the
+    // acceptor != producer / acceptor != verifier SoD gate reuses sod-rules'
+    // default AUTHORIZE_TIME_LADDER.EVIDENCE_ACCEPTOR exclusion.
     const producer = record.envelope.actor_id;
-    const sod = checkProhibitedActors("EVIDENCE_ACCEPTOR", acceptor, {
-      producer,
-      evidenceVerifier: record.verifierActorId
-    });
-    if (!sod.ok) deny(sod.code, sod.message);
+    this.#assertAcceptEvidenceTransition({ status: record.status, claimedStatus: ACCEPTED_STATE, acceptor, producer, verifier: record.verifierActorId });
 
     const approvalList = [...approvals];
     const timestamp = this.#now().toISOString();
@@ -806,6 +870,106 @@ export class EvidenceEnvelopeService {
     if (!EVIDENCE_MACHINE[from]?.includes(to)) {
       deny("DENY_UNDEFINED_TRANSITION", `Evidence cannot transition from ${from} to ${to}`);
     }
+  }
+
+  // ---- shared transition guards (round-3 convergence fix) -----------------
+  //
+  // Single source of truth for each ladder edge's FULL legality, not just its
+  // graph-edge legality: every live ladder method below calls exactly one of
+  // these with its own live arguments, and #rehydrate() calls the SAME
+  // method with values folded from the ledger entry's payload plus the
+  // currently-accumulated record. See the header comment's "TRANSITION-GUARD
+  // CONVERGENCE" note for the full rationale. Each method either returns
+  // (silently, or with the derived target status) or throws via deny() —
+  // never returns a "denied" value, matching this file's fail-closed
+  // convention throughout.
+
+  // sealEnvelope() never writes anything but the ONE literal SEALED_STATE.
+  // claimedStatus is the status being adopted -- the live call site always
+  // passes the literal itself (trivially matching); #rehydrate() passes the
+  // ledger entry's payload.sealed_status, so a forged claim that disagrees
+  // with the one status sealEnvelope() could ever produce is denied
+  // fail-closed BEFORE the graph-edge check even runs (not silently
+  // corrected to the literal and allowed through).
+  #assertSealTransition(fromStatus, claimedStatus) {
+    if (claimedStatus !== SEALED_STATE) {
+      deny("DENY_UNDEFINED_TRANSITION", `Evidence cannot transition from ${fromStatus} to ${claimedStatus}`);
+    }
+    this.#assertEdge(fromStatus, SEALED_STATE);
+  }
+
+  // requestVerification() never writes anything but the ONE literal
+  // VERIFICATION_PENDING_STATE. Same claimed-vs-literal discipline as above.
+  #assertRequestVerificationTransition(fromStatus, claimedStatus) {
+    if (claimedStatus !== VERIFICATION_PENDING_STATE) {
+      deny("DENY_UNDEFINED_TRANSITION", `Evidence cannot transition from ${fromStatus} to ${claimedStatus}`);
+    }
+    this.#assertEdge(fromStatus, VERIFICATION_PENDING_STATE);
+  }
+
+  // recordVerification()'s target is ALWAYS derived from verdict via
+  // VERDICT_TARGETS — never trusted verbatim from a caller/ledger-supplied
+  // next_status. Denies DENY_MALFORMED_REQUEST for any verdict outside
+  // {pass, fail}, exactly as the live method's own input validation does.
+  #verdictTarget(verdict) {
+    const target = typeof verdict === "string" ? VERDICT_TARGETS[verdict] : undefined;
+    if (!target) deny("DENY_MALFORMED_REQUEST", `verdict must be one of: ${Object.keys(VERDICT_TARGETS).join(", ")}`);
+    return target;
+  }
+
+  // Source guard + edge + SoD for recordVerification(). claimedStatus is
+  // checked against the verdict-derived target FIRST (the live call site
+  // always passes target itself, trivially matching; #rehydrate() passes
+  // payload.next_status, so a forged mismatch — e.g. verdict "pass" paired
+  // with next_status "REJECTED" — denies fail-closed here). QUARANTINED
+  // (and VERIFIED) are graph-reachable from several states, so the
+  // target-edge check alone is insufficient — pinning the source to
+  // VERIFICATION_PENDING is what then rejects a verdict applied straight
+  // from SEALED (a ladder skip) or from any later state (a downgrade of an
+  // already-advanced record, the round-3 review's most severe finding when
+  // replayed against ACCEPTANCE instead — see
+  // #assertAcceptEvidenceTransition below).
+  #assertRecordVerificationTransition({ status, target, claimedStatus, verifier, producer }) {
+    if (claimedStatus !== target) {
+      deny("DENY_UNDEFINED_TRANSITION", `Evidence cannot transition from ${status} to ${claimedStatus}`);
+    }
+    if (status !== VERIFICATION_PENDING_STATE) {
+      deny("DENY_UNDEFINED_TRANSITION", `recordVerification requires status ${VERIFICATION_PENDING_STATE}; current ${status}`);
+    }
+    this.#assertEdge(VERIFICATION_PENDING_STATE, target);
+    const sod = checkProhibitedActors("EVIDENCE_VERIFIER", verifier, { producer }, {
+      ladder: EVIDENCE_VERIFIER_LADDER,
+      code: "DENY_VERIFIER_IS_PRODUCER"
+    });
+    if (!sod.ok) deny(sod.code, sod.message);
+  }
+
+  // acceptEvidence()'s approvals shape requirement, shared verbatim.
+  #assertApprovals(approvals) {
+    if (!Array.isArray(approvals) || approvals.length === 0 || approvals.some(isBlank)) {
+      deny("DENY_MALFORMED_REQUEST", "approvals must be a non-empty array of non-blank strings");
+    }
+  }
+
+  // Source guard + edge + SoD for acceptEvidence(). acceptEvidence() never
+  // writes anything but the ONE literal ACCEPTED_STATE, so claimedStatus is
+  // checked against it first (same claimed-vs-literal discipline as seal/
+  // request-verification above). ACCEPTED is graph-reachable only from
+  // VERIFIED, so pinning the source rejects accept-before-verify AND — the
+  // round-3 review's most severe finding — a forged ACCEPTANCE-typed ledger
+  // entry retroactively re-targeting an already-ACCEPTED record (status
+  // ACCEPTED !== VERIFIED, denied here before the edge or SoD checks even
+  // run).
+  #assertAcceptEvidenceTransition({ status, claimedStatus, acceptor, producer, verifier }) {
+    if (claimedStatus !== ACCEPTED_STATE) {
+      deny("DENY_UNDEFINED_TRANSITION", `Evidence cannot transition from ${status} to ${claimedStatus}`);
+    }
+    if (status !== VERIFIED_STATE) {
+      deny("DENY_UNDEFINED_TRANSITION", `acceptEvidence requires status ${VERIFIED_STATE}; current ${status}`);
+    }
+    this.#assertEdge(VERIFIED_STATE, ACCEPTED_STATE);
+    const sod = checkProhibitedActors("EVIDENCE_ACCEPTOR", acceptor, { producer, evidenceVerifier: verifier });
+    if (!sod.ok) deny(sod.code, sod.message);
   }
 
   // Audit-before-effect ledger append shared by every ladder edge: the entry

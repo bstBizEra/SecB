@@ -740,6 +740,294 @@ test("REHYDRATION SECURITY: a forged EVIDENCE_VERIFICATION entry claiming an ill
   }
 });
 
+// ---------------------------------------------------------------------------
+// REHYDRATION TRANSITION-GUARD CONVERGENCE (round 3): closes the round-3
+// independent review's finding (docs/03-project-control/candidates/
+// mod-evid-s2-s3-rehydration-edge-legality-fix-independent-review-001.md,
+// section 5) -- #assertEdge alone validates the ABSTRACT
+// STATE_MACHINES.Evidence graph, but four live methods each enforce a
+// NARROWER rule than raw graph-edge legality (a fixed single target, a
+// pinned source status, or a verdict/approvals/SoD shape check).
+// Reproduces the reviewer's exact four variants, all forged directly through
+// DurableLedger.append() (bypassing EvidenceEnvelopeService's own API
+// entirely), then adds a property-style parity test across a representative
+// set of legitimate ledger histories produced through the real live API.
+// ---------------------------------------------------------------------------
+
+test("REHYDRATION SECURITY (round 3, variant 1): a forged EVIDENCE_VERIFICATION claiming next_status QUARANTINED immediately after SEAL, with no preceding EVIDENCE_VERIFICATION_REQUEST, is denied", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    // Legitimate SEAL only through the real live API -- no request.
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    assert.equal(serviceA.getEnvelope(EV, 1).verificationStatus, "SEALED");
+
+    // The forged entry: on the LIVE API, recordVerification() from status
+    // SEALED (skipping requestVerification entirely) is always denied
+    // DENY_UNDEFINED_TRANSITION by its explicit source guard -- this exact
+    // ledger shape can never be produced by the live API at all.
+    const env = envelope();
+    const ledger = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+    const expectedSequence = ledger.read().length;
+    const forgedVerification = {
+      entryId: JSON.stringify([EV, 1, "VERIFICATION", "forged-v1"]),
+      projectId: env.project_id,
+      workPackageId: env.work_package_id,
+      sessionId: env.session_id,
+      actorId: "attacker",
+      type: "EVIDENCE_VERIFICATION",
+      payload: {
+        envelope: env,
+        previous_status: "SEALED",
+        next_status: "QUARANTINED", // graph-legal from SEALED, but recordVerification() itself pins its source to VERIFICATION_PENDING
+        content_hash: env.content_hash,
+        verifier: "attacker",
+        verdict: "fail",
+        producer: PRODUCER
+      },
+      timestamp: clock().toISOString(),
+      idempotencyKey: JSON.stringify(["VERIFICATION-forged-v1", EV, 1])
+    };
+    ledger.append(forgedVerification, { expectedSequence });
+
+    denies(() => freshInstance(path, clock), "DENY_UNDEFINED_TRANSITION");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY (round 3, variant 2): a forged EVIDENCE_SEAL entry claiming sealed_status QUARANTINED as the FIRST/ONLY entry is denied", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const ledger = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+    const env = envelope();
+
+    // sealEnvelope() never writes anything but the ONE literal SEALED_STATE
+    // (hardcoded); this exact ledger content is unreachable via the live API
+    // for this entry type at all.
+    const forgedSeal = {
+      entryId: JSON.stringify([env.evidence_id, env.version, "SEAL"]),
+      projectId: env.project_id,
+      workPackageId: env.work_package_id,
+      sessionId: env.session_id,
+      actorId: "attacker",
+      type: "EVIDENCE_SEAL",
+      payload: {
+        envelope: env,
+        previous_status: "CAPTURED",
+        sealed_status: "QUARANTINED", // graph-legal from CAPTURED, but sealEnvelope() itself can only ever write SEALED
+        content_hash: env.content_hash
+      },
+      timestamp: "2026-07-20T10:05:00+07:00",
+      idempotencyKey: JSON.stringify(["evidence-seal", env.evidence_id, env.version])
+    };
+    ledger.append(forgedSeal, { expectedSequence: 0 });
+
+    denies(
+      () => new EvidenceEnvelopeService({
+        durableLedger: new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" })
+      }),
+      "DENY_UNDEFINED_TRANSITION"
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY (round 3, variant 3): a forged EVIDENCE_VERIFICATION entry claiming an illegal next_status REJECTED is denied", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    // Legitimate SEAL + VERIFICATION_REQUEST through the real live API.
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    assert.equal(serviceA.getEnvelope(EV, 1).verificationStatus, "VERIFICATION_PENDING");
+
+    // VERDICT_TARGETS -- the only mapping recordVerification() ever consults
+    // -- is { pass: VERIFIED, fail: QUARANTINED }. REJECTED is not a
+    // producible output of this method under ANY verdict; a record showing
+    // REJECTED is therefore always forged, by construction.
+    const env = envelope();
+    const ledger = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+    const expectedSequence = ledger.read().length;
+    const forgedVerification = {
+      entryId: JSON.stringify([EV, 1, "VERIFICATION", "forged-v3"]),
+      projectId: env.project_id,
+      workPackageId: env.work_package_id,
+      sessionId: env.session_id,
+      actorId: "attacker",
+      type: "EVIDENCE_VERIFICATION",
+      payload: {
+        envelope: env,
+        previous_status: "VERIFICATION_PENDING",
+        next_status: "REJECTED", // not a legal VERDICT_TARGETS output for ANY verdict
+        content_hash: env.content_hash,
+        verifier: "attacker",
+        verdict: "pass", // even paired with a superficially-legal verdict, the claimed target disagrees with it
+        producer: PRODUCER
+      },
+      timestamp: clock().toISOString(),
+      idempotencyKey: JSON.stringify(["VERIFICATION-forged-v3", EV, 1])
+    };
+    ledger.append(forgedVerification, { expectedSequence });
+
+    denies(() => freshInstance(path, clock), "DENY_UNDEFINED_TRANSITION");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("REHYDRATION SECURITY (round 3, variant 4 -- most severe): a forged EVIDENCE_ACCEPTANCE entry retroactively downgrading an already-legitimately-ACCEPTED record to QUARANTINED is denied", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+
+    // Run the FULL real ladder through the live API to a genuine ACCEPTED.
+    const serviceA = freshInstance(path, clock);
+    serviceA.registerEnvelope(envelope());
+    serviceA.sealEnvelope(EV, 1);
+    serviceA.requestVerification(EV, 1, REQUESTER);
+    serviceA.recordVerification(EV, 1, VERIFIER, "pass");
+    serviceA.acceptEvidence(EV, 1, ACCEPTOR, APPROVALS);
+    assert.equal(serviceA.getEnvelope(EV, 1).verificationStatus, "ACCEPTED");
+
+    // Append ONE forged EVIDENCE_ACCEPTANCE entry claiming next_status
+    // QUARANTINED. acceptEvidence() never writes anything but the ONE
+    // literal ACCEPTED_STATE, so this exact shape can never come from the
+    // live API -- yet, pre-round-3, raw #assertEdge(ACCEPTED, QUARANTINED)
+    // was graph-legal and rehydration silently overwrote a real, SoD-checked,
+    // approved acceptance with an attacker-controlled quarantine.
+    const env = envelope();
+    const ledger = new DurableLedger({ filePath: path, ledgerId: "secb-evidence-seal-ledger" });
+    const expectedSequence = ledger.read().length;
+    const forgedAcceptance = {
+      entryId: JSON.stringify([EV, 1, "ACCEPTANCE", "forged-v4"]),
+      projectId: env.project_id,
+      workPackageId: env.work_package_id,
+      sessionId: env.session_id,
+      actorId: "attacker",
+      type: "EVIDENCE_ACCEPTANCE",
+      payload: {
+        envelope: env,
+        previous_status: "ACCEPTED",
+        next_status: "QUARANTINED", // graph-legal from ACCEPTED, but acceptEvidence() itself can only ever write ACCEPTED
+        content_hash: env.content_hash,
+        acceptor: "attacker",
+        approvals: ["forged-approval"],
+        producer: PRODUCER,
+        verifier: VERIFIER
+      },
+      timestamp: clock().toISOString(),
+      idempotencyKey: JSON.stringify(["ACCEPTANCE-forged-v4", EV, 1])
+    };
+    ledger.append(forgedAcceptance, { expectedSequence });
+
+    denies(() => freshInstance(path, clock), "DENY_UNDEFINED_TRANSITION");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// Full-state parity: for a representative set of legitimate ledger histories
+// produced entirely through the real live API, a freshly-rehydrated instance
+// must expose EXACTLY the same observable state (getEnvelope + verifyChain)
+// as the live instance that produced that history -- not merely "denies the
+// four known-bad forgeries," but "agrees byte-for-byte with the live ladder
+// on everything it legitimately produced." Mechanical cross-check, not point
+// examples: extends the existing REHYDRATION scenarios into one parity
+// assertion reused across five representative histories.
+function assertFullStateParity(serviceA, serviceB, identities) {
+  const evidenceIds = new Set();
+  for (const [evidenceId, version] of identities) {
+    evidenceIds.add(evidenceId);
+    assert.deepEqual(
+      serviceB.getEnvelope(evidenceId, version),
+      serviceA.getEnvelope(evidenceId, version),
+      `getEnvelope(${evidenceId}, v${version}) must match exactly after rehydration`
+    );
+  }
+  for (const evidenceId of evidenceIds) {
+    assert.deepEqual(
+      serviceB.verifyChain(evidenceId),
+      serviceA.verifyChain(evidenceId),
+      `verifyChain(${evidenceId}) must match exactly after rehydration`
+    );
+  }
+}
+
+test("REHYDRATION PARITY: a rehydrated instance's full observable state matches the live instance's, across representative legitimate histories", () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-evid-rehydrate-parity-"));
+  try {
+    const path = join(directory, "evidence-seals.ndjson");
+    const clock = () => new Date("2026-07-20T10:05:00+07:00");
+    const serviceA = freshInstance(path, clock);
+    const identities = [];
+
+    // Scenario 1: full ladder to ACCEPTED.
+    serviceA.registerEnvelope(envelope({ evidence_id: "ev_parity_accepted", version: 1 }));
+    serviceA.sealEnvelope("ev_parity_accepted", 1);
+    serviceA.requestVerification("ev_parity_accepted", 1, REQUESTER);
+    serviceA.recordVerification("ev_parity_accepted", 1, VERIFIER, "pass");
+    serviceA.acceptEvidence("ev_parity_accepted", 1, ACCEPTOR, APPROVALS);
+    identities.push(["ev_parity_accepted", 1]);
+
+    // Scenario 2: quarantined via a failed verdict (QUARANTINED reached
+    // legitimately, from VERIFICATION_PENDING).
+    serviceA.registerEnvelope(envelope({ evidence_id: "ev_parity_quarantined", version: 1 }));
+    serviceA.sealEnvelope("ev_parity_quarantined", 1);
+    serviceA.requestVerification("ev_parity_quarantined", 1, REQUESTER);
+    serviceA.recordVerification("ev_parity_quarantined", 1, VERIFIER, "fail");
+    identities.push(["ev_parity_quarantined", 1]);
+
+    // Scenario 3: verified but never accepted.
+    serviceA.registerEnvelope(envelope({ evidence_id: "ev_parity_verified", version: 1 }));
+    serviceA.sealEnvelope("ev_parity_verified", 1);
+    serviceA.requestVerification("ev_parity_verified", 1, REQUESTER);
+    serviceA.recordVerification("ev_parity_verified", 1, VERIFIER, "pass");
+    identities.push(["ev_parity_verified", 1]);
+
+    // Scenario 4: mid-ladder, sealed only.
+    serviceA.registerEnvelope(envelope({ evidence_id: "ev_parity_sealed", version: 1 }));
+    serviceA.sealEnvelope("ev_parity_sealed", 1);
+    identities.push(["ev_parity_sealed", 1]);
+
+    // Scenario 5: multiple versions of the SAME evidence_id at different
+    // ladder stages (exercises recordKey isolation across versions).
+    serviceA.registerEnvelope(envelope({ evidence_id: "ev_parity_multi", version: 1 }));
+    serviceA.sealEnvelope("ev_parity_multi", 1);
+    serviceA.requestVerification("ev_parity_multi", 1, REQUESTER);
+    serviceA.recordVerification("ev_parity_multi", 1, VERIFIER, "pass");
+    serviceA.acceptEvidence("ev_parity_multi", 1, ACCEPTOR, APPROVALS);
+    serviceA.registerEnvelope(envelope({ evidence_id: "ev_parity_multi", version: 2 }));
+    serviceA.sealEnvelope("ev_parity_multi", 2);
+    identities.push(["ev_parity_multi", 1], ["ev_parity_multi", 2]);
+
+    const serviceB = freshInstance(path, clock);
+    assertFullStateParity(serviceA, serviceB, identities);
+
+    // Parity is not a one-shot coincidence of the first restart: drive one
+    // more legitimate transition on the rehydrated instance B, then rehydrate
+    // a THIRD instance from B's continuation of the same ledger and confirm
+    // it too matches B (and therefore A + B) exactly.
+    serviceB.requestVerification("ev_parity_sealed", 1, REQUESTER);
+    identities.push(["ev_parity_sealed", 1]);
+    const serviceC = freshInstance(path, clock);
+    assertFullStateParity(serviceB, serviceC, identities);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("REHYDRATION: normal single-instance lifecycle is entirely unaffected (no double-rehydration drift)", () => withHarness(({ service }) => {
   // The construction-time rehydrate() on an empty, freshly-created ledger
   // must be a no-op: identical to pre-fix behavior for the common case of a

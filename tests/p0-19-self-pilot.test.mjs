@@ -257,13 +257,30 @@ test("no real mutation: pilot writes only into the injected ephemeral ledger dir
 // live ladder methods already use on every ledger entry's claimed status
 // transition, instead of copying it verbatim. Again a real, intentional,
 // security-relevant source change to that one file, not composition drift.
+//
+// PIN UPDATE #3 (same branch, disclosed): the evidence-envelope-service.mjs
+// pin below was advanced AGAIN, from "0843d4a9b0c966c13135890ec91a87c823911d30"
+// to "b4ea87196e239d590711b4c7acd0f17b7f331afb", to reflect the round-3
+// transition-guard convergence fast-follow closing the round-3 independent
+// review's finding (docs/03-project-control/candidates/
+// mod-evid-s2-s3-rehydration-edge-legality-fix-independent-review-001.md,
+// section 5): #assertEdge alone validated the ABSTRACT
+// STATE_MACHINES.Evidence graph, but sealEnvelope, requestVerification,
+// recordVerification, and acceptEvidence each enforce a NARROWER rule
+// (fixed single target, pinned source status, verdict/approvals/SoD shape)
+// than raw graph-edge legality. Every ladder transition's full guard is now
+// factored into one shared private method per transition, called identically
+// by the live method (its own arguments) and by #rehydrate() (values folded
+// from the ledger), so the two paths can never again drift apart on how much
+// legality each one checks. Once more a real, intentional, security-relevant
+// source change to that one file, not composition drift.
 // ---------------------------------------------------------------------------
 const NUL = String.fromCharCode(0);
 const PINNED_BLOBS = Object.freeze({
   "src/services/work-package-service.mjs": "6b2af450726cef0b7f74601834b4f91c7db19ed2",
   "src/services/context-federation-service.mjs": "7eb57a289b8331d5576703c5c656624c98f1c029",
   "src/services/context-retrieval-policy.mjs": "a7ba0120fc6a0e3b7469f264e52ea4d0c76ec7ff",
-  "src/services/evidence-envelope-service.mjs": "0843d4a9b0c966c13135890ec91a87c823911d30",
+  "src/services/evidence-envelope-service.mjs": "b4ea87196e239d590711b4c7acd0f17b7f331afb",
   "src/registry/runtime-registry.mjs": "d6e1ce8897940901a9a9b8d339676d0abae67c35",
   "src/registry/adapters.mjs": "34269ca2767b60d0c511373fe19c84bbe393cee7",
   "src/host/host-runtime-agent.mjs": "fbbec1dccb9e09dc639c07f86fea336ba4e00370",
