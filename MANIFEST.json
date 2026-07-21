@@ -340,6 +340,9 @@
     "src/control/retry-policy.mjs",
     "tests/retry-policy.test.mjs",
     "docs/03-project-control/candidates/mod-runtime-s2-retry-policy-evaluator-producer-verification-001.md",
-    "docs/03-project-control/candidates/mod-reg-human-gov-disposition-candidate-001.md"
+    "docs/03-project-control/candidates/mod-reg-human-gov-disposition-candidate-001.md",
+    "src/control/approval-binding.mjs",
+    "tests/approval-binding.test.mjs",
+    "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-producer-verification-001.md"
   ]
 }
