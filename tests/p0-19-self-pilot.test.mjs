@@ -250,7 +250,9 @@ const PINNED_BLOBS = Object.freeze({
   "src/control/workspace-lease-policy.mjs": "c24cb94edebdfa19dccd89a9b7ed593be08d042b",
   "src/control/write-set-policy.mjs": "5f1e119c8089ba8250f3596164c0974662587449",
   "src/live/access-mode-policy.mjs": "5d96eec7af6e717218a81ea5563e09c6b18d191b",
-  "src/live/event-family-policy.mjs": "47ebc9bb7e5190c6f0f78232884379b3c284248d",
+  // Repinned by mod-live-s1-value-mutation-fix-001 (N3 value-mutation fix +
+  // N4 scope-disposition doc comment).
+  "src/live/event-family-policy.mjs": "52f7df2db8a73cfd3b406cde63711814f8ed78df",
   "src/live/replay-assembler.mjs": "6ba6e4b143ad3662c7dc2f364a8ff665002667d6",
   "src/contracts/canonical-fingerprint.mjs": "721e99032ce7040312e77138c8f156b649fd996e",
   "src/contracts/contract-validator.mjs": "306a3d23ef748ffb987cd35d9ab4cf60264f32bc"
