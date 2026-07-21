@@ -360,7 +360,9 @@ function gitBlobSha1(rel) {
 const PINNED_BLOBS = Object.freeze({
   "src/self-pilot/read-only-self-pilot.mjs": "83a1e3595ae965f3af5c153641d5a4c6334c5061",
   "src/self-pilot/fixtures.mjs": "1182198885e6459bbbe80b1f99bc1eaa6721b77a",
-  "src/control/policy-decision-point.mjs": "de2fb006fae3085e1d222f832706a81b96c64dea",
+  // Repinned by mod-gov-s3-pdp-grant-shape-fix-001 (4 rounds of grant-shape
+  // validation hardening, see mod-gov-s3-pdp-grant-shape-fix-producer-verification-001.md).
+  "src/control/policy-decision-point.mjs": "81e6eb67e30d6b424884711d9520088709a7e8d2",
   "src/live/access-mode-policy.mjs": "5d96eec7af6e717218a81ea5563e09c6b18d191b",
   "src/control/approval-binding.mjs": "bb6275d553087bbafac3fd234230e0bc6f82048c",
   "src/control/authority-engine.mjs": "05706bd0d47e588c1cd78e6e13841fadbe5c5e58",
