@@ -17,8 +17,11 @@
 //
 // SECURITY FIX (bst/mod-work-sod-version-spoof-fix-001, closes
 // mod-work-second-independent-review-001 §4 REQUEST_CHANGES finding):
-// `registerGoal` now binds `producerActorId` immutably to a goal_id's FIRST
-// registered version. A later version supplying a different
+// `registerGoal` now binds `producerActorId` immutably to whichever call this
+// ledger sees FIRST for a given goal_id -- not literally "version 1": nothing
+// in this ledger enforces version numbering starting at 1 or being
+// sequential, so "first" means first-registered-here, by call order, not by
+// version-number value. A later call supplying a different
 // `provenance.agent_id` is explicitly denied (DENY_PRODUCER_IMMUTABLE), never
 // silently carried forward. Before this fix, any actor could re-version an
 // existing goal and overwrite `producerActorId`, which let the TRUE original
@@ -27,11 +30,20 @@
 // spoofed identity -- defeating `retireGoal`'s N-5 DENY_SELF_APPROVAL gate.
 // Content, hierarchy (`level`/`parent_goal_id`), and `status` remain mutable
 // across versions by design; only the SoD-relevant producer identity is
-// pinned. The broader general re-parenting/re-leveling ownership gap (any
-// unrelated actor can still move a goal it doesn't own into a different valid
-// parent, or relevel a root, PROVIDED it reuses the correct existing producer
-// id) is a distinct, larger authorization-model gap and is explicitly
-// deferred -- see the producer-verification record for this branch.
+// pinned. Independent review (mod-work-sod-version-spoof-fix-independent-review-001)
+// confirmed a front-running/lockout variant of the SAME disclosed no-auth-
+// model gap (below): since nothing verifies caller identity on a goal_id's
+// very first touch either, an attacker could register a high-version-number
+// entry for an as-yet-unclaimed goal_id to lock out the true owner's later
+// registration -- this cannot reopen an ALREADY-pinned goal (verified: a
+// lower version after a higher one still resolves and is correctly denied),
+// so it is not a security regression, just a restatement of the same "no
+// caller-identity verification exists anywhere in this codebase yet" gap.
+// The broader general re-parenting/re-leveling ownership gap (any unrelated
+// actor can still move a goal it doesn't own into a different valid parent,
+// or relevel a root, PROVIDED it reuses the correct existing producer id) is
+// a distinct, larger authorization-model gap and is explicitly deferred --
+// see the producer-verification record for this branch.
 
 import { RESERVED_ID_DELIMITERS, findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
 import { normalizeRole, checkPairwiseDistinct } from "../control/sod-rules.mjs";
