@@ -368,6 +368,13 @@
     "docs/03-project-control/candidates/mod-runtime-s3-approval-binding-rev-001.md",
     "docs/03-project-control/candidates/mod-runtime-s3-regate-001.md",
     "docs/03-project-control/candidates/mod-runtime-completion-rev-001.md",
-    "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md"
+    "docs/03-project-control/candidates/mod-runtime-completion-rev-001-codex.md",
+    "src/live/access-mode-policy.mjs",
+    "tests/access-mode-policy.test.mjs",
+    "docs/03-project-control/candidates/mod-live-s2-access-mode-rev-001.md",
+    "docs/03-project-control/candidates/mod-live-s1-event-family-second-independent-review-001.md",
+    "src/ops/kpi-registry.mjs",
+    "tests/kpi-registry.test.mjs",
+    "docs/03-project-control/candidates/mod-ops-s1-kpi-registry-rev-001.md"
   ]
 }
