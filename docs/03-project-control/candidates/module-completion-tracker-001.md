@@ -309,3 +309,24 @@ Operator decision stack: SECB-GOV-001 promotion packet (Codex, rework-011 branch
 - 2026-07-21 claude-sonnet-main: PR #83 MERGED (main @ a90b46f) — P0-20 packet citation restored ('twice found NOT_READY' present; second review now cited accurately, trunk-verifiable). Post-merge verify: validator 0; 1149/1146/0/3; sealed human-GOV decision slot CONFIRMED still verdict:null. GOVERNANCE STATE COMPLETE + INTERNALLY CONSISTENT: both readiness reviews on main (#56, #80), P0-20 packet cites them accurately (#77+#83), P0-20 HELD (#78), N4 dispositioned (#79), activation gated, sealed verdict slot null (never agent-filled). Everything downstream of activation remains operator/SEC-GOV. Loop wound down; agents idle.
 
 - 2026-07-21 claude-sonnet-main: RETIRED loop-plan branch `bst/module-loop-plan` CLOSED — local + remote deleted, worktree pruned; archived as tag `archive/module-loop-plan` @ `7f81801` (recoverable). Substantive session history was preserved on main via the #86 reconciliation (spot-verified across the arc). This on-main tracker is the single authoritative copy (#87); the working branch is gone. Repo infrastructure clean: no loose loop branches or worktrees remain. (First entry under the append-via-PR-to-main rule.)
+
+## Coordination 001 — MEM-S2 / SKILL-S2 / A2A-S3 cross-lane (2026-07-21)
+
+**Division of labor (operator-directed coordination):** the Codex lane PRODUCED all three
+partial-module slices (each carries its own independent review); the Claude lane provides
+the **cross-provider review gate + staging**. One-producer-per-file-set holds — the Claude
+lane dispatches NO competing producers for these file sets.
+
+**Branch inventory:**
+- **MOD-MEM S2** `bst/mod-mem-s2-memory-record-contract` @ 00c7212 — adds `contracts/memory-record.schema.json` + registration (schema 17->18); own review APPROVE_FOR_MERGE. Claude cross-review dispatched (`claude-immune-crossrev-mem-s2-01`).
+- **MOD-SKILL S2** — TWO complementary branches: `bst/mod-skill-s2-governed-promotion` @ 6001955 (the IMPLEMENTATION: `skill-promotion.schema.json` + `skill-promotion-ledger.mjs` + registration; own review APPROVE_FOR_MERGE) and `bst/mod-skill-s2-design-addendum-001` (advisory DESIGN addendum, docs-only). The governed-promotion branch is the real S2 slice; the addendum is supporting design. Claude cross-review dispatched (`claude-immune-crossrev-skill-s2-01`).
+- **MOD-A2A S3** `bst/mod-a2a-s3-crossprovider-review-001` @ 5531865 — `escalation-route.mjs` + TASK-014 binding-immutability hardening + an existing cross-provider review. Claude INDEPENDENT verification dispatched (`claude-immune-verify-a2a-s3-01`) — re-derives, does not rubber-stamp.
+
+**MERGE-SEQUENCING CONSTRAINT (coordinator-owned):** MEM-S2 and SKILL-S2 BOTH add a new
+schema and touch `contract-validator.mjs` + `validate-foundation.mjs` + repin the shared
+byte-identity guards. They CANNOT fold independently — merges must be **sequenced**: merge
+one (17->18), then rebase the other's schema-count + guard repins onto the new base (18->19).
+A2A-S3 adds no schema (disjoint file set) — no sequencing conflict; it can merge anytime.
+
+**Handoff:** on each cross-review pass, Claude folds (sequencing MEM/SKILL) and stages a PR
+for the operator. Adoption/wiring of all three remains SEC/GOV-gated (behind the P0-20 HOLD).
