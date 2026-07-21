@@ -1,0 +1,26 @@
+artifact_id: SECB-GOV-001-INDEPENDENT-REVIEW-REQUEST-001
+artifact_type: independent_review_request
+status: DISPATCHED_PENDING_RESPONSES
+target:
+  commit: c4a5f364c2a4d221439454df9818840164cdbae6
+  branch: producer/codex/mcp/p0a-gateway-core-rework-011
+  promotion_packet: docs/03-project-control/candidates/secb-gov-001-promotion-refresh-002.yaml
+requested_lanes:
+  - REV
+  - QA
+  - SEC
+review_constraints:
+  - exact_sha_only
+  - independent_execution
+  - no_self_acceptance
+  - no_merge
+  - no_push
+  - no_activation
+required_outputs:
+  - verdict
+  - commands_and_environment
+  - evidence_references
+  - residual_risks
+  - acceptance_or_blockers
+current_gate: HOLD_PENDING_INDEPENDENT_RESPONSES
+human_gov_required_after_reviews: true
