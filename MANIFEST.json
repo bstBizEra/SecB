@@ -438,6 +438,7 @@
     "tests/conformance-v011-redaction.test.mjs",
     "docs/03-project-control/candidates/p0-18-v011-redaction-candidate-001.md",
     "docs/03-project-control/candidates/p0-18-v011-redaction-crossrev-001.md",
-    "docs/03-project-control/candidates/p0-20-operator-hold-disposition-001.md"
+    "docs/03-project-control/candidates/p0-20-operator-hold-disposition-001.md",
+    "docs/03-project-control/candidates/mod-live-s1-n4-dormant-residual-disposition-001.md"
   ]
 }
