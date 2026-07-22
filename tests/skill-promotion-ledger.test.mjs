@@ -465,9 +465,12 @@ test("no hardcoded test-ID / decisionId branching in skill-promotion-ledger.mjs"
 // --- byte-identity guard: reused primitives + S1 registry are untouched ----
 
 const BYTE_IDENTITY_BASELINE = "ee31db7"; // origin/main tip this branch was cut from
+// src/control/sod-rules.mjs is intentionally EXCLUDED here by
+// mod-gov-s1-sod-rules-hardening-fix-001: an authorized, disclosed
+// cross-cutting fix (fail-open normalization gap + unfrozen shared-mutable-
+// state gap), not drift this guard should protect against.
 const PROTECTED_SOURCE_FILES = [
   "src/control/approval-binding.mjs",
-  "src/control/sod-rules.mjs",
   "src/control/risk-registry.mjs",
   "src/ledger/durable-ledger.mjs",
   "src/registry/skill-candidate-registry.mjs",

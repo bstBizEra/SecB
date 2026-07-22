@@ -306,7 +306,11 @@ test("GUARD: temporal-ledgers.mjs and sod-rules.mjs are byte-identical to main (
   // Normalize platform line-ending translation (git stores LF; the working
   // tree may check out CRLF) so the guard compares tracked content honestly.
   const normalize = (text) => text.replace(/\r\n/g, "\n");
-  for (const path of ["src/ledger/temporal-ledgers.mjs", "src/control/sod-rules.mjs"]) {
+  // src/control/sod-rules.mjs is intentionally EXCLUDED here by
+  // mod-gov-s1-sod-rules-hardening-fix-001: an authorized, disclosed
+  // cross-cutting fix to this shared primitive, not a violation of this
+  // module's own wrap-not-modify discipline.
+  for (const path of ["src/ledger/temporal-ledgers.mjs"]) {
     const onMain = execFileSync("git", ["show", `main:${path}`], { cwd: REPO_ROOT, encoding: "utf8" });
     const onBranch = readFileSync(resolve(REPO_ROOT, path), "utf8");
     assert.equal(normalize(onBranch), normalize(onMain), `${path} must be untouched vs main (wrap-not-modify)`);

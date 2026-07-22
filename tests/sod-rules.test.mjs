@@ -32,6 +32,67 @@ test("normalizeRole denies-by-default for malformed tokens", () => {
   assert.equal(normalizeRole(42), null);
 });
 
+// Regression: mod-gov-s1-sod-rules-second-independent-review-001 Finding 1.
+// normalizeRole must case-fold and trim BEFORE alias/canonical lookup, so
+// near-miss spellings resolve identically to the canonical token instead of
+// silently passing through unchanged (fail-open).
+test("normalizeRole case-folds and trims before lookup (Finding 1 regression)", () => {
+  assert.equal(normalizeRole("Rev"), "REV");
+  assert.equal(normalizeRole("rev"), "REV");
+  assert.equal(normalizeRole("REV "), "REV");
+  assert.equal(normalizeRole(" rev "), "REV");
+  assert.equal(normalizeRole("Governance"), "GOV");
+  assert.equal(normalizeRole("INDEPENDENT_REVIEW"), "REV");
+  assert.equal(normalizeRole("  "), null); // whitespace-only still denies
+});
+
+// Regression: unrecognized near-miss tokens must deny (null), never pass
+// through as if they were a valid role — matches the module's own
+// deny-by-default principle, extended past empty/non-string input.
+test("normalizeRole denies unrecognized tokens after folding instead of passing them through", () => {
+  assert.equal(normalizeRole("Revv"), null);
+  assert.equal(normalizeRole("not-a-role"), null);
+});
+
+// Regression: the reviewer's exact reproduction — checkProhibitedActors("Rev", ...)
+// must now deny identically to checkProhibitedActors("REV", ...), closing the
+// fail-open actor-history bypass. Note: checkProhibitedActors itself takes an
+// already-normalized role (it does not call normalizeRole internally), so this
+// exercises the ladder lookup directly with the exact non-canonical spelling
+// the reviewer used, confirming the ladder's plain object-key index no longer
+// silently no-ops for it once normalizeRole is applied upstream, and that the
+// primitive's own behavior for a raw non-canonical key is unaffected (still a
+// no-match on `ladder[role]`, i.e. { ok: true } for the RAW un-normalized
+// string) while the normalized form correctly denies.
+test("checkProhibitedActors: reviewer's normalizeRole(\"Rev\") scenario now denies like normalizeRole(\"REV\")", () => {
+  const rawNearMiss = checkProhibitedActors("Rev", "same-actor", { producer: "same-actor" });
+  const canonical = checkProhibitedActors("REV", "same-actor", { producer: "same-actor" });
+  // The raw, un-normalized "Rev" key still has no ladder entry (checkProhibitedActors
+  // does not itself normalize) -- callers MUST route role tokens through
+  // normalizeRole first, which is exactly what Finding 1's fix guarantees below.
+  assert.equal(rawNearMiss.ok, true);
+  assert.equal(canonical.ok, false);
+  assert.equal(canonical.code, "DENY_SOD");
+
+  // The actual closure: normalizing "Rev" BEFORE calling checkProhibitedActors
+  // now yields the same deny as normalizing "REV".
+  const normalizedNearMiss = checkProhibitedActors(normalizeRole("Rev"), "same-actor", { producer: "same-actor" });
+  const normalizedCanonical = checkProhibitedActors(normalizeRole("REV"), "same-actor", { producer: "same-actor" });
+  assert.deepEqual(normalizedNearMiss, normalizedCanonical);
+  assert.equal(normalizedNearMiss.ok, false);
+  assert.equal(normalizedNearMiss.code, "DENY_SOD");
+});
+
+// Regression: checkConflictingRoles(..., { normalize: true }) must now rescue
+// case-variant role sets too, not just literal alias words.
+test("checkConflictingRoles normalize:true rescues case-variant role tokens (Finding 1 regression)", () => {
+  const nearMiss = checkConflictingRoles(new Set(["ENGIN", "Rev"]), { normalize: true });
+  const canonical = checkConflictingRoles(new Set(["ENGIN", "REV"]), { normalize: true });
+  assert.deepEqual(nearMiss, canonical);
+  assert.equal(nearMiss.ok, false);
+  assert.equal(nearMiss.code, "SOD_ROLE_CONFLICT");
+});
+
 test("checkConflictingRoles denies a conflicting pair and reports it", () => {
   const verdict = checkConflictingRoles(new Set(["ENGIN", "REV"]));
   assert.equal(verdict.ok, false);
@@ -324,4 +385,28 @@ test("ladders and pairs remain frozen (immutable primitive config)", () => {
   assert.equal(Object.isFrozen(CONFLICTING_ROLE_PAIRS), true);
   assert.equal(Object.isFrozen(AUTHORIZE_TIME_LADDER), true);
   assert.equal(Object.isFrozen(HANDOFF_ACCEPTANCE_LADDER), true);
+});
+
+// Regression: mod-gov-s1-sod-rules-second-independent-review-001 Finding 2.
+// CONFLICTING_ROLE_PAIRS's nested pair arrays must each be individually
+// frozen, matching AUTHORIZE_TIME_LADDER's own established nested-freeze
+// pattern (e.g. AUTHORIZE_TIME_LADDER.REV), so no caller can mutate a shared
+// pair in place and corrupt SoD conflict enforcement for every other
+// consumer for the lifetime of the process.
+test("CONFLICTING_ROLE_PAIRS nested pair arrays are individually frozen (Finding 2 regression)", () => {
+  for (const pair of CONFLICTING_ROLE_PAIRS) {
+    assert.equal(Object.isFrozen(pair), true);
+  }
+  // Reviewer's exact reproduction: in-place mutation of a nested pair must
+  // now throw in strict mode (ESM modules are always strict), matching
+  // AUTHORIZE_TIME_LADDER.REV's already-correct frozen-nested-array behavior.
+  assert.throws(() => { CONFLICTING_ROLE_PAIRS[2][1] = "ENGIN"; }, TypeError);
+  assert.throws(() => { CONFLICTING_ROLE_PAIRS[0].push("EXTRA"); }, TypeError);
+  assert.throws(() => { AUTHORIZE_TIME_LADDER.REV.push("extra"); }, TypeError);
+
+  // Confirm the mutation attempt was a true no-op: the conflict this reviewer
+  // scenario would have corrupted (["QA","GOV"]) still correctly denies, and
+  // no spurious ["QA","ENGIN"] conflict was introduced.
+  assert.equal(checkConflictingRoles(new Set(["QA", "GOV"])).ok, false);
+  assert.equal(checkConflictingRoles(new Set(["QA", "ENGIN"])).ok, true);
 });

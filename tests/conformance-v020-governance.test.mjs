@@ -364,7 +364,11 @@ const PINNED_BLOBS = Object.freeze({
   "src/live/access-mode-policy.mjs": "5d96eec7af6e717218a81ea5563e09c6b18d191b",
   "src/control/approval-binding.mjs": "bb6275d553087bbafac3fd234230e0bc6f82048c",
   "src/control/authority-engine.mjs": "05706bd0d47e588c1cd78e6e13841fadbe5c5e58",
-  "src/control/sod-rules.mjs": "4ffbc2019aae88178ecf0e5e6d2aa6b1e4aa9530",
+  // Repinned by mod-gov-s1-sod-rules-hardening-fix-001: closes a fail-open
+  // normalization gap and an unfrozen shared-mutable-state gap (see
+  // mod-gov-s1-sod-rules-hardening-fix-producer-verification-001.md). Pin
+  // tracks the post-fix blob so this guard still detects further drift.
+  "src/control/sod-rules.mjs": "314f6da194ed3eb5342eb224f2084fb7fe631359",
   "src/control/risk-registry.mjs": "b8ee7f9b979fdb3c5d5261ad0e116ecd7c6a1816",
   "src/ledger/durable-ledger.mjs": "6be08fc14ff31a7c871c5e86888af42285d40529",
   "src/ledger/governed-ledgers.mjs": "32ff590386574311ff5fcdce846b40bcfe2a1f07",
