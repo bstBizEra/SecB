@@ -502,6 +502,8 @@
     "docs/03-project-control/candidates/secb-gov-001-readiness-closure-plan-001.md",
     "docs/03-project-control/candidates/secb-gov-001-baseline-recut-001.md",
     "docs/03-project-control/candidates/secb-gov-001-bound-evidence-001.md",
+    "docs/03-project-control/candidates/secb-gov-001-baseline-recut-002.md",
+    "docs/03-project-control/candidates/secb-gov-001-bound-evidence-002.md",
     "docs/03-project-control/candidates/secb-gov-001-stable-demotion-rollback-policy-001.md",
     "docs/03-project-control/candidates/secb-gov-001-w2-g2-qa-verdict-001.md",
     "docs/03-project-control/candidates/secb-gov-001-w2-g1-rev-verdict-001.md",
@@ -513,6 +515,12 @@
     "docs/03-project-control/candidates/secb-gov-001-w3b-policy-adoption-001.md",
     "docs/03-project-control/candidates/secb-gov-001-w3c-contract-signing-001.md",
     "docs/03-project-control/candidates/secb-gov-001-w3c-contract-signing-002.md",
+    "src/ui/command-center-snapshot.mjs",
+    "tests/command-center-snapshot.test.mjs",
+    "docs/03-project-control/candidates/mod-ui-s1-command-center-snapshot-independent-review-request-001.md",
+    "docs/03-project-control/candidates/mod-ui-s1-command-center-snapshot-rework-verification-001.md",
+    "docs/03-project-control/candidates/mod-ui-s1-rev-response-001.md",
+    "docs/03-project-control/candidates/mod-ui-s1-qa-domain-response-001.md",
     "docs/03-project-control/candidates/secb-gov-001-w4-g9-decision-vehicle-001.md"
   ]
 }
