@@ -1,0 +1,42 @@
+skill_id: SECB-ARCH-013
+name: event-driven-architecture
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R1
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - ARCHI
+  - OPS
+  - QA
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - workflows
+  - state machines
+  - data ownership
+  - reliability scenarios
+outputs:
+  required:
+  - event catalogue
+  - event envelope
+  - producer-consumer map
+  - delivery and replay policy
+  - schema evolution policy
+  - failure and recovery plan
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/event-driven-architecture
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

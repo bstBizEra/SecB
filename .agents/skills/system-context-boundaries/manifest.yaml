@@ -1,0 +1,41 @@
+skill_id: SECB-ARCH-003
+name: system-context-boundaries
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A1
+roles:
+  allowed:
+  - ARCHI
+  - DOMAIN
+  - SEC
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - architecture brief
+  - stakeholder map
+  - integration inventory
+  - data classification
+outputs:
+  required:
+  - C4 system-context model
+  - external actor and system catalogue
+  - trust-boundary map
+  - system-of-record matrix
+  - boundary risks
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/system-context-boundaries
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

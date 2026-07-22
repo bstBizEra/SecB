@@ -1,0 +1,9 @@
+interface:
+  display_name: C4 Architecture Modeling
+  short_description: Creates C4 system context, container, component, dynamic, deployment,
+    or landscape views at the minimum useful level. Use for communicating software
+    architecture to stakeholders. S
+  default_prompt: Use $c4-architecture-modeling to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

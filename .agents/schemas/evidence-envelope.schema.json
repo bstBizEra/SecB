@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "evidence_id",
+    "project_id",
+    "work_id",
+    "producer",
+    "artifact_ref",
+    "artifact_sha256",
+    "method",
+    "timestamp",
+    "classification",
+    "status"
+  ],
+  "properties": {
+    "evidence_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "work_id": {
+      "type": "string"
+    },
+    "producer": {
+      "type": "string"
+    },
+    "artifact_ref": {
+      "type": "string"
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "method": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "classification": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "candidate",
+        "verified",
+        "accepted",
+        "rejected",
+        "quarantined"
+      ]
+    }
+  }
+}

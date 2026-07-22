@@ -1,0 +1,9 @@
+interface:
+  display_name: Independent Architecture Review and Conformance
+  short_description: Independently reviews architecture candidates or implemented
+    systems for requirements traceability, decision consistency, quality attributes,
+    security, operability, evidence, and d
+  default_prompt: Use $architecture-review-conformance to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

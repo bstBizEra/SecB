@@ -1,0 +1,9 @@
+interface:
+  display_name: Architecture Fitness Functions
+  short_description: Converts architecture decisions and quality constraints into
+    automated or repeatable conformance checks. Use after decisions are explicit and
+    measurable. Does not replace independe
+  default_prompt: Use $architecture-fitness-functions to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

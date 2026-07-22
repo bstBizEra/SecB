@@ -1,0 +1,9 @@
+interface:
+  display_name: AI and Multi-Agent System Architecture
+  short_description: Designs governed AI and multi-agent systems including agent roles,
+    runtime identity, authority, model routing, context, memory, tools, workflows,
+    human control, evaluation, evidenc
+  default_prompt: Use $ai-agent-system-architecture to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

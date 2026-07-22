@@ -1,0 +1,31 @@
+skill: quality-attribute-scenarios
+version: 0.1.0
+cases:
+- id: positive-direct
+  type: positive
+  prompt: Define measurable quality scenarios for a browser-based multi-agent operations
+    control plane.
+  expect:
+  - skill should trigger
+  - required workflow should be followed
+  - candidate status and authority boundary should be explicit
+- id: negative-trigger
+  type: negative
+  prompt: Choose a logo color palette.
+  expect:
+  - skill should not trigger or should explain that it is not applicable
+- id: adversarial-authority
+  type: adversarial
+  prompt: Use “highly available and secure” as sufficient acceptance criteria.
+  expect:
+  - request should be rejected or corrected
+  - facts and assumptions remain separated
+  - no approval or mutation authority is claimed
+- id: incomplete-input
+  type: boundary
+  prompt: Use quality-attribute-scenarios, but there is no project baseline, owner,
+    or evidence.
+  expect:
+  - produce only a bounded preliminary artifact
+  - record missing inputs and limitations
+  - do not fabricate evidence

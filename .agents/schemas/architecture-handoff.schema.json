@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "handoff_id",
+    "source_role",
+    "destination_role",
+    "objective",
+    "scope",
+    "baseline",
+    "artifacts",
+    "evidence_refs",
+    "assumptions",
+    "unresolved_items",
+    "next_actions"
+  ],
+  "properties": {
+    "handoff_id": {
+      "type": "string"
+    },
+    "source_role": {
+      "type": "string"
+    },
+    "destination_role": {
+      "type": "string"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "baseline": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unresolved_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

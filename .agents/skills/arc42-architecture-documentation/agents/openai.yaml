@@ -1,0 +1,9 @@
+interface:
+  display_name: arc42 Architecture Documentation
+  short_description: Compiles architecture information into a lean arc42-aligned document
+    covering goals, constraints, context, strategy, building blocks, runtime, deployment,
+    concepts, decisions, qual
+  default_prompt: Use $arc42-architecture-documentation to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

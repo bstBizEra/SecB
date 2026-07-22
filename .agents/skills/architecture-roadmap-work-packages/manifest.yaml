@@ -1,0 +1,44 @@
+skill_id: SECB-ARCH-019
+name: architecture-roadmap-work-packages
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - SARCHI
+  - ARCHI
+  - GOV
+  - QA
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - architecture baseline
+  - decision records
+  - risk register
+  - delivery constraints
+  - governance gates
+outputs:
+  required:
+  - architecture roadmap
+  - dependency graph
+  - work-package catalogue
+  - role and SoD matrix
+  - verification and evidence matrix
+  - exit-gate register
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/architecture-roadmap-work-packages
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills
