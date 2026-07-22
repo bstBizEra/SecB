@@ -1,0 +1,9 @@
+interface:
+  display_name: Quality Attribute Scenario Engineering
+  short_description: Transforms vague non-functional expectations into measurable
+    quality attribute scenarios for performance, reliability, security, usability,
+    compatibility, maintainability, portabil
+  default_prompt: Use $quality-attribute-scenarios to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,9 @@
+interface:
+  display_name: Deployment and Environment Architecture
+  short_description: Designs environments, deployment units, network zones, identities,
+    configuration, secrets, promotion paths, release controls, scaling, backup, disaster
+    recovery, and operational ow
+  default_prompt: Use $deployment-environment-architecture to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

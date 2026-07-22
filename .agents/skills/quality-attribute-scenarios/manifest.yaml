@@ -1,0 +1,41 @@
+skill_id: SECB-ARCH-005
+name: quality-attribute-scenarios
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A1
+roles:
+  allowed:
+  - ARCHI
+  - QA
+  - SEC
+  - OPS
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - architecture brief
+  - stakeholder concerns
+  - risk classification
+  - known service objectives
+outputs:
+  required:
+  - quality attribute scenario register
+  - measurement and evidence plan
+  - quality trade-off register
+  - traceability to decisions and tests
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/quality-attribute-scenarios
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

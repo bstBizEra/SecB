@@ -1,0 +1,9 @@
+interface:
+  display_name: System Context and Boundary Modeling
+  short_description: Defines system context, external actors, external systems, ownership,
+    trust boundaries, and systems of record. Use when scope or integration boundaries
+    are unclear or when producin
+  default_prompt: Use $system-context-boundaries to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

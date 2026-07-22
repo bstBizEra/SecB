@@ -1,0 +1,9 @@
+interface:
+  display_name: Event-Driven Architecture
+  short_description: Designs domain and operational events, commands, streams, consumers,
+    ordering, idempotency, replay, schema evolution, dead-letter handling, and event
+    evidence. Use when asynchronou
+  default_prompt: Use $event-driven-architecture to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

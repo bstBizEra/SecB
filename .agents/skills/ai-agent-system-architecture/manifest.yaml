@@ -1,0 +1,45 @@
+skill_id: SECB-ARCH-015
+name: ai-agent-system-architecture
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R2
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - SARCHI
+  - ARCHI
+  - SEC
+  - QA
+  - KNOW
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - business outcomes
+  - agent use cases
+  - risk classification
+  - model and tool constraints
+  - governance requirements
+outputs:
+  required:
+  - agent system architecture
+  - role and authority model
+  - runtime and workflow topology
+  - context-memory-skill boundaries
+  - evaluation and evidence plan
+  - human control model
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/ai-agent-system-architecture
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills
