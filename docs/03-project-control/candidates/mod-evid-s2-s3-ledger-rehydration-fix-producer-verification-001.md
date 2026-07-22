@@ -1,0 +1,321 @@
+# MOD-EVID S2/S3 Ledger Rehydration Fix — Producer Verification
+
+**Record ID:** MOD-EVID-S2-S3-LEDGER-REHYDRATION-FIX-001
+**Status:** ADVISORY — producer verification record, not an authorization
+**Producer:** claude-motor (BST-SA motor role), operating under `AGENTS.md` SECB-AGENTS-AMD-002 (rev 2) advise-and-proceed authority
+**Branch:** `bst/mod-evid-s2-s3-ledger-rehydration-fix-001`, base `origin/main` @ `24274b0`
+**Date:** 2026-07-21
+**Fixes:** finding #4 of the second independent review of MOD-EVID S2/S3, `docs/03-project-control/candidates/mod-evid-s2-s3-second-independent-review-001.md` (ref `refs/bst-sa/reviews/mod-evid-s2-s3-second-review-001` @ `5d78c65`), reviewer `claude-immune-rev-modevid-s2s3-second-01`.
+
+---
+
+## 1. Root cause (confirmed, first-hand)
+
+`EvidenceEnvelopeService`'s entire lifecycle state — which `(evidence_id, version)` identities are registered, their current status (CAPTURED/SEALED/VERIFICATION_PENDING/VERIFIED/ACCEPTED/QUARANTINED), and who requested/verified/accepted them — lived exclusively in a private `#records = new Map()` populated only as live calls on *that instance* executed. The constructor never read anything back from the injected `durableLedger`, even though `sealEnvelope`/`requestVerification`/`recordVerification`/`acceptEvidence` all append their transitions to it. A second instance constructed against the same ledger file (the ordinary consequence of a process restart, redeploy, or crash recovery) therefore began with an empty Map, even though the ledger file on disk held the complete real history.
+
+I independently reproduced the reviewer's exact scenario against this repo's actual `DurableLedger`/`EvidenceEnvelopeService` (test file below), confirming, pre-fix:
+- `serviceB.getEnvelope(...)` on a governed, previously-ACCEPTED identity threw `DENY_UNKNOWN_EVIDENCE`.
+- `serviceB.registerEnvelope(...)` with the SAME `evidence_id`/`version` but a different `actor_id` and forged content **succeeded** — no `DENY_DUPLICATE` — silently resetting the service's live view of that identity to fresh `CAPTURED`.
+- `serviceB.verifyChain(evidenceId)` after the reset returned `valid: true` with empty `sealedVersions`/`acceptedVersions` arrays, contradicting the ledger's own physical content (`count: 4`, the original SEAL/VERIFICATION_REQUEST/VERIFICATION/ACCEPTANCE entries still present).
+
+This directly contradicted the service's own header comment ("the ledger hash chain — not the in-memory status field — is the tamper evidence"): that claim was only true while the original in-process record survived, which is not a property any restart-safe service can assume.
+
+## 2. Fix mechanism
+
+`EvidenceEnvelopeService` now calls a new private `#rehydrate()` method at the **end of construction** (`src/services/evidence-envelope-service.mjs`). It:
+
+1. Calls `this.#ledger.read()` once (the existing `DurableLedger.read()` already re-verifies the full hash chain before returning records — no new verification logic was added).
+2. Folds over the returned entries in their existing chronological (`sequence`) order, reconstructing exactly the same record fields each live ladder method already sets when it appends: `SEAL` entries seed a new record (`envelope`, `status`, `sealedAt`, `ledgerSequence`, `ledgerRecordHash`); `VERIFICATION_REQUEST`/`VERIFICATION`/`ACCEPTANCE` entries update `status` plus their respective actor/timestamp/ledger-receipt fields on the existing record for that key.
+3. Skips (does not deny on) any ledger entry type it doesn't own, and skips ladder entries with no preceding SEAL entry for their key (unreachable on a self-consistent ledger).
+4. Fails closed at construction if the ledger itself cannot be read/verified: `LEDGER_INTEGRITY_FAILURE`/`LEDGER_CORRUPT` map to the existing `DENY_CHAIN_BROKEN` code; any other read failure maps to a new `DENY_LEDGER_REHYDRATION` code (there is no existing code for "construction-time read failed", so this is additive, not a repurposing of an existing one).
+
+No other method (`registerEnvelope`, `sealEnvelope`, `getEnvelope`, `verifyChain`, `resolveAccepted`, the ladder methods) was changed — they all already read from `#records`, so once `#records` is correctly populated at construction, the duplicate-registration guard, status reads, and SoD checks are automatically evaluated against ledger-derived truth for every instance, not just the one that happened to perform the writes.
+
+**No existing rehydrate-on-construct pattern to reuse:** I checked every other ledger-backed service with an in-memory projection (`context-federation-service`, `handoff-service`, `work-package-service`, `goal-graph-service`, `knowledge-linkage-service`). None of them inject a full `append+read+verify` `DurableLedger` AND keep an in-memory lifecycle Map over it the way `EvidenceEnvelopeService` does — `knowledge-linkage-service` is the closest architectural cousin and is actually fully stateless (it re-reads its sidecar ledger on every call, never caching), which sidesteps this bug class entirely but is a materially different, larger redesign than a bounded fast-follow. I designed `#rehydrate()` net-new, following this repo's existing conventions (deny-by-default, frozen clones, explicit code vocabulary) rather than inventing a different shape.
+
+**Scope-honest limitation (not a new gap):** `registerEnvelope()` itself still never appends to the ledger — only `sealEnvelope()` and the S2 ladder do. A record that is `CAPTURED` but never sealed has no durable trace anywhere and is *not* restart-durable; after a restart it is simply unknown again. This is unchanged behavior, not a regression: no governed lifecycle event was ever durably recorded for a CAPTURED-only record, so a restart erases nothing that mattered and a forged re-registration overwrites nothing that was ever proven. This is disclosed in the file header, not silently assumed.
+
+## 3. Regression tests (9 new, all in `tests/evidence-envelope-service.test.mjs`)
+
+1. **Exact restart scenario** — instance A runs the full register→seal→request→verify→accept lifecycle; a fresh instance B over the same ledger file reports `ACCEPTED` (not `CAPTURED`) via `getEnvelope` and `resolveAccepted`.
+2. **Duplicate-guard enforcement post-restart** — instance B's `registerEnvelope` with the same `evidence_id`/`version`, a different `actor_id`, and forged content is denied `DENY_DUPLICATE`; the real ACCEPTED record is confirmed untouched.
+3. **`verifyChain` truth post-restart** — instance B's `verifyChain` output (`registeredVersions`/`sealedVersions`/`verifiedVersions`/`acceptedVersions`/`quarantinedVersions`/`ledger.headHash`) is asserted **equal** to instance A's own view — the reviewer's exact "`valid: true` but empty arrays" defect is the negative space this test rules out.
+4. **Mid-ladder restart** (rehydrate at SEALED only) — a fresh instance continues the ladder correctly, including both SoD denials (`DENY_VERIFIER_IS_PRODUCER`, `DENY_SOD`), through to `ACCEPTED`, then a third instance restarted again sees the full result.
+5. **QUARANTINED-only restart** — visible post-restart; re-registration and re-accept are both still denied.
+6. **Multiple identities/versions** — v1 ACCEPTED, v2 SEALED-only, and a second `evidence_id` all rehydrate independently and correctly on one fresh instance.
+7. **Fail-closed construction** on a tampered/chain-broken ledger file → `DENY_CHAIN_BROKEN`.
+8. **Fail-closed construction** on an arbitrary ledger read failure → new `DENY_LEDGER_REHYDRATION` code.
+9. **Normal single-instance lifecycle regression check** — full lifecycle on one instance over a freshly created (empty) ledger behaves identically to pre-fix (rehydrating nothing is a no-op).
+
+All 9 pass. All 36 pre-existing tests in `evidence-envelope-service.test.mjs` + `evidence-provenance-chain.test.mjs` pass **unmodified** (byte-identical test bodies), confirming no behavior change for the common single-instance case.
+
+## 4. Test counts
+
+- Module suite (`evidence-envelope-service.test.mjs` + `evidence-provenance-chain.test.mjs`): **36/36 pass (before) → 45/45 pass (after)**.
+- Full suite (`npm test`, includes `node tools/validate-foundation.mjs`): **1149 tests / 1146 pass / 0 fail / 3 skip (before) → 1158 tests / 1155 pass / 0 fail / 3 skip (after)** — +9, all new, all passing, 0 regressions.
+- `node tools/validate-foundation.mjs`: PASS / exit 0, both before and after.
+
+## 5. One incidental, disclosed test-fixture update
+
+`tests/p0-19-self-pilot.test.mjs` pins `src/services/evidence-envelope-service.mjs` to a git blob hash as part of a "self-pilot composes but never modifies its primitives" byte-identity guard. Since this fix is an intentional, disclosed change to that exact file, the pin necessarily fails post-fix (`c7ea62a2...` observed vs. the old pinned `62359eb1...`). I updated only that one entry in `PINNED_BLOBS` to the new hash, added a comment disclosing why, and left every other pinned hash in that list untouched (still asserting byte-identity to main @ `385ac65` for every other composed primitive). This is the correct handling per this repo's own convention: the guard exists to catch silent composition drift, not to freeze a primitive against its own legitimate bugfixes.
+
+## 6. Hardcoded test-ID branching
+
+Grepped `src/services/evidence-envelope-service.mjs` for literal test-actor/test-id/env-branch patterns (`ev_modevid`, `test-id`, `testId`, `NODE_ENV`, `process.env`, string-literal evidence-id comparisons): zero hits. No such branching was introduced.
+
+## 7. Performance / scale disclosure (explicitly requested)
+
+**Does rehydration scan the whole ledger file on every construction? Yes** — `#rehydrate()` calls `this.#ledger.read()` once, which parses and hash-chain-verifies every line in the ledger file, O(n) in the number of entries ever written to it.
+
+**Is this a new cost, or pre-existing?** Pre-existing, not new. Every mutating call this service already makes — `sealEnvelope`, `requestVerification`, `recordVerification`, `acceptEvidence` — already calls `this.#ledger.read()` to compute `expectedSequence` before appending (`evidence-envelope-service.mjs`, both `sealEnvelope` and the shared `#appendLadder` helper). So this service already paid an O(n) full-ledger read+verify cost on **every single mutating operation** before this fix; adding one more such read, performed exactly once at construction, does not introduce a new order-of-magnitude cost class — it adds one read where the codebase already performs many.
+
+**Is that acceptable given this project's current ledger sizes?** Yes, with a caveat. This is a per-slice service (each evidence-governance ledger tracks the evidence lifecycle for one project/session's worth of registrations, not a high-frequency event stream), and the reviewer's own full-suite run reported ledgers in the single-to-low-double-digit entry range for test fixtures; the largest ledger interactions observed anywhere in this repo's test suite are in the hundreds of entries, not the tens of thousands. At that scale, one extra full-file parse+verify at construction is negligible (single-digit milliseconds).
+
+**Documented caveat:** if this service's ledger were ever to grow into the tens-of-thousands-of-entries range (e.g., a very long-lived, high-throughput deployment sharing one ledger file across a long project lifetime), BOTH construction-time rehydration AND the pre-existing per-mutation `read()` calls would need a caching/streaming/checkpoint optimization to avoid linear-time cost per operation — that is a pre-existing `DurableLedger`-level scalability concern shared by every subclass in this repo (Checkpoint/Delegation/Event/Evidence/Decision/Knowledge/Outcome/WorkspaceLease), not something newly introduced or newly worsened by this fix. I am flagging it here for the record rather than treating it as silently acceptable at unbounded scale.
+
+## 8. Self-certification
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: null
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+Advisory only. This record certifies the producer-side verification of the ledger-rehydration fix is complete and reports it for operator/independent-review disposition. It does not itself authorize, merge, push, or ratify. Operator authority remains sole; an independent second review of this fix (recommended, matching this project's established pattern for prior fast-follow fixes) has not been dispatched by this producer.
+
+---
+
+*Provenance — source: second independent MOD-EVID S2/S3 review (`5d78c65`, reviewer `claude-immune-rev-modevid-s2s3-second-01`) finding #4, fixed on `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (base `origin/main` @ `24274b0`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*
+
+---
+
+## Addendum: rehydration edge-legality fast-follow (independent review of this fix, closed)
+
+**Reviewer:** claude-rev-modevid-s2s3-rehydration-fix-independent-01 (BST-SA independent worker, advisory-only), record `docs/03-project-control/candidates/mod-evid-s2-s3-ledger-rehydration-fix-independent-review-001.md` @ `3fb0e6b`, verdict **APPROVE_WITH_NOTES**.
+**Fixed by:** claude-motor (this producer), same branch, on top of `3fb0e6b`.
+
+### Root cause
+
+The reviewer's §4 finding: `#rehydrate()` copied `payload.sealed_status` / `payload.next_status` **verbatim** from ledger entries into `record.status` with no state-machine edge-legality check — unlike every live ladder method in this same file (`sealEnvelope`, `requestVerification`, `recordVerification`, `acceptEvidence`), which all run the existing `#assertEdge` helper before accepting a status transition. `DurableLedger.append()`'s `validateEntry()` only checks structural shape (required top-level fields, `payload` is an object), never payload semantics per `entry.type`, so an actor with direct `DurableLedger.append()` access — bypassing `EvidenceEnvelopeService`'s own API entirely — could append a structurally valid, hash-chain-legitimate entry whose payload content the live service would never itself produce for that entry type. This is a narrower, higher-privilege attack surface than the original restart bug (it requires a reference to the injected ledger instance, not just an ordinary process restart), but the same silent-wrong-state defect class.
+
+### Fix mechanism
+
+`#rehydrate()` (`src/services/evidence-envelope-service.mjs`) now calls the **same, pre-existing `#assertEdge(from, to)` private method** the live ladder already trusts — no new or separate check was invented. For each status-bearing ledger entry, as the fold walks the ledger's own chronological (`sequence`) order:
+
+- **`EVIDENCE_SEAL`**: `fromStatus` is the ladder's single entry state (`CAPTURED`) if no record yet exists for that `(evidence_id, version)` key, or the record's current accumulated status if one already does (defends the same double-seal/re-seal case `sealEnvelope()` itself denies live); `toStatus` is `payload.sealed_status`. `this.#assertEdge(fromStatus, toStatus)` runs before the record is created/overwritten.
+- **`EVIDENCE_VERIFICATION_REQUEST` / `EVIDENCE_VERIFICATION` / `EVIDENCE_ACCEPTANCE`**: `this.#assertEdge(record.status, payload.next_status)` runs before `record.status` is updated, using whatever status the fold has accumulated so far for that key — i.e., validated against ledger-derived truth exactly as if that same sequence of transitions had happened through the live API.
+
+Per this file's established fail-closed convention (see the pre-existing `DENY_CHAIN_BROKEN` handling in the same method), `#assertEdge` **throws** `EvidenceEnvelopeServiceError` with the existing `DENY_UNDEFINED_TRANSITION` code on an illegal edge — this propagates out of the constructor and denies the **whole** rehydration, not just the offending entry. Skipping only the bad entry and continuing was deliberately rejected (per the task's explicit instruction and this file's own convention for other structural inconsistencies): a partially-rehydrated state built by ignoring one bad entry could itself be a different wrong state.
+
+No new deny code was introduced; no other method's behavior changed.
+
+### Both reviewer exploits reproduced and confirmed closed (by this producer, independently)
+
+1. **Forged `EVIDENCE_SEAL` with `sealed_status: "ACCEPTED"` as the first entry** (no verification/acceptance entries at all): pre-fix, a fresh instance rehydrated straight to `ACCEPTED`. Post-fix: `fromStatus = CAPTURED` (no prior record), `assertEdge(CAPTURED, ACCEPTED)` — `ACCEPTED` is not in `CAPTURED`'s edge set (`["SEALED","QUARANTINED"]`) — constructor throws `DENY_UNDEFINED_TRANSITION`. Reproduced in `tests/evidence-envelope-service.test.mjs`, test `"REHYDRATION SECURITY: a forged EVIDENCE_SEAL entry claiming sealed_status ACCEPTED as the FIRST entry is denied..."` — confirmed denied.
+2. **Forged `EVIDENCE_VERIFICATION` with illegal `next_status: "ACCEPTED"`** following a legitimate SEAL + VERIFICATION_REQUEST through the real live API: pre-fix, the record reached `ACCEPTED` with `acceptorActorId: null`, `approvals: null`, no acceptance receipt, and `verifyChain()` passed cleanly. Post-fix: at the point this entry folds, `record.status = VERIFICATION_PENDING` (set by the legitimate request), `assertEdge(VERIFICATION_PENDING, ACCEPTED)` — `ACCEPTED` is not in `VERIFICATION_PENDING`'s edge set (`["VERIFIED","REJECTED","QUARANTINED"]`) — constructor throws `DENY_UNDEFINED_TRANSITION`. Reproduced in the same test file, test `"REHYDRATION SECURITY: a forged EVIDENCE_VERIFICATION entry claiming an illegal next_status ACCEPTED is denied..."` — confirmed denied.
+
+### Genuine ledger histories: no false denials
+
+All 8 pre-existing `REHYDRATION` tests (exact restart to `ACCEPTED`, duplicate-guard post-restart, `verifyChain` truth post-restart, mid-ladder restart, `QUARANTINED`-only restart, multiple identities/versions, chain-broken construction-time deny, ledger-read-failure deny) and all 33 other pre-existing tests in this file continue to pass **unmodified** (byte-identical test bodies) — every legitimate transition produced through the real live API (`CAPTURED→SEALED`, `SEALED→VERIFICATION_PENDING`, `VERIFICATION_PENDING→{VERIFIED,QUARANTINED}`, `VERIFIED→ACCEPTED`) is, by construction, already a legal `#assertEdge` edge, so no genuine history is newly denied.
+
+### Test counts
+
+- Module suite (`evidence-envelope-service.test.mjs`): **41/41 pass (before this fast-follow) → 43/43 pass (after)** — +2 new adversarial regression tests, 0 regressions.
+- Full suite (`npm test`, includes `node tools/validate-foundation.mjs`): **1158 tests / 1155 pass / 0 fail / 3 skip (before) → 1160 tests / 1157 pass / 0 fail / 3 skip (after)** — matches this producer's own prior claimed post-fix baseline exactly before this fast-follow; +2, all new, all passing, 0 regressions.
+- `node tools/validate-foundation.mjs`: PASS / exit 0, both before and after.
+- Grepped `src/services/evidence-envelope-service.mjs` for `ev_modevid|test-id|testId|NODE_ENV|process\.env`: zero hits, same result as both this producer's original grep and the independent reviewer's own grep. No hardcoded test-ID branching introduced.
+
+### One incidental, disclosed test-fixture update (second one on this branch)
+
+`tests/p0-19-self-pilot.test.mjs`'s `PINNED_BLOBS` byte-identity guard pins `src/services/evidence-envelope-service.mjs` to a git blob hash. This fast-follow is a second intentional, disclosed, security-relevant change to that same file on this branch, so the pin necessarily advances again: `c7ea62a20e093415fb90b5321eceb71453d037bd` → `0843d4a9b0c966c13135890ec91a87c823911d30`. Updated only that one entry, added a second disclosure comment (the first pin-update comment from the original fix was left untouched, extend-only), and left every other pinned hash in that list unchanged.
+
+### Self-certification
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: claude-rev-modevid-s2s3-rehydration-fix-independent-01
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+Advisory only. This addendum certifies the producer-side verification of the rehydration-edge-legality fast-follow is complete and reports it for operator/independent-review disposition. It does not itself authorize, merge, push, or ratify. Operator authority remains sole.
+
+*Provenance — source: independent review of the rehydration fix (`3fb0e6b`, reviewer `claude-rev-modevid-s2s3-rehydration-fix-independent-01`) finding #4, fixed on the same branch `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (on top of `3fb0e6b`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*
+
+---
+
+## Addendum 2: round-3 transition-guard convergence fast-follow (independent review of the edge-legality fast-follow, closed)
+
+**Reviewer:** claude-rev-modevid-s2s3-rehydration-edge-legality-fix-independent-01 (BST-SA independent worker, advisory-only), record `docs/03-project-control/candidates/mod-evid-s2-s3-rehydration-edge-legality-fix-independent-review-001.md` @ `72dc4f4`, verdict **APPROVE_WITH_NOTES**.
+**Fixed by:** claude-motor (this producer), same branch, on top of `72dc4f4`.
+
+### Root cause
+
+The reviewer's §5 finding: raw `#assertEdge(from, to)` validates the **abstract** `STATE_MACHINES.Evidence` graph, not the **narrower** rule each live ladder method actually enforces. `QUARANTINED` is graph-reachable from five source states and `REJECTED` from two (a generic "reject/supersede at any time" shape this service does not fully implement), but every live method that can ever produce those targets does so from exactly ONE source, or with an extra check `#assertEdge` cannot express:
+- `sealEnvelope()` / `requestVerification()` / `acceptEvidence()` each write exactly ONE hardcoded literal target (`SEALED`, `VERIFICATION_PENDING`, `ACCEPTED` respectively) — never anything the abstract graph would otherwise also permit from the same source.
+- `recordVerification()` has an explicit source guard (`record.status !== VERIFICATION_PENDING_STATE` denies) *before* it even consults `#assertEdge` — because `QUARANTINED`/`VERIFIED` are graph-reachable from several states, but this method can only ever be reached, live, from `VERIFICATION_PENDING`.
+
+Confirmed exploitable, independently reproduced first-hand, in the reviewer's exact 4 variants (see §"Both reviewer exploits..." analog below): (1) a forged `EVIDENCE_VERIFICATION` claiming `next_status: QUARANTINED` immediately after a real `SEAL`, with no preceding `VERIFICATION_REQUEST` — graph-legal (`SEALED -> QUARANTINED`), but `recordVerification()`'s own source guard could never produce it; (2) a forged `EVIDENCE_SEAL` claiming `sealed_status: QUARANTINED` as the first/only entry — graph-legal (`CAPTURED -> QUARANTINED`), but `sealEnvelope()` can only ever write `SEALED`; (3) a forged `EVIDENCE_VERIFICATION` claiming `next_status: REJECTED` — graph-legal (`VERIFICATION_PENDING -> REJECTED`), but `VERDICT_TARGETS` (the only mapping `recordVerification()` ever consults) never produces `REJECTED` under any verdict; (4) — the most severe — a forged `EVIDENCE_ACCEPTANCE` entry appended *after* a real, full, SoD-checked `register -> seal -> requestVerification -> recordVerification(pass) -> acceptEvidence` history, claiming `next_status: QUARANTINED` — graph-legal (`ACCEPTED -> QUARANTINED`), but `acceptEvidence()` can only ever write `ACCEPTED`, and this specific variant retroactively decertifies evidence a legitimate governance process already accepted, rewriting real history. None of the four variants reach `ACCEPTED` illegitimately (confirmed, re-verified as part of this fix); all four are downgrade/mislabel-class.
+
+### Fix mechanism — approach (a): single source of truth, shared guard functions
+
+Per the recursion note's explicit preference, and following this repo's own established pattern (`sod-rules.mjs`'s `AUTHORIZE_TIME_LADDER`, the single frozen table both `authority-engine.authorize()` and this file's own SoD checks consult), I chose **approach (a)** over (b): every ladder transition's full guard — source-status pin, target derivation, graph-edge check, and SoD check — is now factored into ONE shared private method per transition, in the "shared internals" section of `src/services/evidence-envelope-service.mjs`:
+
+- `#assertSealTransition(fromStatus, claimedStatus)` — shared by `sealEnvelope()` and `#rehydrate()`'s `EVIDENCE_SEAL` fold.
+- `#assertRequestVerificationTransition(fromStatus, claimedStatus)` — shared by `requestVerification()` and `#rehydrate()`'s `EVIDENCE_VERIFICATION_REQUEST` fold.
+- `#verdictTarget(verdict)` + `#assertRecordVerificationTransition({status, target, claimedStatus, verifier, producer})` — shared by `recordVerification()` and `#rehydrate()`'s `EVIDENCE_VERIFICATION` fold.
+- `#assertApprovals(approvals)` + `#assertAcceptEvidenceTransition({status, claimedStatus, acceptor, producer, verifier})` — shared by `acceptEvidence()` and `#rehydrate()`'s `EVIDENCE_ACCEPTANCE` fold.
+
+Each live method calls its own guard with its OWN live arguments (trivially passing its own hardcoded literal as `claimedStatus`, so the guard never rejects a legitimate live call); `#rehydrate()` calls the SAME guard with values folded from the ledger entry's payload plus the currently-accumulated record. Approach (a) was feasible without a large refactor because none of these guards need a live actor/clock the ledger fold doesn't already have — every input (`status`, `verdict`/`acceptor`/`verifier`, `producer` derived from the record's own established `envelope.actor_id`) is already present in both the live call site and the ledger-fold site. I did not fall back to approach (b) because (a) was directly achievable and is strictly stronger: a live method and rehydration literally cannot drift apart on a transition's legality in the future, because there is exactly one place that legality is decided, rather than two hand-synchronized copies.
+
+**Fail-closed discipline preserved (important design correction made during implementation):** my first draft of this fix had the shared guards *derive* the target status independently (e.g., always adopt the literal `SEALED_STATE` for a `SEAL` entry, ignoring `payload.sealed_status` entirely) rather than *checking the claim against* the derived value. That draft broke two pre-existing round-2 regression tests (`REHYDRATION SECURITY: ... sealed_status ACCEPTED ...` and `... next_status ACCEPTED ...`) because it silently *substituted* the correct literal for a forged claim and let construction succeed, instead of denying the whole rehydration — violating this file's own established fail-closed convention. I corrected this before finalizing: every shared guard now takes the ledger's claimed target as an explicit parameter and denies `DENY_UNDEFINED_TRANSITION` immediately if it disagrees with the value the live method could have produced, *before* the graph-edge check even runs. This is disclosed here because a reviewer re-reading only the final diff would not see the wrong intermediate design I rejected; both pre-existing round-2 tests pass unmodified against the final version.
+
+### Both reviewer exploits reproduced and confirmed closed (by this producer, independently), plus a fourth prior variant re-confirmed
+
+All 4 of the round-3 reviewer's variants (§5 above) are reproduced as new regression tests in `tests/evidence-envelope-service.test.mjs` and confirmed **denied** (`DENY_UNDEFINED_TRANSITION`) post-fix:
+1. `"REHYDRATION SECURITY (round 3, variant 1): a forged EVIDENCE_VERIFICATION claiming next_status QUARANTINED immediately after SEAL..."` — denied via the source-pin half of `#assertRecordVerificationTransition` (`status !== VERIFICATION_PENDING_STATE`).
+2. `"REHYDRATION SECURITY (round 3, variant 2): a forged EVIDENCE_SEAL entry claiming sealed_status QUARANTINED..."` — denied via `#assertSealTransition`'s claimed-vs-literal check, before the graph-edge check even runs.
+3. `"REHYDRATION SECURITY (round 3, variant 3): a forged EVIDENCE_VERIFICATION entry claiming an illegal next_status REJECTED..."` — denied via `#assertRecordVerificationTransition`'s claimed-vs-verdict-derived-target cross-check.
+4. `"REHYDRATION SECURITY (round 3, variant 4 -- most severe): a forged EVIDENCE_ACCEPTANCE entry retroactively downgrading an already-legitimately-ACCEPTED record to QUARANTINED..."` — denied via `#assertAcceptEvidenceTransition`'s source pin (`status !== VERIFIED_STATE`; an already-`ACCEPTED` record's status is `ACCEPTED`, not `VERIFIED`) — the reviewer's most severe finding is closed on the first guard check, before the edge or SoD checks even run.
+
+Both round-2 exploits (forged `EVIDENCE_SEAL`/`sealed_status: ACCEPTED`; forged `EVIDENCE_VERIFICATION`/`next_status: ACCEPTED`) remain reproduced and denied — their existing tests pass unmodified.
+
+### Property-style parity test (new, beyond the 4 point examples)
+
+Added `"REHYDRATION PARITY: a rehydrated instance's full observable state matches the live instance's, across representative legitimate histories"` — a mechanical cross-check, not point examples: five representative legitimate ledger histories are driven entirely through the real live API (full accept, quarantine-via-fail-verdict, verified-but-not-accepted, mid-ladder-sealed-only, and multiple versions of one `evidence_id`), then a freshly-rehydrated instance's full observable state (`getEnvelope` + `verifyChain`, for every identity/version and every distinct `evidence_id`) is asserted `assert.deepEqual` against the live instance's own state — not merely "the four known-bad forgeries are denied," but "rehydration agrees byte-for-byte with the live ladder on everything it legitimately produced." The test additionally drives one more legitimate transition on the rehydrated instance and rehydrates a THIRD instance from that continuation, confirming parity holds across a chain of restarts, not just the first one.
+
+### Genuine ledger histories: no false denials
+
+All 43 pre-existing tests in `evidence-envelope-service.test.mjs` (including all 10 pre-existing `REHYDRATION`-prefixed tests) continue to pass **unmodified** (byte-identical test bodies) — every legitimate transition produced through the real live API is, by construction, already both graph-legal AND produced by exactly the guard that live method itself enforces, so no genuine history is newly denied.
+
+### Test counts
+
+- Module suite (`evidence-envelope-service.test.mjs`): **43/43 pass (before this fast-follow) → 48/48 pass (after)** — +5 new tests (4 variant regressions + 1 parity test), 0 regressions.
+- Full suite (`npm test`, includes `node tools/validate-foundation.mjs`): **1160 tests / 1157 pass / 0 fail / 3 skip (before) → 1165 tests / 1162 pass / 0 fail / 3 skip (after)** — matches this producer's own prior claimed post-fix baseline exactly before this fast-follow; +5, all new, all passing, 0 regressions.
+- `node tools/validate-foundation.mjs`: PASS / exit 0, both before and after.
+- Grepped `src/services/evidence-envelope-service.mjs` for `ev_modevid|test-id|testId|NODE_ENV|process\.env`: zero hits. No hardcoded test-ID branching introduced.
+
+### One incidental, disclosed test-fixture update (third one on this branch)
+
+`tests/p0-19-self-pilot.test.mjs`'s `PINNED_BLOBS` byte-identity guard pins `src/services/evidence-envelope-service.mjs` to a git blob hash. This fast-follow is a third intentional, disclosed, security-relevant change to that same file on this branch, so the pin necessarily advances again: `0843d4a9b0c966c13135890ec91a87c823911d30` → `b4ea87196e239d590711b4c7acd0f17b7f331afb`. Updated only that one entry, added a third disclosure comment (the first two pin-update comments were left untouched, extend-only), and left every other pinned hash in that list unchanged.
+
+### Honest assessment: does this close the recursion, or does a residual gap remain?
+
+**Enumerated guards now covered by rehydration, one-for-one with the live methods:**
+- `sealEnvelope`: graph-edge legality (`fromStatus -> SEALED`) AND the "only ever writes SEALED" narrowing. Covered.
+- `requestVerification`: graph-edge legality (`fromStatus -> VERIFICATION_PENDING`) AND the "only ever writes VERIFICATION_PENDING" narrowing. Covered.
+- `recordVerification`: verdict-format validation, the `VERIFICATION_PENDING`-only source pin, graph-edge legality, AND the verifier != producer SoD check (replayed using the record's own ledger-established `envelope.actor_id`, not the forgeable `payload.producer`). Covered.
+- `acceptEvidence`: approvals-shape validation, the `VERIFIED`-only source pin, graph-edge legality, AND the acceptor != producer / acceptor != verifier SoD check (replayed using the record's own ledger-established fields). Covered.
+- `registerEnvelope`'s forge-on-entry/duplicate/schema/content-hash guards: out of scope for rehydration by the pre-existing, disclosed SCOPE NOTE (`registerEnvelope` never durably writes to the ledger, unchanged by any of the three rounds) — not a gap introduced or left open by this fix, a pre-existing architectural boundary.
+
+**One residual, explicitly named, NOT hidden:** `#rehydrate()` still does not re-verify that a later ladder entry's *embedded* `payload.envelope` content fingerprint-matches the record's already-established envelope (the check `verifyChain()` performs for every ladder receipt, `fingerprint(line.entry.payload.envelope) !== fingerprint(record.envelope)` → `DENY_CHAIN_BROKEN`). I traced through why this is not exploitable to corrupt guard logic: `#rehydrate()` only ever reads `evidence_id`/`version` off a later entry's embedded envelope for keying, and never overwrites `record.envelope` from anything but the first `SEAL` entry it sees for that key — so a mismatched embedded envelope in a forged `VERIFICATION`/`ACCEPTANCE` entry cannot alter the exposed record's actual envelope content or bypass any transition guard (all of which operate on `record.status`/`record.envelope.actor_id`/`record.verifierActorId`, never on the later entry's own embedded envelope). Practical exposure is further narrowed because `resolveAccepted()` — the actual S3 port consumed by `knowledge-claim-service` and the temporal-ledgers `evidenceLookup` adapter — calls `verifyChain()` internally before returning `ok: true`, so the content-integrity gap is closed at the point evidence is actually cited/consumed. It is NOT closed for the raw `getEnvelope()`/`resolveAcceptedStatus()` introspection accessors, which do not call `verifyChain()` and would return a status that a subsequent, separately-invoked `verifyChain()` call could still reject as `DENY_CHAIN_BROKEN`. This is a pre-existing asymmetry present since the original round-1 rehydration fix (construction-time transition-legality vs. explicit-call-time content-integrity are, and always have been, two separate checks in this file), unchanged by round 2 or round 3, and is a DIFFERENT check axis than the recursion this task asked me to close (transition-legality convergence between live methods and rehydration) — but I am naming it here rather than letting a clean "all four variants closed" summary imply broader completeness than is actually true. If a future round wants construction itself to be as strict as `verifyChain()`, that would mean either calling `verifyChain()`-equivalent content checks inside `#rehydrate()` for every ladder receipt (a new, larger change — every construction would then always pay `verifyChain()`'s full cost, not just when explicitly invoked) or accepting this documented, narrower boundary permanently.
+
+Given the above, my honest assessment is: **the round-3 recursion — "does rehydration reproduce every live-method transition guard, not just graph-edge legality" — is closed**, exhaustively, not just for the reviewer's 4 examples (verified by the parity test crossing multiple independent legitimate histories, and by walking every guard clause in all four live ladder methods line-by-line rather than only the ones the review's variants happened to hit). The one gap I found and am naming is a genuinely different axis (content-integrity vs. transition-legality) that pre-dates this round and remains open specifically for the two accessor methods that do not call `verifyChain()`.
+
+### Self-certification
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: claude-rev-modevid-s2s3-rehydration-edge-legality-fix-independent-01
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+Advisory only. This addendum certifies the producer-side verification of the round-3 transition-guard convergence fast-follow is complete and reports it for operator/independent-review disposition. It does not itself authorize, merge, push, or ratify. Operator authority remains sole.
+
+*Provenance — source: round-3 independent review of the rehydration edge-legality fast-follow (`72dc4f4`, reviewer `claude-rev-modevid-s2s3-rehydration-edge-legality-fix-independent-01`) §5 finding, fixed on the same branch `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (on top of `72dc4f4`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*
+
+---
+
+## Addendum 3: round-4 envelope-establishment convergence fast-follow (independent review of the round-3 fix, closed) — exhaustive entry-type audit
+
+**Reviewer:** claude-rev-modevid-s2s3-rehydration-guard-parity-fix-independent-01 (BST-SA independent worker, advisory-only), record `docs/03-project-control/candidates/mod-evid-s2-s3-rehydration-guard-parity-fix-independent-review-001.md` @ `7aa7930`, verdict **REQUEST_CHANGES** (all four round-3 variants confirmed genuinely closed; one new escalation-class gap found, outside round 3's own scope).
+**Fixed by:** claude-motor (this producer), same branch, on top of `7aa7930`.
+
+### Root cause
+
+The reviewer's §6 finding: round 3 converged rehydration with every live method's *transition* guard, but every one of those four guards (`#assertSealTransition`, `#assertRequestVerificationTransition`, `#assertRecordVerificationTransition`, `#assertAcceptEvidenceTransition`) only ever runs on a record that **already exists** in `#records`. None of them cover the event that **creates** a record in the first place. On the live path, `registerEnvelope()` is that creation gate — full schema validation (17 required fields, closed object per `contracts/evidence-envelope.schema.json`), a `content_hash` recomputation cross-check, and a forge-on-entry check that `verification_status` is the ladder's one entry state (`CAPTURED`) — and it runs before any record is ever admitted. `registerEnvelope()` itself never reaches the durable ledger (the pre-existing, disclosed SCOPE NOTE, unchanged by any round), so in the ledger-only world `#rehydrate()` replays, the **first `EVIDENCE_SEAL` entry** for a given `(evidence_id, version)` key is the *sole* durable proxy for that entire creation event. Pre-fix, `#rehydrate()`'s only gate on that first sighting was `!envelope || typeof envelope.evidence_id !== "string" || !Number.isInteger(envelope.version)` — no schema check, no content-hash check, no forge-on-entry check.
+
+I independently reproduced the reviewer's exact construction: a single forged `EVIDENCE_SEAL` entry for a never-registered identity, with a 5-field envelope (missing 12 of 17 required fields) and `content_hash: "deadbeef".repeat(8)` (valid hex, not a fingerprint of anything), rehydrated pre-fix as a fully legitimate `SEALED` record; three more forged-but-internally-consistent entries (`VERIFICATION_REQUEST` → `VERIFICATION(pass)` → `ACCEPTANCE`, attacker choosing three distinct actor ids) walked it to `ACCEPTED`, with `resolveAccepted()` — the real S3 consumption port — reporting `ok: true` for a completely fabricated record with no legitimate founding envelope at all.
+
+### Fix mechanism — same "single source of truth" principle as round 3, one level earlier
+
+`registerEnvelope()`'s full creation-time validation — schema gate, `content_hash` self-consistency, forge-on-entry status check — is now factored into one shared private method, `#assertEnvelopeEstablishment(envelope)` (`src/services/evidence-envelope-service.mjs`, "shared envelope-establishment guard" section), called by:
+- `registerEnvelope()`, with its own live argument (unchanged behavior — same three checks, same order, same codes), and
+- `#rehydrate()`'s `EVIDENCE_SEAL` branch, but **only when `!existing`** (true first sighting of the key) — run *before* `#assertSealTransition`, mirroring the live path's order (registration always precedes sealing).
+
+A second `EVIDENCE_SEAL` entry for an **already-established** key is not re-subjected to this guard — an established record's envelope is immutable, exactly as on the live path (`registerEnvelope()` can only ever be called once per key; `DENY_DUPLICATE` blocks a second). It is instead denied unconditionally by the pre-existing `#assertSealTransition`, because `STATE_MACHINES.Evidence` makes `SEALED` reachable from `CAPTURED` alone (`CAPTURED: ["SEALED","QUARANTINED"]`; no other state lists `SEALED` as a target) — so a forged re-seal attempting to swap an established envelope's content can never pass the transition guard regardless of this fix. I verified this structurally (read every edge in `STATE_MACHINES.Evidence`) and empirically (new regression test below).
+
+No new deny code was introduced (`DENY_CONTRACT_INVALID`/`DENY_CONTENT_HASH_MISMATCH`/`DENY_STATUS_FORGERY` all pre-exist from `registerEnvelope()`); no other method's behavior changed.
+
+### Reviewer's exact scenario reproduced fresh and confirmed closed
+
+1. **Experiment A** (malformed envelope, missing 12/17 fields, non-matching `content_hash`, as the first/only entry): pre-fix, rehydrated to `SEALED`. Post-fix: `#assertEnvelopeEstablishment`'s schema gate runs first and denies `DENY_CONTRACT_INVALID` before any record is created — the whole construction fails closed. Reproduced in `tests/evidence-envelope-service.test.mjs`, test `"REHYDRATION SECURITY (round 4): the reviewer's exact scenario -- a forged EVIDENCE_SEAL entry with a malformed envelope..."` — confirmed denied.
+2. **Experiment B** (the same forged founding SEAL, walked to `ACCEPTED` via three more forged-but-self-consistent entries, three distinct attacker-chosen actor ids): pre-fix, reached `ACCEPTED` with `resolveAccepted()` returning `ok: true`. Post-fix: construction denies at the founding SEAL entry — none of the other three forged entries are ever folded. Reproduced in the same test file, test `"...walked to ACCEPTED via three more forged-but-internally-consistent entries..."` — confirmed denied.
+
+### Additional creation-time and re-entry gaps checked for (per the task's step-4 audit) — none found beyond the reviewer's one named scenario
+
+Two more, narrower variants of the same establishment axis were probed to confirm each individual check in `#assertEnvelopeEstablishment` is independently load-bearing, not just the schema check the reviewer's own PoC happened to trip first:
+3. **Schema-valid envelope, non-matching `content_hash`** (all 17 fields present and well-typed, but `content_hash` is not a fingerprint of the body): denied `DENY_CONTENT_HASH_MISMATCH`. Test: `"...a forged EVIDENCE_SEAL entry with a schema-valid envelope but a non-matching content_hash..."`.
+4. **Schema-valid, content-hash-consistent envelope whose `verification_status` is already `ACCEPTED`** (forge-on-entry), with the entry's own `payload.sealed_status` set to the one legal literal `"SEALED"` — i.e. a case the round-3 transition guard alone would **not** catch, since `#assertSealTransition` never inspects `envelope.verification_status` at all, only `payload.sealed_status`: denied `DENY_STATUS_FORGERY`. Test: `"...whose verification_status is already ACCEPTED (forge-on-entry)..."`. This confirms the establishment guard does genuinely new work, not work the existing transition guard already happened to cover.
+5. **Re-seal / content-swap on an already-established key**: a genuine SEAL through the live API, then a second forged `EVIDENCE_SEAL` entry for the *same* key embedding a different, malformed envelope — confirmed denied by the pre-existing `#assertSealTransition` (`DENY_UNDEFINED_TRANSITION`), never reaching (and not needing) the establishment guard. Test: `"...a SECOND forged EVIDENCE_SEAL entry for an ALREADY-established key..."`.
+6. **Parity, not just point examples**: `"ENVELOPE-ESTABLISHMENT PARITY: registerEnvelope() (live) and #rehydrate()'s first-sighting SEAL branch enforce IDENTICAL creation-time rules..."` drives the same three failure inputs (malformed schema, hash mismatch, forge-on-entry) through *both* `registerEnvelope()` directly and a forged first-sighting ledger entry, asserting the *same* error class and deny code from both paths — the single-source-of-truth property demonstrated directly, not inferred.
+
+### Exhaustive entry-type-by-entry-type completeness enumeration (task requirement — every entry type this service can ever write, cross-checked against what `#rehydrate()` now does)
+
+This service writes exactly **four** ledger entry types (grepped every `this.#ledger.append(` / `#appendLadder(` call site in `src/services/evidence-envelope-service.mjs`; there are no others). `registerEnvelope()` is a fifth lifecycle event but is **not** a ledger entry type — it never calls `append()` at all (pre-existing, disclosed SCOPE NOTE, unchanged by this fix).
+
+| # | Entry type | Live method | Live validation performed | `#rehydrate()` coverage | Status |
+|---|---|---|---|---|---|
+| 1 | `EVIDENCE_SEAL` (**first sighting** — the only path that ever creates a record) | `sealEnvelope()`, fed by a prior `registerEnvelope()` | (a) `registerEnvelope()`'s schema gate, (b) content_hash self-consistency, (c) forge-on-entry status check [all now in `#assertEnvelopeEstablishment`], (d) `sealEnvelope()`'s own source-status pin + literal-target check + graph edge (`#assertSealTransition`) | (a)(b)(c) now replayed via `#assertEnvelopeEstablishment(envelope)` when `!existing`; (d) replayed via `#assertSealTransition`, unchanged since round 3 | **CLOSED this round** (a)(b)(c); (d) already closed round 3 |
+| 2 | `EVIDENCE_SEAL` (**re-occurrence** for an already-established key) | Live: `sealEnvelope()` always denies `DENY_UNDEFINED_TRANSITION` for this case (a sealed-or-further record has no path back through `#assertSealTransition`'s literal-target check even before the edge check) — this ledger shape is **structurally unreachable** via the live API | N/A (unreachable live) | Denied unconditionally by `#assertSealTransition` (`SEALED` has no inbound edge except from `CAPTURED` per `STATE_MACHINES.Evidence`); establishment guard correctly NOT invoked for this case (would be meaningless — the record's envelope is already established and immutable) | **Confirmed closed** (round 3 mechanism, independently re-verified this round with a fresh adversarial test) |
+| 3 | `EVIDENCE_VERIFICATION_REQUEST` | `requestVerification()` | Source-status pin (`SEALED` only) + literal-target check + graph edge (`#assertRequestVerificationTransition`); performs **no** envelope-content validation (does not read or re-derive `envelope` at all) | Replayed via `#assertRequestVerificationTransition`, unchanged since round 3 | **Already closed round 3**; no creation-time surface exists for this type (never creates a record, only mutates one that a valid `EVIDENCE_SEAL` already established under the new guard) |
+| 4 | `EVIDENCE_VERIFICATION` | `recordVerification()` | Verdict-format validation (`#verdictTarget`), source-status pin (`VERIFICATION_PENDING` only), verdict-derived-target cross-check, graph edge, verifier≠producer SoD (`#assertRecordVerificationTransition`) | Replayed via `#assertRecordVerificationTransition` with `producer` sourced from the record's own (now establishment-guarded) `envelope.actor_id`, unchanged since round 3 | **Already closed round 3**; SoD's `producer` anchor is now itself trustworthy because the founding envelope is establishment-guarded (this round closes the reviewer's specific complaint that "the attacker also controls producer via the fabricated envelope's actor_id" — that fabricated envelope can no longer exist) |
+| 5 | `EVIDENCE_ACCEPTANCE` | `acceptEvidence()` | Approvals-shape validation (`#assertApprovals`), source-status pin (`VERIFIED` only), literal-target check, graph edge, acceptor≠producer/verifier SoD (`#assertAcceptEvidenceTransition`) | Replayed via `#assertApprovals` + `#assertAcceptEvidenceTransition` with `producer`/`verifier` sourced from the record's own ledger-established fields, unchanged since round 3 | **Already closed round 3**; same producer-anchor strengthening as row 4 |
+
+**`registerEnvelope()` itself (CAPTURED, pre-SEAL):** confirmed, again, to have zero durable footprint — it never calls `append()` (grepped: the only `append`/`#appendLadder` call sites in the file are inside `sealEnvelope()` and `#appendLadder()`, the latter called only by `requestVerification()`/`recordVerification()`/`acceptEvidence()`). A CAPTURED-only record is unknown again after a restart, exactly as before this round; this is unchanged, disclosed, non-regression behavior, not a gap this round introduces or leaves newly open.
+
+**Any ledger entry type this service does not own** (foreign types written by some other service sharing the same ledger file): still correctly skipped, not denied, by the pre-existing `continue` fall-through at the bottom of the fold loop — read-only rehydration must never fail closed over content it does not own. Unchanged by this fix.
+
+**Conclusion of the audit:** every one of the four entry types this service can ever write now has full parity between its live-write validation and its rehydration validation, including the one creation path (row 1) that was the sole remaining gap after three rounds of transition-guard convergence. I did not find any additional creation-time or re-entry validation gap beyond the reviewer's one named scenario.
+
+### Genuine ledger histories: no false denials
+
+All 48 pre-existing tests in `evidence-envelope-service.test.mjs` (including all 16 pre-existing `REHYDRATION`/`REHYDRATION SECURITY`/`REHYDRATION PARITY`-prefixed tests) continue to pass **unmodified** (byte-identical test bodies) — every legitimate `registerEnvelope()` → `sealEnvelope()` history produced through the real live API is, by construction, already schema-valid, content-hash-consistent, and carries `verification_status: CAPTURED` at seal time, so no genuine history is newly denied.
+
+### Test counts
+
+- Module suite (`evidence-envelope-service.test.mjs`): **48/48 pass (before this fast-follow) → 54/54 pass (after)** — +6 new tests (2 reproducing the reviewer's exact scenario, 2 covering the other two establishment-guard clauses individually, 1 re-seal/content-swap defense-in-depth confirmation, 1 explicit live-vs-rehydration parity check), 0 regressions.
+- Full suite (`npm test`, includes `node tools/validate-foundation.mjs`): **1165 tests / 1162 pass / 0 fail / 3 skip (before) → 1171 tests / 1168 pass / 0 fail / 3 skip (after)** — matches this producer's own prior claimed post-fix baseline exactly before this fast-follow; +6, all new, all passing, 0 regressions.
+- `node tools/validate-foundation.mjs`: PASS / exit 0, both before and after.
+- Grepped `src/services/evidence-envelope-service.mjs` for `ev_modevid|test-id|testId|NODE_ENV|process\.env`: zero hits. No hardcoded test-ID branching introduced.
+
+### One incidental, disclosed test-fixture update (fourth one on this branch)
+
+`tests/p0-19-self-pilot.test.mjs`'s `PINNED_BLOBS` byte-identity guard pins `src/services/evidence-envelope-service.mjs` to a git blob hash. This fast-follow is a fourth intentional, disclosed, security-relevant change to that same file on this branch, so the pin necessarily advances again: `b4ea87196e239d590711b4c7acd0f17b7f331afb` → `264b1c24ab78f427b6a4f0fbcfe55140bc953485`. Updated only that one entry, added a fourth disclosure comment (the first three pin-update comments were left untouched, extend-only), and left every other pinned hash in that list unchanged.
+
+### Self-certification
+
+```yaml
+self_certification:
+  agent_id: claude-motor
+  peer_agent_id: claude-rev-modevid-s2s3-rehydration-guard-parity-fix-independent-01
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+Advisory only. This addendum certifies the producer-side verification of the round-4 envelope-establishment convergence fast-follow is complete and reports it, together with the exhaustive entry-type-by-entry-type completeness enumeration requested for this round, for operator/independent-review disposition. It does not itself authorize, merge, push, or ratify. Operator authority remains sole. No production declaration, no ADR/policy/schema mutation, no self-authorization of execution is implied or made by this record.
+
+*Provenance — source: round-4 independent review of the round-3 transition-guard convergence fast-follow (`7aa7930`, reviewer `claude-rev-modevid-s2s3-rehydration-guard-parity-fix-independent-01`) §6 finding, fixed on the same branch `bst/mod-evid-s2-s3-ledger-rehydration-fix-001` (on top of `7aa7930`). Timestamp: 2026-07-21. Agent ID: claude-motor, BST-SA motor role. No push, no merge, no operator ratification implied.*
