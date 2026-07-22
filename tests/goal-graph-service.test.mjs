@@ -299,6 +299,106 @@ test("listLinkedWorkPackages returns the frozen linked work-package ids", () => 
   assert.deepEqual(service.listLinkedWorkPackages("g_unlinked"), []);
 });
 
+// Regression tests for mod-work-second-independent-review-001 §4
+// (REQUEST_CHANGES): registerGoal must bind producerActorId immutably to a
+// goal_id's first version, closing the force-retire SoD bypass the reviewer
+// reproduced end-to-end (retire denied before the spoofing re-version, then
+// wrongly allowed after it).
+
+test("registerGoal denies a re-version that changes the producer (identity pinning)", () => {
+  const { service } = makeService();
+  assert.equal(service.registerGoal(portfolio()).ok, true);
+  // Same goal_id, later version, different provenance.agent_id: denied, not
+  // silently carried forward.
+  const result = service.registerGoal(portfolio({ version: 2, provenance: provenance("someone-else") }));
+  assert.equal(result.deny_code, "DENY_PRODUCER_IMMUTABLE");
+  // The spoofing attempt left no state change: the highest version is still
+  // v1, still owned by the original producer.
+  const got = service.getGoal("g_portfolio");
+  assert.equal(got.version, 1);
+  assert.equal(got.record.provenance.agent_id, "claude-motor");
+});
+
+test("registerGoal allows a re-version that keeps the same producer, changing only content/hierarchy/status", () => {
+  const { service } = makeService();
+  seedChain(service);
+  // Legitimate lifecycle re-version: same producer, different status/title.
+  const result = service.registerGoal(objective({ version: 2, status: "DRAFT", title: "Objective (revised)" }));
+  assert.equal(result.ok, true);
+  const got = service.getGoal("g_objective");
+  assert.equal(got.version, 2);
+  assert.equal(got.status, "DRAFT");
+  assert.equal(got.record.provenance.agent_id, "claude-motor");
+});
+
+test("registerGoal denies a producer-changing re-version even when it also re-parents/re-levels (Probe A/B variants)", () => {
+  const { service } = makeService();
+  seedChain(service);
+  // Unrelated PORTFOLIO the attacker also controls.
+  assert.equal(service.registerGoal(portfolio({ goal_id: "g_portfolio2", provenance: provenance("actor-c") })).ok, true);
+  // Probe A: re-version g_product (owned by claude-motor) with a different
+  // producer AND a different parent -- must be denied on the producer check.
+  const probeA = service.registerGoal(product({
+    version: 2,
+    parent_goal_id: "g_portfolio2",
+    provenance: provenance("actor-b")
+  }));
+  assert.equal(probeA.deny_code, "DENY_PRODUCER_IMMUTABLE");
+  assert.equal(service.getGoal("g_product").record.parent_goal_id, "g_portfolio");
+
+  // Probe B: re-version the root portfolio (owned by claude-motor) into an
+  // OBJECTIVE under its own former child, by an unrelated producer -- denied
+  // on the producer check before hierarchy is ever silently corrupted.
+  const probeB = service.registerGoal(objective({
+    goal_id: "g_portfolio",
+    version: 2,
+    parent_goal_id: "g_product",
+    provenance: provenance("attacker-controlled-id")
+  }));
+  assert.equal(probeB.deny_code, "DENY_PRODUCER_IMMUTABLE");
+  assert.equal(service.getGoal("g_portfolio").level, "PORTFOLIO");
+});
+
+test("Probe C: reviewer's exact force-retire SoD-bypass exploit chain is closed", () => {
+  const { service } = makeService();
+  // owner-real registers PF/PR/OBJ (OBJ producer = owner-real), links wp_1.
+  assert.equal(service.registerGoal(portfolio({ provenance: provenance("owner-real") })).ok, true);
+  assert.equal(service.registerGoal(product({ provenance: provenance("owner-real") })).ok, true);
+  assert.equal(service.registerGoal(objective({ provenance: provenance("owner-real") })).ok, true);
+  assert.equal(service.linkWorkPackage("g_objective", "wp_1").ok, true);
+
+  const approvals = [
+    { role: "independent_review", actor_id: "owner-real", decided_at: "2026-07-19T09:00:00Z" },
+    { role: "governance", actor_id: "gov-1", decided_at: "2026-07-19T09:30:00Z" }
+  ];
+
+  // BEFORE the spoofing re-version: correctly denied (owner-real is the
+  // recorded producer, self-approval as "independent reviewer").
+  assert.equal(
+    service.retireGoal("g_objective", { force: true, approvals }).deny_code,
+    "DENY_SELF_APPROVAL"
+  );
+
+  // The spoofing re-version attempt: ANY actor tries to re-version OBJ (v2),
+  // same level/parent, with provenance.agent_id = "attacker-controlled-id".
+  // This is now denied outright (the fix), where it previously succeeded.
+  const spoof = service.registerGoal(objective({
+    version: 2,
+    provenance: provenance("attacker-controlled-id")
+  }));
+  assert.equal(spoof.deny_code, "DENY_PRODUCER_IMMUTABLE");
+
+  // AFTER the (denied) spoofing attempt: the identical retire call must
+  // STILL be denied -- the bypass is closed, not merely documented. Before
+  // this fix, this second call incorrectly returned { ok: true, status:
+  // "RETIRED" }.
+  assert.equal(
+    service.retireGoal("g_objective", { force: true, approvals }).deny_code,
+    "DENY_SELF_APPROVAL"
+  );
+  assert.equal(service.getGoal("g_objective").status, "ACTIVE");
+});
+
 test("retireGoal denies on unavailable clock and throwing ledger", () => {
   const clock = makeService({ now: () => new Date(NaN) });
   assert.equal(clock.service.retireGoal("g_objective").deny_code, "DENY_CLOCK_UNAVAILABLE");

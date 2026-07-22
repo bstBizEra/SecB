@@ -14,6 +14,36 @@
 // semantics (the R3 gate-WP-on-linkage / embed-objective_id variants are
 // explicitly deferred per mod-work-gap-assessment-001 section 5). Work-package
 // existence is proven only through the injected read-only workPackageResolver.
+//
+// SECURITY FIX (bst/mod-work-sod-version-spoof-fix-001, closes
+// mod-work-second-independent-review-001 §4 REQUEST_CHANGES finding):
+// `registerGoal` now binds `producerActorId` immutably to whichever call this
+// ledger sees FIRST for a given goal_id -- not literally "version 1": nothing
+// in this ledger enforces version numbering starting at 1 or being
+// sequential, so "first" means first-registered-here, by call order, not by
+// version-number value. A later call supplying a different
+// `provenance.agent_id` is explicitly denied (DENY_PRODUCER_IMMUTABLE), never
+// silently carried forward. Before this fix, any actor could re-version an
+// existing goal and overwrite `producerActorId`, which let the TRUE original
+// owner force-retire their own goal by re-versioning it to a spoofed producer
+// identity and then approving as an "independent reviewer" relative to that
+// spoofed identity -- defeating `retireGoal`'s N-5 DENY_SELF_APPROVAL gate.
+// Content, hierarchy (`level`/`parent_goal_id`), and `status` remain mutable
+// across versions by design; only the SoD-relevant producer identity is
+// pinned. Independent review (mod-work-sod-version-spoof-fix-independent-review-001)
+// confirmed a front-running/lockout variant of the SAME disclosed no-auth-
+// model gap (below): since nothing verifies caller identity on a goal_id's
+// very first touch either, an attacker could register a high-version-number
+// entry for an as-yet-unclaimed goal_id to lock out the true owner's later
+// registration -- this cannot reopen an ALREADY-pinned goal (verified: a
+// lower version after a higher one still resolves and is correctly denied),
+// so it is not a security regression, just a restatement of the same "no
+// caller-identity verification exists anywhere in this codebase yet" gap.
+// The broader general re-parenting/re-leveling ownership gap (any unrelated
+// actor can still move a goal it doesn't own into a different valid parent,
+// or relevel a root, PROVIDED it reuses the correct existing producer id) is
+// a distinct, larger authorization-model gap and is explicitly deferred --
+// see the producer-verification record for this branch.
 
 import { RESERVED_ID_DELIMITERS, findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
 import { normalizeRole, checkPairwiseDistinct } from "../control/sod-rules.mjs";
@@ -254,6 +284,32 @@ export class GoalGraphService {
     const key = this.#key(record.goal_id, record.version);
     if (this.#goals.has(key)) {
       return this.#denyAudited("REGISTER_GOAL", "DENY_DUPLICATE", fields);
+    }
+
+    // Producer continuity (mod-work-second-independent-review-001 §4): the
+    // actor recorded as a goal's producer is a Separation-of-Duties fact that
+    // retireGoal's force-retire N-5 gate relies on (evaluateForceRetireApprovals
+    // denies DENY_SELF_APPROVAL when the independent reviewer IS the producer).
+    // That fact must be bound to the goal_id's FIRST-ever-registered version
+    // and immutable across every later version, or a later version can
+    // silently reassign "who is the producer" and defeat DENY_SELF_APPROVAL
+    // entirely (the reviewer's reproduced Probe C). A re-version is free to
+    // change content/hierarchy/status; it is never free to change who the
+    // producer is. Explicit fail-closed rejection (not a silent
+    // carry-forward of the original value) matches this project's own
+    // established convention for identity/authority drift -- every other SoD
+    // fact in this codebase (capability-registry-service.mjs's producer
+    // check, sod-rules.mjs's checkPairwiseDistinct, this file's own
+    // DENY_SELF_APPROVAL / DENY_SOD_VIOLATION) is disclosed via a named deny
+    // code the instant a violation is attempted, never absorbed silently --
+    // an attacker's spoofing attempt must be visibly denied, not quietly
+    // discarded and misread as "nothing happened."
+    const existingHighest = this.#resolveGoalId(record.goal_id);
+    if (existingHighest && existingHighest.producerActorId !== record.provenance.agent_id) {
+      return this.#denyAudited("REGISTER_GOAL", "DENY_PRODUCER_IMMUTABLE", {
+        ...fields,
+        actors: [`producer:${existingHighest.producerActorId}`, `attempted_producer:${record.provenance.agent_id}`]
+      });
     }
 
     const stored = deepFreeze(structuredClone(record));

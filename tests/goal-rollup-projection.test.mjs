@@ -184,6 +184,39 @@ test("a broken hierarchy link surfaces as a DEGRADED entry, not a throw", () => 
   assert.equal(weirdChild.degraded, true);
 });
 
+test("a mutual parent/child reference (version-shadowed cycle) surfaces as a CYCLE-degraded entry, not infinite recursion", () => {
+  // mod-work-second-independent-review-001 §2: the shipped suite had ZERO
+  // coverage of the `reason: "CYCLE"` branch in rollupParent, and the
+  // reviewer independently verified that no reachable input via the REAL
+  // GoalGraphService API can construct a mutual reference between two
+  // currently-non-leaf nodes (dead code under the fixed 3-level hierarchy,
+  // per the review's own construction attempts). Exercising it therefore
+  // requires a fake read surface -- mirroring this file's existing
+  // UNEXPECTED_CHILD_LEVEL technique above -- rather than the live service,
+  // exactly as the review recommended. Two nodes (PORTFOLIO g_a, PRODUCT
+  // g_b) are given each other's id as parent_goal_id, producing a genuine
+  // multi-hop mutual reference; `visited.has(child.goal_id)` is checked
+  // BEFORE the expected-level check in rollupParent, so this is caught as
+  // CYCLE the moment the traversal revisits g_a as a "child" of g_b.
+  const fakeService = {
+    getGoal: (id) => (id === "g_a"
+      ? { ok: true, goal_id: "g_a", level: "PORTFOLIO", status: "ACTIVE" }
+      : { ok: false, deny_code: "DENY_UNKNOWN_GOAL" }),
+    listGoals: () => [
+      { goal_id: "g_a", version: 1, level: "PORTFOLIO", status: "ACTIVE", parent_goal_id: "g_b" },
+      { goal_id: "g_b", version: 1, level: "PRODUCT", status: "ACTIVE", parent_goal_id: "g_a" }
+    ],
+    listLinkedWorkPackages: () => []
+  };
+  const projection = createGoalRollupProjection({ goalGraphService: fakeService, workPackageResolver: statusResolver({}) });
+  const result = projection.rollupForGoal("g_a");
+  assert.equal(result.ok, true);
+  assert.equal(result.degraded, true);
+  assert.deepEqual(result.degraded_entries.map((e) => ({ ...e })), [{ goal_id: "g_a", reason: "CYCLE" }]);
+  const childB = result.children.find((c) => c.goal_id === "g_b");
+  assert.equal(childB.degraded, true);
+});
+
 test("projected output is deeply frozen (immutable read model)", () => {
   const service = makeGraph({ secondObjective: true, links: { g_ob1: ["wp_a"], g_ob2: ["wp_b"] } });
   const projection = createGoalRollupProjection({
