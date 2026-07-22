@@ -1,0 +1,25 @@
+{
+  "project_id": "prj_secb_local",
+  "version": "2",
+  "status": "DRAFT",
+  "profile_id": "software-engineering",
+  "risk_ceiling": "R2",
+  "owners": {
+    "business": null,
+    "technical": null,
+    "security": null,
+    "governance": null
+  },
+  "repositories": [
+    {
+      "repository_id": "repo_secb_local",
+      "provider": "local_git",
+      "path": "C:/laragon/www/SecB",
+      "default_branch": "main"
+    }
+  ],
+  "release_authority": "HUMAN_GOV_REQUIRED",
+  "integration_authority": "SEPARATE_HUMAN_AUTHORIZATION_REQUIRED",
+  "activation_restrictions": ["No direct mutation of main."],
+  "approvals": []
+}

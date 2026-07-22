@@ -634,8 +634,18 @@ test(`byte-identity: all OTHER contract schemas and sibling ledgers unchanged vs
   // MOD-SKILL S2's skill-promotion) postdate BASE and are outside this guard's
   // remit by construction — checked for existence-at-BASE first so a later
   // additive schema never breaks this test.
+  //
+  // project-contract.schema.json is ALSO excluded, for a different reason: it
+  // DID exist at BASE, but it is deliberately REVISED by the later,
+  // separately-scoped schema-alignment slice (bst/schema-align-project-contract)
+  // reconciling the strict schema with the Option-A rich Project Contract shape
+  // signed NORMATIVE in secb-gov-001-w3c-contract-signing-002.md. That revision
+  // is out of THIS integration-queue slice's remit; its correctness is proven by
+  // tests/project-contract-schema-alignment.test.mjs and
+  // tools/validate-foundation.mjs. This guard still bites on every OTHER schema,
+  // so tamper detection is not dropped — only relocated for this aligned file.
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "integration-queue-entry.schema.json") continue;
+    if (file === "integration-queue-entry.schema.json" || file === "project-contract.schema.json") continue;
     try {
       execFileSync("git", ["cat-file", "-e", `${BASE}:contracts/${file}`], { cwd: root, encoding: "utf8" });
     } catch {
