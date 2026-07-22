@@ -2,56 +2,155 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://secb.local/contracts/project-contract.schema.json",
   "title": "SecB Project Contract",
-  "description": "STRICT SUPERSET reconciling the narrow runtime Project Contract shape (consumed by ProjectContractService: valid_from/valid_until windowing, risk_class, string-array owners/repositories) with the Option-A rich governance shape signed NORMATIVE in secb-gov-001-w3c-contract-signing-002.md (OPTION_A_RICH_SHAPE_NORMATIVE; secb-local-v2-r2.project-contract.yaml + secb-gov-001-project-contract-v2-r3-draft-001.md §5). Both shapes validate; each is fully enumerated and typed; additionalProperties stays false at every object level; no enum is widened beyond the values the normative documents use. A top-level oneOf keeps the two shapes disjoint (a document is EITHER narrow OR rich, never an arbitrary mix), so strictness is preserved rather than blanket-loosened.",
+  "description": "STRICT SUPERSET reconciling the narrow runtime Project Contract shape (consumed by ProjectContractService: valid_from/valid_until windowing, risk_class, string-array owners/repositories) with the Option-A rich governance shape signed NORMATIVE in secb-gov-001-w3c-contract-signing-002.md (OPTION_A_RICH_SHAPE_NORMATIVE; secb-local-v2-r2.project-contract.yaml + secb-gov-001-project-contract-v2-r3-draft-001.md \u00a75). Both shapes validate; each is fully enumerated and typed; additionalProperties stays false at every object level; no enum is widened beyond the values the normative documents use. A top-level oneOf keeps the two shapes disjoint (a document is EITHER narrow OR rich, never an arbitrary mix), so strictness is preserved rather than blanket-loosened.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["project_id", "version", "status", "profile_id", "owners", "repositories", "approvals"],
+  "required": [
+    "project_id",
+    "version",
+    "status",
+    "profile_id",
+    "owners",
+    "repositories",
+    "approvals"
+  ],
   "oneOf": [
     {
       "title": "narrow runtime shape (ProjectContractService window fields)",
-      "required": ["risk_class", "evidence_destination", "valid_from", "valid_until"],
+      "required": [
+        "risk_class",
+        "evidence_destination",
+        "valid_from",
+        "valid_until"
+      ],
       "properties": {
-        "risk_class": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
-        "evidence_destination": {"type": "string", "minLength": 1},
-        "valid_from": {"type": "string", "format": "date-time"},
-        "valid_until": {"type": "string", "format": "date-time"}
+        "risk_class": {
+          "enum": [
+            "R0",
+            "R1",
+            "R2",
+            "R3",
+            "R4"
+          ]
+        },
+        "evidence_destination": {
+          "type": "string",
+          "minLength": 1
+        },
+        "valid_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     {
       "title": "rich governance shape (Option-A normative)",
-      "required": ["risk_ceiling"],
+      "required": [
+        "risk_ceiling"
+      ],
       "properties": {
-        "risk_ceiling": {"enum": ["R0", "R1", "R2", "R3", "R4"]}
+        "risk_ceiling": {
+          "enum": [
+            "R0",
+            "R1",
+            "R2",
+            "R3",
+            "R4"
+          ]
+        }
       }
     }
   ],
   "properties": {
-    "project_id": {"type": "string", "minLength": 1},
-    "version": {"type": "integer", "minimum": 1},
-    "status": {"enum": ["DRAFT", "REVIEW", "APPROVED_NOT_EFFECTIVE", "ACTIVE", "SUSPENDED", "CLOSED", "REVOKED"]},
-    "profile_id": {"type": "string", "minLength": 1},
-    "namespace": {"type": "string", "minLength": 1},
-    "name": {"type": "string", "minLength": 1},
-    "description": {"type": "string"},
-
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "DRAFT",
+        "REVIEW",
+        "APPROVED_NOT_EFFECTIVE",
+        "ACTIVE",
+        "SUSPENDED",
+        "CLOSED",
+        "REVOKED"
+      ]
+    },
+    "profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "namespace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
     "owners": {
       "anyOf": [
         {
           "title": "narrow runtime owners (approver id list)",
           "type": "array",
           "minItems": 1,
-          "items": {"type": "string", "minLength": 1}
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         {
           "title": "rich governance owners (role-keyed slots)",
           "type": "object",
           "additionalProperties": false,
-          "required": ["business", "technical", "security", "governance"],
+          "required": [
+            "business",
+            "technical",
+            "security",
+            "governance"
+          ],
           "properties": {
-            "business": {"type": ["string", "null"]},
-            "technical": {"type": ["string", "null"]},
-            "security": {"type": ["string", "null"]},
-            "governance": {"type": ["string", "null"]}
+            "business": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "technical": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "security": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "governance": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
           }
         }
       ]
@@ -62,7 +161,10 @@
           "title": "narrow runtime repositories (path list)",
           "type": "array",
           "minItems": 1,
-          "items": {"type": "string", "minLength": 1}
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         {
           "title": "rich governance repositories (bound records)",
@@ -71,132 +173,431 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["repository_id", "provider", "path", "default_branch"],
+            "required": [
+              "repository_id",
+              "provider",
+              "path",
+              "default_branch"
+            ],
             "properties": {
-              "repository_id": {"type": "string", "minLength": 1},
-              "provider": {"type": "string", "minLength": 1},
-              "path": {"type": "string", "minLength": 1},
-              "default_branch": {"type": "string", "minLength": 1},
-              "protected_refs": {"type": "array", "items": {"type": "string", "minLength": 1}},
-              "authorized_baseline_commit": {"type": "string", "minLength": 1},
-              "authorized_baseline_tree": {"type": "string", "minLength": 1},
-              "baseline_source": {"type": "string", "minLength": 1},
-              "baseline_acceptance": {"type": "string", "minLength": 1},
-              "remote": {"type": ["string", "null"]}
+              "repository_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "default_branch": {
+                "type": "string",
+                "minLength": 1
+              },
+              "protected_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "authorized_baseline_commit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "authorized_baseline_tree": {
+                "type": "string",
+                "minLength": 1
+              },
+              "baseline_source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "baseline_acceptance": {
+                "type": "string",
+                "minLength": 1
+              },
+              "remote": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
             }
           }
         }
       ]
     },
-
-    "risk_class": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
-    "evidence_destination": {"type": "string", "minLength": 1},
-    "valid_from": {"type": "string", "format": "date-time"},
-    "valid_until": {"type": "string", "format": "date-time"},
-
-    "risk_ceiling": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
+    "risk_class": {
+      "enum": [
+        "R0",
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ]
+    },
+    "evidence_destination": {
+      "type": "string",
+      "minLength": 1
+    },
+    "valid_from": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "risk_ceiling": {
+      "enum": [
+        "R0",
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ]
+    },
     "environments": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["environment_id", "kind", "activation_status"],
+        "required": [
+          "environment_id",
+          "kind",
+          "activation_status"
+        ],
         "properties": {
-          "environment_id": {"type": "string", "minLength": 1},
-          "kind": {"type": "string", "minLength": 1},
-          "activation_status": {"type": "string", "minLength": 1}
+          "environment_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "activation_status": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
-    "security_classification": {"type": "string", "minLength": 1},
-    "data_categories": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "applicable_policies": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "security_classification": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data_categories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "applicable_policies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "governing_lifecycle_policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["policy_ref", "policy_adoption_status"],
+      "required": [
+        "policy_ref",
+        "policy_adoption_status"
+      ],
       "properties": {
-        "policy_ref": {"type": "string", "minLength": 1},
-        "policy_adoption_status": {"type": "string", "minLength": 1}
+        "policy_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_adoption_status": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "evidence_chain": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["bound_evidence", "independent_rev_verdict", "independent_qa_verdict", "sec_review"],
+      "required": [
+        "bound_evidence",
+        "independent_rev_verdict",
+        "independent_qa_verdict",
+        "sec_review"
+      ],
       "properties": {
-        "bound_evidence": {"type": "string", "minLength": 1},
-        "independent_rev_verdict": {"type": "string", "minLength": 1},
-        "independent_qa_verdict": {"type": "string", "minLength": 1},
-        "sec_review": {"type": "string", "minLength": 1}
+        "bound_evidence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "independent_rev_verdict": {
+          "type": "string",
+          "minLength": 1
+        },
+        "independent_qa_verdict": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sec_review": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "open_register_alignment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["closure_report_ref", "readiness_gaps_item", "p0_20_seal_item", "p0_20_seal_status"],
+      "required": [
+        "closure_report_ref",
+        "readiness_gaps_item",
+        "p0_20_seal_item",
+        "p0_20_seal_status"
+      ],
       "properties": {
-        "closure_report_ref": {"type": "string", "minLength": 1},
-        "readiness_gaps_item": {"type": "integer"},
-        "p0_20_seal_item": {"type": "integer"},
-        "p0_20_seal_status": {"type": "string", "minLength": 1}
+        "closure_report_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness_gaps_item": {
+          "type": "integer"
+        },
+        "p0_20_seal_item": {
+          "type": "integer"
+        },
+        "p0_20_seal_status": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "authority_invariant": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["effectiveness_authority", "signing_authority", "promotion_authority", "human_gov_slot_ref", "human_gov_slot_state", "llm_is_approving_authority"],
+      "required": [
+        "effectiveness_authority",
+        "signing_authority",
+        "promotion_authority",
+        "human_gov_slot_ref",
+        "human_gov_slot_state",
+        "llm_is_approving_authority"
+      ],
       "properties": {
-        "effectiveness_authority": {"type": "string", "minLength": 1},
-        "signing_authority": {"type": "string", "minLength": 1},
-        "promotion_authority": {"type": "string", "minLength": 1},
-        "human_gov_slot_ref": {"type": "string", "minLength": 1},
-        "human_gov_slot_state": {"type": "string", "minLength": 1},
-        "llm_is_approving_authority": {"type": "boolean"}
+        "effectiveness_authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signing_authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "promotion_authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "human_gov_slot_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "human_gov_slot_state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "llm_is_approving_authority": {
+          "type": "boolean"
+        }
       }
     },
-    "approved_runtime_deployments": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "proposed_runtime_deployments": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "approved_agents": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "proposed_agent_registrations": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "approved_models": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "approved_tools": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "approved_mcp_methods": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "approved_skills": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "evidence_root": {"type": "string", "minLength": 1},
-    "evidence_destination_status": {"type": "string", "minLength": 1},
+    "approved_runtime_deployments": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "proposed_runtime_deployments": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "approved_agents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "proposed_agent_registrations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "approved_models": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "approved_tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "approved_mcp_methods": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "approved_skills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evidence_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_destination_status": {
+      "type": "string",
+      "minLength": 1
+    },
     "memory_policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["project_memory", "cross_project_publication"],
+      "required": [
+        "project_memory",
+        "cross_project_publication"
+      ],
       "properties": {
-        "project_memory": {"type": "boolean"},
-        "cross_project_publication": {"type": "boolean"}
+        "project_memory": {
+          "type": "boolean"
+        },
+        "cross_project_publication": {
+          "type": "boolean"
+        }
       }
     },
-    "release_authority": {"type": "string", "minLength": 1},
-    "integration_authority": {"type": "string", "minLength": 1},
-    "data_residency": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "provider_transport_policy": {"type": "string", "minLength": 1},
-    "agent_tool_network_policy": {"type": "string", "minLength": 1},
-    "credential_policy": {"type": "string", "minLength": 1},
-    "retention_policy": {"type": "string", "minLength": 1},
-    "required_exit_gates": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "activation_restrictions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "release_authority": {
+      "type": "string",
+      "minLength": 1
+    },
+    "integration_authority": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data_residency": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "provider_transport_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_tool_network_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "credential_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retention_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "required_exit_gates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "activation_restrictions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "revocation_policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["revocation_authority", "demotion_authority", "mechanism", "agent_role"],
+      "required": [
+        "revocation_authority",
+        "demotion_authority",
+        "mechanism",
+        "agent_role"
+      ],
       "properties": {
-        "revocation_authority": {"type": "string", "minLength": 1},
-        "demotion_authority": {"type": "string", "minLength": 1},
-        "mechanism": {"type": "string", "minLength": 1},
-        "agent_role": {"type": "string", "minLength": 1}
+        "revocation_authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "demotion_authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mechanism": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_role": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
-    "expiry_policy": {"type": "string", "minLength": 1},
-    "effective_from": {"anyOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]},
-    "expires_at": {"anyOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]},
-    "approvals": {"type": "array", "items": {"type": "string", "minLength": 1}}
+    "expiry_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "effective_from": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "format": "date-time"
+        }
+      ]
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "format": "date-time"
+        }
+      ]
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
   }
 }
