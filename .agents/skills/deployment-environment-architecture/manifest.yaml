@@ -1,0 +1,42 @@
+skill_id: SECB-ARCH-018
+name: deployment-environment-architecture
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R1
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - ARCHI
+  - OPS
+  - SEC
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - container or component architecture
+  - environment requirements
+  - security zones
+  - availability and recovery objectives
+outputs:
+  required:
+  - deployment view
+  - environment catalogue
+  - network and identity model
+  - promotion and rollback model
+  - backup and recovery architecture
+  - operational ownership matrix
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/deployment-environment-architecture
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "review_id",
+    "baseline",
+    "reviewer",
+    "independence",
+    "scope",
+    "findings",
+    "verdict",
+    "limitations"
+  ],
+  "properties": {
+    "review_id": {
+      "type": "string"
+    },
+    "baseline": {
+      "type": "string"
+    },
+    "reviewer": {
+      "type": "string"
+    },
+    "independence": {
+      "type": "boolean"
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "finding_id",
+          "severity",
+          "claim",
+          "evidence_ref",
+          "disposition"
+        ],
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "informational"
+            ]
+          },
+          "claim": {
+            "type": "string"
+          },
+          "evidence_ref": {
+            "type": "string"
+          },
+          "disposition": {
+            "enum": [
+              "open",
+              "accepted",
+              "resolved",
+              "rejected",
+              "risk-acceptance-required"
+            ]
+          }
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "pass-candidate",
+        "pass-with-findings-candidate",
+        "hold",
+        "fail",
+        "not-assessed"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

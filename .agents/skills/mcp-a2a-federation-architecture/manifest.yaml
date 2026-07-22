@@ -1,0 +1,42 @@
+skill_id: SECB-ARCH-016
+name: mcp-a2a-federation-architecture
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R2
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - ARCHI
+  - SEC
+  - OPS
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - agent architecture
+  - capability registry
+  - integration context
+  - security classifications
+outputs:
+  required:
+  - MCP federation topology
+  - A2A collaboration topology
+  - registry contracts
+  - authorization and delegation model
+  - compatibility matrix
+  - conformance test plan
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/mcp-a2a-federation-architecture
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

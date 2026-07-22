@@ -1,0 +1,9 @@
+interface:
+  display_name: Architecture Evidence and Handoff
+  short_description: Packages architecture outputs, decisions, assumptions, evidence,
+    risks, unresolved questions, context deltas, and acceptance obligations into a
+    structured handoff. Use between arch
+  default_prompt: Use $architecture-evidence-handoff to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

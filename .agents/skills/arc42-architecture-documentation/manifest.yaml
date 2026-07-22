@@ -1,0 +1,41 @@
+skill_id: SECB-ARCH-008
+name: arc42-architecture-documentation
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A1
+roles:
+  allowed:
+  - ARCHI
+  - SARCHI
+  - OPS
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - architecture artifacts
+  - ADRs
+  - quality scenarios
+  - risk register
+  - approved scope
+outputs:
+  required:
+  - arc42-aligned architecture document
+  - source traceability index
+  - open architecture issues
+  - document maintenance plan
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/arc42-architecture-documentation
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

@@ -1,0 +1,40 @@
+skill_id: SECB-ARCH-009
+name: architecture-decision-record
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - ARCHI
+  - REV
+  - GOV
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - decision statement
+  - options analysis
+  - evidence
+  - decision authority and status
+outputs:
+  required:
+  - versioned ADR
+  - decision evidence references
+  - affected-element list
+  - review and supersession triggers
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/architecture-decision-record
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

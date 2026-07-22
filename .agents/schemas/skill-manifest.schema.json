@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SecB Skill Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_id",
+    "name",
+    "version",
+    "status",
+    "classification",
+    "roles",
+    "inputs",
+    "outputs",
+    "controls",
+    "evaluation"
+  ],
+  "properties": {
+    "skill_id": {
+      "type": "string",
+      "pattern": "^SECB-ARCH-[0-9]{3}$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,64}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "candidate",
+        "evaluated",
+        "restricted-pilot",
+        "approved",
+        "published",
+        "deprecated",
+        "revoked",
+        "quarantined"
+      ]
+    },
+    "classification": {
+      "type": "object",
+      "required": [
+        "risk_class",
+        "mutation_class",
+        "authority_ceiling"
+      ],
+      "properties": {
+        "risk_class": {
+          "enum": [
+            "R0",
+            "R1",
+            "R2",
+            "R3",
+            "R4"
+          ]
+        },
+        "mutation_class": {
+          "enum": [
+            "M0",
+            "M1",
+            "M2",
+            "M3",
+            "M4",
+            "M5"
+          ]
+        },
+        "authority_ceiling": {
+          "enum": [
+            "A0",
+            "A1",
+            "A2",
+            "A3",
+            "A4",
+            "A5"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "roles": {
+      "type": "object",
+      "required": [
+        "allowed",
+        "prohibited_final_authority"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "prohibited_final_authority": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "inputs": {
+      "type": "object",
+      "required": [
+        "required"
+      ],
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "object",
+      "required": [
+        "required"
+      ],
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "controls": {
+      "type": "object",
+      "required": [
+        "repository_mutation",
+        "external_facts",
+        "secret_handling",
+        "approval_claims"
+      ],
+      "properties": {
+        "repository_mutation": {
+          "const": "prohibited"
+        },
+        "external_facts": {
+          "enum": [
+            "citation-required",
+            "not-applicable"
+          ]
+        },
+        "secret_handling": {
+          "const": "prohibited"
+        },
+        "approval_claims": {
+          "const": "prohibited"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evaluation": {
+      "type": "object",
+      "required": [
+        "suite",
+        "cross_harness"
+      ],
+      "properties": {
+        "suite": {
+          "type": "string"
+        },
+        "cross_harness": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "codex",
+              "claude-code",
+              "generic-agent-skills"
+            ]
+          },
+          "minItems": 2,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

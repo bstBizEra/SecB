@@ -1,0 +1,42 @@
+skill_id: SECB-ARCH-006
+name: architecture-options-tradeoffs
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - SARCHI
+  - ARCHI
+  - FINOPS
+  - SEC
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - architecture brief
+  - quality attribute scenarios
+  - constraints
+  - current-state findings
+outputs:
+  required:
+  - options register
+  - trade-off matrix
+  - risk and sensitivity analysis
+  - recommendation candidate
+  - decision review triggers
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/architecture-options-tradeoffs
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

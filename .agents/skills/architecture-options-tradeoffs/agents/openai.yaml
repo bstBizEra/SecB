@@ -1,0 +1,9 @@
+interface:
+  display_name: Architecture Options and Trade-Off Analysis
+  short_description: Generates and compares viable architecture options using explicit
+    decision criteria, risks, reversibility, cost, operational burden, and quality
+    attributes. Use before an ADR or te
+  default_prompt: Use $architecture-options-tradeoffs to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

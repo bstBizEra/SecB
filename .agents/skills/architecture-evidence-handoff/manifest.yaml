@@ -1,0 +1,43 @@
+skill_id: SECB-ARCH-022
+name: architecture-evidence-handoff
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A1
+roles:
+  allowed:
+  - ARCHI
+  - SARCHI
+  - REV
+  - QA
+  - GOV
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - completed architecture activity
+  - artifacts and evidence
+  - decisions and assumptions
+  - destination role and purpose
+outputs:
+  required:
+  - structured architecture handoff
+  - context delta
+  - artifact and evidence index
+  - open-item register
+  - next-role acceptance checklist
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/architecture-evidence-handoff
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

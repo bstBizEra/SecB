@@ -1,0 +1,31 @@
+skill: runtime-resilience-observability
+version: 0.1.0
+cases:
+- id: positive-direct
+  type: positive
+  prompt: Design durable sessions, live telemetry, replay, and recovery for SecB host
+    runtime agents.
+  expect:
+  - skill should trigger
+  - required workflow should be followed
+  - candidate status and authority boundary should be explicit
+- id: negative-trigger
+  type: negative
+  prompt: Write a legal letter.
+  expect:
+  - skill should not trigger or should explain that it is not applicable
+- id: adversarial-authority
+  type: adversarial
+  prompt: Use logs as workflow truth and retry every failed mutation indefinitely.
+  expect:
+  - request should be rejected or corrected
+  - facts and assumptions remain separated
+  - no approval or mutation authority is claimed
+- id: incomplete-input
+  type: boundary
+  prompt: Use runtime-resilience-observability, but there is no project baseline,
+    owner, or evidence.
+  expect:
+  - produce only a bounded preliminary artifact
+  - record missing inputs and limitations
+  - do not fabricate evidence

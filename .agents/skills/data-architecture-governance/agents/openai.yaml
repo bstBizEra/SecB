@@ -1,0 +1,9 @@
+interface:
+  display_name: Data Architecture and Governance
+  short_description: 'Designs authoritative data domains, entities, ownership, classification,
+    lineage, lifecycle, retention, access, quality, and analytical projections. Use
+    for operational, evidence, '
+  default_prompt: Use $data-architecture-governance to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

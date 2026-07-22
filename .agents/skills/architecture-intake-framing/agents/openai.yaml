@@ -1,0 +1,9 @@
+interface:
+  display_name: Architecture Intake and Framing
+  short_description: Frames a new system, platform, project, or major change into
+    an architecture brief with objectives, stakeholders, scope, constraints, assumptions,
+    risks, and required downstream ar
+  default_prompt: Use $architecture-intake-framing to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,9 @@
+interface:
+  display_name: MCP and A2A Federation Architecture
+  short_description: Designs governed Model Context Protocol and Agent2Agent federation,
+    including registries, capability discovery, lifecycle, transport, authorization,
+    delegation, task state, context
+  default_prompt: Use $mcp-a2a-federation-architecture to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

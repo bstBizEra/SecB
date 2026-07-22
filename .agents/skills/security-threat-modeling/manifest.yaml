@@ -1,0 +1,43 @@
+skill_id: SECB-ARCH-014
+name: security-threat-modeling
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R2
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - SEC
+  - ARCHI
+  - REV
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - system context
+  - trust boundaries
+  - data flows
+  - asset and identity inventory
+  - risk tolerance
+outputs:
+  required:
+  - threat model
+  - abuse-case catalogue
+  - risk register
+  - control architecture
+  - security verification matrix
+  - residual-risk candidates
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/security-threat-modeling
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills
