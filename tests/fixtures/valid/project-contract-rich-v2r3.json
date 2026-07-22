@@ -1,0 +1,116 @@
+{
+  "project_id": "prj_secb_local",
+  "namespace": "bizera/secb/local",
+  "name": "SecB Local Phase 0 Parallel Build Wave 1",
+  "description": "Candidate authority boundary for isolated local R2 implementation by Codex and Claude Code.",
+  "version": 3,
+  "status": "DRAFT",
+  "profile_id": "software-engineering",
+  "risk_ceiling": "R2",
+  "owners": {
+    "business": null,
+    "technical": null,
+    "security": null,
+    "governance": null
+  },
+  "repositories": [
+    {
+      "repository_id": "repo_secb_local",
+      "provider": "local_git",
+      "path": "C:/laragon/www/SecB",
+      "default_branch": "main",
+      "protected_refs": ["main"],
+      "authorized_baseline_commit": "c2ec6458b60ded0a93d74e717cd7816f55834f01",
+      "authorized_baseline_tree": "3b7300f1b7cd378d373cf8e2da10dc459bb8f63b",
+      "baseline_source": "secb-gov-001-baseline-recut-001.md (G4 proposed single baseline)",
+      "baseline_acceptance": "PENDING_OPERATOR_G4_ACCEPTANCE",
+      "remote": null
+    }
+  ],
+  "environments": [
+    {
+      "environment_id": "env_secb_local_build",
+      "kind": "local_isolated_worktrees",
+      "activation_status": "CANDIDATE"
+    }
+  ],
+  "security_classification": "INTERNAL",
+  "data_categories": ["repository_source", "governance_documents", "test_results", "build_evidence"],
+  "applicable_policies": [
+    "AGENTS.md",
+    "docs/AGENTS.md",
+    "docs/00-governance/governance-baseline.md",
+    "docs/00-governance/authority-and-risk-model.md",
+    "docs/02-operating-model/agent-team-and-sod.md",
+    "docs/03-project-control/work-package-contract.md",
+    "docs/09-delivery/codex-claude-git-worktree-build-plan.md"
+  ],
+  "governing_lifecycle_policy": {
+    "policy_ref": "docs/03-project-control/candidates/secb-gov-001-stable-demotion-rollback-policy-001.md",
+    "policy_adoption_status": "PENDING_OPERATOR_ADOPTION_WAVE_3"
+  },
+  "evidence_chain": {
+    "bound_evidence": "docs/03-project-control/candidates/secb-gov-001-bound-evidence-001.md",
+    "independent_rev_verdict": "PENDING_WAVE_2",
+    "independent_qa_verdict": "PENDING_WAVE_2",
+    "sec_review": "PENDING_WAVE_2"
+  },
+  "open_register_alignment": {
+    "closure_report_ref": "docs/03-project-control/candidates/p0-closure-report-001.md",
+    "readiness_gaps_item": 4,
+    "p0_20_seal_item": 1,
+    "p0_20_seal_status": "OPERATOR_HOLD_IN_FORCE (PR #78)"
+  },
+  "authority_invariant": {
+    "effectiveness_authority": "OPERATOR_ONLY",
+    "signing_authority": "OPERATOR_ONLY",
+    "promotion_authority": "OPERATOR_ONLY",
+    "human_gov_slot_ref": "docs/03-project-control/candidates/secb-gov-001-human-gov-decision-001.yaml",
+    "human_gov_slot_state": "PENDING_HUMAN_GOV / producer_may_fill: false / codex_may_activate: false",
+    "llm_is_approving_authority": false
+  },
+  "approved_runtime_deployments": [],
+  "proposed_runtime_deployments": [
+    "runtime_deployment_codex_local_candidate",
+    "runtime_deployment_claude_code_local_2_1_139_candidate"
+  ],
+  "approved_agents": [],
+  "proposed_agent_registrations": [
+    "docs/03-project-control/candidates/agents/codex-p0-08.agent-registration.yaml",
+    "docs/03-project-control/candidates/agents/claude-p0-15a.agent-registration.yaml"
+  ],
+  "approved_models": [],
+  "approved_tools": [],
+  "approved_mcp_methods": [],
+  "approved_skills": [],
+  "evidence_root": "C:/laragon/www/SecB-evidence/p0-wave-1",
+  "evidence_destination_status": "PROPOSED_NOT_PROVISIONED",
+  "memory_policy": {
+    "project_memory": false,
+    "cross_project_publication": false
+  },
+  "release_authority": "HUMAN_GOV_REQUIRED",
+  "integration_authority": "SEPARATE_HUMAN_AUTHORIZATION_REQUIRED",
+  "data_residency": ["LOCAL_MACHINE_ONLY"],
+  "provider_transport_policy": "ALLOW_APPROVED_PROVIDER_CONTROL_PLANE_ONLY",
+  "agent_tool_network_policy": "DENY_ALL",
+  "credential_policy": "TEMPORARY_PROVIDER_AUTH_ONLY_NO_AGENT_SECRET_ACCESS",
+  "retention_policy": "PROPOSED_30_DAYS_PENDING_GOV",
+  "required_exit_gates": ["G0", "G1", "G2", "G3", "G4", "G5", "G7", "G8"],
+  "activation_restrictions": [
+    "No direct mutation of main.",
+    "No remote configuration, push, publication, deployment, or activation.",
+    "No MCP, A2A, browser, memory, knowledge promotion, or skill publication.",
+    "Producer work is limited to authorized sibling worktrees and exact write sets."
+  ],
+  "revocation_policy": {
+    "revocation_authority": "OPERATOR_ONLY",
+    "demotion_authority": "OPERATOR_ONLY",
+    "mechanism": "governed decision per governing_lifecycle_policy (G8): revert-by-new-record, never history rewrite; pin-to-last-accepted-baseline (c2ec645 G4 anchor)",
+    "agent_role": "RECOMMEND_ONLY"
+  },
+  "expiry_policy": "SET_AT_SIGNING_BY_OPERATOR",
+  "effective_from": null,
+  "expires_at": null,
+  "approvals": []
+}

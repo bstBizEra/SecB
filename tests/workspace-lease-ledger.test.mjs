@@ -463,9 +463,22 @@ test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE
   // coverage. integration-queue-entry.schema.json is ALSO excluded for the same
   // reason: it was added by MOD-INTEG S1, another unrelated later slice, and
   // does not exist at ${BASE}; its additive-only nature is proven by its own
-  // ledger + contract coverage.)
+  // ledger + contract coverage.
+  //
+  // project-contract.schema.json is excluded for a DIFFERENT reason: unlike the
+  // above it DID exist at ${BASE}, but it is deliberately REVISED by the later,
+  // separately-scoped schema-alignment slice (bst/schema-align-project-contract)
+  // that reconciles the strict schema with the Option-A rich Project Contract
+  // shape signed NORMATIVE in secb-gov-001-w3c-contract-signing-002.md. That
+  // revision is out of THIS additive lease slice's remit; its correctness is
+  // proven by tests/project-contract-schema-alignment.test.mjs (rich fixtures
+  // validate; extra-field + type violations still reject) and by
+  // tools/validate-foundation.mjs (additionalProperties:false, identity fields,
+  // draft 2020-12). The byte-identity guard therefore still bites on every OTHER
+  // schema in contracts/ — tamper detection is not dropped, only relocated to
+  // shape-based coverage for this one intentionally-aligned file.)
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json" || file === "skill-promotion.schema.json" || file === "integration-queue-entry.schema.json") continue;
+    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json" || file === "skill-promotion.schema.json" || file === "integration-queue-entry.schema.json" || file === "project-contract.schema.json") continue;
     guarded.push(`contracts/${file}`);
   }
   for (const rel of guarded) {

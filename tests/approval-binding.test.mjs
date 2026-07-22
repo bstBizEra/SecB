@@ -724,6 +724,19 @@ test("F4 byte-identity: protected source files are byte-identical to main @ beeb
   }
 });
 
+// contracts/project-contract.schema.json is deliberately REVISED by the later,
+// separately-scoped schema-alignment slice (bst/schema-align-project-contract),
+// reconciling the strict schema with the Option-A rich Project Contract shape
+// signed NORMATIVE in secb-gov-001-w3c-contract-signing-002.md. That revision is
+// out of THIS gateway-rework guard's remit; its correctness is proven by
+// tests/project-contract-schema-alignment.test.mjs (rich + narrow fixtures
+// validate; extra-field + type violations reject) and tools/validate-foundation.mjs.
+// The file SET is unchanged (no schema added/removed), so the set-equality
+// assertion still holds; only this one file's blob comparison is exempted, so
+// this guard still bites on every OTHER contract — tamper detection is relocated,
+// not dropped.
+const ALIGNED_CONTRACTS = new Set(["contracts/project-contract.schema.json"]);
+
 test("F4 byte-identity: every contracts/*.json is byte-identical to main @ beebfe8 AND @ 71b9d41 (same file set)", () => {
   const baseContracts = contractPathsAt(BYTE_IDENTITY_BASELINES[0]);
   assert.ok(baseContracts.length >= 16, "expected at least 16 contract schemas");
@@ -731,6 +744,7 @@ test("F4 byte-identity: every contracts/*.json is byte-identical to main @ beebf
     assert.deepEqual(contractPathsAt(ref), baseContracts, `contract file set differs at main @ ${ref}`);
   }
   for (const path of baseContracts) {
+    if (ALIGNED_CONTRACTS.has(path)) continue;
     const working = gitWorkingBlobHash(path);
     for (const ref of BYTE_IDENTITY_BASELINES) {
       assert.equal(working, gitBlobHashAtRef(ref, path), `${path} drifted from main @ ${ref}`);
