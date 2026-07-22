@@ -18,7 +18,31 @@
 //   - Fail-closed everywhere: malformed construction throws; malformed
 //     requests, unresolvable factors, and THROWING resolvers all yield
 //     structured denials with stage-specific codes (gateway style — decide()
-//     itself never throws).
+//     itself never throws). This includes the SHAPE of every injected
+//     collaborator's return value, not just the caller-supplied `request`
+//     (S3-N1 fast-follow, second independent review,
+//     mod-gov-s2-s3-second-independent-review-001): `grantResolver`'s
+//     `roles` must be an Array or Set, and `history` must be a plain object
+//     keyed ONLY from the vocabulary `producer`/`reviewer`/`qa`/
+//     `evidenceVerifier` (S1's AUTHORIZE_TIME_LADDER convention), and each
+//     PRESENT history value must itself be a well-formed actor-id (a
+//     non-blank string, or an Array/Set of non-blank strings) — a
+//     syntactically valid key paired with a malformed VALUE (an object, a
+//     number) reproduces the identical bug one level deeper (S3-N1,
+//     independent review of the fix,
+//     mod-gov-s3-pdp-grant-shape-fix-independent-review-001 §2b). `roles`'
+//     own elements, when it is an Array/Set, must likewise each be a
+//     well-formed (non-blank) role string — the round-1 fix only checked the
+//     CONTAINER type, so a malformed element (e.g. an object where a role
+//     string belonged) silently normalized to `null` inside
+//     sod-rules.mjs's checkConflictingRoles()/normalizeRole() and could never
+//     match a conflicting-role pair, masking a genuine SOD_ROLE_CONFLICT as a
+//     false ALLOW (round-3 independent review,
+//     mod-gov-s3-pdp-grant-shape-fix-round3-independent-review-001 §2b, T3b).
+//     Any other shape denies with DENY_MALFORMED_GRANT_SHAPE — it is never
+//     silently coerced to "absent/empty", because that coercion is what let a
+//     malformed or differently-keyed grantResolver output silently disable
+//     the SoD check and flip a real conflict/prohibition into a false ALLOW.
 //
 // serverDerived HONESTY NOTE (K-16): project-contract-service demands
 // `authority.serverDerived === true`, meaning "every factor of effective
@@ -51,7 +75,8 @@
 import {
   normalizeRole as sodNormalizeRole,
   checkConflictingRoles as sodCheckConflictingRoles,
-  checkProhibitedActors as sodCheckProhibitedActors
+  checkProhibitedActors as sodCheckProhibitedActors,
+  AUTHORIZE_TIME_LADDER
 } from "./sod-rules.mjs";
 import { riskProfile as registryRiskProfile, isMutationAtMost as registryIsMutationAtMost } from "./risk-registry.mjs";
 import { validateContract } from "../contracts/contract-validator.mjs";
@@ -72,6 +97,15 @@ const CONTEXT_KEYS = Object.freeze(["project_id", "work_package_id", "session_id
 
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+// The prohibited-actor ladder's full inner-key vocabulary (S1's convention:
+// producer, reviewer, qa, evidenceVerifier — see sod-rules.mjs). `grant.history`
+// keys are validated against this closed set at the PDP boundary: a grant
+// store that emits a differently-named key (e.g. `producerActorId` instead of
+// `producer`) must not be silently ignored, because that silence is exactly
+// what lets a real prior-role fact hide from the ladder lookup and flip a
+// would-be DENY_SOD into a false ALLOW (S3-N1).
+const KNOWN_GRANT_HISTORY_KEYS = Object.freeze([...new Set(Object.values(AUTHORIZE_TIME_LADDER).flat())]);
 
 function deepFreeze(value) {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
@@ -311,8 +345,97 @@ export function createPolicyDecisionPoint({
     // 6-7. SoD via the S1 primitive: conflicting-role pairs over the granted
     // role set plus the requested role, then the prohibited-actor ladder over
     // the grant-supplied actor history.
+    //
+    // Shape-validate the grantResolver's OWN output before it feeds the SoD
+    // check, with the same rigor already applied to the caller's `request`
+    // (S3-N1 fix). `grant.roles`, when present, must be an Array or a Set;
+    // `grant.history`, when present, must be a plain object. Anything else is
+    // a malformed collaborator output and MUST fail closed with a distinct
+    // typed code — it must never be silently treated as "absent/empty",
+    // because that coercion is exactly what flips a real SOD_ROLE_CONFLICT /
+    // DENY_SOD fact into a false ALLOW when a grantResolver bug or a
+    // differently-shaped internal representation feeds in a string instead
+    // of an array, or history keyed by different names than the hardcoded
+    // AUTHORIZE_TIME_LADDER expects.
+    if (grant.roles !== undefined && !Array.isArray(grant.roles) && !(grant.roles instanceof Set)) {
+      return deny(
+        "DENY_MALFORMED_GRANT_SHAPE",
+        "grantResolver returned grant.roles that is neither an Array nor a Set",
+        grant.decisionId
+      );
+    }
+    // Validate each ELEMENT of an Array/Set grant.roles, not just the
+    // container type (S3-N1, round-4 fast-follow: round-3 independent review
+    // mod-gov-s3-pdp-grant-shape-fix-round3-independent-review-001 §2b, T3b).
+    // sod-rules.mjs's checkConflictingRoles({ normalize: true }) maps every
+    // element through normalizeRole(), which returns null for any non-string
+    // input; null can never match a CONFLICTING_ROLE_PAIRS entry, so a
+    // malformed element (e.g. an object where a role string belonged) is
+    // silently treated as "no role" instead of denying — the identical
+    // coercion-to-permissive-absence bug class the container-type check and
+    // the grant.history checks above exist to close, one field over. Same
+    // well-formedness convention already used throughout this file (isBlank)
+    // and by sod-rules.mjs's own role/actor checks (non-empty string) — not a
+    // new format. Denies with the SAME DENY_MALFORMED_GRANT_SHAPE code.
+    if (Array.isArray(grant.roles) || grant.roles instanceof Set) {
+      const malformedRoleElementCount = [...grant.roles].filter((value) => isBlank(value)).length;
+      if (malformedRoleElementCount > 0) {
+        return deny(
+          "DENY_MALFORMED_GRANT_SHAPE",
+          "grantResolver returned grant.roles containing element(s) that are not well-formed (non-blank) role strings",
+          grant.decisionId
+        );
+      }
+    }
+    if (grant.history !== undefined && !isPlainObject(grant.history)) {
+      return deny(
+        "DENY_MALFORMED_GRANT_SHAPE",
+        "grantResolver returned grant.history that is not a plain object",
+        grant.decisionId
+      );
+    }
+    if (isPlainObject(grant.history)) {
+      const unknownHistoryKeys = Object.keys(grant.history).filter((key) => !KNOWN_GRANT_HISTORY_KEYS.includes(key));
+      if (unknownHistoryKeys.length > 0) {
+        return deny(
+          "DENY_MALFORMED_GRANT_SHAPE",
+          `grantResolver returned grant.history with unrecognized key(s): ${unknownHistoryKeys.join(", ")}`,
+          grant.decisionId
+        );
+      }
+      // Validate each PRESENT key's VALUE, not just its name (S3-N1, one
+      // level deeper: mod-gov-s3-pdp-grant-shape-fix-independent-review-001
+      // §2b). sod-rules.mjs's collectProhibited() adds a truthy history
+      // value to the prohibited set AS-IS, whatever its type, then compares
+      // it to the requester's actor_id by strict equality. A syntactically
+      // valid key (e.g. "producer") paired with a malformed value -- an
+      // object, a number, anything that is not itself an actor-id string or
+      // a collection of actor-id strings -- can never strictly-equal that
+      // string actor_id, so a genuine same-actor prohibition silently never
+      // fires. That is the identical silent-ALLOW bug class the key-name
+      // check above exists to close, reproduced one level deeper, so it
+      // denies with the SAME code, not a new one. Same actor-id convention
+      // already used by sod-rules.mjs's checkProhibitedActors() (a
+      // non-empty string) and this file's own isBlank(): a non-blank
+      // string, or an Array/Set of non-blank strings.
+      const isWellFormedActorId = (value) => !isBlank(value);
+      const isWellFormedHistoryValue = (value) =>
+        Array.isArray(value) || value instanceof Set
+          ? [...value].every(isWellFormedActorId)
+          : isWellFormedActorId(value);
+      const malformedHistoryValueKeys = Object.keys(grant.history).filter(
+        (key) => !isWellFormedHistoryValue(grant.history[key])
+      );
+      if (malformedHistoryValueKeys.length > 0) {
+        return deny(
+          "DENY_MALFORMED_GRANT_SHAPE",
+          `grantResolver returned grant.history with malformed value(s) for key(s): ${malformedHistoryValueKeys.join(", ")} (each must be a non-blank actor-id string, or an Array/Set of non-blank actor-id strings)`,
+          grant.decisionId
+        );
+      }
+    }
     try {
-      const roleSet = new Set(Array.isArray(grant.roles) || grant.roles instanceof Set ? grant.roles : []);
+      const roleSet = new Set(grant.roles ?? []);
       roleSet.add(request.role);
       const conflict = sod.checkConflictingRoles(roleSet, { normalize: true });
       if (!conflict.ok) return deny(conflict.code, conflict.message, grant.decisionId);
