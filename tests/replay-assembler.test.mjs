@@ -707,12 +707,12 @@ test("determinism: identical inputs with an identical injected now yield deeply 
 const PINNED_BLOBS = Object.freeze({
   "docs/05-live-operations/intervention-and-replay.md": "2b0be978ded8a04ece704c36ce132a787cfc8095",
   "docs/05-live-operations/event-envelope.md": "27269ad39d1d9b081ff480e857ed4035b63c5124",
-  // Repinned by mod-live-s1-value-mutation-fix-001 (commit 24d5dcd): closes
-  // N3 (a hostile getter mutating a later sibling's VALUE, not just key
-  // presence -- see mod-live-s1-value-mutation-fix-producer-verification-001.md).
-  // Pin tracks the post-fix blob so this guard still detects any
-  // UNAUTHORIZED further drift of this file.
-  "src/live/event-family-policy.mjs": "47ebc9bb7e5190c6f0f78232884379b3c284248d",
+  // Repinned by mod-live-s1-value-mutation-fix-001: the N3 fix (commit
+  // 24d5dcd) plus the N4 scope-disposition doc comment (see
+  // docs/03-project-control/candidates/mod-live-s1-toctou-class-scope-disposition-001.md)
+  // both legitimately touch this file. Pin tracks the final post-disposition
+  // blob so this guard still detects any UNAUTHORIZED further drift.
+  "src/live/event-family-policy.mjs": "52f7df2db8a73cfd3b406cde63711814f8ed78df",
   "src/ops/scorecard-assembler.mjs": "9be7e9db992b4aa14f0030652c86c58548e0e5f5",
   "src/control/write-set-policy.mjs": "5f1e119c8089ba8250f3596164c0974662587449",
   // Repinned from 082638c1 by MOD-WSPACE-S3, then again by MOD-MEM S2: the
