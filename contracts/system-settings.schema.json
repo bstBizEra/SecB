@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "secb://schemas/system-settings/v1.0",
+  "title": "SecB System Settings Schema",
+  "description": "Canonical machine-readable system configuration and governance settings for the SecB control plane.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "environment",
+    "governance",
+    "ports",
+    "swarm",
+    "security",
+    "knowledge",
+    "ledgers"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "staging", "production", "ci"]
+    },
+    "governance": {
+      "type": "object",
+      "required": ["policy_ceiling", "enforce_sod", "fail_closed", "max_data_classification"],
+      "properties": {
+        "policy_ceiling": { "type": "string", "enum": ["A0", "A1", "A2", "A3", "A4", "A5"] },
+        "enforce_sod": { "type": "boolean" },
+        "fail_closed": { "type": "boolean" },
+        "max_data_classification": { "type": "string", "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"] }
+      }
+    },
+    "ports": {
+      "type": "object",
+      "required": ["control_api", "event_ingress", "ruflo_ui", "ruflo_mcp", "ruflo_adapter", "secb_mcp"],
+      "properties": {
+        "control_api": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "event_ingress": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "ruflo_ui": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "ruflo_mcp": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "ruflo_adapter": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "secb_mcp": { "type": "integer", "minimum": 1024, "maximum": 65535 }
+      }
+    },
+    "swarm": {
+      "type": "object",
+      "required": ["default_topology", "max_agents", "task_timeout_sec", "cost_ceiling_usd"],
+      "properties": {
+        "default_topology": { "type": "string", "enum": ["hierarchical", "mesh", "hierarchical-mesh", "ring", "star", "adaptive"] },
+        "max_agents": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "task_timeout_sec": { "type": "integer", "minimum": 10 },
+        "cost_ceiling_usd": { "type": "number", "minimum": 0 }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["secret_scanning", "path_traversal_prevention", "cve_scanning", "blocked_file_patterns"],
+      "properties": {
+        "secret_scanning": { "type": "boolean" },
+        "path_traversal_prevention": { "type": "boolean" },
+        "cve_scanning": { "type": "boolean" },
+        "blocked_file_patterns": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "knowledge": {
+      "type": "object",
+      "required": ["graphify_enabled", "ast_cache_enabled", "compression_mode"],
+      "properties": {
+        "graphify_enabled": { "type": "boolean" },
+        "ast_cache_enabled": { "type": "boolean" },
+        "compression_mode": { "type": "string" }
+      }
+    },
+    "ledgers": {
+      "type": "object",
+      "required": ["event_ledger_path", "evidence_ledger_path", "storage_backend"],
+      "properties": {
+        "event_ledger_path": { "type": "string" },
+        "evidence_ledger_path": { "type": "string" },
+        "storage_backend": { "type": "string", "enum": ["local_ndjson", "sqlite", "postgresql"] }
+      }
+    }
+  }
+}
