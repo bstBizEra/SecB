@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe } from 'lucide-react';
+import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink } from 'lucide-react';
+
+interface CommunityItem {
+  id: number;
+  name: string;
+  count: number;
+  color: string;
+}
 
 interface GraphNode {
   id: string;
@@ -7,6 +14,8 @@ interface GraphNode {
   file: string;
   type: string;
   community: number;
+  community_name: string;
+  color: string;
   connections: number;
   isGodNode: boolean;
   x?: number;
@@ -23,7 +32,8 @@ interface GraphPayload {
   generated_at: string;
   total_nodes: number;
   total_edges: number;
-  communities: number;
+  communities_count: number;
+  top_communities: CommunityItem[];
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
@@ -32,9 +42,13 @@ export default function KnowledgeGraph() {
   const [data, setData] = useState<GraphPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<'SecB' | 'Ruflo' | 'Custom'>('SecB');
-  const [graphMode, setGraphMode] = useState<'ast' | 'system' | 'memory'>('ast');
+  const [graphMode, setGraphMode] = useState<'canvas' | 'native' | 'system' | 'memory'>('canvas');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+
+  // Communities selection state (matching Graphify native UI)
+  const [selectedCommunities, setSelectedCommunities] = useState<Set<number>>(new Set());
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Fetch real Graphify dataset from public/graph-data.json
@@ -44,19 +58,21 @@ export default function KnowledgeGraph() {
       .then((payload: GraphPayload) => {
         // Layout nodes in a force-directed circle layout for Canvas rendering
         const angleStep = (2 * Math.PI) / payload.nodes.length;
-        const radius = 220;
+        const radius = 210;
         const centerX = 320;
         const centerY = 240;
 
         payload.nodes.forEach((n, idx) => {
           const angle = idx * angleStep;
-          // Place god nodes closer to center
-          const dist = n.isGodNode ? radius * 0.4 : radius * (0.6 + (idx % 5) * 0.1);
+          const dist = n.isGodNode ? radius * 0.35 : radius * (0.55 + (idx % 6) * 0.08);
           n.x = centerX + dist * Math.cos(angle);
           n.y = centerY + dist * Math.sin(angle);
         });
 
         setData(payload);
+        // Select top 15 communities by default
+        const initialCommSet = new Set(payload.top_communities.slice(0, 15).map(c => c.id));
+        setSelectedCommunities(initialCommSet);
         setLoading(false);
       })
       .catch(err => {
@@ -65,7 +81,7 @@ export default function KnowledgeGraph() {
       });
   }, [selectedProject]);
 
-  // Render Canvas Graph Visualization
+  // Render Canvas Graph Visualization with Community Filtering & Colors
   useEffect(() => {
     if (!canvasRef.current || !data) return;
     const canvas = canvasRef.current;
@@ -74,8 +90,13 @@ export default function KnowledgeGraph() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    const activeNodes = data.nodes.filter(n =>
+      selectedCommunities.has(n.community) &&
+      (searchTerm === '' || n.name.toLowerCase().includes(searchTerm.toLowerCase()) || n.file.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
     const nodeMap = new Map<string, GraphNode>();
-    data.nodes.forEach(n => nodeMap.set(n.id, n));
+    activeNodes.forEach(n => nodeMap.set(n.id, n));
 
     // Draw Edges
     ctx.lineWidth = 1;
@@ -83,7 +104,7 @@ export default function KnowledgeGraph() {
       const src = nodeMap.get(e.source);
       const tgt = nodeMap.get(e.target);
       if (src && src.x && src.y && tgt && tgt.x && tgt.y) {
-        ctx.strokeStyle = 'rgba(59, 130, 246, 0.25)';
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.22)';
         ctx.beginPath();
         ctx.moveTo(src.x, src.y);
         ctx.lineTo(tgt.x, tgt.y);
@@ -92,7 +113,7 @@ export default function KnowledgeGraph() {
     });
 
     // Draw Nodes
-    data.nodes.forEach(n => {
+    activeNodes.forEach(n => {
       if (n.x === undefined || n.y === undefined) return;
       const isSelected = selectedNode?.id === n.id;
       const radius = n.isGodNode ? 10 : isSelected ? 8 : 5;
@@ -100,16 +121,14 @@ export default function KnowledgeGraph() {
       ctx.beginPath();
       ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI);
 
+      ctx.fillStyle = n.color || '#3b82f6';
       if (n.isGodNode) {
-        ctx.fillStyle = '#ef4444'; // Red hub
-        ctx.shadowColor = 'rgba(239, 68, 68, 0.6)';
+        ctx.shadowColor = n.color || '#ef4444';
         ctx.shadowBlur = 10;
       } else if (isSelected) {
-        ctx.fillStyle = '#3b82f6';
-        ctx.shadowColor = 'rgba(59, 130, 246, 0.8)';
+        ctx.shadowColor = '#ffffff';
         ctx.shadowBlur = 12;
       } else {
-        ctx.fillStyle = '#60a5fa';
         ctx.shadowBlur = 0;
       }
 
@@ -117,29 +136,43 @@ export default function KnowledgeGraph() {
 
       // Node Label
       if (n.isGodNode || isSelected) {
-        ctx.fillStyle = '#f3f4f6';
-        ctx.font = '11px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = n.isGodNode ? 'bold 11px sans-serif' : '11px sans-serif';
         ctx.fillText(n.name, n.x + radius + 4, n.y + 3);
       }
     });
 
-  }, [data, selectedNode]);
+  }, [data, selectedNode, selectedCommunities, searchTerm]);
 
-  const filteredNodes = (data?.nodes ?? []).filter(n =>
-    n.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    n.file.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const toggleCommunity = (commId: number) => {
+    const next = new Set(selectedCommunities);
+    if (next.has(commId)) {
+      next.delete(commId);
+    } else {
+      next.add(commId);
+    }
+    setSelectedCommunities(next);
+  };
+
+  const toggleSelectAll = () => {
+    if (!data) return;
+    if (selectedCommunities.size === data.top_communities.length) {
+      setSelectedCommunities(new Set());
+    } else {
+      setSelectedCommunities(new Set(data.top_communities.map(c => c.id)));
+    }
+  };
 
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Project AST & Memory Graph Engine</h1>
-          <p className="page-subtitle">Live Graphify AST parsing, NetworkX Centrality, and AgentDB Vector Topology</p>
+          <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
+          <p className="page-subtitle">Interactive Physics Network, Communities Panel, and Native Vis-Network View</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center' }}>
-            <Sparkles size={13} /> Graphify AST Active (71.5x Token Saver)
+            <Sparkles size={13} /> Graphify Native Engine Active
           </span>
         </div>
       </div>
@@ -161,11 +194,11 @@ export default function KnowledgeGraph() {
         <div className="card" style={{ padding: '12px 16px' }}>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Graph Communities</div>
           <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#10b981' }}>
-            {data ? data.communities : 301}
+            {data ? data.communities_count : 300}
           </div>
         </div>
         <div className="card" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Query Compression</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Query Token Saver</div>
           <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f59e0b' }}>71.5x Tokens</div>
         </div>
       </div>
@@ -187,7 +220,8 @@ export default function KnowledgeGraph() {
 
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
           {[
-            { id: 'ast', label: 'AST Code Graph', icon: Code },
+            { id: 'canvas', label: 'Interactive Canvas', icon: Code },
+            { id: 'native', label: 'Native Graphify (vis-network)', icon: ExternalLink },
             { id: 'system', label: 'System Governance DAG', icon: Layers },
             { id: 'memory', label: 'AgentDB Memory Graph', icon: Database },
           ].map(m => {
@@ -213,99 +247,136 @@ export default function KnowledgeGraph() {
         </div>
       </div>
 
-      {/* Visual Canvas Graph & Node Details */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
-
-        {/* Interactive Canvas Visualizer */}
-        <div className="card">
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="card-title"><Activity size={15} /> Live Interactive AST Topology Canvas</span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>● Red = Architectural God Node | ● Blue = Symbol Node</span>
-          </div>
-          <div style={{ background: '#0a0d14', borderRadius: '0 0 8px 8px', display: 'flex', justifyContent: 'center', padding: 10, position: 'relative' }}>
-            {loading ? (
-              <div style={{ padding: 100, color: 'var(--text-muted)' }}>Parsing AST codebase graph...</div>
-            ) : (
-              <canvas
-                ref={canvasRef}
-                width={640}
-                height={480}
-                style={{ borderRadius: 6, background: '#070a0f', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}
-                onClick={e => {
-                  if (!canvasRef.current || !data) return;
-                  const rect = canvasRef.current.getBoundingClientRect();
-                  const clickX = e.clientX - rect.left;
-                  const clickY = e.clientY - rect.top;
-
-                  const hit = data.nodes.find(n => {
-                    if (n.x === undefined || n.y === undefined) return false;
-                    const dx = n.x - clickX;
-                    const dy = n.y - clickY;
-                    return Math.sqrt(dx * dx + dy * dy) <= 12;
-                  });
-
-                  if (hit) setSelectedNode(hit);
-                }}
-              />
-            )}
-          </div>
+      {/* Main View Modes */}
+      {graphMode === 'native' ? (
+        /* Native Graphify HTML Iframe View */
+        <div className="card" style={{ height: 620, padding: 0, overflow: 'hidden' }}>
+          <iframe
+            src="/graphify-out/graph.html"
+            title="Graphify Native Visualizer"
+            style={{ width: '100%', height: '100%', border: 'none' }}
+          />
         </div>
+      ) : (
+        /* Canvas Visualizer with Communities Panel Sidebar (Matching Native Graphify UI) */
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
 
-        {/* Selected Node Details & Symbol Inspector */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title"><Globe size={15} /> Symbol Inspector</span>
-          </div>
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {selectedNode ? (
-              <>
-                <div style={{ padding: 10, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--accent-light)' }}>
-                  <div style={{ fontWeight: 700, color: 'var(--accent-light)', fontSize: '0.9rem' }}>{selectedNode.name}</div>
-                  <div className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{selectedNode.file}</div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, fontSize: '0.75rem' }}>
-                    <span className="badge-count">Connections: {selectedNode.connections}</span>
-                    <span className="badge-count">Community: #{selectedNode.community}</span>
-                  </div>
+          {/* Left Panel: Graph Canvas Visualizer */}
+          <div className="card" style={{ padding: 0 }}>
+            <div className="card-header" style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="card-title"><Activity size={15} /> Force-Directed AST Node-Link Canvas</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
+                <Search size={13} color="var(--text-muted)" />
+                <input
+                  type="text"
+                  placeholder="Filter nodes by name/file..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', width: 180 }}
+                />
+              </div>
+            </div>
+
+            <div style={{ background: '#0a0d14', borderRadius: '0 0 8px 8px', display: 'flex', justifyContent: 'center', padding: 10 }}>
+              {loading ? (
+                <div style={{ padding: 120, color: 'var(--text-muted)' }}>Parsing AST codebase graph...</div>
+              ) : (
+                <canvas
+                  ref={canvasRef}
+                  width={660}
+                  height={500}
+                  style={{ borderRadius: 6, background: '#090b12', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}
+                  onClick={e => {
+                    if (!canvasRef.current || !data) return;
+                    const rect = canvasRef.current.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const clickY = e.clientY - rect.top;
+
+                    const hit = data.nodes.find(n => {
+                      if (n.x === undefined || n.y === undefined) return false;
+                      const dx = n.x - clickX;
+                      const dy = n.y - clickY;
+                      return Math.sqrt(dx * dx + dy * dy) <= 12;
+                    });
+
+                    if (hit) setSelectedNode(hit);
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Selected Node Details Bar */}
+            {selectedNode && (
+              <div style={{ padding: '10px 16px', background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ fontWeight: 700, color: 'var(--accent-light)', fontSize: '0.85rem' }}>{selectedNode.name}</span>
+                  <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 8 }}>({selectedNode.file})</span>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  <strong>Knowledge Claim ID:</strong> <code className="mono">KCLAIM-GRAPHIFY-{selectedNode.id}</code>
+                <div style={{ display: 'flex', gap: 8, fontSize: '0.72rem' }}>
+                  <span className="badge-count">Degree: {selectedNode.connections}</span>
+                  <span className="badge-count" style={{ background: selectedNode.color, color: '#fff' }}>{selectedNode.community_name}</span>
                 </div>
-              </>
-            ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: 20, textAlign: 'center' }}>
-                Click any node on the graph canvas to inspect its AST relationships and KnowledgeClaims.
               </div>
             )}
+          </div>
 
-            <div className="divider" />
+          {/* Right Sidebar: COMMUNITIES Panel (Exact replica of Graphify native UI) */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 560, padding: 0 }}>
+            <div className="card-header" style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <span className="card-title" style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                COMMUNITIES ({data ? data.top_communities.length : 0})
+              </span>
+            </div>
 
-            <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>Top Codebase Symbols ({filteredNodes.length})</div>
-            <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {filteredNodes.slice(0, 15).map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => setSelectedNode(n)}
-                  style={{
-                    padding: '6px 10px',
-                    borderRadius: 4,
-                    background: selectedNode?.id === n.id ? 'var(--accent-glow)' : 'var(--bg-elevated)',
-                    border: '1px solid var(--border-subtle)',
-                    cursor: 'pointer',
-                    fontSize: '0.75rem',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                >
-                  <span style={{ fontWeight: 500, color: selectedNode?.id === n.id ? 'var(--accent-light)' : 'var(--text-primary)' }}>{n.name}</span>
-                  {n.isGodNode && <span style={{ fontSize: '0.6rem', color: '#ef4444', fontWeight: 700 }}>HUB</span>}
-                </div>
-              ))}
+            {/* Select All Toggle */}
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }} onClick={toggleSelectAll}>
+                {data && selectedCommunities.size === data.top_communities.length ? (
+                  <CheckSquare size={16} color="var(--accent-light)" />
+                ) : (
+                  <Square size={16} color="var(--text-muted)" />
+                )}
+                Select All
+              </label>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{selectedCommunities.size} active</span>
+            </div>
+
+            {/* Communities Checklist Scroll Area */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {data?.top_communities.map(comm => {
+                const active = selectedCommunities.has(comm.id);
+                return (
+                  <div
+                    key={comm.id}
+                    onClick={() => toggleCommunity(comm.id)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 6,
+                      background: active ? 'var(--bg-elevated)' : 'transparent',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: '0.78rem',
+                      opacity: active ? 1 : 0.45,
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: comm.color, flexShrink: 0 }} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: active ? 600 : 400 }}>
+                      {comm.name}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      {comm.count}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
 
-      </div>
+        </div>
+      )}
     </>
   );
 }
