@@ -1,0 +1,9 @@
+interface:
+  display_name: Architecture Roadmap and Work-Package Compilation
+  short_description: Translates approved or candidate architecture into sequenced,
+    dependency-aware implementation work packages with roles, acceptance criteria,
+    evidence, risks, and exit gates. Use fo
+  default_prompt: Use $architecture-roadmap-work-packages to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

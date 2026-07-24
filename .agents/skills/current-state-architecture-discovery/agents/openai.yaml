@@ -1,0 +1,10 @@
+interface:
+  display_name: Current-State Architecture Discovery
+  short_description: Performs read-only discovery of an existing repository, system,
+    deployment, or documentation set and distinguishes observed architecture from
+    documented claims and inference. Use f
+  default_prompt: Use $current-state-architecture-discovery to produce a governed
+    architecture candidate with evidence, assumptions, limitations, and next-role
+    handoff.
+policy:
+  allow_implicit_invocation: true

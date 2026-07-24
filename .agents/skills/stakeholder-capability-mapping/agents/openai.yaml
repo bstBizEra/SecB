@@ -1,0 +1,9 @@
+interface:
+  display_name: Stakeholder and Capability Mapping
+  short_description: Maps business stakeholders, outcomes, capabilities, ownership,
+    responsibilities, and architecture concerns. Use to connect technical architecture
+    to business value and domain accou
+  default_prompt: Use $stakeholder-capability-mapping to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

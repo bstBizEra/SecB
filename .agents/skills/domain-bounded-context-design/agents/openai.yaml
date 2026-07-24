@@ -1,0 +1,9 @@
+interface:
+  display_name: Domain and Bounded Context Design
+  short_description: Models domains, subdomains, bounded contexts, ownership, context
+    relationships, and integration contracts. Use when business concepts or service
+    boundaries are ambiguous. Do not sp
+  default_prompt: Use $domain-bounded-context-design to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

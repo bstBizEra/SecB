@@ -114,3 +114,16 @@ export {
   intersectWithParent,
   withinCeiling
 } from "./services/non-escalation-comparator.mjs";
+
+// Ruflo Agent Command Center integration
+export {
+  RUFLO_ADAPTERS,
+  RUFLO_SWARM_ADAPTER,
+  RUFLO_CODER_ADAPTER,
+  RUFLO_REVIEWER_ADAPTER,
+  createRufloAdapterRegistration
+} from "./registry/ruflo-adapters.mjs";
+
+export {
+  RufloCommandBridge
+} from "./gateway/ruflo-command-bridge.mjs";

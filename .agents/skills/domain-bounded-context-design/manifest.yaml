@@ -1,0 +1,41 @@
+skill_id: SECB-ARCH-010
+name: domain-bounded-context-design
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A1
+roles:
+  allowed:
+  - DOMAIN
+  - ARCHI
+  - SARCHI
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - business capabilities
+  - domain terminology
+  - workflows
+  - ownership model
+outputs:
+  required:
+  - domain map
+  - bounded-context catalogue
+  - context relationship map
+  - ubiquitous language glossary
+  - boundary decision candidates
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/domain-bounded-context-design
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

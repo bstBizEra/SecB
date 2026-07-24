@@ -1,0 +1,14 @@
+pack_id: SECB-ARCH-SKILLS-PACK-001
+name: SecB Architecture Skills Pack
+version: 0.1.0
+status: candidate
+effective: false
+generated_at: '2026-07-22T10:00:00Z'
+skills: 22
+mutation_authorized: false
+protocol_baselines:
+  agent_skills: current as accessed 2026-07-22
+  mcp: '2025-11-25'
+  a2a: 1.0.0
+  nist_ai_rmf: '1.0'
+  iso_25010: '2023'

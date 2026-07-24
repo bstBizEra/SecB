@@ -1,0 +1,9 @@
+interface:
+  display_name: Security and Agentic Threat Modeling
+  short_description: Performs system and agentic threat modeling across identities,
+    trust boundaries, tools, MCP, A2A, memory, skills, evidence, runtimes, credentials,
+    and human approvals. Use during a
+  default_prompt: Use $security-threat-modeling to produce a governed architecture
+    candidate with evidence, assumptions, limitations, and next-role handoff.
+policy:
+  allow_implicit_invocation: true

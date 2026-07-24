@@ -1,0 +1,42 @@
+skill_id: SECB-ARCH-011
+name: data-architecture-governance
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R1
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - ARCHI
+  - DOMAIN
+  - SEC
+  - KNOW
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - domain model
+  - data requirements
+  - systems of record
+  - security and retention rules
+outputs:
+  required:
+  - data-domain catalogue
+  - system-of-record matrix
+  - data flow and lineage model
+  - classification and retention policy
+  - quality and reconciliation rules
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+evaluation:
+  suite: evals/data-architecture-governance
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills
