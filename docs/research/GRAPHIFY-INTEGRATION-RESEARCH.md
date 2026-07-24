@@ -1,8 +1,8 @@
 # SECB-RESEARCH-GRAPHIFY-001 — SecB Integration Architecture for Graphify Knowledge Graph Engine
 
 **Document ID:** SECB-RESEARCH-GRAPHIFY-001  
-**Version:** 1.0.0-draft  
-**Status:** DRAFT / RESEARCH  
+**Version:** 1.1.0  
+**Status:** APPROVED / ACTIVE  
 **Date:** 2026-07-25  
 **Target Repository:** `Graphify-Labs/graphify` (PyPI: `graphifyy`)  
 
@@ -39,14 +39,6 @@ SecB Graphify Adapter (src/plugins/secb-graphify-adapter.mjs)
 SecB KnowledgeLedger (knowledge-claim.schema.json)
 ```
 
-### Graphify Artifact Output Structure
-
-- `graphify-out/graph.json` — Persistent node & edge graph JSON (queries survive across agent sessions).
-- `graphify-out/GRAPH_REPORT.md` — Identified "god nodes" (high centrality), hub connections, and structural risks.
-- `graphify-out/wiki/` — Wikipedia-style Markdown articles indexed for agent fast traversal.
-- `graphify-out/graph.html` — Standalone D3/Vis.js interactive web visualizer.
-- `graphify-out/cache/` — Incremental parsing cache keyed by SHA-256 file digests.
-
 ---
 
 ## 3. Integration Blueprint into SecB
@@ -64,9 +56,9 @@ description: Build, update, or query codebase knowledge graph using Graphify AST
 # Graphify Skill
 
 Usage:
-  - Build graph: graphify .
-  - Update graph: graphify . --update
-  - Query graph: graphify query "relationship between AuthorityEngine and WorkPackage"
+  - Code-only AST extraction: python -m graphify extract . --code-only
+  - Headless multi-backend extraction: python -m graphify extract . --backend [claude|gemini|openai|ollama]
+  - Query graph: python -m graphify query "relationship between AuthorityEngine and WorkPackage"
 ```
 
 ### B. SecB Knowledge Ledger Plugin (`src/plugins/secb-graphify-adapter.mjs`)
@@ -97,22 +89,33 @@ export function ingestingGraphifyGraph(graphJsonPath, { project_id = "SECB" } = 
 }
 ```
 
-### C. SecB Dashboard Knowledge Graph Tab (`dashboard/src/pages/KnowledgeGraph.tsx`)
-
-Renders the interactive Graphify dependency graph directly inside the SecB Governance Dashboard on port `3000`.
-
 ---
 
 ## 4. Security & Governance Boundaries
 
 - **Authority Ceiling:** Graphify runs strictly in **Read-Only (`R0` / `M0`)** mode.
 - **Cache Integrity:** Cached graph nodes use SecB's SHA-256 entry hash validation.
-- **No Remote Egress:** Local AST parsing via Tree-sitter without third-party API dependencies.
+- **No Remote Egress:** Local AST parsing via Tree-sitter without third-party API dependencies when running `--code-only`.
 
 ---
 
-## 5. Next Actions for P1 Implementation
+## 5. Environment Variables & Model Backends Reference
 
-1. Register `$graphify` skill in `.agents/skills/graphify/SKILL.md`.
-2. Add `src/plugins/secb-graphify-adapter.mjs` unit test suite.
-3. Add `Knowledge Graph` tab to SecB Dashboard navigation.
+| Variable | Used For | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | `--backend claude` | Claude (Anthropic) backend API key |
+| `ANTHROPIC_BASE_URL` | `--backend claude` | Custom endpoint (LiteLLM proxy) |
+| `ANTHROPIC_MODEL` | `--backend claude` | Model override (e.g. `claude-sonnet-4-6`) |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `--backend gemini` | Google Gemini backend key |
+| `OPENAI_API_KEY` | `--backend openai` | OpenAI API key |
+| `OPENAI_BASE_URL` | `--backend openai` | OpenAI-compatible server (llama.cpp, vLLM, LM Studio) |
+| `OPENAI_MODEL` | `--backend openai` | OpenAI model override (default `gpt-4.1-mini`) |
+| `DEEPSEEK_API_KEY` | `--backend deepseek` | DeepSeek backend key |
+| `MOONSHOT_API_KEY` | `--backend kimi` | Kimi Code backend key |
+| `OLLAMA_BASE_URL` | `--backend ollama` | Ollama local inference URL (`http://localhost:11434`) |
+| `OLLAMA_MODEL` | `--backend ollama` | Ollama model name |
+| `AZURE_OPENAI_API_KEY` | `--backend azure` | Azure OpenAI key |
+| `AZURE_OPENAI_ENDPOINT` | `--backend azure` | Azure endpoint URL |
+| `GRAPHIFY_MAX_WORKERS` | AST parallelism | Parallel AST parsing thread count |
+| `GRAPHIFY_API_TIMEOUT` | Headless HTTP | Per-call HTTP timeout (default: 600s) |
+| `GRAPHIFY_MAX_GRAPH_BYTES` | Graph limit | Size cap override (default: 512 MiB) |

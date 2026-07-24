@@ -57,7 +57,12 @@ export const DEFAULT_SYSTEM_SETTINGS = Object.freeze({
   knowledge: {
     graphify_enabled: true,
     ast_cache_enabled: true,
-    compression_mode: "71.5x"
+    compression_mode: "71.5x",
+    backend: "code-only",
+    ollama_base_url: "http://localhost:11434",
+    api_timeout_sec: 600,
+    max_workers: 8,
+    max_graph_mb: 512
   },
   ledgers: {
     event_ledger_path: ".secb/ledger/events.ndjson",

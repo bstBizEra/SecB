@@ -65,11 +65,16 @@
     },
     "knowledge": {
       "type": "object",
-      "required": ["graphify_enabled", "ast_cache_enabled", "compression_mode"],
+      "required": ["graphify_enabled", "ast_cache_enabled", "compression_mode", "backend", "ollama_base_url", "api_timeout_sec", "max_workers", "max_graph_mb"],
       "properties": {
         "graphify_enabled": { "type": "boolean" },
         "ast_cache_enabled": { "type": "boolean" },
-        "compression_mode": { "type": "string" }
+        "compression_mode": { "type": "string" },
+        "backend": { "type": "string", "enum": ["code-only", "claude", "gemini", "openai", "deepseek", "kimi", "ollama", "azure", "bedrock"] },
+        "ollama_base_url": { "type": "string" },
+        "api_timeout_sec": { "type": "integer", "minimum": 10 },
+        "max_workers": { "type": "integer", "minimum": 1 },
+        "max_graph_mb": { "type": "integer", "minimum": 10 }
       }
     },
     "ledgers": {
