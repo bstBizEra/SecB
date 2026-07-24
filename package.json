@@ -7,6 +7,7 @@
   "main": "src/index.mjs",
   "exports": "./src/index.mjs",
   "scripts": {
+    "dev": "npm --prefix dashboard run dev",
     "validate": "node tools/validate-foundation.mjs",
     "test": "npm run validate && node --test tests/*.test.mjs"
   },
