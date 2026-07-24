@@ -1,0 +1,2125 @@
+{
+  "generated_at": "2026-07-24T20:05:53.250Z",
+  "total_nodes": 3525,
+  "total_edges": 4692,
+  "communities": 301,
+  "nodes": [
+    {
+      "id": "agents_install_install_claude_ps1_agents_install_install_claude",
+      "name": "install-claude.ps1",
+      "file": ".agents/install/install-claude.ps1",
+      "type": "code",
+      "community": 294,
+      "connections": 0,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_claude_sh_agents_install_install_claude",
+      "name": "install-claude.sh",
+      "file": ".agents/install/install-claude.sh",
+      "type": "code",
+      "community": 292,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_claude_sh__entry",
+      "name": "install-claude.sh script",
+      "file": ".agents/install/install-claude.sh",
+      "type": "code",
+      "community": 292,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_codex_ps1_agents_install_install_codex",
+      "name": "install-codex.ps1",
+      "file": ".agents/install/install-codex.ps1",
+      "type": "code",
+      "community": 295,
+      "connections": 0,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_codex_sh_agents_install_install_codex",
+      "name": "install-codex.sh",
+      "file": ".agents/install/install-codex.sh",
+      "type": "code",
+      "community": 293,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_codex_sh__entry",
+      "name": "install-codex.sh script",
+      "file": ".agents/install/install-codex.sh",
+      "type": "code",
+      "community": 293,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema",
+      "name": "architecture-brief.schema.json",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 78,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_schema",
+      "name": "$schema",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 78,
+      "connections": 10,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_artifact_id",
+      "name": "artifact_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_project_id",
+      "name": "project_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_scope",
+      "name": "scope",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_facts",
+      "name": "facts",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_assumptions",
+      "name": "assumptions",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_unknowns",
+      "name": "unknowns",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_success_criteria",
+      "name": "success_criteria",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 78,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 10,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_artifact_id",
+      "name": "artifact_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_artifact_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_project_id",
+      "name": "project_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_project_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_objective_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_objective_minlength",
+      "name": "minLength",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_scope",
+      "name": "scope",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 192,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_scope_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 192,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_scope_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 192,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_in",
+      "name": "in",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 192,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_out",
+      "name": "out",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 192,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_scope_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_in",
+      "name": "in",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_in_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_in_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_items_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 6,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_out",
+      "name": "out",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_out_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_out_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_facts",
+      "name": "facts",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_facts_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_facts_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_items_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_claim",
+      "name": "claim",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 102,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_source_ref",
+      "name": "source_ref",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 102,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_items_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_claim",
+      "name": "claim",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_claim_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_source_ref",
+      "name": "source_ref",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_source_ref_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 102,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "name": "assumptions",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_assumptions_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_assumptions_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 101,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "name": "unknowns",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 212,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_unknowns_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 212,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_unknowns_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 212,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "name": "success_criteria",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_success_criteria_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_success_criteria_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_success_criteria_minitems",
+      "name": "minItems",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 88,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 164,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_status_enum",
+      "name": "enum",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 164,
+      "connections": 5,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_draft",
+      "name": "draft",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 164,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_review_required",
+      "name": "review-required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 164,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_accepted",
+      "name": "accepted",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 164,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_superseded",
+      "name": "superseded",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 164,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema",
+      "name": "architecture-decision-record.schema.json",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 79,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_schema",
+      "name": "$schema",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 79,
+      "connections": 10,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_decision_id",
+      "name": "decision_id",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_title",
+      "name": "title",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_context",
+      "name": "context",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_options",
+      "name": "options",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_decision",
+      "name": "decision",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_consequences",
+      "name": "consequences",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_evidence_refs",
+      "name": "evidence_refs",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_owner",
+      "name": "owner",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 79,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 12,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_decision_id",
+      "name": "decision_id",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_decision_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_title",
+      "name": "title",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_title_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 141,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "name": "enum",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 141,
+      "connections": 7,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_proposed",
+      "name": "proposed",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 141,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_review_required",
+      "name": "review-required",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 141,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_accepted",
+      "name": "accepted",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 141,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_rejected",
+      "name": "rejected",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 141,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_deprecated",
+      "name": "deprecated",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 141,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_superseded",
+      "name": "superseded",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 141,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_context",
+      "name": "context",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_context_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "name": "options",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 150,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_options_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 150,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_options_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 150,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_items_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 149,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_items_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 150,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_name",
+      "name": "name",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 150,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_summary",
+      "name": "summary",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 150,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_name",
+      "name": "name",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_name_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_summary",
+      "name": "summary",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_summary_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "name": "tradeoffs",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_tradeoffs_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_tradeoffs_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 140,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_options_minitems",
+      "name": "minItems",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 150,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_decision",
+      "name": "decision",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_decision_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "name": "consequences",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 149,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_consequences_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 149,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_consequences_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 149,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "name": "evidence_refs",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 149,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_evidence_refs_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 149,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_evidence_refs_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 149,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_owner",
+      "name": "owner",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_owner_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 103,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_approver",
+      "name": "approver",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 165,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 165,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_string",
+      "name": "string",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 165,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_null",
+      "name": "null",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 165,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_supersedes",
+      "name": "supersedes",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 165,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 165,
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema",
+      "name": "architecture-handoff.schema.json",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_schema",
+      "name": "$schema",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 12,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_handoff_id",
+      "name": "handoff_id",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_source_role",
+      "name": "source_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_destination_role",
+      "name": "destination_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_scope",
+      "name": "scope",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_baseline",
+      "name": "baseline",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_artifacts",
+      "name": "artifacts",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_evidence_refs",
+      "name": "evidence_refs",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_assumptions",
+      "name": "assumptions",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_unresolved_items",
+      "name": "unresolved_items",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_next_actions",
+      "name": "next_actions",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 12,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_handoff_id",
+      "name": "handoff_id",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_handoff_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_source_role",
+      "name": "source_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_source_role_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_destination_role",
+      "name": "destination_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_destination_role_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 6,
+      "connections": 2,
+      "isGodNode": false
+    }
+  ],
+  "edges": [
+    {
+      "source": "agents_install_install_claude_sh_agents_install_install_claude",
+      "target": "agents_install_install_claude_sh__entry",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_install_install_codex_sh_agents_install_install_codex",
+      "target": "agents_install_install_codex_sh__entry",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_schema",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_assumptions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_project_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_scope",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_artifact_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_facts",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_success_criteria",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_unknowns",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_artifact_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_facts",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_project_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_scope",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_artifact_id",
+      "target": "agents_schemas_architecture_brief_schema_artifact_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_project_id",
+      "target": "agents_schemas_architecture_brief_schema_project_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_objective",
+      "target": "agents_schemas_architecture_brief_schema_objective_minlength",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_objective",
+      "target": "agents_schemas_architecture_brief_schema_objective_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_scope",
+      "target": "agents_schemas_architecture_brief_schema_scope_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_scope",
+      "target": "agents_schemas_architecture_brief_schema_scope_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_scope",
+      "target": "agents_schemas_architecture_brief_schema_scope_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_required",
+      "target": "ref_in",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_required",
+      "target": "ref_out",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_in",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_out",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_in",
+      "target": "agents_schemas_architecture_brief_schema_in_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_in",
+      "target": "agents_schemas_architecture_brief_schema_in_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_in_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_assumptions_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_facts_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_out_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_success_criteria_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_unknowns_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_out",
+      "target": "agents_schemas_architecture_brief_schema_out_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_out",
+      "target": "agents_schemas_architecture_brief_schema_out_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_facts",
+      "target": "agents_schemas_architecture_brief_schema_facts_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_facts",
+      "target": "agents_schemas_architecture_brief_schema_facts_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_facts_items",
+      "target": "agents_schemas_architecture_brief_schema_items_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_facts_items",
+      "target": "agents_schemas_architecture_brief_schema_items_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_claim",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_required",
+      "target": "ref_source_ref",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_claim",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_source_ref",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_claim",
+      "target": "agents_schemas_architecture_brief_schema_claim_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_source_ref",
+      "target": "agents_schemas_architecture_brief_schema_source_ref_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "target": "agents_schemas_architecture_brief_schema_assumptions_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "target": "agents_schemas_architecture_brief_schema_assumptions_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "target": "agents_schemas_architecture_brief_schema_unknowns_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "target": "agents_schemas_architecture_brief_schema_unknowns_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "target": "agents_schemas_architecture_brief_schema_success_criteria_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "target": "agents_schemas_architecture_brief_schema_success_criteria_minitems",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "target": "agents_schemas_architecture_brief_schema_success_criteria_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_status",
+      "target": "agents_schemas_architecture_brief_schema_status_enum",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_accepted",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_draft",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_review_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_superseded",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_schema",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_context",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_decision_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_evidence_refs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_owner",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_title",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "ref_consequences",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "ref_decision",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "ref_options",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_approver",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_context",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_decision",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_decision_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_owner",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_supersedes",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_title",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_decision_id",
+      "target": "agents_schemas_architecture_decision_record_schema_decision_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_title",
+      "target": "agents_schemas_architecture_decision_record_schema_title_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_status",
+      "target": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_accepted",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_deprecated",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_rejected",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_review_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_superseded",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "ref_proposed",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_context",
+      "target": "agents_schemas_architecture_decision_record_schema_context_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "target": "agents_schemas_architecture_decision_record_schema_options_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "target": "agents_schemas_architecture_decision_record_schema_options_minitems",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "target": "agents_schemas_architecture_decision_record_schema_options_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_options_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_options_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_options_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_consequences_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_evidence_refs_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_tradeoffs_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_name",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_required",
+      "target": "ref_summary",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_name",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_summary",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_name",
+      "target": "agents_schemas_architecture_decision_record_schema_name_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_summary",
+      "target": "agents_schemas_architecture_decision_record_schema_summary_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "target": "agents_schemas_architecture_decision_record_schema_tradeoffs_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "target": "agents_schemas_architecture_decision_record_schema_tradeoffs_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_decision",
+      "target": "agents_schemas_architecture_decision_record_schema_decision_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "target": "agents_schemas_architecture_decision_record_schema_consequences_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "target": "agents_schemas_architecture_decision_record_schema_consequences_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "target": "agents_schemas_architecture_decision_record_schema_evidence_refs_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "target": "agents_schemas_architecture_decision_record_schema_evidence_refs_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_owner",
+      "target": "agents_schemas_architecture_decision_record_schema_owner_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_approver",
+      "target": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_null",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_string",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_string",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_null",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_supersedes",
+      "target": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_schema",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_artifacts",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_assumptions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_baseline",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_destination_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_evidence_refs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_handoff_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_scope",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "ref_next_actions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "ref_source_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "ref_unresolved_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_destination_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_handoff_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_source_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties_handoff_id",
+      "target": "agents_schemas_architecture_handoff_schema_handoff_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties_source_role",
+      "target": "agents_schemas_architecture_handoff_schema_source_role_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties_destination_role",
+      "target": "agents_schemas_architecture_handoff_schema_destination_role_type",
+      "relationship": "depends_on"
+    }
+  ]
+}
