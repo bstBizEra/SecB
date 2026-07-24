@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { Shield, FileText, CheckCircle, Cpu, Users, Activity, GitCommit } from 'lucide-react';
+import React from 'react';
+import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { Shield, FileText, CheckCircle, Cpu, Users, Activity, Network } from 'lucide-react';
 import Overview from './pages/Overview';
 import Ledger from './pages/Ledger';
 import Authorize from './pages/Authorize';
 import Swarm from './pages/Swarm';
 import Agents from './pages/Agents';
+import KnowledgeGraph from './pages/KnowledgeGraph';
 
-const MAIN_SHA = 'a908bbe';
-const PENDING_SHA = 'f1eea272';
+const MAIN_SHA = 'f1eea272';
 const VERSION = '0.3.0-alpha.0';
 
 function TopBar() {
@@ -22,11 +22,11 @@ function TopBar() {
         <span className="badge">Governance Command Center</span>
       </div>
       <div className="topbar-meta">
-        <span className="sha">main @ <strong>{MAIN_SHA}</strong></span>
+        <span className="sha">candidate @ <strong>{MAIN_SHA}</strong></span>
         <span>v{VERSION}</span>
         <span>{ts}</span>
-        <span style={{ color: 'var(--status-pending)', fontWeight: 600 }}>
-          ⏳ 2 gates pending
+        <span style={{ color: 'var(--status-done)', fontWeight: 600 }}>
+          ✓ SKEL-P0-01 ACCEPTED
         </span>
       </div>
     </div>
@@ -42,7 +42,7 @@ function Sidebar() {
       </NavLink>
       <NavLink to="/authorize" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
         <CheckCircle className="icon" /> Authorize
-        <span className="badge-count">2</span>
+        <span className="badge-count" style={{ background: 'var(--status-done)', color: '#fff' }}>✓</span>
       </NavLink>
       <NavLink to="/ledger" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
         <FileText className="icon" /> Evidence Ledger
@@ -53,6 +53,9 @@ function Sidebar() {
       </NavLink>
       <NavLink to="/agents" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
         <Users className="icon" /> Agent Registry
+      </NavLink>
+      <NavLink to="/graph" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+        <Network className="icon" /> Knowledge Graph
       </NavLink>
     </nav>
   );
@@ -71,6 +74,7 @@ export default function App() {
             <Route path="/authorize" element={<Authorize />} />
             <Route path="/swarm" element={<Swarm />} />
             <Route path="/agents" element={<Agents />} />
+            <Route path="/graph" element={<KnowledgeGraph />} />
           </Routes>
         </main>
       </div>
