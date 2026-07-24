@@ -168,11 +168,14 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">Interactive Physics Network, Communities Panel, and Native Vis-Network View</p>
+          <p className="page-subtitle">Interactive Physics Network, Communities Panel, and V3 Swarm Unified Graph</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(147, 51, 234, 0.2)', color: '#a855f7', border: '1px solid rgba(147, 51, 234, 0.4)' }}>
+            👑 15-Agent V3 Swarm Active
+          </span>
           <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center' }}>
-            <Sparkles size={13} /> Graphify Native Engine Active
+            <Sparkles size={13} /> Graphify Engine Ready
           </span>
         </div>
       </div>
