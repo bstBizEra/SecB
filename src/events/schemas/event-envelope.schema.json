@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "secb://schemas/event-envelope/v1.0",
+  "title": "SecB Canonical Event Envelope",
+  "description": "Canonical normalized event envelope for all runtime telemetry ingested into SecB's append-only event ledger.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "occurred_at",
+    "received_at",
+    "sequence",
+    "correlation",
+    "source",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "event_id": {
+      "type": "string",
+      "description": "Globally unique event ID. Format: EVT-{ULID}",
+      "pattern": "^EVT-[A-Z0-9]+$"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Canonical SecB event type.",
+      "enum": [
+        "runtime.connected",
+        "runtime.disconnected",
+        "runtime.heartbeat",
+        "swarm.requested",
+        "swarm.created",
+        "swarm.started",
+        "swarm.paused",
+        "swarm.resumed",
+        "swarm.completed",
+        "swarm.failed",
+        "swarm.cancelled",
+        "plan.created",
+        "plan.updated",
+        "plan.rejected",
+        "agent.requested",
+        "agent.spawned",
+        "agent.ready",
+        "agent.blocked",
+        "agent.completed",
+        "agent.failed",
+        "agent.terminated",
+        "task.created",
+        "task.assigned",
+        "task.started",
+        "task.progress",
+        "task.blocked",
+        "task.completed",
+        "task.failed",
+        "task.cancelled",
+        "handoff.requested",
+        "handoff.accepted",
+        "handoff.completed",
+        "handoff.rejected",
+        "tool.requested",
+        "tool.authorized",
+        "tool.denied",
+        "tool.started",
+        "tool.completed",
+        "tool.failed",
+        "artifact.created",
+        "artifact.updated",
+        "artifact.submitted",
+        "evidence.candidate_submitted",
+        "finding.created",
+        "decision.requested",
+        "usage.recorded",
+        "incident.detected"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the event occurred in the source runtime."
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When SecB ingested the event."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonically increasing per execution_id. Used for deduplication and ordering."
+    },
+    "correlation": {
+      "type": "object",
+      "required": ["runtime_deployment_id"],
+      "properties": {
+        "project_id": { "type": "string" },
+        "project_session_id": { "type": "string" },
+        "work_package_id": { "type": "string" },
+        "execution_id": { "type": "string" },
+        "swarm_id": { "type": "string" },
+        "task_id": { "type": "string" },
+        "agent_instance_id": { "type": "string" },
+        "runtime_deployment_id": { "type": "string" },
+        "trace_id": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["runtime_deployment_id", "adapter_version"],
+      "properties": {
+        "runtime_deployment_id": { "type": "string" },
+        "adapter_version": { "type": "string" },
+        "native_event_type": { "type": "string" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-type-specific payload. Content varies per event_type."
+    },
+    "integrity": {
+      "type": "object",
+      "properties": {
+        "payload_sha256": { "type": "string" },
+        "previous_event_hash": { "type": "string" },
+        "signature_ref": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+schema_version: "1.0"
+
+runtime_deployment_id: RT-RUFLO-LOCAL-001
+provider_id: PROVIDER-RUFLO
+runtime_product: ruflo
+runtime_version: "3.32.9"
+deployment_type: local_sidecar
+
+endpoint:
+  control_api: http://127.0.0.1:3004
+  event_ingress: http://127.0.0.1:3001
+  mcp: http://127.0.0.1:3003
+  dashboard: http://127.0.0.1:3002
+
+identity:
+  authentication: local_workload_token
+  host_id: HOST-VILY-WIN-001
+  workload_id: ruflo-local-sidecar
+
+capabilities:
+  - swarm_planning
+  - multi_agent_execution
+  - parallel_task_execution
+  - agent_memory
+  - mcp_client
+  - mcp_server
+  - lifecycle_hooks
+  - read_repository
+
+# Read-only Stage 1 — write_repository added only at Stage 3 (bounded mutation)
+
+authority:
+  maximum_authority_class: A2
+  may_self_authorize: false
+  may_accept_evidence: false
+  may_publish_skills: false
+  may_merge_protected_branch: false
+
+lifecycle:
+  status: candidate
+  operationally_effective: false
+  registered_at: "2026-07-25T00:00:00Z"
