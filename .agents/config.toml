@@ -58,6 +58,13 @@ args = ["-y", "@claude-flow/cli@latest"]
 enabled = true
 tool_timeout_sec = 120
 
+[mcp_servers.graphify]
+command = "python"
+args = ["-m", "graphify.serve", "graphify-out/graph.json"]
+enabled = true
+tool_timeout_sec = 120
+
+
 # =============================================================================
 # Profiles
 # =============================================================================
