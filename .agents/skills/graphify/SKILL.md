@@ -20,6 +20,11 @@ Graphify parses codebases using 36 local AST grammars (Tree-sitter), multimodal 
 | **Office & PDFs** | `.docx` `.xlsx` `.pdf` | Structured text extraction |
 | **Multimodal** | `.png` `.jpg` `.webp` `.mp4` `.mp3` YouTube URLs | Vision & faster-whisper transcription |
 
+# Rootly Incident & Telemetry Importer
+graphify rootly                            # Fetch incidents, alerts, & services from Rootly API
+graphify rootly --days 30 --mode standard  # Non-interactive Rootly ingestion
+/graphify graphify-rootly-data --mode deep # Run deep semantic inference on incident corpus
+
 ---
 
 ## Core Command Reference
