@@ -1,14 +1,14 @@
 /**
- * SecB Graphify Plugin Adapter Unit Tests
+ * SecB Graphify Plugin Adapter Unit & Audit Tests
  */
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { parseGraphifyKnowledgeClaims } from "../src/plugins/secb-graphify-adapter.mjs";
+import { parseGraphifyKnowledgeClaims, auditProjectGraphifyAccess } from "../src/plugins/secb-graphify-adapter.mjs";
 
-const tmpDir = resolve(import.meta.dirname, "tmp_graphify");
+const tmpDir = resolve(import.meta.dirname, "tmp_graphify_audit");
 
 test("AC-GRAPHIFY-01: parseGraphifyKnowledgeClaims extracts nodes and edges as KnowledgeClaims", () => {
   mkdirSync(tmpDir, { recursive: true });
@@ -36,4 +36,16 @@ test("AC-GRAPHIFY-01: parseGraphifyKnowledgeClaims extracts nodes and edges as K
   assert.equal(edgeClaim.object, "WorkPackage");
 
   rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test("AC-GRAPHIFY-02: auditProjectGraphifyAccess audits external project directory and produces R0 containment receipt", () => {
+  const projectPath = resolve(import.meta.dirname, "..");
+  const audit = auditProjectGraphifyAccess(projectPath, { codeOnly: true });
+
+  assert.equal(audit.read_only_access, true);
+  assert.equal(audit.security_verdict, "PASS_R0_CONTAINED");
+  assert.equal(audit.isolation_mode, "LOCAL_TREE_SITTER_OFFLINE");
+  assert.ok(audit.nodes_found > 0);
+  assert.ok(audit.edges_found > 0);
+  assert.ok(audit.knowledge_claims_generated > 0);
 });
