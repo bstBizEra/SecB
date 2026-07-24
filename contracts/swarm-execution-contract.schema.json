@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "secb://schemas/swarm-execution-contract/v1.0",
+  "title": "SecB Swarm Execution Contract",
+  "description": "Bounded contract issued by SecB to a registered execution provider (e.g. Ruflo) defining objective, authorized scope, team policies, runtime constraints, and evidence requirements.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "execution",
+    "objective",
+    "scope",
+    "team_policy",
+    "runtime_policy",
+    "context",
+    "workspace",
+    "evidence",
+    "validity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "execution": {
+      "type": "object",
+      "required": ["execution_id", "project_id", "work_package_id", "runtime_deployment_id"],
+      "properties": {
+        "execution_id": { "type": "string", "pattern": "^EXEC-[A-Z0-9-]+$" },
+        "project_id": { "type": "string" },
+        "project_session_id": { "type": "string" },
+        "work_package_id": { "type": "string" },
+        "runtime_deployment_id": { "type": "string" }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "required": ["statement", "acceptance_criteria"],
+      "properties": {
+        "statement": { "type": "string" },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "required": ["authorized_paths", "prohibited_paths", "mutation_class", "risk_class"],
+      "properties": {
+        "authorized_paths": { "type": "array", "items": { "type": "string" } },
+        "prohibited_paths": { "type": "array", "items": { "type": "string" } },
+        "mutation_class": { "type": "string", "enum": ["M0", "M1", "M2", "M3"] },
+        "risk_class": { "type": "string", "enum": ["R0", "R1", "R2", "R3", "R4"] }
+      }
+    },
+    "team_policy": {
+      "type": "object",
+      "required": ["required_roles", "separation_of_duties", "maximum_agents"],
+      "properties": {
+        "required_roles": { "type": "array", "items": { "type": "string" } },
+        "separation_of_duties": {
+          "type": "object",
+          "required": ["producer_may_review", "producer_may_issue_final_verdict"],
+          "properties": {
+            "producer_may_review": { "type": "boolean", "const": false },
+            "producer_may_issue_final_verdict": { "type": "boolean", "const": false }
+          }
+        },
+        "maximum_agents": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "maximum_parallel_writers": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "runtime_policy": {
+      "type": "object",
+      "required": ["allowed_tools", "prohibited_tools", "maximum_turns", "maximum_duration_minutes"],
+      "properties": {
+        "allowed_tools": { "type": "array", "items": { "type": "string" } },
+        "prohibited_tools": { "type": "array", "items": { "type": "string" } },
+        "maximum_turns": { "type": "integer", "minimum": 1 },
+        "maximum_retries": { "type": "integer", "minimum": 0 },
+        "maximum_duration_minutes": { "type": "integer", "minimum": 1 },
+        "cost_ceiling": { "type": "number", "minimum": 0 }
+      }
+    },
+    "context": {
+      "type": "object",
+      "required": ["context_receipt_id", "context_receipt_sha256"],
+      "properties": {
+        "context_receipt_id": { "type": "string" },
+        "context_receipt_sha256": { "type": "string" },
+        "source_refs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["lease_id", "baseline_sha", "worktree_root"],
+      "properties": {
+        "lease_id": { "type": "string" },
+        "baseline_sha": { "type": "string" },
+        "worktree_root": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["destination", "required"],
+      "properties": {
+        "destination": { "type": "string" },
+        "required": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "validity": {
+      "type": "object",
+      "required": ["effective_at", "expires_at"],
+      "properties": {
+        "effective_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
