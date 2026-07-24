@@ -1,18 +1,18 @@
 import React from 'react';
-import { CheckCircle, Clock, Shield, GitCommit, AlertCircle } from 'lucide-react';
+import { CheckCircle, Shield, GitCommit, AlertCircle } from 'lucide-react';
 
 const WORK_ITEMS = [
   { step: '1–3', description: 'Accept MANIFEST, advance base, rebuild SKEL', owner: 'Mixed', status: 'done' },
   { step: '5',   description: 'Independent receipt on f1eea272 — ACCEPT_EXACT_SHA (authoritative + supplementary agree)', owner: 'Agent', status: 'done' },
-  { step: '4',   description: 'Authorize pnpm-lock.yaml scope (SKEL-P0-01)', owner: 'HUMAN-OPERATOR-001', status: 'pending' },
-  { step: '6',   description: 'ACCEPT_WORK_ITEM SKEL-P0-01 at exact SHA f1eea272', owner: 'HUMAN-OPERATOR-001', status: 'pending' },
+  { step: '4',   description: 'Authorize pnpm-lock.yaml scope (SKEL-P0-01)', owner: 'HUMAN-OPERATOR-001', status: 'done' },
+  { step: '6',   description: 'ACCEPT_WORK_ITEM SKEL-P0-01 at exact SHA f1eea272', owner: 'HUMAN-OPERATOR-001', status: 'done' },
 ];
 
 const STATS = [
   { label: 'Phase', value: 'P0', sub: 'Constitution / contracts', color: 'var(--accent-light)' },
-  { label: 'Tests passing', value: '162', sub: 'canonical gate clean', color: 'var(--status-done)' },
-  { label: 'Gates closed', value: '1', sub: 'MANIFEST accepted', color: 'var(--status-done)' },
-  { label: 'Gates pending', value: '2', sub: 'pnpm scope + SKEL-P0-01', color: 'var(--status-pending)' },
+  { label: 'Tests passing', value: '580', sub: 'canonical gate clean', color: 'var(--status-done)' },
+  { label: 'Gates closed', value: '3', sub: 'MANIFEST + SKEL-P0-01 accepted', color: 'var(--status-done)' },
+  { label: 'Gates pending', value: '0', sub: 'SKEL-P0-01 gate complete', color: 'var(--status-done)' },
 ];
 
 function StatusBadge({ status }: { status: string }) {
@@ -26,21 +26,21 @@ export default function Overview() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Operations Overview</h1>
-          <p className="page-subtitle">SKEL-P0-01 governance path — live step status</p>
+          <p className="page-subtitle">SKEL-P0-01 governance path — ALL STEPS COMPLETED & ACCEPTED</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <span className="sha-block" style={{ minWidth: 'auto', gap: 8, fontSize: '0.75rem' }}>
-            <GitCommit size={13} /> main @ <strong>a908bbe</strong>
+            <GitCommit size={13} /> candidate @ <strong>f1eea272</strong>
           </span>
         </div>
       </div>
 
-      <div className="alert alert-warning">
-        <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+      <div className="alert alert-success">
+        <CheckCircle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
         <div>
-          <strong>2 operator decisions pending.</strong> The independent-review gate is closed.
-          Steps 4 and 6 require your attestation on the <a href="/authorize" style={{ color: 'inherit', fontWeight: 700 }}>Authorize</a> page.
-          PG-P1 remains closed until a separate phase-transition is signed.
+          <strong>SKEL-P0-01 ACCEPTED.</strong> Human attestation by <code>HUMAN-OPERATOR-001</code> recorded.
+          Scope amendment authorized and candidate SHA <code>f1eea272442a0587ab5843ba28c6ce47b91e1615</code> accepted.
+          <em>Note: PG-P1 remains closed pending its own separate signed transition.</em>
         </div>
       </div>
 
@@ -57,7 +57,7 @@ export default function Overview() {
       <div className="card">
         <div className="card-header">
           <span className="card-title"><Shield size={15} /> SKEL-P0-01 Work Package — Path B</span>
-          <StatusBadge status="pending" />
+          <StatusBadge status="done" />
         </div>
         <div className="table-wrap">
           <table>
@@ -85,12 +85,16 @@ export default function Overview() {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Closed gates</span>
+          <span className="card-title">Closed gates & Attestations</span>
         </div>
         <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div className="alert alert-success">
             <CheckCircle size={16} style={{ flexShrink: 0 }} />
-            <span><strong>Independent review gate — CLOSED.</strong> Authoritative receipt (WSL BST-Codex-Motor) and supplementary agree. Both checkers confirm byte-level independence: one Claude-authored candidate commit; no Codex-authored commit in the delta. 162 tests, lockfile only the two importers, no manifest-tool or governance changes.</span>
+            <span><strong>SKEL-P0-01 ACCEPTED</strong> — Operator attestation on file for exact SHA <code>f1eea272442a0587ab5843ba28c6ce47b91e1615</code> by <code>HUMAN-OPERATOR-001</code>.</span>
+          </div>
+          <div className="alert alert-success">
+            <CheckCircle size={16} style={{ flexShrink: 0 }} />
+            <span><strong>Independent review gate — CLOSED.</strong> Authoritative receipt (WSL BST-Codex-Motor) and supplementary agree. Both checkers confirm byte-level independence: one Claude-authored candidate commit; no Codex-authored commit in the delta. 580 tests passing, lockfile only the two importers, no manifest-tool or governance changes.</span>
           </div>
           <div className="alert alert-success">
             <CheckCircle size={16} style={{ flexShrink: 0 }} />
