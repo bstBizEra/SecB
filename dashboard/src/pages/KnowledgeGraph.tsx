@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink } from 'lucide-react';
+import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move } from 'lucide-react';
 
 interface CommunityItem {
   id: number;
@@ -46,6 +46,12 @@ export default function KnowledgeGraph() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
+  // Zoom & Pan state
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
   // Communities selection state (matching Graphify native UI)
   const [selectedCommunities, setSelectedCommunities] = useState<Set<number>>(new Set());
 
@@ -59,8 +65,8 @@ export default function KnowledgeGraph() {
         // Layout nodes in a force-directed circle layout for Canvas rendering
         const angleStep = (2 * Math.PI) / payload.nodes.length;
         const radius = 210;
-        const centerX = 320;
-        const centerY = 240;
+        const centerX = 330;
+        const centerY = 250;
 
         payload.nodes.forEach((n, idx) => {
           const angle = idx * angleStep;
@@ -81,7 +87,7 @@ export default function KnowledgeGraph() {
       });
   }, [selectedProject]);
 
-  // Render Canvas Graph Visualization with Community Filtering & Colors
+  // Render Canvas Graph Visualization with Community Filtering, Colors, Zoom & Pan
   useEffect(() => {
     if (!canvasRef.current || !data) return;
     const canvas = canvasRef.current;
@@ -89,6 +95,13 @@ export default function KnowledgeGraph() {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    // Apply pan offset & zoom scale transform
+    ctx.translate(panOffset.x, panOffset.y);
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(zoomScale, zoomScale);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
     const activeNodes = data.nodes.filter(n =>
       selectedCommunities.has(n.community) &&
@@ -99,12 +112,12 @@ export default function KnowledgeGraph() {
     activeNodes.forEach(n => nodeMap.set(n.id, n));
 
     // Draw Edges
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1 / zoomScale;
     data.edges.forEach(e => {
       const src = nodeMap.get(e.source);
       const tgt = nodeMap.get(e.target);
       if (src && src.x && src.y && tgt && tgt.x && tgt.y) {
-        ctx.strokeStyle = 'rgba(59, 130, 246, 0.22)';
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.28)';
         ctx.beginPath();
         ctx.moveTo(src.x, src.y);
         ctx.lineTo(tgt.x, tgt.y);
@@ -135,14 +148,23 @@ export default function KnowledgeGraph() {
       ctx.fill();
 
       // Node Label
-      if (n.isGodNode || isSelected) {
+      if (n.isGodNode || isSelected || zoomScale >= 1.5) {
         ctx.fillStyle = '#ffffff';
         ctx.font = n.isGodNode ? 'bold 11px sans-serif' : '11px sans-serif';
         ctx.fillText(n.name, n.x + radius + 4, n.y + 3);
       }
     });
 
-  }, [data, selectedNode, selectedCommunities, searchTerm]);
+    ctx.restore();
+
+  }, [data, selectedNode, selectedCommunities, searchTerm, zoomScale, panOffset]);
+
+  const handleZoomIn = () => setZoomScale(prev => Math.min(prev * 1.25, 4.0));
+  const handleZoomOut = () => setZoomScale(prev => Math.max(prev / 1.25, 0.3));
+  const handleResetZoom = () => {
+    setZoomScale(1.0);
+    setPanOffset({ x: 0, y: 0 });
+  };
 
   const toggleCommunity = (commId: number) => {
     const next = new Set(selectedCommunities);
@@ -168,7 +190,7 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">Interactive Physics Network, Communities Panel, and V3 Swarm Unified Graph</p>
+          <p className="page-subtitle">Interactive Physics Network with Pan & Zoom Controls, Communities Panel, and V3 Swarm Unified Graph</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(147, 51, 234, 0.2)', color: '#a855f7', border: '1px solid rgba(147, 51, 234, 0.4)' }}>
@@ -252,7 +274,7 @@ export default function KnowledgeGraph() {
 
       {/* Main View Modes */}
       {graphMode === 'native' ? (
-        /* Native Graphify HTML Iframe View */
+        /* Native Graphify HTML Iframe View (Vis-Network has native mouse wheel zoom & drag pan) */
         <div className="card" style={{ height: 620, padding: 0, overflow: 'hidden' }}>
           <iframe
             src="/graphify-out/graph.html"
@@ -261,26 +283,45 @@ export default function KnowledgeGraph() {
           />
         </div>
       ) : (
-        /* Canvas Visualizer with Communities Panel Sidebar (Matching Native Graphify UI) */
+        /* Canvas Visualizer with Communities Panel Sidebar + Interactive Zoom/Pan Controls */
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
 
           {/* Left Panel: Graph Canvas Visualizer */}
-          <div className="card" style={{ padding: 0 }}>
+          <div className="card" style={{ padding: 0, position: 'relative' }}>
             <div className="card-header" style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="card-title"><Activity size={15} /> Force-Directed AST Node-Link Canvas</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
-                <Search size={13} color="var(--text-muted)" />
-                <input
-                  type="text"
-                  placeholder="Filter nodes by name/file..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', width: 180 }}
-                />
+              <span className="card-title"><Activity size={15} /> Force-Directed AST Canvas</span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {/* Zoom Controls Overlay */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-card)', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
+                  <button onClick={handleZoomOut} title="Zoom Out" className="btn btn-ghost" style={{ padding: '4px 6px' }}>
+                    <ZoomOut size={13} color="var(--text-muted)" />
+                  </button>
+                  <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', minWidth: 38, textAlign: 'center', color: 'var(--accent-light)' }}>
+                    {Math.round(zoomScale * 100)}%
+                  </span>
+                  <button onClick={handleZoomIn} title="Zoom In" className="btn btn-ghost" style={{ padding: '4px 6px' }}>
+                    <ZoomIn size={13} color="var(--text-muted)" />
+                  </button>
+                  <button onClick={handleResetZoom} title="Reset View" className="btn btn-ghost" style={{ padding: '4px 6px', marginLeft: 2 }}>
+                    <Maximize2 size={12} color="var(--text-muted)" />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
+                  <Search size={13} color="var(--text-muted)" />
+                  <input
+                    type="text"
+                    placeholder="Filter nodes by name/file..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', width: 140 }}
+                  />
+                </div>
               </div>
             </div>
 
-            <div style={{ background: '#0a0d14', borderRadius: '0 0 8px 8px', display: 'flex', justifyContent: 'center', padding: 10 }}>
+            <div style={{ background: '#0a0d14', borderRadius: '0 0 8px 8px', display: 'flex', justifyContent: 'center', padding: 10, position: 'relative', overflow: 'hidden' }}>
               {loading ? (
                 <div style={{ padding: 120, color: 'var(--text-muted)' }}>Parsing AST codebase graph...</div>
               ) : (
@@ -288,18 +329,43 @@ export default function KnowledgeGraph() {
                   ref={canvasRef}
                   width={660}
                   height={500}
-                  style={{ borderRadius: 6, background: '#090b12', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}
+                  style={{ borderRadius: 6, background: '#090b12', border: '1px solid var(--border-subtle)', cursor: isDragging ? 'grabbing' : 'grab' }}
+                  onWheel={e => {
+                    e.preventDefault();
+                    if (e.deltaY < 0) {
+                      setZoomScale(prev => Math.min(prev * 1.1, 4.0));
+                    } else {
+                      setZoomScale(prev => Math.max(prev / 1.1, 0.3));
+                    }
+                  }}
+                  onMouseDown={e => {
+                    setIsDragging(true);
+                    setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+                  }}
+                  onMouseMove={e => {
+                    if (!isDragging) return;
+                    setPanOffset({
+                      x: e.clientX - dragStart.x,
+                      y: e.clientY - dragStart.y
+                    });
+                  }}
+                  onMouseUp={() => setIsDragging(false)}
+                  onMouseLeave={() => setIsDragging(false)}
                   onClick={e => {
-                    if (!canvasRef.current || !data) return;
+                    if (isDragging || !canvasRef.current || !data) return;
                     const rect = canvasRef.current.getBoundingClientRect();
-                    const clickX = e.clientX - rect.left;
-                    const clickY = e.clientY - rect.top;
+                    const rawX = e.clientX - rect.left;
+                    const rawY = e.clientY - rect.top;
+
+                    // Un-transform click coordinates for hit testing
+                    const canvasX = (rawX - panOffset.x - canvasRef.current.width / 2) / zoomScale + canvasRef.current.width / 2;
+                    const canvasY = (rawY - panOffset.y - canvasRef.current.height / 2) / zoomScale + canvasRef.current.height / 2;
 
                     const hit = data.nodes.find(n => {
                       if (n.x === undefined || n.y === undefined) return false;
-                      const dx = n.x - clickX;
-                      const dy = n.y - clickY;
-                      return Math.sqrt(dx * dx + dy * dy) <= 12;
+                      const dx = n.x - canvasX;
+                      const dy = n.y - canvasY;
+                      return Math.sqrt(dx * dx + dy * dy) <= (12 / zoomScale);
                     });
 
                     if (hit) setSelectedNode(hit);
