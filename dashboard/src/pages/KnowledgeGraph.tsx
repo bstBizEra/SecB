@@ -58,11 +58,14 @@ export default function KnowledgeGraph() {
   // Orbit Rotation state ("turn the orbit")
   const [isOrbiting, setIsOrbiting] = useState<boolean>(false);
 
+  // Continuous animation frame counter for turning dash halos & traveling relation particles
+  const [animStep, setAnimStep] = useState<number>(0);
+
   // Communities selection state (matching Graphify native UI)
   const [selectedCommunities, setSelectedCommunities] = useState<Set<number>>(new Set());
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const animFrameRef = useRef<number | null>(null);
+  const mainAnimRef = useRef<number | null>(null);
 
   // Fetch real Graphify dataset from public/graph-data.json
   useEffect(() => {
@@ -94,38 +97,38 @@ export default function KnowledgeGraph() {
       });
   }, [selectedProject]);
 
-  // Orbit Rotation Loop ("turn the orbit")
+  // Continuous 60fps Animation Loop for Orbit Rotation, Turning Dash Halos, and Relationship Flow Particles
   useEffect(() => {
-    if (!isOrbiting || !data) return;
+    const renderLoop = () => {
+      setAnimStep(prev => (prev + 1) % 10000);
 
-    const centerX = 330;
-    const centerY = 250;
-    const speed = 0.005; // radians per frame
+      if (isOrbiting && data) {
+        const centerX = 330;
+        const centerY = 250;
+        const speed = 0.005; // radians per frame
 
-    const rotateFrame = () => {
-      data.nodes.forEach(n => {
-        if (n === draggedNode || n.x === undefined || n.y === undefined) return;
-        const dx = n.x - centerX;
-        const dy = n.y - centerY;
-        const r = Math.sqrt(dx * dx + dy * dy);
-        const theta = Math.atan2(dy, dx) + speed;
-        n.x = centerX + r * Math.cos(theta);
-        n.y = centerY + r * Math.sin(theta);
-      });
+        data.nodes.forEach(n => {
+          if (n === draggedNode || n.x === undefined || n.y === undefined) return;
+          const dx = n.x - centerX;
+          const dy = n.y - centerY;
+          const r = Math.sqrt(dx * dx + dy * dy);
+          const theta = Math.atan2(dy, dx) + speed;
+          n.x = centerX + r * Math.cos(theta);
+          n.y = centerY + r * Math.sin(theta);
+        });
+      }
 
-      // Force canvas refresh
-      setData(prev => (prev ? { ...prev } : null));
-      animFrameRef.current = requestAnimationFrame(rotateFrame);
+      mainAnimRef.current = requestAnimationFrame(renderLoop);
     };
 
-    animFrameRef.current = requestAnimationFrame(rotateFrame);
+    mainAnimRef.current = requestAnimationFrame(renderLoop);
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (mainAnimRef.current) cancelAnimationFrame(mainAnimRef.current);
     };
   }, [isOrbiting, data, draggedNode]);
 
-  // Render Canvas Graph Visualization with Community Filtering, Colors, Zoom, Pan, & Element Movement
+  // Render Canvas Graph Visualization with Turning Style Halos, Thicker Connected Lines, & Animated Relation Flow
   useEffect(() => {
     if (!canvasRef.current || !data) return;
     const canvas = canvasRef.current;
@@ -149,27 +152,80 @@ export default function KnowledgeGraph() {
     const nodeMap = new Map<string, GraphNode>();
     activeNodes.forEach(n => nodeMap.set(n.id, n));
 
-    // Draw Edges
-    ctx.lineWidth = 1 / zoomScale;
+    const selectedId = selectedNode?.id;
+
+    // 1. Draw Edges (Line thicker for connected relationships)
     data.edges.forEach(e => {
       const src = nodeMap.get(e.source);
       const tgt = nodeMap.get(e.target);
-      if (src && src.x !== undefined && src.y !== undefined && tgt && tgt.x !== undefined && tgt.y !== undefined) {
-        ctx.strokeStyle = 'rgba(59, 130, 246, 0.28)';
+      if (!src || src.x === undefined || src.y === undefined || !tgt || tgt.x === undefined || tgt.y === undefined) return;
+
+      const isConnectedToSelected = selectedId && (src.id === selectedId || tgt.id === selectedId);
+      const isGodEdge = src.isGodNode || tgt.isGodNode;
+
+      ctx.save();
+      if (isConnectedToSelected) {
+        // Thicker, glowing line for selected relationships ("line thicker")
+        ctx.lineWidth = 3.2 / zoomScale;
+        ctx.strokeStyle = '#38bdf8';
+        ctx.shadowColor = '#0284c7';
+        ctx.shadowBlur = 12;
+      } else if (isGodEdge) {
+        ctx.lineWidth = 1.8 / zoomScale;
+        ctx.strokeStyle = 'rgba(99, 102, 241, 0.45)';
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.lineWidth = 1.0 / zoomScale;
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.22)';
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(src.x, src.y);
+      ctx.lineTo(tgt.x, tgt.y);
+      ctx.stroke();
+      ctx.restore();
+
+      // 2. Animated Flow Particles Along Connected Relations ("animation of relation from node")
+      if (isConnectedToSelected || isGodEdge) {
+        const particleSpeed = 0.015;
+        const progress = ((animStep * particleSpeed) % 1.0);
+        const px = src.x + (tgt.x - src.x) * progress;
+        const py = src.y + (tgt.y - src.y) * progress;
+
+        ctx.save();
         ctx.beginPath();
-        ctx.moveTo(src.x, src.y);
-        ctx.lineTo(tgt.x, tgt.y);
-        ctx.stroke();
+        ctx.arc(px, py, isConnectedToSelected ? 4 / zoomScale : 2.5 / zoomScale, 0, 2 * Math.PI);
+        ctx.fillStyle = isConnectedToSelected ? '#ffffff' : '#a5f3fc';
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = isConnectedToSelected ? 14 : 6;
+        ctx.fill();
+        ctx.restore();
       }
     });
 
-    // Draw Nodes
+    // 3. Draw Nodes & Turning Style Halos ("turn style" & "action on click")
     activeNodes.forEach(n => {
       if (n.x === undefined || n.y === undefined) return;
       const isSelected = selectedNode?.id === n.id;
       const isBeingDragged = draggedNode?.id === n.id;
-      const radius = n.isGodNode ? 10 : isSelected || isBeingDragged ? 8 : 5;
+      const radius = n.isGodNode ? 11 : isSelected || isBeingDragged ? 9 : 5;
 
+      // Draw Turning Style Halo Ring around Selected Node or God Nodes ("add turning style")
+      if (isSelected || n.isGodNode || isBeingDragged) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, radius + 7 / zoomScale, 0, 2 * Math.PI);
+        ctx.strokeStyle = isSelected ? '#38bdf8' : n.isGodNode ? '#f59e0b' : '#10b981';
+        ctx.lineWidth = 2 / zoomScale;
+        ctx.setLineDash([6 / zoomScale, 4 / zoomScale]);
+        ctx.lineDashOffset = -animStep * 0.8; // Turning animation offset!
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw Base Node Circle
+      ctx.save();
       ctx.beginPath();
       ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI);
 
@@ -179,27 +235,28 @@ export default function KnowledgeGraph() {
         ctx.shadowBlur = 18;
       } else if (n.isGodNode) {
         ctx.shadowColor = n.color || '#ef4444';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 12;
       } else if (isSelected) {
         ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 16;
       } else {
         ctx.shadowBlur = 0;
       }
 
       ctx.fill();
+      ctx.restore();
 
       // Node Label
       if (n.isGodNode || isSelected || isBeingDragged || zoomScale >= 1.5) {
         ctx.fillStyle = '#ffffff';
         ctx.font = n.isGodNode ? 'bold 11px sans-serif' : '11px sans-serif';
-        ctx.fillText(n.name, n.x + radius + 4, n.y + 3);
+        ctx.fillText(n.name, n.x + radius + 5, n.y + 3);
       }
     });
 
     ctx.restore();
 
-  }, [data, selectedNode, draggedNode, selectedCommunities, searchTerm, zoomScale, panOffset]);
+  }, [data, selectedNode, draggedNode, selectedCommunities, searchTerm, zoomScale, panOffset, animStep]);
 
   const handleZoomIn = () => setZoomScale(prev => Math.min(prev * 1.25, 4.0));
   const handleZoomOut = () => setZoomScale(prev => Math.max(prev / 1.25, 0.3));
@@ -245,7 +302,7 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">Interactive Physics Network with Element Dragging, Orbit Rotation, Zoom & Pan Controls, Communities Panel</p>
+          <p className="page-subtitle">Interactive Physics Network with Turning Style Halos, Thicker Relation Lines, Animated Relation Flow, Element Dragging, Orbit Rotation</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(147, 51, 234, 0.2)', color: '#a855f7', border: '1px solid rgba(147, 51, 234, 0.4)' }}>
@@ -338,7 +395,7 @@ export default function KnowledgeGraph() {
           />
         </div>
       ) : (
-        /* Canvas Visualizer with Communities Panel Sidebar + Interactive Drag/Orbit/Zoom Controls */
+        /* Canvas Visualizer with Turning Style Halos, Thicker Lines, & Particle Relation Flow */
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
 
           {/* Left Panel: Graph Canvas Visualizer */}
@@ -423,7 +480,7 @@ export default function KnowledgeGraph() {
                     if (!canvasRef.current || !data) return;
                     const coords = getCanvasCoords(e.clientX, e.clientY);
 
-                    // Check if user clicked on an individual node element ("move the element able")
+                    // Check if user clicked on an individual node element ("Action on click")
                     const hit = data.nodes.find(n => {
                       if (!selectedCommunities.has(n.community)) return false;
                       if (n.x === undefined || n.y === undefined) return false;
@@ -467,14 +524,17 @@ export default function KnowledgeGraph() {
               )}
             </div>
 
-            {/* Selected Node Details Bar */}
+            {/* Selected Node Details Bar ("Action on click") */}
             {selectedNode && (
               <div style={{ padding: '10px 16px', background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <span style={{ fontWeight: 700, color: 'var(--accent-light)', fontSize: '0.85rem' }}>{selectedNode.name}</span>
+                  <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>{selectedNode.name}</span>
                   <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 8 }}>({selectedNode.file})</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, fontSize: '0.72rem' }}>
+                  <span className="badge-count" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.4)' }}>
+                    Active Action Node
+                  </span>
                   <span className="badge-count">Degree: {selectedNode.connections}</span>
                   <span className="badge-count" style={{ background: selectedNode.color, color: '#fff' }}>{selectedNode.community_name}</span>
                 </div>
