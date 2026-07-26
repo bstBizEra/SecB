@@ -60,10 +60,10 @@ test("deny-by-default methods and malformed requests", () => {
   assert.equal(server.handle({ jsonrpc: "2.0", method: "notifications/initialized" }), null);
 });
 
-test("tools/list projects the frozen catalog (9 read-only tools)", () => {
+test("tools/list projects the frozen catalog (10 read-only tools)", () => {
   const { server } = harness();
   const tools = server.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }).result.tools;
-  assert.equal(tools.length, 9);
+  assert.equal(tools.length, 10);
   assert.ok(tools.every((t) => typeof t.description === "string"));
   assert.throws(() => { TOOL_CATALOG.push({}); }, TypeError);
 });

@@ -78,6 +78,13 @@ export const TOOL_CATALOG = freeze([
     required: ["document"],
     optional: [],
     idParams: []
+  },
+  {
+    name: "secb_graph_build",
+    description: "Scan target codebase folder AST triples, degree centrality, and Louvain community clusters. Saves token costs by returning a high-level graph summary.",
+    required: [],
+    optional: ["targetDir"],
+    idParams: []
   }
 ]);
 

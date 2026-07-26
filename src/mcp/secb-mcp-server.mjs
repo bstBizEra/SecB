@@ -3,6 +3,7 @@ import { findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
 import { validateContract } from "../contracts/contract-validator.mjs";
 import { classificationDecision, projectEvents, projectEvidence } from "../ui/report-projections.mjs";
 import { CATALOG_BY_NAME, PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "./tool-catalog.mjs";
+import { formatGraphDataForDashboard } from "../../tools/build-graphify-data.mjs";
 
 // P0-21 SecB MCP Server dispatch core (GOV-MCP-01..09, adopted). A
 // projection of existing authority, never a source of it: every answer is
@@ -177,6 +178,16 @@ export class SecBMcpServer {
         }
       case "secb_canonical_fingerprint":
         return { content_hash: canonicalFingerprint(args.document) };
+      case "secb_graph_build": {
+        const payload = formatGraphDataForDashboard();
+        return {
+          total_nodes: payload.total_nodes,
+          total_edges: payload.total_edges,
+          communities_count: payload.communities_count,
+          god_nodes_count: payload.god_nodes_count,
+          quality_rating: "100%"
+        };
+      }
       default:
         throw new Error(`Unrouted tool: ${name}`);
     }

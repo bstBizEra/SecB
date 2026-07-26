@@ -223,7 +223,7 @@ test("wired end-to-end: initialize + tools/list + a read tool call, audited", as
 
     const byId = new Map(responses.map((r) => [r.id, r]));
     assert.equal(byId.get(1).result.protocolVersion, PINNED_PROTOCOL_VERSION);
-    assert.equal(byId.get(2).result.tools.length, 9);
+    assert.equal(byId.get(2).result.tools.length, 10);
     const call = byId.get(3).result;
     assert.equal(call.content_disposition, "data_untrusted");
     assert.equal(call.tool, "secb_ledger_verify_summary");
