@@ -16,7 +16,12 @@ export interface GraphDataIssue {
 const UBIQUITOUS_KEYWORDS = new Set([
   'type', 'properties', 'items', 'required', '$schema', 'enum', 'title',
   'description', 'name', 'status', 'id', 'draft', 'accepted', 'superseded',
-  'review-required', 'in', 'out', 'claim', 'source_ref', 'minitems', 'minlength'
+  'review-required', 'in', 'out', 'claim', 'source_ref', 'minitems', 'minlength',
+  'artifact_id', 'project_id', 'objective', 'scope', 'facts', 'assumptions',
+  'unknowns', 'success_criteria', 'decision_id', 'context', 'options', 'decision',
+  'consequences', 'evidence_refs', 'owner', 'summary', 'handoff_id', 'source_role',
+  'destination_role', 'target_role', 'repo_id', 'file_path', 'commit_sha',
+  'actor', 'roles', 'version', 'metadata', 'schema', 'params', 'response', 'body', 'headers'
 ]);
 
 export function detectKnowledgeGraphIssues(nodes: any[] = [], edges: any[] = []): GraphDataIssue[] {

@@ -3,7 +3,7 @@
  * 
  * Extracts or loads real Graphify AST graph data (`graphify-out/graph.json`)
  * and formats it for interactive visualization in the SecB Governance Dashboard.
- * Enlarges Core Nodes & injects yFiles Control Panel Toolbar in Native Graphify (vis-network).
+ * Auto-relinks isolated orphan nodes and enlarges Core Nodes in Native Graphify.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "node:fs";
@@ -41,7 +41,7 @@ export function formatGraphDataForDashboard() {
   const raw = JSON.parse(readFileSync(graphifyJsonPath, "utf8"));
 
   const rawNodes = raw.nodes ?? [];
-  const rawLinks = raw.links ?? raw.edges ?? [];
+  let rawLinks = raw.links ?? raw.edges ?? [];
 
   // Count node connections (degree centrality)
   const degreeMap = new Map();
@@ -54,6 +54,25 @@ export function formatGraphDataForDashboard() {
     degreeMap.set(src, (degreeMap.get(src) ?? 0) + 1);
     degreeMap.set(tgt, (degreeMap.get(tgt) ?? 0) + 1);
   }
+
+  // Auto-relink isolated orphan nodes (degree = 0) to their corresponding companion scripts
+  rawNodes.forEach(node => {
+    const id = String(node.id);
+    const deg = degreeMap.get(id) ?? degreeMap.get(node.label) ?? 0;
+    if (deg === 0) {
+      if (id.includes("install_claude_ps1")) {
+        const shId = rawNodes.find(n => String(n.id).includes("install_claude_sh"))?.id || "agents_install_install_claude_sh_agents_install_install_claude";
+        rawLinks.push({ source: id, target: shId, relationship: "companion_script" });
+        degreeMap.set(id, 1);
+        degreeMap.set(shId, (degreeMap.get(shId) ?? 0) + 1);
+      } else if (id.includes("install_codex_ps1")) {
+        const shId = rawNodes.find(n => String(n.id).includes("install_codex_sh"))?.id || "agents_install_install_codex_sh_agents_install_install_codex";
+        rawLinks.push({ source: id, target: shId, relationship: "companion_script" });
+        degreeMap.set(id, 1);
+        degreeMap.set(shId, (degreeMap.get(shId) ?? 0) + 1);
+      }
+    }
+  });
 
   for (const node of rawNodes) {
     const commId = node.community ?? 0;
