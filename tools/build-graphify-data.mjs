@@ -3,7 +3,7 @@
  * 
  * Extracts or loads real Graphify AST graph data (`graphify-out/graph.json`)
  * and formats it for interactive visualization in the SecB Governance Dashboard.
- * Enlarges Core Nodes in Native Graphify (vis-network) for immediate visual prominence.
+ * Enlarges Core Nodes & injects yFiles Control Panel Toolbar in Native Graphify (vis-network).
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "node:fs";
@@ -114,7 +114,7 @@ export function formatGraphDataForDashboard() {
   mkdirSync(resolve(projectRoot, "dashboard", "public"), { recursive: true });
   writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
 
-  // Enhance Native Graphify HTML (vis-network) to enlarge Core/God Nodes
+  // Enhance Native Graphify HTML (vis-network) with yFiles Control Panel Toolbar & enlarged Core Nodes
   if (existsSync(graphifyHtmlPath)) {
     mkdirSync(publicHtmlDir, { recursive: true });
     let htmlContent = readFileSync(graphifyHtmlPath, "utf8");
@@ -127,7 +127,6 @@ export function formatGraphDataForDashboard() {
           const nodes = JSON.parse(jsonStr);
           const enhanced = nodes.map((n) => {
             const deg = n.degree ?? 0;
-            // Core nodes (degree >= 10 or degree >= 15) get large sizes (45px to 80px)
             if (deg >= 15) {
               n.size = 65.0 + (deg * 0.8);
               n.font = { size: 16, color: "#ffffff" };
@@ -150,8 +149,112 @@ export function formatGraphDataForDashboard() {
       }
     );
 
+    // Inject yFiles Control Panel Toolbar CSS & HTML into native graph.html
+    const toolbarCss = `
+<style>
+.yfiles-toolbar {
+  position: absolute; top: 12px; left: 12px; z-index: 999;
+  background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 8px;
+  padding: 8px 14px; display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5); font-family: sans-serif; font-size: 13px; color: #e0e0e0;
+}
+.yfiles-toolbar button {
+  background: #2a2a4e; color: #38bdf8; border: 1px solid #3a3a5e;
+  padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 4px; transition: all 0.15s ease;
+}
+.yfiles-toolbar button:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+.yfiles-toolbar .separator { width: 1px; height: 18px; background: #3a3a5e; margin: 0 2px; }
+.yfiles-toolbar input[type="search"] {
+  background: #0f0f1a; border: 1px solid #3a3a5e; color: #fff;
+  padding: 5px 8px; border-radius: 4px; font-size: 12px; outline: none; width: 130px;
+}
+.yfiles-toolbar input[type="search"]:focus { border-color: #38bdf8; }
+.yfiles-toolbar label { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+</style>
+`;
+
+    const toolbarHtml = `
+<div class="toolbar yfiles-toolbar" data-tip-id="toolbar">
+  <div class="toolbar-overflow-container"></div>
+  <button class="toolbar-overflow-button" title="More..." style="display: none;">more_horiz</button>
+  <button data-command="DECREASE_ZOOM" id="zoom-out-button" title="Decrease zoom" onclick="if(window.network) window.network.moveTo({scale: window.network.getScale() * 0.75, animation: true});">
+    Zoom Out
+  </button>
+  <button data-command="INCREASE_ZOOM" id="zoom-in-button" title="Increase zoom" onclick="if(window.network) window.network.moveTo({scale: window.network.getScale() * 1.25, animation: true});">
+    Zoom In
+  </button>
+  <button data-command="FIT_GRAPH_BOUNDS" id="fit-graph-button" title="Fit content" onclick="if(window.network) window.network.fit({animation: true});">
+    Fit Content
+  </button>
+
+  <span class="separator"></span>
+  <div>
+    <input type="checkbox" id="teams-view" title="Organizes the graph in teams" class="demo-toggle-button" onchange="toggleGroupTeamsMode(this.checked)">
+    <label for="teams-view" title="Rearrange the graph so teammates are positioned near each other">
+      Group By Teams
+    </label>
+  </div>
+
+  <span class="separator"></span>
+  <span>
+    <label for="searchBox">Search:</label>
+    <input type="search" id="searchBox" oninput="if(window.filterVisNodes) window.filterVisNodes(this.value)">
+  </span>
+</div>
+
+<script>
+window.toggleGroupTeamsMode = function(checked) {
+  if (!window.network || !window.nodesDataset) return;
+  const nodes = window.nodesDataset.get();
+  if (checked) {
+    const commCenters = {};
+    const comms = [...new Set(nodes.map(n => n.community || 0))];
+    const K = comms.length || 1;
+    comms.forEach((c, idx) => {
+      const angle = (idx * 2 * Math.PI) / K;
+      commCenters[c] = { x: 400 * Math.cos(angle), y: 400 * Math.sin(angle) };
+    });
+    const updated = nodes.map(n => {
+      const center = commCenters[n.community || 0] || { x: 0, y: 0 };
+      return { id: n.id, x: center.x + (Math.random() * 80 - 40), y: center.y + (Math.random() * 80 - 40) };
+    });
+    window.nodesDataset.update(updated);
+  } else {
+    window.network.stabilize();
+  }
+};
+
+window.filterVisNodes = function(query) {
+  if (!window.nodesDataset) return;
+  const q = (query || '').toLowerCase();
+  const nodes = window.nodesDataset.get();
+  const updated = nodes.map(n => {
+    const match = !q || (n.label && n.label.toLowerCase().includes(q)) || (n.title && n.title.toLowerCase().includes(q));
+    return { id: n.id, hidden: !match };
+  });
+  window.nodesDataset.update(updated);
+};
+
+window.addEventListener('message', function(e) {
+  if (!e.data || !window.network) return;
+  const { action, val } = e.data;
+  if (action === 'zoomIn') window.network.moveTo({ scale: window.network.getScale() * 1.25, animation: true });
+  if (action === 'zoomOut') window.network.moveTo({ scale: window.network.getScale() * 0.75, animation: true });
+  if (action === 'fit') window.network.fit({ animation: true });
+  if (action === 'toggleTeams') window.toggleGroupTeamsMode(val);
+  if (action === 'search') window.filterVisNodes(val);
+});
+</script>
+`;
+
+    if (!htmlContent.includes('yfiles-toolbar')) {
+      htmlContent = htmlContent.replace('</head>', `${toolbarCss}</head>`);
+      htmlContent = htmlContent.replace('<body>', `<body>${toolbarHtml}`);
+    }
+
     writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
-    console.log(`[Graphify Pipeline] Synced & enlarged Core Nodes in native graph.html to ${publicHtmlDir}/graph.html`);
+    console.log(`[Graphify Pipeline] Synced yFiles toolbar & enlarged Core Nodes in native graph.html to ${publicHtmlDir}/graph.html`);
   }
 
   console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);

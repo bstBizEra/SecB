@@ -168,7 +168,15 @@ export default function KnowledgeGraph() {
   const [selectedCommunities, setSelectedCommunities] = useState<Set<number>>(new Set());
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const mainAnimRef = useRef<number | null>(null);
+
+  // Helper to sync actions to Native Graphify iframe if active
+  const postIframeAction = (action: string, val?: any) => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({ action, val }, '*');
+    }
+  };
 
   // Apply layout positioning (Group by Teams vs Force-Directed Circular)
   const applyLayoutPositions = (payload: GraphPayload, grouped: boolean) => {
@@ -245,10 +253,36 @@ export default function KnowledgeGraph() {
 
   const handleToggleTeamsView = (checked: boolean) => {
     setIsGroupedByTeams(checked);
+    postIframeAction('toggleTeams', checked);
     if (data) {
       applyLayoutPositions(data, checked);
-      setData({ ...data });
+      setData({
+        ...data,
+        nodes: [...data.nodes] // Clone array to trigger React state re-render
+      });
     }
+  };
+
+  const handleZoomIn = () => {
+    setZoomScale(prev => Math.min(prev * 1.25, 4.0));
+    postIframeAction('zoomIn');
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale(prev => Math.max(prev / 1.25, 0.3));
+    postIframeAction('zoomOut');
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1.0);
+    setPanOffset({ x: 0, y: 0 });
+    setNeighborhoodNode(null);
+    postIframeAction('fit');
+  };
+
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    postIframeAction('search', val);
   };
 
   const handleInspectFolder = (path: string) => {
@@ -452,14 +486,6 @@ export default function KnowledgeGraph() {
     ctx.restore();
 
   }, [data, selectedNode, draggedNode, selectedCommunities, searchTerm, zoomScale, panOffset, animStep, spotlightBeaconMode, detectedIssues, neighborhoodNode]);
-
-  const handleZoomIn = () => setZoomScale(prev => Math.min(prev * 1.25, 4.0));
-  const handleZoomOut = () => setZoomScale(prev => Math.max(prev / 1.25, 0.3));
-  const handleResetZoom = () => {
-    setZoomScale(1.0);
-    setPanOffset({ x: 0, y: 0 });
-    setNeighborhoodNode(null);
-  };
 
   const toggleCommunity = (commId: number) => {
     const next = new Set(selectedCommunities);
@@ -757,7 +783,7 @@ export default function KnowledgeGraph() {
             type="search"
             id="searchBox"
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={e => handleSearchChange(e.target.value)}
             placeholder="Search nodes or files..."
             style={{
               flex: 1,
@@ -806,6 +832,7 @@ export default function KnowledgeGraph() {
         /* Native Graphify HTML Iframe View (Vis-Network has native mouse wheel zoom & drag pan) */
         <div className="card" style={{ height: 620, padding: 0, overflow: 'hidden' }}>
           <iframe
+            ref={iframeRef}
             src="/graphify-out/graph.html"
             title="Graphify Native Visualizer"
             style={{ width: '100%', height: '100%', border: 'none' }}
