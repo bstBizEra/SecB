@@ -14,7 +14,7 @@
  */
 
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { formatGraphDataForDashboard, runGraphifyExtraction } from "./build-graphify-data.mjs";
@@ -82,7 +82,7 @@ export async function executeSecbGraphCommand(options = {}) {
 }
 
 // CLI Execution Entry Point
-if (process.argv[1] && import.meta.url === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && (import.meta.url === pathToFileURL(resolve(process.argv[1])).href || fileURLToPath(import.meta.url) === resolve(process.argv[1]))) {
   const args = process.argv.slice(2);
   const targetDir = args.find(a => !a.startsWith("--")) || ROOT;
   const extract = args.includes("--extract");
