@@ -171,13 +171,6 @@ export default function KnowledgeGraph() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const mainAnimRef = useRef<number | null>(null);
 
-  // Helper to sync actions to Native Graphify iframe if active
-  const postIframeAction = (action: string, val?: any) => {
-    if (iframeRef.current && iframeRef.current.contentWindow) {
-      iframeRef.current.contentWindow.postMessage({ action, val }, '*');
-    }
-  };
-
   // Apply layout positioning (Group by Teams vs Force-Directed Circular)
   const applyLayoutPositions = (payload: GraphPayload, grouped: boolean) => {
     if (!payload || !payload.nodes) return;
@@ -251,38 +244,12 @@ export default function KnowledgeGraph() {
     loadGraphData(activeFolderPath);
   }, []);
 
-  const handleToggleTeamsView = (checked: boolean) => {
-    setIsGroupedByTeams(checked);
-    postIframeAction('toggleTeams', checked);
-    if (data) {
-      applyLayoutPositions(data, checked);
-      setData({
-        ...data,
-        nodes: [...data.nodes] // Clone array to trigger React state re-render
-      });
-    }
-  };
-
-  const handleZoomIn = () => {
-    setZoomScale(prev => Math.min(prev * 1.25, 4.0));
-    postIframeAction('zoomIn');
-  };
-
-  const handleZoomOut = () => {
-    setZoomScale(prev => Math.max(prev / 1.25, 0.3));
-    postIframeAction('zoomOut');
-  };
-
+  const handleZoomIn = () => setZoomScale(prev => Math.min(prev * 1.25, 4.0));
+  const handleZoomOut = () => setZoomScale(prev => Math.max(prev / 1.25, 0.3));
   const handleResetZoom = () => {
     setZoomScale(1.0);
     setPanOffset({ x: 0, y: 0 });
     setNeighborhoodNode(null);
-    postIframeAction('fit');
-  };
-
-  const handleSearchChange = (val: string) => {
-    setSearchTerm(val);
-    postIframeAction('search', val);
   };
 
   const handleInspectFolder = (path: string) => {
@@ -532,7 +499,7 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">yFiles Showcase Control Panel, Quality Inspector, Data Issues Radar, Folder Selection, Turning Halos</p>
+          <p className="page-subtitle">yFiles Quality Inspector, Data Issues Radar, Folder Selection, Turning Halos</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {detectedIssues.length > 0 && (
@@ -692,112 +659,13 @@ export default function KnowledgeGraph() {
         </div>
       </div>
 
-      {/* yFiles Control Panel Toolbar (User Provided Markup Implementation) */}
-      <div
-        className="toolbar card"
-        data-tip-id="toolbar"
-        style={{
-          padding: '10px 16px',
-          display: 'flex',
-          gap: 12,
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          marginBottom: 16,
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border-mid)'
-        }}
-      >
-        <div className="toolbar-overflow-container"></div>
-        <button className="toolbar-overflow-button" title="More..." style={{ display: 'none' }}>more_horiz</button>
-        
-        {/* Decrease Zoom */}
-        <button
-          data-command="DECREASE_ZOOM"
-          id="zoom-out-button"
-          title="Decrease zoom"
-          data-icon="zoom_out"
-          data-command-registered=""
-          onClick={handleZoomOut}
-          className="btn btn-ghost"
-          style={{ padding: '6px 12px', fontSize: '0.8rem', gap: 6, display: 'flex', alignItems: 'center' }}
-        >
-          <ZoomOut size={15} /> Decrease Zoom
-        </button>
-
-        {/* Increase Zoom */}
-        <button
-          data-command="INCREASE_ZOOM"
-          id="zoom-in-button"
-          title="Increase zoom"
-          data-icon="zoom_in"
-          data-command-registered=""
-          onClick={handleZoomIn}
-          className="btn btn-ghost"
-          style={{ padding: '6px 12px', fontSize: '0.8rem', gap: 6, display: 'flex', alignItems: 'center' }}
-        >
-          <ZoomIn size={15} /> Increase Zoom
-        </button>
-
-        {/* Fit Graph Bounds */}
-        <button
-          data-command="FIT_GRAPH_BOUNDS"
-          id="fit-graph-button"
-          title="Fit content"
-          data-icon="zoom_out_map"
-          data-command-registered=""
-          onClick={handleResetZoom}
-          className="btn btn-ghost"
-          style={{ padding: '6px 12px', fontSize: '0.8rem', gap: 6, display: 'flex', alignItems: 'center' }}
-        >
-          <Maximize2 size={15} /> Fit Content
-        </button>
-
-        <span className="separator" style={{ width: 1, height: 22, background: 'var(--border-subtle)', margin: '0 4px' }}></span>
-
-        {/* Group By Teams Toggle */}
+      {/* Clean View Mode Tabs Header */}
+      <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="checkbox"
-            id="teams-view"
-            title="Organizes the graph in teams"
-            className="demo-toggle-button"
-            checked={isGroupedByTeams}
-            onChange={e => handleToggleTeamsView(e.target.checked)}
-            style={{ cursor: 'pointer', width: 15, height: 15 }}
-          />
-          <label
-            htmlFor="teams-view"
-            title="Rearrange the graph so teammates are positioned near each other"
-            style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
-          >
-            Group By Teams
-          </label>
+          <Layers size={15} color="var(--accent-light)" />
+          <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Graph View Mode:</span>
         </div>
 
-        <span className="separator" style={{ width: 1, height: 22, background: 'var(--border-subtle)', margin: '0 4px' }}></span>
-
-        {/* Search Box */}
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
-          <label htmlFor="searchBox" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Search:</label>
-          <input
-            type="search"
-            id="searchBox"
-            value={searchTerm}
-            onChange={e => handleSearchChange(e.target.value)}
-            placeholder="Search nodes or files..."
-            style={{
-              flex: 1,
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border-mid)',
-              color: 'var(--text-primary)',
-              padding: '5px 10px',
-              borderRadius: 6,
-              fontSize: '0.8rem'
-            }}
-          />
-        </span>
-
-        {/* View Mode Selector Tabs */}
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
           {[
             { id: 'canvas', label: 'Interactive Canvas', icon: Code },
@@ -814,13 +682,14 @@ export default function KnowledgeGraph() {
                 className="btn btn-ghost"
                 style={{
                   fontSize: '0.75rem',
-                  padding: '4px 10px',
+                  padding: '5px 12px',
                   background: active ? 'var(--accent-glow)' : 'transparent',
                   color: active ? 'var(--accent-light)' : 'var(--text-muted)',
-                  border: active ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent'
+                  border: active ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
+                  fontWeight: active ? 700 : 500
                 }}
               >
-                <Icon size={12} /> {m.label}
+                <Icon size={13} /> {m.label}
               </button>
             );
           })}
@@ -829,8 +698,8 @@ export default function KnowledgeGraph() {
 
       {/* Main View Modes */}
       {graphMode === 'native' ? (
-        /* Native Graphify HTML Iframe View (Vis-Network has native mouse wheel zoom & drag pan) */
-        <div className="card" style={{ height: 620, padding: 0, overflow: 'hidden' }}>
+        /* Native Graphify HTML Iframe View (Vis-Network has native yFiles Toolbar embedded inside graph.html) */
+        <div className="card" style={{ height: 640, padding: 0, overflow: 'hidden' }}>
           <iframe
             ref={iframeRef}
             src="/graphify-out/graph.html"
@@ -889,10 +758,21 @@ export default function KnowledgeGraph() {
                   {isOrbiting ? 'Orbit Spin ON' : 'Turn Orbit'}
                 </button>
 
-                {/* Zoom Scale Badge */}
-                <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-mid)', color: 'var(--accent-light)' }}>
-                  {Math.round(zoomScale * 100)}%
-                </span>
+                {/* Zoom Controls Overlay */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-card)', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
+                  <button onClick={handleZoomOut} title="Zoom Out" className="btn btn-ghost" style={{ padding: '4px 6px' }}>
+                    <ZoomOut size={13} color="var(--text-muted)" />
+                  </button>
+                  <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', minWidth: 38, textAlign: 'center', color: 'var(--accent-light)' }}>
+                    {Math.round(zoomScale * 100)}%
+                  </span>
+                  <button onClick={handleZoomIn} title="Zoom In" className="btn btn-ghost" style={{ padding: '4px 6px' }}>
+                    <ZoomIn size={13} color="var(--text-muted)" />
+                  </button>
+                  <button onClick={handleResetZoom} title="Reset View" className="btn btn-ghost" style={{ padding: '4px 6px', marginLeft: 2 }}>
+                    <Maximize2 size={12} color="var(--text-muted)" />
+                  </button>
+                </div>
               </div>
             </div>
 
