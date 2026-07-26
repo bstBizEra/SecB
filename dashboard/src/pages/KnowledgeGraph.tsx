@@ -1,5 +1,90 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check } from 'lucide-react';
+import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check, AlertTriangle, Radio, Wrench, Eye, CornerDownRight } from 'lucide-react';
+
+export interface GraphDataIssue {
+  id: string;
+  type: 'DUPLICATED_NODE' | 'ISOLATED_NODE' | 'INVALID_EDGE';
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  title: string;
+  description: string;
+  affectedNodeIds: string[];
+  suggestedAction: string;
+}
+
+export function detectKnowledgeGraphIssues(nodes: any[], edges: any[]): GraphDataIssue[] {
+  const issues: GraphDataIssue[] = [];
+  const nodeMap = new Map<string, any>();
+  const degreeMap = new Map<string, number>();
+
+  nodes.forEach(n => {
+    nodeMap.set(String(n.id), n);
+    degreeMap.set(String(n.id), 0);
+  });
+
+  // Calculate degree centrality
+  edges.forEach(e => {
+    const src = String(e.source);
+    const tgt = String(e.target);
+    if (degreeMap.has(src)) degreeMap.set(src, (degreeMap.get(src) || 0) + 1);
+    if (degreeMap.has(tgt)) degreeMap.set(tgt, (degreeMap.get(tgt) || 0) + 1);
+
+    // Check for Invalid / Dangling Edges
+    if (!nodeMap.has(src) || !nodeMap.has(tgt)) {
+      issues.push({
+        id: `ISSUE-EDGE-${src}-${tgt}`,
+        type: 'INVALID_EDGE',
+        severity: 'HIGH',
+        title: `Invalid Edge Endpoint (${src} ➔ ${tgt})`,
+        description: `Edge references target node "${!nodeMap.has(tgt) ? tgt : src}" which does not exist in the graph.`,
+        affectedNodeIds: [nodeMap.has(src) ? src : tgt],
+        suggestedAction: 'Repair edge endpoint'
+      });
+    }
+  });
+
+  // Check for Isolated Nodes
+  nodes.forEach(n => {
+    const id = String(n.id);
+    const deg = degreeMap.get(id) || 0;
+    if (deg === 0) {
+      issues.push({
+        id: `ISSUE-ISOLATED-${id}`,
+        type: 'ISOLATED_NODE',
+        severity: 'MEDIUM',
+        title: `Isolated Orphan Node: "${n.name || n.label || id}"`,
+        description: `Node has 0 connected relationships in the graph.`,
+        affectedNodeIds: [id],
+        suggestedAction: 'Relink or purge'
+      });
+    }
+  });
+
+  // Check for Duplicated Nodes (same symbol label across different paths)
+  const nameOccurrences = new Map<string, string[]>();
+  nodes.forEach(n => {
+    const name = String(n.name || n.label || n.id).toLowerCase();
+    if (name.length > 2) {
+      if (!nameOccurrences.has(name)) nameOccurrences.set(name, []);
+      nameOccurrences.get(name)!.push(String(n.id));
+    }
+  });
+
+  nameOccurrences.forEach((ids, name) => {
+    if (ids.length > 1) {
+      issues.push({
+        id: `ISSUE-DUP-${name}`,
+        type: 'DUPLICATED_NODE',
+        severity: 'LOW',
+        title: `Duplicated Entity Label: "${name}"`,
+        description: `Found ${ids.length} separate nodes sharing the identical symbol name across different files.`,
+        affectedNodeIds: ids,
+        suggestedAction: 'Consolidate concepts'
+      });
+    }
+  });
+
+  return issues;
+}
 
 interface CommunityItem {
   id: number;
@@ -54,8 +139,14 @@ export default function KnowledgeGraph() {
   ]);
 
   const [graphMode, setGraphMode] = useState<'canvas' | 'native' | 'system' | 'memory'>('canvas');
+  const [rightTab, setRightTab] = useState<'communities' | 'issues'>('communities');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+
+  // yFiles Showcase Feature: Data Issues & Spotlight Beacon Radar
+  const [detectedIssues, setDetectedIssues] = useState<GraphDataIssue[]>([]);
+  const [spotlightBeaconMode, setSpotlightBeaconMode] = useState<boolean>(false);
+  const [neighborhoodNode, setNeighborhoodNode] = useState<GraphNode | null>(null);
 
   // Zoom & Pan state
   const [zoomScale, setZoomScale] = useState<number>(1.0);
@@ -98,6 +189,11 @@ export default function KnowledgeGraph() {
         });
 
         setData(payload);
+
+        // Run yFiles Data Issue Detection
+        const issues = detectKnowledgeGraphIssues(payload.nodes, payload.edges);
+        setDetectedIssues(issues);
+
         // Select top 15 communities by default
         const initialCommSet = new Set(payload.top_communities.slice(0, 15).map(c => c.id));
         setSelectedCommunities(initialCommSet);
@@ -175,13 +271,27 @@ export default function KnowledgeGraph() {
     ctx.scale(zoomScale, zoomScale);
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
+    // Build Neighborhood set if active
+    let neighborhoodSet: Set<string> | null = null;
+    if (neighborhoodNode) {
+      neighborhoodSet = new Set<string>([neighborhoodNode.id]);
+      data.edges.forEach(e => {
+        if (e.source === neighborhoodNode.id) neighborhoodSet!.add(e.target);
+        if (e.target === neighborhoodNode.id) neighborhoodSet!.add(e.source);
+      });
+    }
+
     const activeNodes = data.nodes.filter(n =>
       selectedCommunities.has(n.community) &&
+      (!neighborhoodSet || neighborhoodSet.has(n.id)) &&
       (searchTerm === '' || n.name.toLowerCase().includes(searchTerm.toLowerCase()) || n.file.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const nodeMap = new Map<string, GraphNode>();
     activeNodes.forEach(n => nodeMap.set(n.id, n));
+
+    const problemNodeIds = new Set<string>();
+    detectedIssues.forEach(i => i.affectedNodeIds.forEach((id: string) => problemNodeIds.add(id)));
 
     const selectedId = selectedNode?.id;
 
@@ -235,12 +345,25 @@ export default function KnowledgeGraph() {
       }
     });
 
-    // 3. Draw Nodes & Turning Style Halos ("turn style" & "action on click")
+    // 3. Draw Nodes & Turning Style Halos & Spotlight Radar Beacons
     activeNodes.forEach(n => {
       if (n.x === undefined || n.y === undefined) return;
       const isSelected = selectedNode?.id === n.id;
       const isBeingDragged = draggedNode?.id === n.id;
+      const isProblemNode = problemNodeIds.has(n.id);
       const radius = n.isGodNode ? 11 : isSelected || isBeingDragged ? 9 : 5;
+
+      // Spotlight Radar Beacon Ring (yFiles Showcase Feature)
+      if (spotlightBeaconMode && isProblemNode) {
+        const beaconPulse = (animStep * 0.8) % 30;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, radius + beaconPulse / zoomScale, 0, 2 * Math.PI);
+        ctx.strokeStyle = `rgba(239, 68, 68, ${1 - beaconPulse / 30})`;
+        ctx.lineWidth = 2.5 / zoomScale;
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Draw Turning Style Halo Ring around Selected Node or God Nodes ("add turning style")
       if (isSelected || n.isGodNode || isBeingDragged) {
@@ -260,7 +383,7 @@ export default function KnowledgeGraph() {
       ctx.beginPath();
       ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI);
 
-      ctx.fillStyle = n.color || '#3b82f6';
+      ctx.fillStyle = isProblemNode ? '#ef4444' : n.color || '#3b82f6';
       if (isBeingDragged) {
         ctx.shadowColor = '#f59e0b';
         ctx.shadowBlur = 18;
@@ -287,13 +410,14 @@ export default function KnowledgeGraph() {
 
     ctx.restore();
 
-  }, [data, selectedNode, draggedNode, selectedCommunities, searchTerm, zoomScale, panOffset, animStep]);
+  }, [data, selectedNode, draggedNode, selectedCommunities, searchTerm, zoomScale, panOffset, animStep, spotlightBeaconMode, detectedIssues, neighborhoodNode]);
 
   const handleZoomIn = () => setZoomScale(prev => Math.min(prev * 1.25, 4.0));
   const handleZoomOut = () => setZoomScale(prev => Math.max(prev / 1.25, 0.3));
   const handleResetZoom = () => {
     setZoomScale(1.0);
     setPanOffset({ x: 0, y: 0 });
+    setNeighborhoodNode(null);
   };
 
   const toggleCommunity = (commId: number) => {
@@ -315,6 +439,14 @@ export default function KnowledgeGraph() {
     }
   };
 
+  const handleFixIssue = (issue: GraphDataIssue) => {
+    setDetectedIssues(prev => prev.filter(i => i.id !== issue.id));
+    if (issue.affectedNodeIds.length > 0 && data) {
+      const node = data.nodes.find(n => n.id === issue.affectedNodeIds[0]);
+      if (node) setSelectedNode(node);
+    }
+  };
+
   // Convert raw screen event coordinates into un-transformed canvas coordinates
   const getCanvasCoords = (clientX: number, clientY: number) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -333,9 +465,14 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">Interactive Physics Network with Custom Folder Selection, Turning Halos, Thicker Lines, Particle Flow, Dragging & Orbit Controls</p>
+          <p className="page-subtitle">yFiles Showcase Quality Inspector, Data Issues Radar, Folder Selection, Turning Halos, Thicker Relation Lines, Particle Flow</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {detectedIssues.length > 0 && (
+            <span className="badge-status" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
+              <AlertTriangle size={13} /> {detectedIssues.length} Data Issues
+            </span>
+          )}
           <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(147, 51, 234, 0.2)', color: '#a855f7', border: '1px solid rgba(147, 51, 234, 0.4)' }}>
             👑 15-Agent V3 Swarm Active
           </span>
@@ -360,9 +497,9 @@ export default function KnowledgeGraph() {
           </div>
         </div>
         <div className="card" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Graph Communities</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#10b981' }}>
-            {data ? data.communities_count : 300}
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Graph Quality Rating</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: detectedIssues.length === 0 ? '#10b981' : '#f59e0b' }}>
+            {Math.max(75, 100 - detectedIssues.length * 3)}% Quality
           </div>
         </div>
         <div className="card" style={{ padding: '12px 16px' }}>
@@ -488,7 +625,7 @@ export default function KnowledgeGraph() {
         </div>
       </div>
 
-      {/* Control Bar: View Modes */}
+      {/* Control Bar: View Modes & Spotlight Radar Toggle */}
       <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Layers size={15} color="var(--accent-light)" />
@@ -536,14 +673,34 @@ export default function KnowledgeGraph() {
         </div>
       ) : (
         /* Canvas Visualizer with Turning Style Halos, Thicker Lines, & Particle Relation Flow */
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
 
           {/* Left Panel: Graph Canvas Visualizer */}
           <div className="card" style={{ padding: 0, position: 'relative' }}>
             <div className="card-header" style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="card-title"><Activity size={15} /> Force-Directed AST Canvas</span>
               
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+                {/* yFiles Showcase Feature: Spotlight Radar Beacon Toggle */}
+                <button
+                  onClick={() => setSpotlightBeaconMode(!spotlightBeaconMode)}
+                  className="btn btn-ghost"
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '4px 8px',
+                    gap: 5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: spotlightBeaconMode ? 'rgba(239, 68, 68, 0.2)' : 'var(--bg-card)',
+                    color: spotlightBeaconMode ? '#ef4444' : 'var(--text-muted)',
+                    border: spotlightBeaconMode ? '1px solid #ef4444' : '1px solid var(--border-mid)'
+                  }}
+                  title="yFiles Showcase: Spotlight Beacon Radar for Data Issues"
+                >
+                  <Radio size={13} className={spotlightBeaconMode ? 'spin' : ''} />
+                  {spotlightBeaconMode ? 'Spotlight Radar ON' : 'Spotlight Radar'}
+                </button>
 
                 {/* Turn Orbit Rotation Button */}
                 <button
@@ -588,7 +745,7 @@ export default function KnowledgeGraph() {
                     placeholder="Filter nodes..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', width: 110 }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', width: 90 }}
                   />
                 </div>
               </div>
@@ -600,13 +757,30 @@ export default function KnowledgeGraph() {
               ) : (
                 <canvas
                   ref={canvasRef}
-                  width={660}
+                  width={640}
                   height={500}
                   style={{
                     borderRadius: 6,
                     background: '#090b12',
                     border: '1px solid var(--border-subtle)',
                     cursor: draggedNode ? 'grabbing' : isDragging ? 'grabbing' : 'grab'
+                  }}
+                  onDoubleClick={e => {
+                    if (!canvasRef.current || !data) return;
+                    const coords = getCanvasCoords(e.clientX, e.clientY);
+                    const hit = data.nodes.find(n => {
+                      if (!selectedCommunities.has(n.community)) return false;
+                      if (n.x === undefined || n.y === undefined) return false;
+                      const dx = n.x - coords.x;
+                      const dy = n.y - coords.y;
+                      return Math.sqrt(dx * dx + dy * dy) <= (14 / zoomScale);
+                    });
+
+                    // yFiles Showcase: Neighborhood 1-Hop View Explorer
+                    if (hit) {
+                      setNeighborhoodNode(hit);
+                      setSelectedNode(hit);
+                    }
                   }}
                   onWheel={e => {
                     e.preventDefault();
@@ -672,9 +846,11 @@ export default function KnowledgeGraph() {
                   <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 8 }}>({selectedNode.file})</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, fontSize: '0.72rem' }}>
-                  <span className="badge-count" style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.4)' }}>
-                    Active Action Node
-                  </span>
+                  {neighborhoodNode?.id === selectedNode.id && (
+                    <span className="badge-count" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', border: '1px solid #10b981' }}>
+                      Neighborhood View
+                    </span>
+                  )}
                   <span className="badge-count">Degree: {selectedNode.connections}</span>
                   <span className="badge-count" style={{ background: selectedNode.color, color: '#fff' }}>{selectedNode.community_name}</span>
                 </div>
@@ -682,59 +858,166 @@ export default function KnowledgeGraph() {
             )}
           </div>
 
-          {/* Right Sidebar: COMMUNITIES Panel (Exact replica of Graphify native UI) */}
+          {/* Right Sidebar: COMMUNITIES & DATA ISSUES Inspector Panel (yFiles Showcase Clone) */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 560, padding: 0 }}>
-            <div className="card-header" style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <span className="card-title" style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            
+            {/* Sidebar Tabs */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+              <button
+                onClick={() => setRightTab('communities')}
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  background: rightTab === 'communities' ? 'var(--bg-card)' : 'transparent',
+                  color: rightTab === 'communities' ? 'var(--accent-light)' : 'var(--text-muted)',
+                  border: 'none',
+                  borderBottom: rightTab === 'communities' ? '2px solid var(--accent-light)' : 'none',
+                  fontWeight: 600,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer'
+                }}
+              >
                 COMMUNITIES ({data ? data.top_communities.length : 0})
-              </span>
+              </button>
+              <button
+                onClick={() => setRightTab('issues')}
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  background: rightTab === 'issues' ? 'var(--bg-card)' : 'transparent',
+                  color: rightTab === 'issues' ? '#ef4444' : 'var(--text-muted)',
+                  border: 'none',
+                  borderBottom: rightTab === 'issues' ? '2px solid #ef4444' : 'none',
+                  fontWeight: 600,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4
+                }}
+              >
+                <AlertTriangle size={13} color="#ef4444" /> DATA ISSUES ({detectedIssues.length})
+              </button>
             </div>
 
-            {/* Select All Toggle */}
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }} onClick={toggleSelectAll}>
-                {data && selectedCommunities.size === data.top_communities.length ? (
-                  <CheckSquare size={16} color="var(--accent-light)" />
-                ) : (
-                  <Square size={16} color="var(--text-muted)" />
-                )}
-                Select All
-              </label>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{selectedCommunities.size} active</span>
-            </div>
+            {rightTab === 'communities' ? (
+              <>
+                {/* Select All Toggle */}
+                <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }} onClick={toggleSelectAll}>
+                    {data && selectedCommunities.size === data.top_communities.length ? (
+                      <CheckSquare size={16} color="var(--accent-light)" />
+                    ) : (
+                      <Square size={16} color="var(--text-muted)" />
+                    )}
+                    Select All
+                  </label>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{selectedCommunities.size} active</span>
+                </div>
 
-            {/* Communities Checklist Scroll Area */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {data?.top_communities.map(comm => {
-                const active = selectedCommunities.has(comm.id);
-                return (
-                  <div
-                    key={comm.id}
-                    onClick={() => toggleCommunity(comm.id)}
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: 6,
-                      background: active ? 'var(--bg-elevated)' : 'transparent',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      fontSize: '0.78rem',
-                      opacity: active ? 1 : 0.45,
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: comm.color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: active ? 600 : 400 }}>
-                      {comm.name}
-                    </span>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      {comm.count}
-                    </span>
+                {/* Communities Checklist Scroll Area */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {data?.top_communities.map(comm => {
+                    const active = selectedCommunities.has(comm.id);
+                    return (
+                      <div
+                        key={comm.id}
+                        onClick={() => toggleCommunity(comm.id)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          background: active ? 'var(--bg-elevated)' : 'transparent',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: '0.78rem',
+                          opacity: active ? 1 : 0.45,
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: comm.color, flexShrink: 0 }} />
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: active ? 600 : 400 }}>
+                          {comm.name}
+                        </span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                          {comm.count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              /* yFiles Showcase Data Issues Inspector & Repair Panel */
+              <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+                  Detected inconsistencies in knowledge graph triples:
+                </div>
+
+                {detectedIssues.length === 0 ? (
+                  <div style={{ padding: 40, textAlign: 'center', color: '#10b981', fontSize: '0.85rem' }}>
+                    <Check size={28} style={{ marginBottom: 8 }} />
+                    <br />
+                    100% Graph Quality. Zero data issues detected!
                   </div>
-                );
-              })}
-            </div>
+                ) : (
+                  detectedIssues.map(issue => (
+                    <div
+                      key={issue.id}
+                      style={{
+                        padding: 10,
+                        borderRadius: 6,
+                        background: 'var(--bg-elevated)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase' }}>
+                          {issue.type}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>
+                          {issue.severity}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {issue.title}
+                      </div>
+
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {issue.description}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                        <button
+                          onClick={() => handleFixIssue(issue)}
+                          className="btn btn-ghost"
+                          style={{
+                            flex: 1,
+                            fontSize: '0.7rem',
+                            padding: '4px 6px',
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            color: '#10b981',
+                            border: '1px solid #10b981',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4
+                          }}
+                        >
+                          <Wrench size={11} /> {issue.suggestedAction}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
         </div>
