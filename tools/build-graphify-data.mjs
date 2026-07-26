@@ -133,7 +133,7 @@ export function formatGraphDataForDashboard() {
   mkdirSync(resolve(projectRoot, "dashboard", "public"), { recursive: true });
   writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
 
-  // Enhance Native Graphify HTML (vis-network) with yFiles Control Panel Toolbar & enlarged Core Nodes
+  // Enhance Native Graphify HTML (vis-network) with Google Earth Style Glassmorphic Translucent Toolbar
   if (existsSync(graphifyHtmlPath)) {
     mkdirSync(publicHtmlDir, { recursive: true });
     let htmlContent = readFileSync(graphifyHtmlPath, "utf8");
@@ -168,28 +168,79 @@ export function formatGraphDataForDashboard() {
       }
     );
 
-    // Inject yFiles Control Panel Toolbar CSS & HTML into native graph.html
+    // Google Earth Style Translucent Glassmorphic HUD CSS
     const toolbarCss = `
 <style>
 .yfiles-toolbar {
-  position: absolute; top: 12px; left: 12px; z-index: 999;
-  background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 8px;
-  padding: 8px 14px; display: flex; align-items: center; gap: 10px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5); font-family: sans-serif; font-size: 13px; color: #e0e0e0;
+  position: absolute; top: 14px; left: 14px; z-index: 999;
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(14px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 10px !important;
+  padding: 8px 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 12px !important;
+  color: #f1f5f9 !important;
 }
 .yfiles-toolbar button {
-  background: #2a2a4e; color: #38bdf8; border: 1px solid #3a3a5e;
-  padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;
-  display: flex; align-items: center; gap: 4px; transition: all 0.15s ease;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #e2e8f0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  padding: 6px 12px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  backdrop-filter: blur(6px) !important;
 }
-.yfiles-toolbar button:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-.yfiles-toolbar .separator { width: 1px; height: 18px; background: #3a3a5e; margin: 0 2px; }
+.yfiles-toolbar button:hover {
+  background: rgba(56, 189, 248, 0.25) !important;
+  color: #ffffff !important;
+  border-color: rgba(56, 189, 248, 0.6) !important;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4) !important;
+  transform: translateY(-1px);
+}
+.yfiles-toolbar button:active {
+  transform: translateY(0);
+}
+.yfiles-toolbar .separator {
+  width: 1px !important;
+  height: 20px !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  margin: 0 4px !important;
+}
 .yfiles-toolbar input[type="search"] {
-  background: #0f0f1a; border: 1px solid #3a3a5e; color: #fff;
-  padding: 5px 8px; border-radius: 4px; font-size: 12px; outline: none; width: 130px;
+  background: rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  padding: 5px 10px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  outline: none !important;
+  width: 140px !important;
+  transition: all 0.2s ease !important;
 }
-.yfiles-toolbar input[type="search"]:focus { border-color: #38bdf8; }
-.yfiles-toolbar label { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+.yfiles-toolbar input[type="search"]:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+}
+.yfiles-toolbar label {
+  cursor: pointer !important;
+  user-select: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-weight: 500 !important;
+}
 </style>
 `;
 
@@ -218,7 +269,7 @@ export function formatGraphDataForDashboard() {
   <span class="separator"></span>
   <span>
     <label for="searchBox">Search:</label>
-    <input type="search" id="searchBox" oninput="if(window.filterVisNodes) window.filterVisNodes(this.value)">
+    <input type="search" id="searchBox" placeholder="Filter graph..." oninput="if(window.filterVisNodes) window.filterVisNodes(this.value)">
   </span>
 </div>
 
@@ -267,13 +318,18 @@ window.addEventListener('message', function(e) {
 </script>
 `;
 
-    if (!htmlContent.includes('yfiles-toolbar')) {
+    // Replace existing style or inject
+    if (htmlContent.includes('yfiles-toolbar')) {
+      // Replace existing toolbarCss and toolbarHtml
+      htmlContent = htmlContent.replace(/<style>\s*\.yfiles-toolbar.*?<\/style>/s, toolbarCss);
+      htmlContent = htmlContent.replace(/<div class="toolbar yfiles-toolbar".*?<\/script>/s, toolbarHtml);
+    } else {
       htmlContent = htmlContent.replace('</head>', `${toolbarCss}</head>`);
       htmlContent = htmlContent.replace('<body>', `<body>${toolbarHtml}`);
     }
 
     writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
-    console.log(`[Graphify Pipeline] Synced yFiles toolbar & enlarged Core Nodes in native graph.html to ${publicHtmlDir}/graph.html`);
+    console.log(`[Graphify Pipeline] Synced Google Earth translucent glassmorphic toolbar in native graph.html to ${publicHtmlDir}/graph.html`);
   }
 
   console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
