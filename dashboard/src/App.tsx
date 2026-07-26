@@ -1,12 +1,13 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { Shield, FileText, CheckCircle, Cpu, Users, Activity, Network, Settings as SettingsIcon } from 'lucide-react';
+import { Shield, FileText, CheckCircle, Cpu, Users, Activity, Network, Sparkles, Settings as SettingsIcon } from 'lucide-react';
 import Overview from './pages/Overview';
 import Ledger from './pages/Ledger';
 import Authorize from './pages/Authorize';
 import Swarm from './pages/Swarm';
 import Agents from './pages/Agents';
 import KnowledgeGraph from './pages/KnowledgeGraph';
+import SkillsHub from './pages/SkillsHub';
 import Settings from './pages/Settings';
 
 const MAIN_SHA = 'f1eea272';
@@ -58,6 +59,9 @@ function Sidebar() {
       <NavLink to="/graph" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
         <Network className="icon" /> Knowledge Graph
       </NavLink>
+      <NavLink to="/skills" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+        <Sparkles className="icon" /> Skills Hub
+      </NavLink>
       <div className="nav-section">System</div>
       <NavLink to="/settings" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
         <SettingsIcon className="icon" /> Settings
@@ -80,6 +84,7 @@ export default function App() {
             <Route path="/swarm" element={<Swarm />} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/graph" element={<KnowledgeGraph />} />
+            <Route path="/skills" element={<SkillsHub />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
