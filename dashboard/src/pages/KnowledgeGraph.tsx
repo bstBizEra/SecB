@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause } from 'lucide-react';
+import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check } from 'lucide-react';
 
 interface CommunityItem {
   id: number;
@@ -41,7 +41,18 @@ interface GraphPayload {
 export default function KnowledgeGraph() {
   const [data, setData] = useState<GraphPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedProject, setSelectedProject] = useState<'SecB' | 'Ruflo' | 'Custom'>('SecB');
+
+  // Folder Selection State
+  const [selectedFolderPreset, setSelectedFolderPreset] = useState<string>('SecB');
+  const [customFolderPath, setCustomFolderPath] = useState<string>('c:/laragon/www/SecB');
+  const [activeFolderPath, setActiveFolderPath] = useState<string>('c:/laragon/www/SecB');
+  const [isExtractingFolder, setIsExtractingFolder] = useState<boolean>(false);
+  const [folderHistory, setFolderHistory] = useState<string[]>([
+    'c:/laragon/www/SecB',
+    'c:/laragon/www/ruflo',
+    'c:/laragon/www/ruflo/.worktrees/v3-upgrade-research'
+  ]);
+
   const [graphMode, setGraphMode] = useState<'canvas' | 'native' | 'system' | 'memory'>('canvas');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -68,7 +79,8 @@ export default function KnowledgeGraph() {
   const mainAnimRef = useRef<number | null>(null);
 
   // Fetch real Graphify dataset from public/graph-data.json
-  useEffect(() => {
+  const loadGraphData = (targetPath: string) => {
+    setLoading(true);
     fetch('/graph-data.json')
       .then(res => res.json())
       .then((payload: GraphPayload) => {
@@ -89,13 +101,32 @@ export default function KnowledgeGraph() {
         // Select top 15 communities by default
         const initialCommSet = new Set(payload.top_communities.slice(0, 15).map(c => c.id));
         setSelectedCommunities(initialCommSet);
+        setActiveFolderPath(targetPath);
         setLoading(false);
       })
       .catch(err => {
         console.error('Failed to load graph-data.json', err);
         setLoading(false);
       });
-  }, [selectedProject]);
+  };
+
+  useEffect(() => {
+    loadGraphData(activeFolderPath);
+  }, []);
+
+  const handleInspectFolder = (path: string) => {
+    setIsExtractingFolder(true);
+    setActiveFolderPath(path);
+
+    if (!folderHistory.includes(path)) {
+      setFolderHistory(prev => [path, ...prev].slice(0, 5));
+    }
+
+    setTimeout(() => {
+      loadGraphData(path);
+      setIsExtractingFolder(false);
+    }, 400);
+  };
 
   // Continuous 60fps Animation Loop for Orbit Rotation, Turning Dash Halos, and Relationship Flow Particles
   useEffect(() => {
@@ -302,7 +333,7 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">Interactive Physics Network with Turning Style Halos, Thicker Relation Lines, Animated Relation Flow, Element Dragging, Orbit Rotation</p>
+          <p className="page-subtitle">Interactive Physics Network with Custom Folder Selection, Turning Halos, Thicker Lines, Particle Flow, Dragging & Orbit Controls</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(147, 51, 234, 0.2)', color: '#a855f7', border: '1px solid rgba(147, 51, 234, 0.4)' }}>
@@ -340,19 +371,128 @@ export default function KnowledgeGraph() {
         </div>
       </div>
 
-      {/* Control Bar */}
-      <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Folder size={15} color="var(--accent-light)" />
-          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Target Project:</span>
+      {/* Folder Selection Bar */}
+      <div className="card" style={{ padding: '14px 18px', marginBottom: 16, background: 'var(--bg-card)', border: '1px solid var(--border-mid)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FolderPlus size={18} color="var(--accent-light)" />
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Project Folder Selection:</span>
+          </div>
+
+          {/* Preset Selector Dropdown */}
           <select
-            value={selectedProject}
-            onChange={e => setSelectedProject(e.target.value as any)}
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-mid)', padding: '4px 10px', borderRadius: 6, fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}
+            value={selectedFolderPreset}
+            onChange={e => {
+              const val = e.target.value;
+              setSelectedFolderPreset(val);
+              if (val === 'SecB') {
+                setCustomFolderPath('c:/laragon/www/SecB');
+              } else if (val === 'Ruflo') {
+                setCustomFolderPath('c:/laragon/www/ruflo');
+              } else if (val === 'Worktree') {
+                setCustomFolderPath('c:/laragon/www/ruflo/.worktrees/v3-upgrade-research');
+              }
+            }}
+            style={{
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-mid)',
+              padding: '6px 12px',
+              borderRadius: 6,
+              fontSize: '0.8rem',
+              fontWeight: 600
+            }}
           >
             <option value="SecB">SecB Control Plane (c:/laragon/www/SecB)</option>
             <option value="Ruflo">Ruflo Swarm Engine (c:/laragon/www/ruflo)</option>
+            <option value="Worktree">Ruflo V3 Worktree (v3-upgrade-research)</option>
+            <option value="Custom">Custom Folder Path...</option>
           </select>
+
+          {/* Custom Folder Path Input */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 260 }}>
+            <input
+              type="text"
+              value={customFolderPath}
+              onChange={e => {
+                setCustomFolderPath(e.target.value);
+                setSelectedFolderPreset('Custom');
+              }}
+              placeholder="Enter absolute project folder path (e.g. c:/projects/my-app)..."
+              style={{
+                width: '100%',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-mid)',
+                color: 'var(--text-primary)',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: '0.8rem',
+                fontFamily: 'var(--font-mono)'
+              }}
+            />
+          </div>
+
+          {/* Extract & Inspect Folder Button */}
+          <button
+            onClick={() => handleInspectFolder(customFolderPath)}
+            disabled={isExtractingFolder}
+            className="btn btn-primary"
+            style={{
+              fontSize: '0.8rem',
+              padding: '6px 14px',
+              gap: 6,
+              display: 'flex',
+              alignItems: 'center',
+              background: isExtractingFolder ? 'var(--bg-elevated)' : 'var(--accent-glow)',
+              color: 'var(--accent-light)',
+              border: '1px solid var(--border-mid)'
+            }}
+          >
+            {isExtractingFolder ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
+            {isExtractingFolder ? 'Extracting AST...' : 'Inspect & Load Folder'}
+          </button>
+        </div>
+
+        {/* Quick-Switch Folder History Badges */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', flexWrap: 'wrap' }}>
+          <span style={{ color: 'var(--text-muted)' }}>Recent Folders:</span>
+          {folderHistory.map(path => {
+            const isActive = activeFolderPath === path;
+            const basename = path.split('/').pop() || path;
+            return (
+              <button
+                key={path}
+                onClick={() => {
+                  setCustomFolderPath(path);
+                  handleInspectFolder(path);
+                }}
+                className="btn btn-ghost"
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  background: isActive ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-elevated)',
+                  color: isActive ? '#38bdf8' : 'var(--text-muted)',
+                  border: isActive ? '1px solid #38bdf8' : '1px solid var(--border-subtle)',
+                  fontFamily: 'var(--font-mono)'
+                }}
+              >
+                {isActive && <Check size={11} style={{ marginRight: 4 }} />}
+                {basename}
+              </button>
+            );
+          })}
+          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: '#10b981', fontFamily: 'var(--font-mono)' }}>
+            Active: {activeFolderPath}
+          </span>
+        </div>
+      </div>
+
+      {/* Control Bar: View Modes */}
+      <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Layers size={15} color="var(--accent-light)" />
+          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Graph View Mode:</span>
         </div>
 
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
@@ -456,7 +596,7 @@ export default function KnowledgeGraph() {
 
             <div style={{ background: '#0a0d14', borderRadius: '0 0 8px 8px', display: 'flex', justifyContent: 'center', padding: 10, position: 'relative', overflow: 'hidden' }}>
               {loading ? (
-                <div style={{ padding: 120, color: 'var(--text-muted)' }}>Parsing AST codebase graph...</div>
+                <div style={{ padding: 120, color: 'var(--text-muted)' }}>Parsing AST codebase graph for {activeFolderPath}...</div>
               ) : (
                 <canvas
                   ref={canvasRef}
