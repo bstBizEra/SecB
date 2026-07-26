@@ -133,7 +133,7 @@ export function formatGraphDataForDashboard() {
   mkdirSync(resolve(projectRoot, "dashboard", "public"), { recursive: true });
   writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
 
-  // Enhance Native Graphify HTML (vis-network) with Google Earth Glassmorphic Toolbar + SVG Icons
+  // Enhance Native Graphify HTML (vis-network) with Working Toolbar Button Actions
   if (existsSync(graphifyHtmlPath)) {
     mkdirSync(publicHtmlDir, { recursive: true });
     let htmlContent = readFileSync(graphifyHtmlPath, "utf8");
@@ -168,15 +168,15 @@ export function formatGraphDataForDashboard() {
       }
     );
 
-    // Google Earth Style Translucent Glassmorphic HUD CSS with SVG Icon Support
+    // Google Earth Style Translucent Glassmorphic HUD CSS
     const toolbarCss = `
 <style>
 .yfiles-toolbar {
-  position: absolute; top: 14px; left: 14px; z-index: 999;
-  background: rgba(15, 23, 42, 0.45) !important;
+  position: absolute; top: 14px; left: 14px; z-index: 9999;
+  background: rgba(15, 23, 42, 0.55) !important;
   backdrop-filter: blur(14px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-radius: 10px !important;
   padding: 8px 14px !important;
   display: flex !important;
@@ -186,11 +186,12 @@ export function formatGraphDataForDashboard() {
   font-family: system-ui, -apple-system, sans-serif !important;
   font-size: 12px !important;
   color: #f1f5f9 !important;
+  user-select: none !important;
 }
 .yfiles-toolbar button {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #e2e8f0 !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
   padding: 6px 12px !important;
   border-radius: 6px !important;
   cursor: pointer !important;
@@ -203,10 +204,10 @@ export function formatGraphDataForDashboard() {
   backdrop-filter: blur(6px) !important;
 }
 .yfiles-toolbar button:hover {
-  background: rgba(56, 189, 248, 0.25) !important;
+  background: rgba(56, 189, 248, 0.3) !important;
   color: #ffffff !important;
-  border-color: rgba(56, 189, 248, 0.6) !important;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4) !important;
+  border-color: rgba(56, 189, 248, 0.7) !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.5) !important;
   transform: translateY(-1px);
 }
 .yfiles-toolbar button:active {
@@ -215,22 +216,22 @@ export function formatGraphDataForDashboard() {
 .yfiles-toolbar .separator {
   width: 1px !important;
   height: 20px !important;
-  background: rgba(255, 255, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
   margin: 0 4px !important;
 }
 .yfiles-toolbar .search-container {
   display: flex !important;
   align-items: center !important;
   gap: 6px !important;
-  background: rgba(0, 0, 0, 0.35) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
   padding: 4px 10px !important;
   border-radius: 6px !important;
   transition: all 0.2s ease !important;
 }
 .yfiles-toolbar .search-container:focus-within {
   border-color: #38bdf8 !important;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5) !important;
 }
 .yfiles-toolbar input[type="search"] {
   background: transparent !important;
@@ -251,23 +252,23 @@ export function formatGraphDataForDashboard() {
 </style>
 `;
 
-    // SVG Icon-Enhanced Toolbar HTML
+    // SVG Icon Toolbar HTML with Robust Multi-Target Click Action Dispatcher
     const toolbarHtml = `
 <div class="toolbar yfiles-toolbar" data-tip-id="toolbar">
   <div class="toolbar-overflow-container"></div>
   <button class="toolbar-overflow-button" title="More..." style="display: none;">more_horiz</button>
   
-  <button data-command="DECREASE_ZOOM" id="zoom-out-button" title="Decrease zoom" onclick="if(window.network) window.network.moveTo({scale: window.network.getScale() * 0.75, animation: true});">
+  <button data-command="DECREASE_ZOOM" id="zoom-out-button" title="Decrease zoom" onclick="performVisZoom(0.8)">
     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
     Decrease Zoom
   </button>
 
-  <button data-command="INCREASE_ZOOM" id="zoom-in-button" title="Increase zoom" onclick="if(window.network) window.network.moveTo({scale: window.network.getScale() * 1.25, animation: true});">
+  <button data-command="INCREASE_ZOOM" id="zoom-in-button" title="Increase zoom" onclick="performVisZoom(1.25)">
     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
     Increase Zoom
   </button>
 
-  <button data-command="FIT_GRAPH_BOUNDS" id="fit-graph-button" title="Fit content" onclick="if(window.network) window.network.fit({animation: true});">
+  <button data-command="FIT_GRAPH_BOUNDS" id="fit-graph-button" title="Fit content" onclick="performVisFit()">
     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
     Fit Content
   </button>
@@ -289,46 +290,68 @@ export function formatGraphDataForDashboard() {
 </div>
 
 <script>
+function getActiveVisNetwork() {
+  return typeof network !== 'undefined' ? network : window.network;
+}
+
+window.performVisZoom = function(factor) {
+  var net = getActiveVisNetwork();
+  if (net) {
+    var curScale = net.getScale();
+    net.moveTo({ scale: curScale * factor, animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+  }
+};
+
+window.performVisFit = function() {
+  var net = getActiveVisNetwork();
+  if (net) {
+    net.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+  }
+};
+
 window.toggleGroupTeamsMode = function(checked) {
-  if (!window.network || !window.nodesDataset) return;
-  const nodes = window.nodesDataset.get();
+  var net = getActiveVisNetwork();
+  var ds = typeof nodesDS !== 'undefined' ? nodesDS : window.nodesDataset;
+  if (!net || !ds) return;
+  var nodes = ds.get();
   if (checked) {
-    const commCenters = {};
-    const comms = [...new Set(nodes.map(n => n.community || 0))];
-    const K = comms.length || 1;
+    var commCenters = {};
+    var comms = [...new Set(nodes.map(n => n.community || 0))];
+    var K = comms.length || 1;
     comms.forEach((c, idx) => {
-      const angle = (idx * 2 * Math.PI) / K;
+      var angle = (idx * 2 * Math.PI) / K;
       commCenters[c] = { x: 400 * Math.cos(angle), y: 400 * Math.sin(angle) };
     });
-    const updated = nodes.map(n => {
-      const center = commCenters[n.community || 0] || { x: 0, y: 0 };
+    var updated = nodes.map(n => {
+      var center = commCenters[n.community || 0] || { x: 0, y: 0 };
       return { id: n.id, x: center.x + (Math.random() * 80 - 40), y: center.y + (Math.random() * 80 - 40) };
     });
-    window.nodesDataset.update(updated);
+    ds.update(updated);
   } else {
-    window.network.stabilize();
+    net.stabilize();
   }
 };
 
 window.filterVisNodes = function(query) {
-  if (!window.nodesDataset) return;
-  const q = (query || '').toLowerCase();
-  const nodes = window.nodesDataset.get();
-  const updated = nodes.map(n => {
-    const match = !q || (n.label && n.label.toLowerCase().includes(q)) || (n.title && n.title.toLowerCase().includes(q));
+  var ds = typeof nodesDS !== 'undefined' ? nodesDS : window.nodesDataset;
+  if (!ds) return;
+  var q = (query || '').toLowerCase().trim();
+  var nodes = ds.get();
+  var updated = nodes.map(n => {
+    var match = !q || (n.label && n.label.toLowerCase().includes(q)) || (n.title && n.title.toLowerCase().includes(q));
     return { id: n.id, hidden: !match };
   });
-  window.nodesDataset.update(updated);
+  ds.update(updated);
 };
 
 window.addEventListener('message', function(e) {
-  if (!e.data || !window.network) return;
-  const { action, val } = e.data;
-  if (action === 'zoomIn') window.network.moveTo({ scale: window.network.getScale() * 1.25, animation: true });
-  if (action === 'zoomOut') window.network.moveTo({ scale: window.network.getScale() * 0.75, animation: true });
-  if (action === 'fit') window.network.fit({ animation: true });
-  if (action === 'toggleTeams') window.toggleGroupTeamsMode(val);
-  if (action === 'search') window.filterVisNodes(val);
+  if (!e.data) return;
+  var action = e.data.action;
+  if (action === 'zoomIn') window.performVisZoom(1.25);
+  if (action === 'zoomOut') window.performVisZoom(0.8);
+  if (action === 'fit') window.performVisFit();
+  if (action === 'toggleTeams') window.toggleGroupTeamsMode(e.data.val);
+  if (action === 'search') window.filterVisNodes(e.data.val);
 });
 </script>
 `;
@@ -342,7 +365,7 @@ window.addEventListener('message', function(e) {
     }
 
     writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
-    console.log(`[Graphify Pipeline] Synced SVG icon-enhanced toolbar in native graph.html to ${publicHtmlDir}/graph.html`);
+    console.log(`[Graphify Pipeline] Synced working toolbar button actions in native graph.html to ${publicHtmlDir}/graph.html`);
   }
 
   console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
