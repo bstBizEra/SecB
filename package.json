@@ -6,8 +6,12 @@
   "type": "module",
   "main": "src/index.mjs",
   "exports": "./src/index.mjs",
+  "bin": {
+    "secb-graph": "./tools/secb-graph.mjs"
+  },
   "scripts": {
     "dev": "npm --prefix dashboard run dev",
+    "secb:graph": "node tools/secb-graph.mjs",
     "validate": "node tools/validate-foundation.mjs",
     "test": "npm run validate && node --test tests/*.test.mjs"
   },
