@@ -5,6 +5,7 @@ import { classificationDecision, projectEvents, projectEvidence } from "../ui/re
 import { CATALOG_BY_NAME, PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "./tool-catalog.mjs";
 import { formatGraphDataForDashboard } from "../../tools/build-graphify-data.mjs";
 import { SecBAgentRegistry } from "../gateway/secb-agent-registry.mjs";
+import { SecBSkillsHub } from "../skills/skills-hub-service.mjs";
 
 // P0-21 SecB MCP Server dispatch core (GOV-MCP-01..09, adopted). A
 // projection of existing authority, never a source of it: every answer is
@@ -192,6 +193,10 @@ export class SecBMcpServer {
       case "secb_agent_config_resolve": {
         const agentRegistry = s.agentRegistry ?? new SecBAgentRegistry({ services: s });
         return agentRegistry.resolveCapability(args.agent_type);
+      }
+      case "secb_skill_hub_search": {
+        const skillsHub = s.skillsHub ?? new SecBSkillsHub({ services: s });
+        return skillsHub.searchSkills(args.query ?? "", { classificationFloor: ceiling });
       }
       default:
         throw new Error(`Unrouted tool: ${name}`);

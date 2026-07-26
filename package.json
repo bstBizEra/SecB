@@ -7,11 +7,13 @@
   "main": "src/index.mjs",
   "exports": "./src/index.mjs",
   "bin": {
-    "secb-graph": "./tools/secb-graph.mjs"
+    "secb-graph": "./tools/secb-graph.mjs",
+    "secb-skills": "./tools/secb-skills.mjs"
   },
   "scripts": {
     "dev": "npm --prefix dashboard run dev",
     "secb:graph": "node tools/secb-graph.mjs",
+    "secb:skills": "node tools/secb-skills.mjs",
     "validate": "node tools/validate-foundation.mjs",
     "test": "npm run validate && node --test tests/*.test.mjs"
   },

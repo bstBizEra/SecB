@@ -92,6 +92,13 @@ export const TOOL_CATALOG = freeze([
     required: ["agent_type"],
     optional: [],
     idParams: ["agent_type"]
+  },
+  {
+    name: "secb_skill_hub_search",
+    description: "Token-efficient search across local governed skills in .agents/skills/ with classification ceiling enforcement. Pure function; returns minimal skill snippets.",
+    required: [],
+    optional: ["query"],
+    idParams: []
   }
 ]);
 
