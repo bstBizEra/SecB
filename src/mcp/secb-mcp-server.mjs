@@ -179,7 +179,7 @@ export class SecBMcpServer {
       case "secb_canonical_fingerprint":
         return { content_hash: canonicalFingerprint(args.document) };
       case "secb_graph_build": {
-        const payload = formatGraphDataForDashboard();
+        const payload = formatGraphDataForDashboard({ writeAssets: false });
         return {
           total_nodes: payload.total_nodes,
           total_edges: payload.total_edges,

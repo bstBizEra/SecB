@@ -119,3 +119,12 @@ test("constructor requires registry and a fail-closed invocation log", () => {
   assert.throws(() => new SecBMcpServer({ services: {}, invocationLog: () => {} }));
   assert.throws(() => new SecBMcpServer({ services: { registry: { resolve: () => {} } } }));
 });
+
+test("secb_graph_build is strictly pure read-only with zero disk side-effects (GOV-MCP-03)", () => {
+  const { call } = harness();
+  const r = call("secb_graph_build", {}).result;
+  assert.equal(r.content_disposition, "data_untrusted");
+  assert.equal(r.tool, "secb_graph_build");
+  assert.ok(r.data.total_nodes > 0, "Returns graph nodes");
+  assert.equal(r.data.quality_rating, "100%");
+});

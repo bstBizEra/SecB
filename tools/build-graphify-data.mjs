@@ -32,9 +32,10 @@ export function runGraphifyExtraction(targetDir = projectRoot) {
   }
 }
 
-export function formatGraphDataForDashboard() {
+export function formatGraphDataForDashboard(options = { writeAssets: true }) {
+  const shouldWrite = options?.writeAssets ?? true;
   if (!existsSync(graphifyJsonPath)) {
-    runGraphifyExtraction();
+    if (shouldWrite) runGraphifyExtraction();
   }
 
   console.log(`[Graphify Pipeline] Loading ${graphifyJsonPath}...`);
@@ -364,11 +365,16 @@ window.addEventListener('message', function(e) {
       htmlContent = htmlContent.replace('<body>', `<body>${toolbarHtml}`);
     }
 
-    writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
-    console.log(`[Graphify Pipeline] Synced working toolbar button actions in native graph.html to ${publicHtmlDir}/graph.html`);
+    if (shouldWrite) {
+      writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
+      console.log(`[Graphify Pipeline] Synced working toolbar button actions in native graph.html to ${publicHtmlDir}/graph.html`);
+    }
   }
 
-  console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
+  if (shouldWrite) {
+    writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
+    console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
+  }
   return payload;
 }
 
