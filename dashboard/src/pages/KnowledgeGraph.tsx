@@ -143,7 +143,8 @@ export default function KnowledgeGraph() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
-  // yFiles Showcase Feature: Data Issues & Spotlight Beacon Radar
+  // yFiles Showcase Control Panel Features: Group by Teams & Data Issues Radar
+  const [isGroupedByTeams, setIsGroupedByTeams] = useState<boolean>(false);
   const [detectedIssues, setDetectedIssues] = useState<GraphDataIssue[]>([]);
   const [spotlightBeaconMode, setSpotlightBeaconMode] = useState<boolean>(false);
   const [neighborhoodNode, setNeighborhoodNode] = useState<GraphNode | null>(null);
@@ -169,25 +170,57 @@ export default function KnowledgeGraph() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mainAnimRef = useRef<number | null>(null);
 
+  // Apply layout positioning (Group by Teams vs Force-Directed Circular)
+  const applyLayoutPositions = (payload: GraphPayload, grouped: boolean) => {
+    if (!payload || !payload.nodes) return;
+    if (grouped) {
+      // Group By Teams / Communities radial cluster layout
+      const commIds = payload.top_communities.map(c => c.id);
+      const K = commIds.length || 1;
+      const commCenters = new Map<number, { cx: number; cy: number }>();
+      commIds.forEach((id, idx) => {
+        const angle = (idx * 2 * Math.PI) / K;
+        commCenters.set(id, {
+          cx: 330 + 155 * Math.cos(angle),
+          cy: 250 + 155 * Math.sin(angle)
+        });
+      });
+
+      const commNodeIndex = new Map<number, number>();
+      payload.nodes.forEach(n => {
+        const comm = n.community ?? 0;
+        const center = commCenters.get(comm) || { cx: 330, cy: 250 };
+        const subIdx = commNodeIndex.get(comm) || 0;
+        commNodeIndex.set(comm, subIdx + 1);
+
+        const subAngle = subIdx * 0.9;
+        const subRadius = 22 + (subIdx % 4) * 10;
+        n.x = center.cx + subRadius * Math.cos(subAngle);
+        n.y = center.cy + subRadius * Math.sin(subAngle);
+      });
+    } else {
+      // Standard circular force-directed layout
+      const angleStep = (2 * Math.PI) / payload.nodes.length;
+      const radius = 210;
+      const centerX = 330;
+      const centerY = 250;
+
+      payload.nodes.forEach((n, idx) => {
+        const angle = idx * angleStep;
+        const dist = n.isGodNode ? radius * 0.35 : radius * (0.55 + (idx % 6) * 0.08);
+        n.x = centerX + dist * Math.cos(angle);
+        n.y = centerY + dist * Math.sin(angle);
+      });
+    }
+  };
+
   // Fetch real Graphify dataset from public/graph-data.json
   const loadGraphData = (targetPath: string) => {
     setLoading(true);
     fetch('/graph-data.json')
       .then(res => res.json())
       .then((payload: GraphPayload) => {
-        // Layout nodes in a force-directed circle layout for Canvas rendering
-        const angleStep = (2 * Math.PI) / payload.nodes.length;
-        const radius = 210;
-        const centerX = 330;
-        const centerY = 250;
-
-        payload.nodes.forEach((n, idx) => {
-          const angle = idx * angleStep;
-          const dist = n.isGodNode ? radius * 0.35 : radius * (0.55 + (idx % 6) * 0.08);
-          n.x = centerX + dist * Math.cos(angle);
-          n.y = centerY + dist * Math.sin(angle);
-        });
-
+        applyLayoutPositions(payload, isGroupedByTeams);
         setData(payload);
 
         // Run yFiles Data Issue Detection
@@ -209,6 +242,14 @@ export default function KnowledgeGraph() {
   useEffect(() => {
     loadGraphData(activeFolderPath);
   }, []);
+
+  const handleToggleTeamsView = (checked: boolean) => {
+    setIsGroupedByTeams(checked);
+    if (data) {
+      applyLayoutPositions(data, checked);
+      setData({ ...data });
+    }
+  };
 
   const handleInspectFolder = (path: string) => {
     setIsExtractingFolder(true);
@@ -465,7 +506,7 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">yFiles Showcase Quality Inspector, Data Issues Radar, Folder Selection, Turning Halos, Thicker Relation Lines, Particle Flow</p>
+          <p className="page-subtitle">yFiles Showcase Control Panel, Quality Inspector, Data Issues Radar, Folder Selection, Turning Halos</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {detectedIssues.length > 0 && (
@@ -625,13 +666,112 @@ export default function KnowledgeGraph() {
         </div>
       </div>
 
-      {/* Control Bar: View Modes & Spotlight Radar Toggle */}
-      <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+      {/* yFiles Control Panel Toolbar (User Provided Markup Implementation) */}
+      <div
+        className="toolbar card"
+        data-tip-id="toolbar"
+        style={{
+          padding: '10px 16px',
+          display: 'flex',
+          gap: 12,
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          marginBottom: 16,
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-mid)'
+        }}
+      >
+        <div className="toolbar-overflow-container"></div>
+        <button className="toolbar-overflow-button" title="More..." style={{ display: 'none' }}>more_horiz</button>
+        
+        {/* Decrease Zoom */}
+        <button
+          data-command="DECREASE_ZOOM"
+          id="zoom-out-button"
+          title="Decrease zoom"
+          data-icon="zoom_out"
+          data-command-registered=""
+          onClick={handleZoomOut}
+          className="btn btn-ghost"
+          style={{ padding: '6px 12px', fontSize: '0.8rem', gap: 6, display: 'flex', alignItems: 'center' }}
+        >
+          <ZoomOut size={15} /> Decrease Zoom
+        </button>
+
+        {/* Increase Zoom */}
+        <button
+          data-command="INCREASE_ZOOM"
+          id="zoom-in-button"
+          title="Increase zoom"
+          data-icon="zoom_in"
+          data-command-registered=""
+          onClick={handleZoomIn}
+          className="btn btn-ghost"
+          style={{ padding: '6px 12px', fontSize: '0.8rem', gap: 6, display: 'flex', alignItems: 'center' }}
+        >
+          <ZoomIn size={15} /> Increase Zoom
+        </button>
+
+        {/* Fit Graph Bounds */}
+        <button
+          data-command="FIT_GRAPH_BOUNDS"
+          id="fit-graph-button"
+          title="Fit content"
+          data-icon="zoom_out_map"
+          data-command-registered=""
+          onClick={handleResetZoom}
+          className="btn btn-ghost"
+          style={{ padding: '6px 12px', fontSize: '0.8rem', gap: 6, display: 'flex', alignItems: 'center' }}
+        >
+          <Maximize2 size={15} /> Fit Content
+        </button>
+
+        <span className="separator" style={{ width: 1, height: 22, background: 'var(--border-subtle)', margin: '0 4px' }}></span>
+
+        {/* Group By Teams Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Layers size={15} color="var(--accent-light)" />
-          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Graph View Mode:</span>
+          <input
+            type="checkbox"
+            id="teams-view"
+            title="Organizes the graph in teams"
+            className="demo-toggle-button"
+            checked={isGroupedByTeams}
+            onChange={e => handleToggleTeamsView(e.target.checked)}
+            style={{ cursor: 'pointer', width: 15, height: 15 }}
+          />
+          <label
+            htmlFor="teams-view"
+            title="Rearrange the graph so teammates are positioned near each other"
+            style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
+          >
+            Group By Teams
+          </label>
         </div>
 
+        <span className="separator" style={{ width: 1, height: 22, background: 'var(--border-subtle)', margin: '0 4px' }}></span>
+
+        {/* Search Box */}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+          <label htmlFor="searchBox" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Search:</label>
+          <input
+            type="search"
+            id="searchBox"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Search nodes or files..."
+            style={{
+              flex: 1,
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-mid)',
+              color: 'var(--text-primary)',
+              padding: '5px 10px',
+              borderRadius: 6,
+              fontSize: '0.8rem'
+            }}
+          />
+        </span>
+
+        {/* View Mode Selector Tabs */}
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
           {[
             { id: 'canvas', label: 'Interactive Canvas', icon: Code },
@@ -722,32 +862,10 @@ export default function KnowledgeGraph() {
                   {isOrbiting ? 'Orbit Spin ON' : 'Turn Orbit'}
                 </button>
 
-                {/* Zoom Controls Overlay */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-card)', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
-                  <button onClick={handleZoomOut} title="Zoom Out" className="btn btn-ghost" style={{ padding: '4px 6px' }}>
-                    <ZoomOut size={13} color="var(--text-muted)" />
-                  </button>
-                  <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', minWidth: 38, textAlign: 'center', color: 'var(--accent-light)' }}>
-                    {Math.round(zoomScale * 100)}%
-                  </span>
-                  <button onClick={handleZoomIn} title="Zoom In" className="btn btn-ghost" style={{ padding: '4px 6px' }}>
-                    <ZoomIn size={13} color="var(--text-muted)" />
-                  </button>
-                  <button onClick={handleResetZoom} title="Reset View" className="btn btn-ghost" style={{ padding: '4px 6px', marginLeft: 2 }}>
-                    <Maximize2 size={12} color="var(--text-muted)" />
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
-                  <Search size={13} color="var(--text-muted)" />
-                  <input
-                    type="text"
-                    placeholder="Filter nodes..."
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '0.75rem', outline: 'none', width: 90 }}
-                  />
-                </div>
+                {/* Zoom Scale Badge */}
+                <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)', padding: '2px 8px', borderRadius: 4, background: 'var(--bg-card)', border: '1px solid var(--border-mid)', color: 'var(--accent-light)' }}>
+                  {Math.round(zoomScale * 100)}%
+                </span>
               </div>
             </div>
 
