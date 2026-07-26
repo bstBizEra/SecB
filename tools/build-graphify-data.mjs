@@ -3,6 +3,7 @@
  * 
  * Extracts or loads real Graphify AST graph data (`graphify-out/graph.json`)
  * and formats it for interactive visualization in the SecB Governance Dashboard.
+ * Enlarges Core Nodes in Native Graphify (vis-network) for immediate visual prominence.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from "node:fs";
@@ -113,10 +114,44 @@ export function formatGraphDataForDashboard() {
   mkdirSync(resolve(projectRoot, "dashboard", "public"), { recursive: true });
   writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
 
+  // Enhance Native Graphify HTML (vis-network) to enlarge Core/God Nodes
   if (existsSync(graphifyHtmlPath)) {
     mkdirSync(publicHtmlDir, { recursive: true });
-    copyFileSync(graphifyHtmlPath, resolve(publicHtmlDir, "graph.html"));
-    console.log(`[Graphify Pipeline] Synced native graph.html to ${publicHtmlDir}/graph.html`);
+    let htmlContent = readFileSync(graphifyHtmlPath, "utf8");
+
+    // Transform node sizes in RAW_NODES JS array inside graph.html
+    htmlContent = htmlContent.replace(
+      /const RAW_NODES = (\[.*?\]);/s,
+      (match, jsonStr) => {
+        try {
+          const nodes = JSON.parse(jsonStr);
+          const enhanced = nodes.map((n) => {
+            const deg = n.degree ?? 0;
+            // Core nodes (degree >= 10 or degree >= 15) get large sizes (45px to 80px)
+            if (deg >= 15) {
+              n.size = 65.0 + (deg * 0.8);
+              n.font = { size: 16, color: "#ffffff" };
+            } else if (deg >= 8) {
+              n.size = 42.0 + (deg * 0.9);
+              n.font = { size: 13, color: "#ffffff" };
+            } else if (deg >= 3) {
+              n.size = 24.0 + (deg * 0.5);
+              n.font = { size: 10, color: "#e2e8f0" };
+            } else {
+              n.size = 12.0;
+              n.font = { size: 0, color: "#ffffff" };
+            }
+            return n;
+          });
+          return `const RAW_NODES = ${JSON.stringify(enhanced)};`;
+        } catch (e) {
+          return match;
+        }
+      }
+    );
+
+    writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
+    console.log(`[Graphify Pipeline] Synced & enlarged Core Nodes in native graph.html to ${publicHtmlDir}/graph.html`);
   }
 
   console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
