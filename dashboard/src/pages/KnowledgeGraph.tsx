@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check, AlertTriangle, Radio, Wrench, Eye, Cpu, Users, UserCheck } from 'lucide-react';
+import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check, AlertTriangle, Radio, Wrench, Eye, Cpu, Users, UserCheck, MessageSquare } from 'lucide-react';
 import { detectKnowledgeGraphIssues, GraphDataIssue } from '../plugins/secb-graph-issue-detector';
+import { swarmEventStream, SwarmLogEvent } from '../services/swarm-event-stream';
 
 export interface SwarmAgent {
   id: string;
@@ -100,6 +101,15 @@ export default function KnowledgeGraph() {
   const [swarmAgents, setSwarmAgents] = useState<SwarmAgent[]>(INITIAL_15_SWARM_AGENTS);
   const [isSwarmActive, setIsSwarmActive] = useState<boolean>(true);
   const [selectedAgent, setSelectedAgent] = useState<SwarmAgent | null>(INITIAL_15_SWARM_AGENTS[0]);
+  const [liveEvents, setLiveEvents] = useState<SwarmLogEvent[]>([]);
+
+  // Subscribe to Live WebSocket / SSE Event Stream
+  useEffect(() => {
+    const unsubscribe = swarmEventStream.subscribe(ev => {
+      setLiveEvents(prev => [ev, ...prev].slice(0, 25));
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Zoom & Pan state
   const [zoomScale, setZoomScale] = useState<number>(1.0);
@@ -964,9 +974,36 @@ export default function KnowledgeGraph() {
             </div>
 
             {rightTab === 'swarm' ? (
-              /* 15-Agent Ruflo V3 Swarm Execution Inspector Panel */
-              <div style={{ flex: 1, overflowY: 'auto', padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 2 }}>
+              /* 15-Agent Ruflo V3 Swarm Execution Inspector Panel & Live Event Ticker */
+              <div style={{ flex: 1, overflowY: 'auto', padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                
+                {/* Live Swarm WebSocket Event Ticker */}
+                <div style={{ padding: '8px 10px', background: '#090b10', borderRadius: 6, border: '1px solid rgba(168,85,247,0.3)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 700, color: '#c084fc' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Radio size={12} className="spin" color="#a855f7" /> LIVE SWARM EVENT STREAM
+                    </span>
+                    <span style={{ fontSize: '0.65rem', padding: '1px 5px', borderRadius: 3, background: 'rgba(16,185,129,0.2)', color: '#10b981' }}>
+                      WebSocket Connected
+                    </span>
+                  </div>
+
+                  <div style={{ height: 110, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}>
+                    {liveEvents.length === 0 ? (
+                      <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Listening for swarm events...</div>
+                    ) : (
+                      liveEvents.map(ev => (
+                        <div key={ev.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 2 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{ev.timestamp.split('.')[0]}</span>
+                          <span style={{ color: ev.agentColor, fontWeight: 700 }}>{ev.agentIcon} {ev.agentName}:</span>
+                          <span style={{ color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.message}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2, marginBottom: 2 }}>
                   Hierarchical Mesh Swarm Topology (15 Active Agents):
                 </div>
 
