@@ -133,7 +133,7 @@ export function formatGraphDataForDashboard() {
   mkdirSync(resolve(projectRoot, "dashboard", "public"), { recursive: true });
   writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
 
-  // Enhance Native Graphify HTML (vis-network) with Google Earth Style Glassmorphic Translucent Toolbar
+  // Enhance Native Graphify HTML (vis-network) with Google Earth Glassmorphic Toolbar + SVG Icons
   if (existsSync(graphifyHtmlPath)) {
     mkdirSync(publicHtmlDir, { recursive: true });
     let htmlContent = readFileSync(graphifyHtmlPath, "utf8");
@@ -168,7 +168,7 @@ export function formatGraphDataForDashboard() {
       }
     );
 
-    // Google Earth Style Translucent Glassmorphic HUD CSS
+    // Google Earth Style Translucent Glassmorphic HUD CSS with SVG Icon Support
     const toolbarCss = `
 <style>
 .yfiles-toolbar {
@@ -218,20 +218,27 @@ export function formatGraphDataForDashboard() {
   background: rgba(255, 255, 255, 0.18) !important;
   margin: 0 4px !important;
 }
-.yfiles-toolbar input[type="search"] {
+.yfiles-toolbar .search-container {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
   background: rgba(0, 0, 0, 0.35) !important;
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
-  color: #ffffff !important;
-  padding: 5px 10px !important;
+  padding: 4px 10px !important;
   border-radius: 6px !important;
-  font-size: 12px !important;
-  outline: none !important;
-  width: 140px !important;
   transition: all 0.2s ease !important;
 }
-.yfiles-toolbar input[type="search"]:focus {
+.yfiles-toolbar .search-container:focus-within {
   border-color: #38bdf8 !important;
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
+}
+.yfiles-toolbar input[type="search"] {
+  background: transparent !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  outline: none !important;
+  width: 130px !important;
 }
 .yfiles-toolbar label {
   cursor: pointer !important;
@@ -244,17 +251,24 @@ export function formatGraphDataForDashboard() {
 </style>
 `;
 
+    // SVG Icon-Enhanced Toolbar HTML
     const toolbarHtml = `
 <div class="toolbar yfiles-toolbar" data-tip-id="toolbar">
   <div class="toolbar-overflow-container"></div>
   <button class="toolbar-overflow-button" title="More..." style="display: none;">more_horiz</button>
+  
   <button data-command="DECREASE_ZOOM" id="zoom-out-button" title="Decrease zoom" onclick="if(window.network) window.network.moveTo({scale: window.network.getScale() * 0.75, animation: true});">
-    Zoom Out
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+    Decrease Zoom
   </button>
+
   <button data-command="INCREASE_ZOOM" id="zoom-in-button" title="Increase zoom" onclick="if(window.network) window.network.moveTo({scale: window.network.getScale() * 1.25, animation: true});">
-    Zoom In
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+    Increase Zoom
   </button>
+
   <button data-command="FIT_GRAPH_BOUNDS" id="fit-graph-button" title="Fit content" onclick="if(window.network) window.network.fit({animation: true});">
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
     Fit Content
   </button>
 
@@ -262,15 +276,16 @@ export function formatGraphDataForDashboard() {
   <div>
     <input type="checkbox" id="teams-view" title="Organizes the graph in teams" class="demo-toggle-button" onchange="toggleGroupTeamsMode(this.checked)">
     <label for="teams-view" title="Rearrange the graph so teammates are positioned near each other">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       Group By Teams
     </label>
   </div>
 
   <span class="separator"></span>
-  <span>
-    <label for="searchBox">Search:</label>
-    <input type="search" id="searchBox" placeholder="Filter graph..." oninput="if(window.filterVisNodes) window.filterVisNodes(this.value)">
-  </span>
+  <div class="search-container">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="search" id="searchBox" placeholder="Search nodes..." oninput="if(window.filterVisNodes) window.filterVisNodes(this.value)">
+  </div>
 </div>
 
 <script>
@@ -318,9 +333,7 @@ window.addEventListener('message', function(e) {
 </script>
 `;
 
-    // Replace existing style or inject
     if (htmlContent.includes('yfiles-toolbar')) {
-      // Replace existing toolbarCss and toolbarHtml
       htmlContent = htmlContent.replace(/<style>\s*\.yfiles-toolbar.*?<\/style>/s, toolbarCss);
       htmlContent = htmlContent.replace(/<div class="toolbar yfiles-toolbar".*?<\/script>/s, toolbarHtml);
     } else {
@@ -329,7 +342,7 @@ window.addEventListener('message', function(e) {
     }
 
     writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
-    console.log(`[Graphify Pipeline] Synced Google Earth translucent glassmorphic toolbar in native graph.html to ${publicHtmlDir}/graph.html`);
+    console.log(`[Graphify Pipeline] Synced SVG icon-enhanced toolbar in native graph.html to ${publicHtmlDir}/graph.html`);
   }
 
   console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
