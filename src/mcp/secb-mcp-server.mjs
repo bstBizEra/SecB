@@ -52,9 +52,14 @@ export class SecBMcpServer {
     }
     const { id, method, params } = message;
     switch (method) {
-      case "initialize":
-        const clientVersion = params?.protocolVersion || PINNED_PROTOCOL_VERSION;
-        return rpcResult(id, { protocolVersion: clientVersion, capabilities: { tools: {} }, serverInfo: { name: "secb-mcp-server", version: "0.1.0-alpha" } });
+      case "initialize": {
+        const requested = params?.protocolVersion;
+        const SUPPORTED_VERSIONS = ["2024-11-05", "2024-10-07", "2025-03-26", "2025-06-18", PINNED_PROTOCOL_VERSION];
+        if (!requested || !SUPPORTED_VERSIONS.includes(requested)) {
+          return rpcError(id, -32602, `Unsupported protocolVersion; this server supports ${SUPPORTED_VERSIONS.join(", ")}`, { code: "DENY_PROTOCOL_VERSION", pinned: PINNED_PROTOCOL_VERSION });
+        }
+        return rpcResult(id, { protocolVersion: requested, capabilities: { tools: {} }, serverInfo: { name: "secb-mcp-server", version: "0.1.0-alpha" } });
+      }
       case "notifications/initialized":
         return null; // notification, no response
       case "ping":
