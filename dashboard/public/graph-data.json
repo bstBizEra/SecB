@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-26T06:34:57.661Z",
+  "generated_at": "2026-07-26T06:56:34.386Z",
   "total_nodes": 3578,
   "total_edges": 4746,
-  "communities_count": 309,
+  "communities_count": 310,
   "top_communities": [
     {
       "id": 0,
@@ -318,7 +318,7 @@
     },
     {
       "id": 52,
-      "name": "Community 82",
+      "name": "Community 14",
       "count": 17,
       "color": "#E15759"
     },
@@ -366,91 +366,91 @@
     },
     {
       "id": 60,
-      "name": "Community 65",
+      "name": "Community 85",
       "count": 16,
       "color": "#4E79A7"
     },
     {
-      "id": 62,
-      "name": "Community 67",
-      "count": 16,
-      "color": "#E15759"
-    },
-    {
       "id": 61,
-      "name": "Community 66",
+      "name": "Community 65",
       "count": 16,
       "color": "#F28E2B"
     },
     {
       "id": 63,
-      "name": "Community 32",
+      "name": "Community 67",
       "count": 16,
       "color": "#76B7B2"
     },
     {
+      "id": 62,
+      "name": "Community 66",
+      "count": 16,
+      "color": "#E15759"
+    },
+    {
       "id": 64,
-      "name": "Community 68",
-      "count": 15,
+      "name": "Community 32",
+      "count": 16,
       "color": "#59A14F"
     },
     {
       "id": 65,
-      "name": "Community 69",
+      "name": "Community 68",
       "count": 15,
       "color": "#EDC948"
     },
     {
       "id": 66,
-      "name": "Community 70",
+      "name": "Community 69",
       "count": 15,
       "color": "#B07AA1"
     },
     {
       "id": 67,
-      "name": "Community 71",
+      "name": "Community 70",
       "count": 15,
       "color": "#FF9DA7"
     },
     {
-      "id": 69,
-      "name": "Community 73",
-      "count": 15,
-      "color": "#BAB0AC"
-    },
-    {
       "id": 68,
-      "name": "Community 68",
+      "name": "Community 71",
       "count": 15,
       "color": "#9C755F"
     },
     {
       "id": 70,
-      "name": "Community 74",
-      "count": 14,
+      "name": "Community 73",
+      "count": 15,
       "color": "#4E79A7"
     },
     {
+      "id": 69,
+      "name": "Community 69",
+      "count": 15,
+      "color": "#BAB0AC"
+    },
+    {
       "id": 71,
-      "name": "Community 75",
+      "name": "Community 74",
       "count": 14,
       "color": "#F28E2B"
     },
     {
       "id": 72,
-      "name": "Community 76",
+      "name": "Community 75",
       "count": 14,
       "color": "#E15759"
     },
     {
       "id": 73,
-      "name": "Community 77",
+      "name": "Community 76",
       "count": 14,
       "color": "#76B7B2"
     },
     {
       "id": 74,
-      "name": "Community 14",
+      "name": "Community 77",
       "count": 14,
       "color": "#59A14F"
     },
@@ -491,12 +491,6 @@
       "color": "#4E79A7"
     },
     {
-      "id": 83,
-      "name": "Community 85",
-      "count": 13,
-      "color": "#76B7B2"
-    },
-    {
       "id": 82,
       "name": "Community 84",
       "count": 13,
@@ -509,22 +503,28 @@
       "color": "#F28E2B"
     },
     {
-      "id": 85,
+      "id": 84,
       "name": "Community 87",
+      "count": 13,
+      "color": "#59A14F"
+    },
+    {
+      "id": 85,
+      "name": "Community 17",
       "count": 13,
       "color": "#EDC948"
     },
     {
-      "id": 86,
-      "name": "Community 17",
+      "id": 83,
+      "name": "Community 83",
       "count": 13,
-      "color": "#B07AA1"
+      "color": "#76B7B2"
     },
     {
-      "id": 84,
-      "name": "Community 84",
-      "count": 13,
-      "color": "#59A14F"
+      "id": 86,
+      "name": "Community 88",
+      "count": 12,
+      "color": "#B07AA1"
     },
     {
       "id": 87,
@@ -581,172 +581,160 @@
       "color": "#EDC948"
     },
     {
+      "id": 97,
+      "name": "Community 14",
+      "count": 12,
+      "color": "#FF9DA7"
+    },
+    {
       "id": 96,
-      "name": "Community 98",
+      "name": "Community 99",
       "count": 12,
       "color": "#B07AA1"
     },
     {
       "id": 98,
-      "name": "Community 14",
-      "count": 12,
+      "name": "Community 101",
+      "count": 11,
       "color": "#9C755F"
     },
     {
-      "id": 97,
-      "name": "Community 99",
-      "count": 12,
-      "color": "#FF9DA7"
-    },
-    {
       "id": 99,
-      "name": "Community 212",
+      "name": "Community 102",
       "count": 11,
       "color": "#BAB0AC"
     },
     {
       "id": 100,
-      "name": "Community 101",
+      "name": "Community 103",
       "count": 11,
       "color": "#4E79A7"
     },
     {
-      "id": 101,
-      "name": "Community 102",
-      "count": 11,
-      "color": "#F28E2B"
-    },
-    {
       "id": 102,
-      "name": "Community 103",
+      "name": "Community 105",
       "count": 11,
       "color": "#E15759"
     },
     {
-      "id": 104,
-      "name": "Community 105",
+      "id": 101,
+      "name": "Community 104",
       "count": 11,
-      "color": "#59A14F"
+      "color": "#F28E2B"
     },
     {
       "id": 103,
-      "name": "Community 104",
+      "name": "Community 106",
       "count": 11,
       "color": "#76B7B2"
     },
     {
+      "id": 104,
+      "name": "Community 107",
+      "count": 11,
+      "color": "#59A14F"
+    },
+    {
       "id": 105,
-      "name": "Community 106",
+      "name": "Community 82",
       "count": 11,
       "color": "#EDC948"
     },
     {
       "id": 106,
-      "name": "Community 107",
+      "name": "Community 108",
       "count": 11,
       "color": "#B07AA1"
     },
     {
-      "id": 108,
-      "name": "Community 156",
-      "count": 11,
-      "color": "#9C755F"
-    },
-    {
-      "id": 107,
-      "name": "Community 108",
-      "count": 11,
-      "color": "#FF9DA7"
-    },
-    {
-      "id": 111,
-      "name": "Community 112",
-      "count": 11,
-      "color": "#F28E2B"
-    },
-    {
       "id": 109,
-      "name": "Community 109",
+      "name": "Community 112",
       "count": 11,
       "color": "#BAB0AC"
     },
     {
-      "id": 110,
-      "name": "Community 110",
+      "id": 107,
+      "name": "Community 107",
       "count": 11,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 108,
+      "name": "Community 108",
+      "count": 11,
+      "color": "#9C755F"
+    },
+    {
+      "id": 110,
+      "name": "Community 116",
+      "count": 10,
       "color": "#4E79A7"
     },
     {
+      "id": 111,
+      "name": "Community 117",
+      "count": 10,
+      "color": "#F28E2B"
+    },
+    {
       "id": 112,
-      "name": "Community 116",
+      "name": "Community 118",
       "count": 10,
       "color": "#E15759"
     },
     {
       "id": 113,
-      "name": "Community 117",
+      "name": "Community 119",
       "count": 10,
       "color": "#76B7B2"
     },
     {
       "id": 114,
-      "name": "Community 118",
+      "name": "Community 120",
       "count": 10,
       "color": "#59A14F"
     },
     {
-      "id": 115,
-      "name": "Community 119",
-      "count": 10,
-      "color": "#EDC948"
-    },
-    {
       "id": 116,
-      "name": "Community 120",
+      "name": "Community 122",
       "count": 10,
       "color": "#B07AA1"
     },
     {
-      "id": 118,
-      "name": "Community 122",
+      "id": 115,
+      "name": "Community 121",
       "count": 10,
-      "color": "#9C755F"
+      "color": "#EDC948"
     },
     {
       "id": 117,
-      "name": "Community 121",
+      "name": "Community 271",
       "count": 10,
       "color": "#FF9DA7"
     },
     {
+      "id": 118,
+      "name": "Community 124",
+      "count": 10,
+      "color": "#9C755F"
+    },
+    {
       "id": 119,
-      "name": "Community 123",
+      "name": "Community 125",
       "count": 10,
       "color": "#BAB0AC"
     },
     {
-      "id": 120,
-      "name": "Community 124",
-      "count": 10,
-      "color": "#4E79A7"
-    },
-    {
       "id": 121,
-      "name": "Community 125",
+      "name": "Community 126",
       "count": 10,
       "color": "#F28E2B"
     },
     {
-      "id": 123,
-      "name": "Community 126",
+      "id": 120,
+      "name": "Community 120",
       "count": 10,
-      "color": "#76B7B2"
-    },
-    {
-      "id": 124,
-      "name": "Community 124",
-      "count": 10,
-      "color": "#59A14F"
+      "color": "#4E79A7"
     },
     {
       "id": 122,
@@ -755,166 +743,184 @@
       "color": "#E15759"
     },
     {
-      "id": 126,
+      "id": 124,
       "name": "Community 130",
+      "count": 9,
+      "color": "#59A14F"
+    },
+    {
+      "id": 123,
+      "name": "Community 129",
+      "count": 9,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 126,
+      "name": "Community 132",
       "count": 9,
       "color": "#B07AA1"
     },
     {
       "id": 125,
-      "name": "Community 129",
+      "name": "Community 131",
       "count": 9,
       "color": "#EDC948"
     },
     {
       "id": 128,
-      "name": "Community 132",
+      "name": "Community 134",
       "count": 9,
       "color": "#9C755F"
     },
     {
       "id": 127,
-      "name": "Community 131",
+      "name": "Community 133",
       "count": 9,
       "color": "#FF9DA7"
     },
     {
-      "id": 130,
-      "name": "Community 134",
-      "count": 9,
-      "color": "#4E79A7"
-    },
-    {
       "id": 129,
-      "name": "Community 133",
+      "name": "Community 235",
       "count": 9,
       "color": "#BAB0AC"
     },
     {
-      "id": 131,
-      "name": "Community 235",
+      "id": 130,
+      "name": "Community 136",
       "count": 9,
-      "color": "#F28E2B"
+      "color": "#4E79A7"
     },
     {
       "id": 132,
-      "name": "Community 136",
+      "name": "Community 138",
       "count": 9,
       "color": "#E15759"
     },
     {
-      "id": 134,
-      "name": "Community 138",
+      "id": 131,
+      "name": "Community 137",
       "count": 9,
-      "color": "#59A14F"
+      "color": "#F28E2B"
     },
     {
       "id": 133,
-      "name": "Community 137",
+      "name": "Community 98",
       "count": 9,
       "color": "#76B7B2"
     },
     {
-      "id": 136,
-      "name": "Community 139",
-      "count": 9,
-      "color": "#B07AA1"
-    },
-    {
       "id": 135,
-      "name": "Community 135",
+      "name": "Community 139",
       "count": 9,
       "color": "#EDC948"
     },
     {
-      "id": 138,
-      "name": "Community 141",
-      "count": 8,
-      "color": "#9C755F"
+      "id": 134,
+      "name": "Community 134",
+      "count": 9,
+      "color": "#59A14F"
     },
     {
       "id": 137,
-      "name": "Community 140",
+      "name": "Community 141",
       "count": 8,
       "color": "#FF9DA7"
     },
     {
-      "id": 139,
+      "id": 136,
+      "name": "Community 140",
+      "count": 8,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 138,
       "name": "Community 142",
+      "count": 8,
+      "color": "#9C755F"
+    },
+    {
+      "id": 139,
+      "name": "Community 143",
       "count": 8,
       "color": "#BAB0AC"
     },
     {
       "id": 140,
-      "name": "Community 143",
+      "name": "Community 144",
       "count": 8,
       "color": "#4E79A7"
     },
     {
       "id": 141,
-      "name": "Community 144",
+      "name": "Community 145",
       "count": 8,
       "color": "#F28E2B"
     },
     {
       "id": 142,
-      "name": "Community 145",
+      "name": "Community 146",
       "count": 8,
       "color": "#E15759"
     },
     {
       "id": 143,
-      "name": "Community 146",
+      "name": "Community 63",
       "count": 8,
       "color": "#76B7B2"
     },
     {
       "id": 144,
-      "name": "Community 63",
+      "name": "Community 147",
       "count": 8,
       "color": "#59A14F"
     },
     {
-      "id": 145,
-      "name": "Community 147",
-      "count": 8,
-      "color": "#EDC948"
-    },
-    {
-      "id": 147,
-      "name": "Community 150",
-      "count": 7,
-      "color": "#FF9DA7"
-    },
-    {
       "id": 146,
-      "name": "Community 149",
+      "name": "Community 150",
       "count": 7,
       "color": "#B07AA1"
     },
     {
-      "id": 148,
+      "id": 145,
+      "name": "Community 149",
+      "count": 7,
+      "color": "#EDC948"
+    },
+    {
+      "id": 147,
       "name": "Community 151",
+      "count": 7,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 148,
+      "name": "Community 152",
       "count": 7,
       "color": "#9C755F"
     },
     {
       "id": 149,
-      "name": "Community 152",
+      "name": "Community 153",
       "count": 7,
       "color": "#BAB0AC"
     },
     {
       "id": 150,
-      "name": "Community 153",
+      "name": "Community 154",
       "count": 7,
       "color": "#4E79A7"
     },
     {
       "id": 151,
-      "name": "Community 154",
+      "name": "Community 98",
       "count": 7,
       "color": "#F28E2B"
+    },
+    {
+      "id": 154,
+      "name": "Community 156",
+      "count": 7,
+      "color": "#59A14F"
     },
     {
       "id": 153,
@@ -929,40 +935,34 @@
       "color": "#E15759"
     },
     {
-      "id": 158,
-      "name": "Community 159",
-      "count": 7,
-      "color": "#9C755F"
-    },
-    {
-      "id": 160,
-      "name": "Community 161",
-      "count": 7,
-      "color": "#4E79A7"
-    },
-    {
-      "id": 161,
-      "name": "Community 162",
-      "count": 7,
-      "color": "#F28E2B"
-    },
-    {
-      "id": 163,
-      "name": "Community 163",
-      "count": 7,
-      "color": "#76B7B2"
-    },
-    {
       "id": 159,
-      "name": "Community 160",
+      "name": "Community 159",
       "count": 7,
       "color": "#BAB0AC"
     },
     {
-      "id": 154,
-      "name": "Community 154",
+      "id": 161,
+      "name": "Community 161",
+      "count": 7,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 162,
+      "name": "Community 162",
+      "count": 7,
+      "color": "#E15759"
+    },
+    {
+      "id": 164,
+      "name": "Community 163",
       "count": 7,
       "color": "#59A14F"
+    },
+    {
+      "id": 160,
+      "name": "Community 160",
+      "count": 7,
+      "color": "#4E79A7"
     },
     {
       "id": 155,
@@ -983,212 +983,212 @@
       "color": "#FF9DA7"
     },
     {
-      "id": 162,
-      "name": "Community 162",
+      "id": 158,
+      "name": "Community 158",
       "count": 7,
-      "color": "#E15759"
+      "color": "#9C755F"
     },
     {
-      "id": 164,
-      "name": "Community 164",
-      "count": 6,
-      "color": "#59A14F"
+      "id": 163,
+      "name": "Community 163",
+      "count": 7,
+      "color": "#76B7B2"
     },
     {
       "id": 165,
-      "name": "Community 165",
+      "name": "Community 164",
       "count": 6,
       "color": "#EDC948"
     },
     {
-      "id": 167,
-      "name": "Community 167",
-      "count": 6,
-      "color": "#FF9DA7"
-    },
-    {
       "id": 166,
-      "name": "Community 166",
+      "name": "Community 165",
       "count": 6,
       "color": "#B07AA1"
     },
     {
       "id": 168,
-      "name": "Community 168",
+      "name": "Community 167",
       "count": 6,
       "color": "#9C755F"
     },
     {
+      "id": 167,
+      "name": "Community 166",
+      "count": 6,
+      "color": "#FF9DA7"
+    },
+    {
       "id": 169,
-      "name": "Community 169",
+      "name": "Community 168",
       "count": 6,
       "color": "#BAB0AC"
     },
     {
       "id": 170,
-      "name": "Community 170",
+      "name": "Community 169",
       "count": 6,
       "color": "#4E79A7"
     },
     {
-      "id": 173,
-      "name": "Community 173",
-      "count": 6,
-      "color": "#76B7B2"
-    },
-    {
       "id": 171,
-      "name": "Community 171",
+      "name": "Community 170",
       "count": 6,
       "color": "#F28E2B"
     },
     {
-      "id": 172,
-      "name": "Community 172",
-      "count": 6,
-      "color": "#E15759"
-    },
-    {
       "id": 174,
-      "name": "Community 174",
+      "name": "Community 173",
       "count": 6,
       "color": "#59A14F"
     },
     {
+      "id": 172,
+      "name": "Community 171",
+      "count": 6,
+      "color": "#E15759"
+    },
+    {
+      "id": 173,
+      "name": "Community 172",
+      "count": 6,
+      "color": "#76B7B2"
+    },
+    {
       "id": 175,
-      "name": "Community 175",
+      "name": "Community 174",
       "count": 6,
       "color": "#EDC948"
     },
     {
       "id": 176,
-      "name": "Community 176",
+      "name": "Community 175",
       "count": 6,
       "color": "#B07AA1"
     },
     {
       "id": 177,
-      "name": "Community 177",
+      "name": "Community 176",
       "count": 6,
       "color": "#FF9DA7"
     },
     {
       "id": 178,
-      "name": "Community 178",
+      "name": "Community 177",
       "count": 6,
       "color": "#9C755F"
     },
     {
       "id": 179,
-      "name": "Community 179",
+      "name": "Community 178",
       "count": 6,
       "color": "#BAB0AC"
     },
     {
       "id": 180,
-      "name": "Community 180",
+      "name": "Community 179",
       "count": 6,
       "color": "#4E79A7"
     },
     {
       "id": 181,
-      "name": "Community 181",
+      "name": "Community 180",
       "count": 6,
       "color": "#F28E2B"
     },
     {
       "id": 182,
-      "name": "Community 182",
+      "name": "Community 181",
       "count": 6,
       "color": "#E15759"
     },
     {
       "id": 183,
-      "name": "Community 183",
+      "name": "Community 182",
       "count": 6,
       "color": "#76B7B2"
     },
     {
       "id": 184,
-      "name": "Community 184",
+      "name": "Community 183",
       "count": 6,
       "color": "#59A14F"
     },
     {
       "id": 185,
-      "name": "Community 185",
+      "name": "Community 184",
       "count": 6,
       "color": "#EDC948"
     },
     {
       "id": 186,
-      "name": "Community 186",
+      "name": "Community 185",
       "count": 6,
       "color": "#B07AA1"
     },
     {
       "id": 187,
-      "name": "Community 187",
+      "name": "Community 186",
       "count": 6,
       "color": "#FF9DA7"
     },
     {
-      "id": 189,
-      "name": "Community 188",
+      "id": 188,
+      "name": "Community 187",
       "count": 6,
-      "color": "#BAB0AC"
+      "color": "#9C755F"
     },
     {
       "id": 190,
-      "name": "Community 189",
+      "name": "Community 188",
       "count": 6,
       "color": "#4E79A7"
     },
     {
       "id": 191,
-      "name": "Community 191",
+      "name": "Community 189",
       "count": 6,
       "color": "#F28E2B"
     },
     {
-      "id": 188,
-      "name": "Community 188",
-      "count": 6,
-      "color": "#9C755F"
-    },
-    {
       "id": 192,
-      "name": "Community 192",
+      "name": "Community 191",
       "count": 6,
       "color": "#E15759"
     },
     {
+      "id": 189,
+      "name": "Community 189",
+      "count": 6,
+      "color": "#BAB0AC"
+    },
+    {
       "id": 193,
-      "name": "Community 192",
-      "count": 5,
+      "name": "Community 193",
+      "count": 6,
       "color": "#76B7B2"
     },
     {
-      "id": 195,
-      "name": "Community 194",
-      "count": 5,
-      "color": "#EDC948"
-    },
-    {
       "id": 194,
-      "name": "Community 193",
+      "name": "Community 192",
       "count": 5,
       "color": "#59A14F"
     },
     {
-      "id": 197,
-      "name": "Community 197",
+      "id": 196,
+      "name": "Community 194",
       "count": 5,
-      "color": "#FF9DA7"
+      "color": "#B07AA1"
+    },
+    {
+      "id": 195,
+      "name": "Community 193",
+      "count": 5,
+      "color": "#EDC948"
     },
     {
       "id": 198,
-      "name": "Community 8",
+      "name": "Community 198",
       "count": 5,
       "color": "#9C755F"
     },
@@ -1199,21 +1199,21 @@
       "color": "#BAB0AC"
     },
     {
-      "id": 196,
-      "name": "Community 196",
-      "count": 5,
-      "color": "#B07AA1"
-    },
-    {
       "id": 200,
-      "name": "Community 200",
+      "name": "Community 8",
       "count": 5,
       "color": "#4E79A7"
     },
     {
+      "id": 197,
+      "name": "Community 197",
+      "count": 5,
+      "color": "#FF9DA7"
+    },
+    {
       "id": 201,
-      "name": "Community 88",
-      "count": 4,
+      "name": "Community 201",
+      "count": 5,
       "color": "#F28E2B"
     },
     {
@@ -1319,544 +1319,550 @@
       "color": "#9C755F"
     },
     {
-      "id": 220,
-      "name": "Community 213",
-      "count": 3,
-      "color": "#4E79A7"
-    },
-    {
       "id": 219,
-      "name": "Community 208",
+      "name": "Community 212",
       "count": 3,
       "color": "#BAB0AC"
     },
     {
       "id": 221,
-      "name": "Community 215",
+      "name": "Community 213",
       "count": 3,
       "color": "#F28E2B"
     },
     {
-      "id": 226,
-      "name": "Community 220",
+      "id": 220,
+      "name": "Community 208",
       "count": 3,
-      "color": "#B07AA1"
-    },
-    {
-      "id": 227,
-      "name": "Community 221",
-      "count": 3,
-      "color": "#FF9DA7"
-    },
-    {
-      "id": 225,
-      "name": "Community 81",
-      "count": 3,
-      "color": "#EDC948"
-    },
-    {
-      "id": 228,
-      "name": "Community 222",
-      "count": 3,
-      "color": "#9C755F"
-    },
-    {
-      "id": 223,
-      "name": "Community 217",
-      "count": 3,
-      "color": "#76B7B2"
+      "color": "#4E79A7"
     },
     {
       "id": 222,
-      "name": "Community 216",
+      "name": "Community 215",
       "count": 3,
       "color": "#E15759"
     },
     {
+      "id": 227,
+      "name": "Community 220",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 228,
+      "name": "Community 221",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 229,
+      "name": "Community 222",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
       "id": 224,
-      "name": "Community 218",
+      "name": "Community 217",
       "count": 3,
       "color": "#59A14F"
     },
     {
-      "id": 231,
+      "id": 225,
+      "name": "Community 214",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 223,
+      "name": "Community 216",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 226,
+      "name": "Community 218",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 232,
       "name": "Community 225",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 238,
+      "name": "Community 231",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 234,
+      "name": "Community 227",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 239,
+      "name": "Community 232",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 236,
+      "name": "Community 229",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 233,
+      "name": "Community 226",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 235,
+      "name": "Community 228",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 230,
+      "name": "Community 223",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 231,
+      "name": "Community 224",
       "count": 3,
       "color": "#F28E2B"
     },
     {
       "id": 237,
-      "name": "Community 231",
-      "count": 3,
-      "color": "#FF9DA7"
-    },
-    {
-      "id": 233,
-      "name": "Community 227",
-      "count": 3,
-      "color": "#76B7B2"
-    },
-    {
-      "id": 238,
-      "name": "Community 232",
-      "count": 3,
-      "color": "#9C755F"
-    },
-    {
-      "id": 235,
-      "name": "Community 229",
-      "count": 3,
-      "color": "#EDC948"
-    },
-    {
-      "id": 232,
-      "name": "Community 226",
-      "count": 3,
-      "color": "#E15759"
-    },
-    {
-      "id": 234,
-      "name": "Community 228",
-      "count": 3,
-      "color": "#59A14F"
-    },
-    {
-      "id": 229,
-      "name": "Community 223",
-      "count": 3,
-      "color": "#BAB0AC"
-    },
-    {
-      "id": 230,
-      "name": "Community 224",
-      "count": 3,
-      "color": "#4E79A7"
-    },
-    {
-      "id": 236,
       "name": "Community 230",
       "count": 3,
-      "color": "#B07AA1"
-    },
-    {
-      "id": 247,
-      "name": "Community 241",
-      "count": 3,
       "color": "#FF9DA7"
-    },
-    {
-      "id": 244,
-      "name": "Community 238",
-      "count": 3,
-      "color": "#59A14F"
     },
     {
       "id": 248,
-      "name": "Community 242",
+      "name": "Community 241",
       "count": 3,
       "color": "#9C755F"
     },
     {
       "id": 245,
-      "name": "Community 239",
+      "name": "Community 238",
       "count": 3,
       "color": "#EDC948"
     },
     {
-      "id": 239,
-      "name": "Community 135",
+      "id": 249,
+      "name": "Community 242",
       "count": 3,
       "color": "#BAB0AC"
     },
     {
-      "id": 241,
-      "name": "Community 236",
-      "count": 3,
-      "color": "#F28E2B"
-    },
-    {
-      "id": 243,
-      "name": "Community 237",
-      "count": 3,
-      "color": "#76B7B2"
-    },
-    {
       "id": 246,
-      "name": "Community 240",
+      "name": "Community 239",
       "count": 3,
       "color": "#B07AA1"
     },
     {
-      "id": 242,
-      "name": "Community 219",
-      "count": 3,
-      "color": "#E15759"
-    },
-    {
       "id": 240,
-      "name": "Community 234",
+      "name": "Community 135",
       "count": 3,
       "color": "#4E79A7"
     },
     {
-      "id": 251,
-      "name": "Community 245",
-      "count": 3,
-      "color": "#F28E2B"
-    },
-    {
-      "id": 258,
-      "name": "Community 252",
-      "count": 3,
-      "color": "#9C755F"
-    },
-    {
-      "id": 255,
-      "name": "Community 249",
-      "count": 3,
-      "color": "#EDC948"
-    },
-    {
-      "id": 259,
-      "name": "Community 253",
-      "count": 3,
-      "color": "#BAB0AC"
-    },
-    {
-      "id": 257,
-      "name": "Community 251",
-      "count": 3,
-      "color": "#FF9DA7"
-    },
-    {
-      "id": 249,
-      "name": "Community 243",
-      "count": 3,
-      "color": "#BAB0AC"
-    },
-    {
-      "id": 252,
-      "name": "Community 246",
+      "id": 242,
+      "name": "Community 236",
       "count": 3,
       "color": "#E15759"
     },
     {
+      "id": 244,
+      "name": "Community 237",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 247,
+      "name": "Community 240",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 243,
+      "name": "Community 219",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 241,
+      "name": "Community 234",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 252,
+      "name": "Community 245",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 259,
+      "name": "Community 252",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 256,
+      "name": "Community 249",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 260,
+      "name": "Community 253",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 258,
+      "name": "Community 251",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 250,
+      "name": "Community 243",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
       "id": 253,
-      "name": "Community 247",
+      "name": "Community 246",
       "count": 3,
       "color": "#76B7B2"
     },
     {
       "id": 254,
-      "name": "Community 248",
+      "name": "Community 247",
       "count": 3,
       "color": "#59A14F"
     },
     {
-      "id": 256,
-      "name": "Community 250",
+      "id": 255,
+      "name": "Community 248",
       "count": 3,
-      "color": "#B07AA1"
+      "color": "#EDC948"
     },
     {
-      "id": 250,
+      "id": 257,
+      "name": "Community 250",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 251,
       "name": "Community 244",
       "count": 3,
-      "color": "#4E79A7"
+      "color": "#F28E2B"
+    },
+    {
+      "id": 263,
+      "name": "Community 256",
+      "count": 3,
+      "color": "#76B7B2"
     },
     {
       "id": 262,
-      "name": "Community 256",
+      "name": "Community 255",
       "count": 3,
       "color": "#E15759"
     },
     {
       "id": 261,
-      "name": "Community 255",
+      "name": "Community 254",
       "count": 3,
       "color": "#F28E2B"
     },
     {
-      "id": 260,
-      "name": "Community 254",
-      "count": 3,
-      "color": "#4E79A7"
-    },
-    {
-      "id": 267,
-      "name": "Community 261",
-      "count": 3,
-      "color": "#FF9DA7"
-    },
-    {
-      "id": 272,
-      "name": "Community 266",
-      "count": 3,
-      "color": "#E15759"
-    },
-    {
-      "id": 274,
-      "name": "Community 268",
-      "count": 3,
-      "color": "#59A14F"
-    },
-    {
-      "id": 270,
-      "name": "Community 264",
-      "count": 3,
-      "color": "#4E79A7"
-    },
-    {
-      "id": 273,
-      "name": "Community 267",
-      "count": 3,
-      "color": "#76B7B2"
-    },
-    {
-      "id": 263,
-      "name": "Community 257",
-      "count": 3,
-      "color": "#76B7B2"
-    },
-    {
-      "id": 266,
-      "name": "Community 260",
-      "count": 3,
-      "color": "#B07AA1"
-    },
-    {
       "id": 268,
-      "name": "Community 262",
+      "name": "Community 261",
       "count": 3,
       "color": "#9C755F"
     },
     {
-      "id": 271,
-      "name": "Community 265",
-      "count": 3,
-      "color": "#F28E2B"
-    },
-    {
-      "id": 269,
-      "name": "Community 263",
-      "count": 3,
-      "color": "#BAB0AC"
-    },
-    {
-      "id": 265,
-      "name": "Community 259",
-      "count": 3,
-      "color": "#EDC948"
-    },
-    {
-      "id": 264,
-      "name": "Community 258",
-      "count": 3,
-      "color": "#59A14F"
-    },
-    {
-      "id": 275,
-      "name": "Community 270",
-      "count": 3,
-      "color": "#EDC948"
-    },
-    {
-      "id": 283,
-      "name": "Community 233",
+      "id": 273,
+      "name": "Community 266",
       "count": 3,
       "color": "#76B7B2"
     },
     {
-      "id": 277,
-      "name": "Community 272",
+      "id": 275,
+      "name": "Community 268",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 271,
+      "name": "Community 264",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 274,
+      "name": "Community 267",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 264,
+      "name": "Community 257",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 267,
+      "name": "Community 260",
       "count": 3,
       "color": "#FF9DA7"
     },
     {
-      "id": 279,
-      "name": "Community 274",
+      "id": 269,
+      "name": "Community 262",
       "count": 3,
       "color": "#BAB0AC"
     },
     {
+      "id": 272,
+      "name": "Community 265",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 270,
+      "name": "Community 263",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 266,
+      "name": "Community 259",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 265,
+      "name": "Community 258",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 277,
+      "name": "Community 270",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 284,
+      "name": "Community 233",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 278,
+      "name": "Community 272",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
       "id": 280,
-      "name": "Community 275",
+      "name": "Community 274",
       "count": 3,
       "color": "#4E79A7"
     },
     {
       "id": 276,
-      "name": "Community 271",
+      "name": "Community 123",
       "count": 3,
       "color": "#B07AA1"
     },
     {
       "id": 281,
-      "name": "Community 276",
+      "name": "Community 275",
       "count": 3,
       "color": "#F28E2B"
     },
     {
       "id": 282,
-      "name": "Community 277",
+      "name": "Community 276",
       "count": 3,
       "color": "#E15759"
     },
     {
-      "id": 278,
+      "id": 283,
+      "name": "Community 277",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 279,
       "name": "Community 273",
-      "count": 3,
-      "color": "#9C755F"
-    },
-    {
-      "id": 286,
-      "name": "Community 280",
-      "count": 3,
-      "color": "#B07AA1"
-    },
-    {
-      "id": 289,
-      "name": "Community 283",
       "count": 3,
       "color": "#BAB0AC"
     },
     {
       "id": 287,
-      "name": "Community 281",
+      "name": "Community 280",
       "count": 3,
       "color": "#FF9DA7"
     },
     {
       "id": 290,
-      "name": "Community 284",
+      "name": "Community 283",
       "count": 3,
       "color": "#4E79A7"
     },
     {
       "id": 288,
-      "name": "Community 282",
+      "name": "Community 281",
       "count": 3,
       "color": "#9C755F"
     },
     {
-      "id": 284,
-      "name": "Community 278",
+      "id": 291,
+      "name": "Community 284",
       "count": 3,
-      "color": "#59A14F"
+      "color": "#F28E2B"
+    },
+    {
+      "id": 289,
+      "name": "Community 282",
+      "count": 3,
+      "color": "#BAB0AC"
     },
     {
       "id": 285,
-      "name": "Community 279",
+      "name": "Community 278",
       "count": 3,
       "color": "#EDC948"
     },
     {
-      "id": 293,
+      "id": 286,
+      "name": "Community 279",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 294,
       "name": "Community 107",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 293,
+      "name": "Community 124",
       "count": 3,
       "color": "#76B7B2"
     },
     {
       "id": 292,
-      "name": "Community 124",
+      "name": "Community 285",
       "count": 3,
       "color": "#E15759"
     },
     {
-      "id": 291,
-      "name": "Community 285",
-      "count": 3,
-      "color": "#F28E2B"
-    },
-    {
-      "id": 294,
-      "name": "Community 288",
-      "count": 3,
-      "color": "#59A14F"
-    },
-    {
-      "id": 296,
-      "name": "Community 289",
-      "count": 3,
-      "color": "#B07AA1"
-    },
-    {
       "id": 295,
-      "name": "Community 287",
+      "name": "Community 288",
       "count": 3,
       "color": "#EDC948"
     },
     {
       "id": 297,
-      "name": "Community 291",
+      "name": "Community 55",
       "count": 3,
       "color": "#FF9DA7"
     },
     {
+      "id": 296,
+      "name": "Community 287",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
       "id": 298,
-      "name": "Community 292",
-      "count": 2,
+      "name": "Community 291",
+      "count": 3,
       "color": "#9C755F"
     },
     {
       "id": 299,
-      "name": "Community 293",
+      "name": "Community 292",
       "count": 2,
       "color": "#BAB0AC"
     },
     {
       "id": 300,
-      "name": "Community 8",
+      "name": "Community 293",
       "count": 2,
       "color": "#4E79A7"
     },
     {
       "id": 301,
-      "name": "Community 301",
+      "name": "Community 8",
       "count": 2,
       "color": "#F28E2B"
     },
     {
       "id": 302,
-      "name": "Community 294",
-      "count": 1,
+      "name": "Community 302",
+      "count": 2,
       "color": "#E15759"
     },
     {
       "id": 303,
-      "name": "Community 295",
+      "name": "Community 294",
       "count": 1,
       "color": "#76B7B2"
     },
     {
       "id": 304,
-      "name": "Community 296",
+      "name": "Community 295",
       "count": 1,
       "color": "#59A14F"
     },
     {
       "id": 305,
-      "name": "Community 297",
+      "name": "Community 296",
       "count": 1,
       "color": "#EDC948"
     },
     {
       "id": 306,
-      "name": "Community 298",
+      "name": "Community 297",
       "count": 1,
       "color": "#B07AA1"
     },
     {
       "id": 307,
-      "name": "Community 299",
+      "name": "Community 298",
       "count": 1,
       "color": "#FF9DA7"
     },
     {
       "id": 308,
-      "name": "Community 300",
+      "name": "Community 299",
       "count": 1,
       "color": "#9C755F"
+    },
+    {
+      "id": 309,
+      "name": "Community 300",
+      "count": 1,
+      "color": "#BAB0AC"
     }
   ],
   "nodes": [
@@ -1865,9 +1871,9 @@
       "name": "install-claude.ps1",
       "file": ".agents/install/install-claude.ps1",
       "type": "code",
-      "community": 302,
+      "community": 303,
       "community_name": "Community 294",
-      "color": "#E15759",
+      "color": "#76B7B2",
       "connections": 1,
       "isGodNode": false
     },
@@ -1876,9 +1882,9 @@
       "name": "install-claude.sh",
       "file": ".agents/install/install-claude.sh",
       "type": "code",
-      "community": 298,
+      "community": 299,
       "community_name": "Community 292",
-      "color": "#9C755F",
+      "color": "#BAB0AC",
       "connections": 2,
       "isGodNode": false
     },
@@ -1887,9 +1893,9 @@
       "name": "install-claude.sh script",
       "file": ".agents/install/install-claude.sh",
       "type": "code",
-      "community": 298,
+      "community": 299,
       "community_name": "Community 292",
-      "color": "#9C755F",
+      "color": "#BAB0AC",
       "connections": 1,
       "isGodNode": false
     },
@@ -1898,9 +1904,9 @@
       "name": "install-codex.ps1",
       "file": ".agents/install/install-codex.ps1",
       "type": "code",
-      "community": 303,
+      "community": 304,
       "community_name": "Community 295",
-      "color": "#76B7B2",
+      "color": "#59A14F",
       "connections": 1,
       "isGodNode": false
     },
@@ -1909,9 +1915,9 @@
       "name": "install-codex.sh",
       "file": ".agents/install/install-codex.sh",
       "type": "code",
-      "community": 299,
+      "community": 300,
       "community_name": "Community 293",
-      "color": "#BAB0AC",
+      "color": "#4E79A7",
       "connections": 2,
       "isGodNode": false
     },
@@ -1920,9 +1926,9 @@
       "name": "install-codex.sh script",
       "file": ".agents/install/install-codex.sh",
       "type": "code",
-      "community": 299,
+      "community": 300,
       "community_name": "Community 293",
-      "color": "#BAB0AC",
+      "color": "#4E79A7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2074,9 +2080,9 @@
       "name": "properties",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 10,
       "isGodNode": false
     },
@@ -2085,9 +2091,9 @@
       "name": "artifact_id",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 2,
       "isGodNode": false
     },
@@ -2096,9 +2102,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2107,9 +2113,9 @@
       "name": "project_id",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 2,
       "isGodNode": false
     },
@@ -2118,9 +2124,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2129,9 +2135,9 @@
       "name": "objective",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 3,
       "isGodNode": false
     },
@@ -2140,9 +2146,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2151,9 +2157,9 @@
       "name": "minLength",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
-      "community_name": "Community 212",
-      "color": "#BAB0AC",
+      "community": 98,
+      "community_name": "Community 101",
+      "color": "#9C755F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2162,9 +2168,9 @@
       "name": "scope",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 193,
+      "community": 194,
       "community_name": "Community 192",
-      "color": "#76B7B2",
+      "color": "#59A14F",
       "connections": 4,
       "isGodNode": false
     },
@@ -2173,9 +2179,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 193,
+      "community": 194,
       "community_name": "Community 192",
-      "color": "#76B7B2",
+      "color": "#59A14F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2184,9 +2190,9 @@
       "name": "required",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 193,
+      "community": 194,
       "community_name": "Community 192",
-      "color": "#76B7B2",
+      "color": "#59A14F",
       "connections": 3,
       "isGodNode": false
     },
@@ -2195,9 +2201,9 @@
       "name": "in",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 193,
+      "community": 194,
       "community_name": "Community 192",
-      "color": "#76B7B2",
+      "color": "#59A14F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2206,9 +2212,9 @@
       "name": "out",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 193,
+      "community": 194,
       "community_name": "Community 192",
-      "color": "#76B7B2",
+      "color": "#59A14F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2217,9 +2223,9 @@
       "name": "properties",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 3,
       "isGodNode": false
     },
@@ -2228,9 +2234,9 @@
       "name": "in",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 3,
       "isGodNode": false
     },
@@ -2239,9 +2245,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -2250,9 +2256,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -2261,9 +2267,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 6,
       "isGodNode": false
     },
@@ -2272,9 +2278,9 @@
       "name": "out",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 3,
       "isGodNode": false
     },
@@ -2283,9 +2289,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -2294,9 +2300,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
-      "community_name": "Community 101",
-      "color": "#4E79A7",
+      "community": 86,
+      "community_name": "Community 88",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -2305,9 +2311,9 @@
       "name": "facts",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 3,
       "isGodNode": false
     },
@@ -2316,9 +2322,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 1,
       "isGodNode": false
     },
@@ -2327,9 +2333,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 4,
       "isGodNode": false
     },
@@ -2338,9 +2344,9 @@
       "name": "required",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 3,
       "isGodNode": false
     },
@@ -2349,9 +2355,9 @@
       "name": "claim",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 1,
       "isGodNode": false
     },
@@ -2360,9 +2366,9 @@
       "name": "source_ref",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 1,
       "isGodNode": false
     },
@@ -2371,9 +2377,9 @@
       "name": "properties",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 3,
       "isGodNode": false
     },
@@ -2382,9 +2388,9 @@
       "name": "claim",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 2,
       "isGodNode": false
     },
@@ -2393,9 +2399,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 1,
       "isGodNode": false
     },
@@ -2404,9 +2410,9 @@
       "name": "source_ref",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 2,
       "isGodNode": false
     },
@@ -2415,9 +2421,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 101,
+      "community": 99,
       "community_name": "Community 102",
-      "color": "#F28E2B",
+      "color": "#BAB0AC",
       "connections": 1,
       "isGodNode": false
     },
@@ -2426,9 +2432,9 @@
       "name": "assumptions",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
+      "community": 98,
       "community_name": "Community 101",
-      "color": "#4E79A7",
+      "color": "#9C755F",
       "connections": 3,
       "isGodNode": false
     },
@@ -2437,9 +2443,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
+      "community": 98,
       "community_name": "Community 101",
-      "color": "#4E79A7",
+      "color": "#9C755F",
       "connections": 1,
       "isGodNode": false
     },
@@ -2448,9 +2454,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 100,
+      "community": 98,
       "community_name": "Community 101",
-      "color": "#4E79A7",
+      "color": "#9C755F",
       "connections": 2,
       "isGodNode": false
     },
@@ -2459,7 +2465,7 @@
       "name": "unknowns",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
+      "community": 219,
       "community_name": "Community 212",
       "color": "#BAB0AC",
       "connections": 3,
@@ -2470,7 +2476,7 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
+      "community": 219,
       "community_name": "Community 212",
       "color": "#BAB0AC",
       "connections": 1,
@@ -2481,7 +2487,7 @@
       "name": "items",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 99,
+      "community": 219,
       "community_name": "Community 212",
       "color": "#BAB0AC",
       "connections": 2,
@@ -2492,9 +2498,9 @@
       "name": "success_criteria",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 201,
+      "community": 86,
       "community_name": "Community 88",
-      "color": "#F28E2B",
+      "color": "#B07AA1",
       "connections": 4,
       "isGodNode": false
     },
@@ -2503,9 +2509,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 201,
+      "community": 86,
       "community_name": "Community 88",
-      "color": "#F28E2B",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -2514,9 +2520,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 201,
+      "community": 86,
       "community_name": "Community 88",
-      "color": "#F28E2B",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -2525,9 +2531,9 @@
       "name": "minItems",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 201,
+      "community": 86,
       "community_name": "Community 88",
-      "color": "#F28E2B",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -2536,9 +2542,9 @@
       "name": "status",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 164,
+      "community": 165,
       "community_name": "Community 164",
-      "color": "#59A14F",
+      "color": "#EDC948",
       "connections": 2,
       "isGodNode": false
     },
@@ -2547,9 +2553,9 @@
       "name": "enum",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "code",
-      "community": 164,
+      "community": 165,
       "community_name": "Community 164",
-      "color": "#59A14F",
+      "color": "#EDC948",
       "connections": 5,
       "isGodNode": false
     },
@@ -2558,9 +2564,9 @@
       "name": "draft",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 164,
+      "community": 165,
       "community_name": "Community 164",
-      "color": "#59A14F",
+      "color": "#EDC948",
       "connections": 1,
       "isGodNode": false
     },
@@ -2569,9 +2575,9 @@
       "name": "review-required",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 164,
+      "community": 165,
       "community_name": "Community 164",
-      "color": "#59A14F",
+      "color": "#EDC948",
       "connections": 1,
       "isGodNode": false
     },
@@ -2580,9 +2586,9 @@
       "name": "accepted",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 164,
+      "community": 165,
       "community_name": "Community 164",
-      "color": "#59A14F",
+      "color": "#EDC948",
       "connections": 1,
       "isGodNode": false
     },
@@ -2591,9 +2597,9 @@
       "name": "superseded",
       "file": ".agents/schemas/architecture-brief.schema.json",
       "type": "concept",
-      "community": 164,
+      "community": 165,
       "community_name": "Community 164",
-      "color": "#59A14F",
+      "color": "#EDC948",
       "connections": 1,
       "isGodNode": false
     },
@@ -2745,9 +2751,9 @@
       "name": "properties",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 12,
       "isGodNode": false
     },
@@ -2756,9 +2762,9 @@
       "name": "decision_id",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 2,
       "isGodNode": false
     },
@@ -2767,9 +2773,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2778,9 +2784,9 @@
       "name": "title",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 2,
       "isGodNode": false
     },
@@ -2789,9 +2795,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2800,9 +2806,9 @@
       "name": "status",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 2,
       "isGodNode": false
     },
@@ -2811,9 +2817,9 @@
       "name": "enum",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 7,
       "isGodNode": false
     },
@@ -2822,9 +2828,9 @@
       "name": "proposed",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2833,9 +2839,9 @@
       "name": "review-required",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2844,9 +2850,9 @@
       "name": "accepted",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2855,9 +2861,9 @@
       "name": "rejected",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2866,9 +2872,9 @@
       "name": "deprecated",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2877,9 +2883,9 @@
       "name": "superseded",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 138,
+      "community": 137,
       "community_name": "Community 141",
-      "color": "#9C755F",
+      "color": "#FF9DA7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2888,9 +2894,9 @@
       "name": "context",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 2,
       "isGodNode": false
     },
@@ -2899,9 +2905,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 1,
       "isGodNode": false
     },
@@ -2910,9 +2916,9 @@
       "name": "options",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 147,
+      "community": 146,
       "community_name": "Community 150",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 4,
       "isGodNode": false
     },
@@ -2921,9 +2927,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 147,
+      "community": 146,
       "community_name": "Community 150",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -2932,9 +2938,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 147,
+      "community": 146,
       "community_name": "Community 150",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 4,
       "isGodNode": false
     },
@@ -2943,9 +2949,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 146,
+      "community": 145,
       "community_name": "Community 149",
-      "color": "#B07AA1",
+      "color": "#EDC948",
       "connections": 4,
       "isGodNode": false
     },
@@ -2954,9 +2960,9 @@
       "name": "required",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 147,
+      "community": 146,
       "community_name": "Community 150",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 3,
       "isGodNode": false
     },
@@ -2965,9 +2971,9 @@
       "name": "name",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 147,
+      "community": 146,
       "community_name": "Community 150",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -2976,9 +2982,9 @@
       "name": "summary",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 147,
+      "community": 146,
       "community_name": "Community 150",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -2987,9 +2993,9 @@
       "name": "properties",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 4,
       "isGodNode": false
     },
@@ -2998,9 +3004,9 @@
       "name": "name",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -3009,9 +3015,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -3020,9 +3026,9 @@
       "name": "summary",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -3031,9 +3037,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -3042,9 +3048,9 @@
       "name": "tradeoffs",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 3,
       "isGodNode": false
     },
@@ -3053,9 +3059,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -3064,9 +3070,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 137,
+      "community": 136,
       "community_name": "Community 140",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -3075,9 +3081,9 @@
       "name": "minItems",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 147,
+      "community": 146,
       "community_name": "Community 150",
-      "color": "#FF9DA7",
+      "color": "#B07AA1",
       "connections": 1,
       "isGodNode": false
     },
@@ -3086,9 +3092,9 @@
       "name": "decision",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 2,
       "isGodNode": false
     },
@@ -3097,9 +3103,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 1,
       "isGodNode": false
     },
@@ -3108,9 +3114,9 @@
       "name": "consequences",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 146,
+      "community": 145,
       "community_name": "Community 149",
-      "color": "#B07AA1",
+      "color": "#EDC948",
       "connections": 3,
       "isGodNode": false
     },
@@ -3119,9 +3125,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 146,
+      "community": 145,
       "community_name": "Community 149",
-      "color": "#B07AA1",
+      "color": "#EDC948",
       "connections": 1,
       "isGodNode": false
     },
@@ -3130,9 +3136,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 146,
+      "community": 145,
       "community_name": "Community 149",
-      "color": "#B07AA1",
+      "color": "#EDC948",
       "connections": 2,
       "isGodNode": false
     },
@@ -3141,9 +3147,9 @@
       "name": "evidence_refs",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 146,
+      "community": 145,
       "community_name": "Community 149",
-      "color": "#B07AA1",
+      "color": "#EDC948",
       "connections": 3,
       "isGodNode": false
     },
@@ -3152,9 +3158,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 146,
+      "community": 145,
       "community_name": "Community 149",
-      "color": "#B07AA1",
+      "color": "#EDC948",
       "connections": 1,
       "isGodNode": false
     },
@@ -3163,9 +3169,9 @@
       "name": "items",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 146,
+      "community": 145,
       "community_name": "Community 149",
-      "color": "#B07AA1",
+      "color": "#EDC948",
       "connections": 2,
       "isGodNode": false
     },
@@ -3174,9 +3180,9 @@
       "name": "owner",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 2,
       "isGodNode": false
     },
@@ -3185,9 +3191,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 102,
+      "community": 100,
       "community_name": "Community 103",
-      "color": "#E15759",
+      "color": "#4E79A7",
       "connections": 1,
       "isGodNode": false
     },
@@ -3196,9 +3202,9 @@
       "name": "approver",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 165,
+      "community": 166,
       "community_name": "Community 165",
-      "color": "#EDC948",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -3207,9 +3213,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 165,
+      "community": 166,
       "community_name": "Community 165",
-      "color": "#EDC948",
+      "color": "#B07AA1",
       "connections": 3,
       "isGodNode": false
     },
@@ -3218,9 +3224,9 @@
       "name": "string",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 165,
+      "community": 166,
       "community_name": "Community 165",
-      "color": "#EDC948",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -3229,9 +3235,9 @@
       "name": "null",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "concept",
-      "community": 165,
+      "community": 166,
       "community_name": "Community 165",
-      "color": "#EDC948",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -3240,9 +3246,9 @@
       "name": "supersedes",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 165,
+      "community": 166,
       "community_name": "Community 165",
-      "color": "#EDC948",
+      "color": "#B07AA1",
       "connections": 2,
       "isGodNode": false
     },
@@ -3251,9 +3257,9 @@
       "name": "type",
       "file": ".agents/schemas/architecture-decision-record.schema.json",
       "type": "code",
-      "community": 165,
+      "community": 166,
       "community_name": "Community 165",
-      "color": "#EDC948",
+      "color": "#B07AA1",
       "connections": 3,
       "isGodNode": false
     },

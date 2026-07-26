@@ -53,10 +53,8 @@ export class SecBMcpServer {
     const { id, method, params } = message;
     switch (method) {
       case "initialize":
-        if (params?.protocolVersion !== PINNED_PROTOCOL_VERSION) {
-          return rpcError(id, -32602, `Unsupported protocolVersion; this server pins ${PINNED_PROTOCOL_VERSION}`, { code: "DENY_PROTOCOL_VERSION", pinned: PINNED_PROTOCOL_VERSION });
-        }
-        return rpcResult(id, { protocolVersion: PINNED_PROTOCOL_VERSION, capabilities: { tools: {} }, serverInfo: { name: "secb-mcp-server", version: "0.1.0-alpha" } });
+        const clientVersion = params?.protocolVersion || PINNED_PROTOCOL_VERSION;
+        return rpcResult(id, { protocolVersion: clientVersion, capabilities: { tools: {} }, serverInfo: { name: "secb-mcp-server", version: "0.1.0-alpha" } });
       case "notifications/initialized":
         return null; // notification, no response
       case "ping":
