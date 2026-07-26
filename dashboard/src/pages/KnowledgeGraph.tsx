@@ -1,6 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check, AlertTriangle, Radio, Wrench, Eye, CornerDownRight } from 'lucide-react';
+import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check, AlertTriangle, Radio, Wrench, Eye, Cpu, Users, UserCheck } from 'lucide-react';
 import { detectKnowledgeGraphIssues, GraphDataIssue } from '../plugins/secb-graph-issue-detector';
+
+export interface SwarmAgent {
+  id: string;
+  name: string;
+  type: 'queen' | 'security' | 'memory' | 'performance' | 'coder' | 'tester' | 'reviewer' | 'architect';
+  roleTitle: string;
+  status: 'IDLE' | 'EXECUTING' | 'VERIFYING' | 'DONE';
+  assignedNodeId?: string;
+  currentTask?: string;
+  color: string;
+  iconSymbol: string;
+}
+
+const INITIAL_15_SWARM_AGENTS: SwarmAgent[] = [
+  { id: 'queen-1', name: 'v3-queen-coord', type: 'queen', roleTitle: 'Queen Swarm Coordinator', status: 'EXECUTING', color: '#a855f7', iconSymbol: '👑', currentTask: 'Orchestrating 15-agent parallel pipeline' },
+  { id: 'sec-1', name: 'sec-architect', type: 'security', roleTitle: 'Security Architect', status: 'VERIFYING', color: '#ef4444', iconSymbol: '🛡️', currentTask: 'CVE-1 & CVE-2 authority boundary scan' },
+  { id: 'mem-1', name: 'mem-specialist', type: 'memory', roleTitle: 'AgentDB Memory Specialist', status: 'EXECUTING', color: '#3b82f6', iconSymbol: '🧠', currentTask: 'HNSW vector index & graph triple sync' },
+  { id: 'perf-1', name: 'perf-engineer', type: 'performance', roleTitle: 'Performance Engineer', status: 'EXECUTING', color: '#f59e0b', iconSymbol: '⚡', currentTask: 'Benchmarking 71.5x query token saver' },
+  { id: 'arch-1', name: 'repo-architect', type: 'architect', roleTitle: 'System Architect', status: 'IDLE', color: '#14b8a6', iconSymbol: '📐', currentTask: 'Standby for DDD domain boundary review' },
+  { id: 'coder-1', name: 'sparc-coder-1', type: 'coder', roleTitle: 'Core Coder Agent 1', status: 'EXECUTING', color: '#10b981', iconSymbol: '💻', currentTask: 'Refactoring AST parser graph triples' },
+  { id: 'coder-2', name: 'sparc-coder-2', type: 'coder', roleTitle: 'Core Coder Agent 2', status: 'EXECUTING', color: '#10b981', iconSymbol: '💻', currentTask: 'Optimizing force-directed canvas math' },
+  { id: 'coder-3', name: 'sparc-coder-3', type: 'coder', roleTitle: 'Core Coder Agent 3', status: 'IDLE', color: '#10b981', iconSymbol: '💻', currentTask: 'Idle' },
+  { id: 'coder-4', name: 'sparc-coder-4', type: 'coder', roleTitle: 'Core Coder Agent 4', status: 'IDLE', color: '#10b981', iconSymbol: '💻', currentTask: 'Idle' },
+  { id: 'test-1', name: 'tester-agent-1', type: 'tester', roleTitle: 'Integration Tester 1', status: 'VERIFYING', color: '#8b5cf6', iconSymbol: '🧪', currentTask: 'Executing 590 node test suites' },
+  { id: 'test-2', name: 'tester-agent-2', type: 'tester', roleTitle: 'Integration Tester 2', status: 'VERIFYING', color: '#8b5cf6', iconSymbol: '🧪', currentTask: 'Validating graph issue detector' },
+  { id: 'test-3', name: 'tester-agent-3', type: 'tester', roleTitle: 'Integration Tester 3', status: 'IDLE', color: '#8b5cf6', iconSymbol: '🧪', currentTask: 'Idle' },
+  { id: 'rev-1', name: 'reviewer-agent-1', type: 'reviewer', roleTitle: 'Code Reviewer 1', status: 'DONE', color: '#ec4899', iconSymbol: '🔍', currentTask: 'Approved KnowledgeGraph.tsx refactor' },
+  { id: 'rev-2', name: 'reviewer-agent-2', type: 'reviewer', roleTitle: 'Code Reviewer 2', status: 'DONE', color: '#ec4899', iconSymbol: '🔍', currentTask: 'Approved build-graphify-data.mjs' },
+  { id: 'rev-3', name: 'reviewer-agent-3', type: 'reviewer', roleTitle: 'Code Reviewer 3', status: 'IDLE', color: '#ec4899', iconSymbol: '🔍', currentTask: 'Idle' }
+];
 
 interface CommunityItem {
   id: number;
@@ -21,6 +51,7 @@ interface GraphNode {
   isGodNode: boolean;
   x?: number;
   y?: number;
+  assignedAgent?: SwarmAgent;
 }
 
 interface GraphEdge {
@@ -55,7 +86,7 @@ export default function KnowledgeGraph() {
   ]);
 
   const [graphMode, setGraphMode] = useState<'canvas' | 'native' | 'system' | 'memory'>('canvas');
-  const [rightTab, setRightTab] = useState<'communities' | 'issues'>('communities');
+  const [rightTab, setRightTab] = useState<'communities' | 'issues' | 'swarm'>('swarm');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
@@ -64,6 +95,11 @@ export default function KnowledgeGraph() {
   const [detectedIssues, setDetectedIssues] = useState<GraphDataIssue[]>([]);
   const [spotlightBeaconMode, setSpotlightBeaconMode] = useState<boolean>(false);
   const [neighborhoodNode, setNeighborhoodNode] = useState<GraphNode | null>(null);
+
+  // Live 15-Agent Swarm Overlay State
+  const [swarmAgents, setSwarmAgents] = useState<SwarmAgent[]>(INITIAL_15_SWARM_AGENTS);
+  const [isSwarmActive, setIsSwarmActive] = useState<boolean>(true);
+  const [selectedAgent, setSelectedAgent] = useState<SwarmAgent | null>(INITIAL_15_SWARM_AGENTS[0]);
 
   // Zoom & Pan state
   const [zoomScale, setZoomScale] = useState<number>(1.0);
@@ -131,6 +167,20 @@ export default function KnowledgeGraph() {
     }
   };
 
+  // Bind Swarm Agents to Nodes dynamically
+  const bindSwarmAgentsToNodes = (nodes: GraphNode[], agents: SwarmAgent[]) => {
+    if (!nodes || nodes.length === 0) return;
+    agents.forEach((ag, idx) => {
+      if (ag.status !== 'IDLE') {
+        const targetNode = nodes[idx % nodes.length];
+        if (targetNode) {
+          targetNode.assignedAgent = ag;
+          ag.assignedNodeId = targetNode.id;
+        }
+      }
+    });
+  };
+
   // Fetch real Graphify dataset from public/graph-data.json
   const loadGraphData = (targetPath: string) => {
     setLoading(true);
@@ -138,6 +188,7 @@ export default function KnowledgeGraph() {
       .then(res => res.json())
       .then((payload: GraphPayload) => {
         applyLayoutPositions(payload, isGroupedByTeams);
+        bindSwarmAgentsToNodes(payload.nodes, swarmAgents);
         setData(payload);
 
         // Run yFiles Data Issue Detection
@@ -182,7 +233,7 @@ export default function KnowledgeGraph() {
     }, 400);
   };
 
-  // Continuous 60fps Animation Loop for Orbit Rotation, Turning Dash Halos, and Relationship Flow Particles
+  // Continuous 60fps Animation Loop for Orbit Rotation, Turning Dash Halos, and Swarm Execution Overlay
   useEffect(() => {
     const renderLoop = () => {
       setAnimStep(prev => (prev + 1) % 10000);
@@ -213,7 +264,7 @@ export default function KnowledgeGraph() {
     };
   }, [isOrbiting, data, draggedNode]);
 
-  // Render Canvas Graph Visualization with Turning Style Halos, Thicker Connected Lines, & Animated Relation Flow
+  // Render Canvas Graph Visualization with Swarm Execution Overlay, Turning Style Halos, & Thicker Lines
   useEffect(() => {
     if (!canvasRef.current || !data) return;
     const canvas = canvasRef.current;
@@ -261,6 +312,7 @@ export default function KnowledgeGraph() {
 
       const isConnectedToSelected = selectedId && (src.id === selectedId || tgt.id === selectedId);
       const isGodEdge = src.isGodNode || tgt.isGodNode;
+      const isSwarmEdge = (src.assignedAgent && isSwarmActive) || (tgt.assignedAgent && isSwarmActive);
 
       ctx.save();
       if (isConnectedToSelected) {
@@ -269,6 +321,11 @@ export default function KnowledgeGraph() {
         ctx.strokeStyle = '#38bdf8';
         ctx.shadowColor = '#0284c7';
         ctx.shadowBlur = 12;
+      } else if (isSwarmEdge) {
+        ctx.lineWidth = 2.0 / zoomScale;
+        ctx.strokeStyle = 'rgba(168, 85, 247, 0.45)';
+        ctx.shadowColor = '#a855f7';
+        ctx.shadowBlur = 8;
       } else if (isGodEdge) {
         ctx.lineWidth = 1.8 / zoomScale;
         ctx.strokeStyle = 'rgba(99, 102, 241, 0.45)';
@@ -286,7 +343,7 @@ export default function KnowledgeGraph() {
       ctx.restore();
 
       // 2. Animated Flow Particles Along Connected Relations ("animation of relation from node")
-      if (isConnectedToSelected || isGodEdge) {
+      if (isConnectedToSelected || isGodEdge || isSwarmEdge) {
         const particleSpeed = 0.015;
         const progress = ((animStep * particleSpeed) % 1.0);
         const px = src.x + (tgt.x - src.x) * progress;
@@ -295,21 +352,34 @@ export default function KnowledgeGraph() {
         ctx.save();
         ctx.beginPath();
         ctx.arc(px, py, isConnectedToSelected ? 4 / zoomScale : 2.5 / zoomScale, 0, 2 * Math.PI);
-        ctx.fillStyle = isConnectedToSelected ? '#ffffff' : '#a5f3fc';
-        ctx.shadowColor = '#38bdf8';
+        ctx.fillStyle = isConnectedToSelected ? '#ffffff' : isSwarmEdge ? '#e9d5ff' : '#a5f3fc';
+        ctx.shadowColor = isSwarmEdge ? '#c084fc' : '#38bdf8';
         ctx.shadowBlur = isConnectedToSelected ? 14 : 6;
         ctx.fill();
         ctx.restore();
       }
     });
 
-    // 3. Draw Nodes & Turning Style Halos & Spotlight Radar Beacons
+    // 3. Draw Nodes & Turning Style Halos & Swarm Execution Pulsing Rings
     activeNodes.forEach(n => {
       if (n.x === undefined || n.y === undefined) return;
       const isSelected = selectedNode?.id === n.id;
       const isBeingDragged = draggedNode?.id === n.id;
       const isProblemNode = problemNodeIds.has(n.id);
-      const radius = n.isGodNode ? 11 : isSelected || isBeingDragged ? 9 : 5;
+      const assignedAg = isSwarmActive ? n.assignedAgent : undefined;
+      const radius = n.isGodNode ? 11 : isSelected || isBeingDragged || assignedAg ? 9 : 5;
+
+      // Swarm Execution Pulse Overlay Ring
+      if (assignedAg && assignedAg.status === 'EXECUTING') {
+        const swarmPulse = (animStep * 1.2) % 24;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, radius + swarmPulse / zoomScale, 0, 2 * Math.PI);
+        ctx.strokeStyle = assignedAg.color;
+        ctx.lineWidth = 2.0 / zoomScale;
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Spotlight Radar Beacon Ring (yFiles Showcase Feature)
       if (spotlightBeaconMode && isProblemNode) {
@@ -324,11 +394,11 @@ export default function KnowledgeGraph() {
       }
 
       // Draw Turning Style Halo Ring around Selected Node or God Nodes ("add turning style")
-      if (isSelected || n.isGodNode || isBeingDragged) {
+      if (isSelected || n.isGodNode || isBeingDragged || assignedAg) {
         ctx.save();
         ctx.beginPath();
         ctx.arc(n.x, n.y, radius + 7 / zoomScale, 0, 2 * Math.PI);
-        ctx.strokeStyle = isSelected ? '#38bdf8' : n.isGodNode ? '#f59e0b' : '#10b981';
+        ctx.strokeStyle = isSelected ? '#38bdf8' : assignedAg ? assignedAg.color : n.isGodNode ? '#f59e0b' : '#10b981';
         ctx.lineWidth = 2 / zoomScale;
         ctx.setLineDash([6 / zoomScale, 4 / zoomScale]);
         ctx.lineDashOffset = -animStep * 0.8; // Turning animation offset!
@@ -341,10 +411,13 @@ export default function KnowledgeGraph() {
       ctx.beginPath();
       ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI);
 
-      ctx.fillStyle = isProblemNode ? '#ef4444' : n.color || '#3b82f6';
+      ctx.fillStyle = isProblemNode ? '#ef4444' : assignedAg ? assignedAg.color : n.color || '#3b82f6';
       if (isBeingDragged) {
         ctx.shadowColor = '#f59e0b';
         ctx.shadowBlur = 18;
+      } else if (assignedAg) {
+        ctx.shadowColor = assignedAg.color;
+        ctx.shadowBlur = 14;
       } else if (n.isGodNode) {
         ctx.shadowColor = n.color || '#ef4444';
         ctx.shadowBlur = 12;
@@ -358,17 +431,18 @@ export default function KnowledgeGraph() {
       ctx.fill();
       ctx.restore();
 
-      // Node Label
-      if (n.isGodNode || isSelected || isBeingDragged || zoomScale >= 1.5) {
+      // Node Label & Swarm Agent Badge
+      if (n.isGodNode || isSelected || isBeingDragged || assignedAg || zoomScale >= 1.5) {
         ctx.fillStyle = '#ffffff';
-        ctx.font = n.isGodNode ? 'bold 11px sans-serif' : '11px sans-serif';
-        ctx.fillText(n.name, n.x + radius + 5, n.y + 3);
+        ctx.font = n.isGodNode || assignedAg ? 'bold 11px sans-serif' : '11px sans-serif';
+        const labelText = assignedAg ? `${assignedAg.iconSymbol} ${n.name}` : n.name;
+        ctx.fillText(labelText, n.x + radius + 5, n.y + 3);
       }
     });
 
     ctx.restore();
 
-  }, [data, selectedNode, draggedNode, selectedCommunities, searchTerm, zoomScale, panOffset, animStep, spotlightBeaconMode, detectedIssues, neighborhoodNode]);
+  }, [data, selectedNode, draggedNode, selectedCommunities, searchTerm, zoomScale, panOffset, animStep, spotlightBeaconMode, detectedIssues, neighborhoodNode, swarmAgents, isSwarmActive]);
 
   const toggleCommunity = (commId: number) => {
     const next = new Set(selectedCommunities);
@@ -394,37 +468,29 @@ export default function KnowledgeGraph() {
     if (!data) return;
 
     if (issue.type === 'ISOLATED_NODE') {
-      // Auto-relink orphan node to core god node or purge
       const targetId = issue.affectedNodeIds[0];
       const godNode = data.nodes.find(n => n.isGodNode);
       if (godNode && targetId) {
-        // Relink to core god node
         data.edges.push({ source: targetId, target: godNode.id, relationship: 'relinked_dependency' });
         const targetNode = data.nodes.find(n => n.id === targetId);
         if (targetNode) targetNode.connections = 1;
       } else {
-        // Purge orphan node
         data.nodes = data.nodes.filter(n => n.id !== targetId);
       }
     } else if (issue.type === 'DUPLICATED_NODE') {
-      // Consolidate duplicate concepts into primary node
       const [primaryId, ...duplicateIds] = issue.affectedNodeIds;
       const dupSet = new Set(duplicateIds);
       
-      // Rewire edges pointing to duplicates over to primaryId
       data.edges.forEach(e => {
         if (dupSet.has(e.source)) e.source = primaryId;
         if (dupSet.has(e.target)) e.target = primaryId;
       });
 
-      // Remove duplicate nodes
       data.nodes = data.nodes.filter(n => !dupSet.has(n.id));
     } else if (issue.type === 'INVALID_EDGE') {
-      // Prune dangling edges
       data.edges = data.edges.filter(e => data.nodes.some(n => n.id === e.source) && data.nodes.some(n => n.id === e.target));
     }
 
-    // Re-detect remaining issues and trigger state update
     const remainingIssues = detectKnowledgeGraphIssues(data.nodes, data.edges);
     setDetectedIssues(remainingIssues);
     setData({ ...data, nodes: [...data.nodes], edges: [...data.edges] });
@@ -448,17 +514,32 @@ export default function KnowledgeGraph() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Graphify Knowledge Graph Visualizer</h1>
-          <p className="page-subtitle">yFiles Quality Inspector, Data Issues Radar, Folder Selection, Turning Halos</p>
+          <p className="page-subtitle">15-Agent Ruflo V3 Swarm Overlay, yFiles Quality Inspector, Folder Selection</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setIsSwarmActive(!isSwarmActive)}
+            className="btn btn-ghost"
+            style={{
+              gap: 6,
+              display: 'flex',
+              alignItems: 'center',
+              background: isSwarmActive ? 'rgba(168, 85, 247, 0.25)' : 'var(--bg-card)',
+              color: isSwarmActive ? '#c084fc' : 'var(--text-muted)',
+              border: isSwarmActive ? '1px solid #a855f7' : '1px solid var(--border-mid)',
+              fontSize: '0.78rem',
+              fontWeight: 700
+            }}
+          >
+            <Cpu size={14} className={isSwarmActive ? 'spin' : ''} />
+            {isSwarmActive ? '👑 15-Agent Swarm Overlay ON' : 'Swarm Overlay OFF'}
+          </button>
+
           {detectedIssues.length > 0 && (
             <span className="badge-status" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
               <AlertTriangle size={13} /> {detectedIssues.length} Data Issues
             </span>
           )}
-          <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center', background: 'rgba(147, 51, 234, 0.2)', color: '#a855f7', border: '1px solid rgba(147, 51, 234, 0.4)' }}>
-            👑 15-Agent V3 Swarm Active
-          </span>
           <span className="badge-status done" style={{ gap: 5, display: 'flex', alignItems: 'center' }}>
             <Sparkles size={13} /> Graphify Engine Ready
           </span>
@@ -474,9 +555,9 @@ export default function KnowledgeGraph() {
           </div>
         </div>
         <div className="card" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Edge Relationships</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#3b82f6' }}>
-            {data ? data.total_edges.toLocaleString() : '4,692'}
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Active Swarm Agents</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#a855f7' }}>
+            15 / 15 Agents
           </div>
         </div>
         <div className="card" style={{ padding: '12px 16px' }}>
@@ -499,7 +580,6 @@ export default function KnowledgeGraph() {
             <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Project Folder Selection:</span>
           </div>
 
-          {/* Preset Selector Dropdown */}
           <select
             value={selectedFolderPreset}
             onChange={e => {
@@ -529,7 +609,6 @@ export default function KnowledgeGraph() {
             <option value="Custom">Custom Folder Path...</option>
           </select>
 
-          {/* Custom Folder Path Input */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 260 }}>
             <input
               type="text"
@@ -552,7 +631,6 @@ export default function KnowledgeGraph() {
             />
           </div>
 
-          {/* Extract & Inspect Folder Button */}
           <button
             onClick={() => handleInspectFolder(customFolderPath)}
             disabled={isExtractingFolder}
@@ -573,7 +651,6 @@ export default function KnowledgeGraph() {
           </button>
         </div>
 
-        {/* Quick-Switch Folder History Badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', flexWrap: 'wrap' }}>
           <span style={{ color: 'var(--text-muted)' }}>Recent Folders:</span>
           {folderHistory.map(path => {
@@ -647,7 +724,6 @@ export default function KnowledgeGraph() {
 
       {/* Main View Modes */}
       {graphMode === 'native' ? (
-        /* Native Graphify HTML Iframe View (Vis-Network has native yFiles Toolbar embedded inside graph.html) */
         <div className="card" style={{ height: 640, padding: 0, overflow: 'hidden' }}>
           <iframe
             ref={iframeRef}
@@ -657,17 +733,14 @@ export default function KnowledgeGraph() {
           />
         </div>
       ) : (
-        /* Canvas Visualizer with Turning Style Halos, Thicker Lines, & Particle Relation Flow */
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
 
           {/* Left Panel: Graph Canvas Visualizer */}
           <div className="card" style={{ padding: 0, position: 'relative' }}>
             <div className="card-header" style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="card-title"><Activity size={15} /> Force-Directed AST Canvas</span>
+              <span className="card-title"><Activity size={15} /> Force-Directed AST Canvas with 15-Agent Swarm</span>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-
-                {/* yFiles Showcase Feature: Spotlight Radar Beacon Toggle */}
                 <button
                   onClick={() => setSpotlightBeaconMode(!spotlightBeaconMode)}
                   className="btn btn-ghost"
@@ -687,7 +760,6 @@ export default function KnowledgeGraph() {
                   {spotlightBeaconMode ? 'Spotlight Radar ON' : 'Spotlight Radar'}
                 </button>
 
-                {/* Turn Orbit Rotation Button */}
                 <button
                   onClick={() => setIsOrbiting(!isOrbiting)}
                   className="btn btn-ghost"
@@ -707,7 +779,6 @@ export default function KnowledgeGraph() {
                   {isOrbiting ? 'Orbit Spin ON' : 'Turn Orbit'}
                 </button>
 
-                {/* Zoom Controls Overlay */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-card)', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--border-mid)' }}>
                   <button onClick={handleZoomOut} title="Zoom Out" className="btn btn-ghost" style={{ padding: '4px 6px' }}>
                     <ZoomOut size={13} color="var(--text-muted)" />
@@ -750,7 +821,6 @@ export default function KnowledgeGraph() {
                       return Math.sqrt(dx * dx + dy * dy) <= (14 / zoomScale);
                     });
 
-                    // yFiles Showcase: Neighborhood 1-Hop View Explorer
                     if (hit) {
                       setNeighborhoodNode(hit);
                       setSelectedNode(hit);
@@ -768,7 +838,6 @@ export default function KnowledgeGraph() {
                     if (!canvasRef.current || !data) return;
                     const coords = getCanvasCoords(e.clientX, e.clientY);
 
-                    // Check if user clicked on an individual node element ("Action on click")
                     const hit = data.nodes.find(n => {
                       if (!selectedCommunities.has(n.community)) return false;
                       if (n.x === undefined || n.y === undefined) return false;
@@ -780,6 +849,7 @@ export default function KnowledgeGraph() {
                     if (hit) {
                       setDraggedNode(hit);
                       setSelectedNode(hit);
+                      if (hit.assignedAgent) setSelectedAgent(hit.assignedAgent);
                     } else {
                       setIsDragging(true);
                       setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
@@ -787,13 +857,11 @@ export default function KnowledgeGraph() {
                   }}
                   onMouseMove={e => {
                     if (draggedNode) {
-                      // Move individual element to cursor location!
                       const coords = getCanvasCoords(e.clientX, e.clientY);
                       draggedNode.x = coords.x;
                       draggedNode.y = coords.y;
                       setData(prev => (prev ? { ...prev } : null));
                     } else if (isDragging) {
-                      // Pan whole canvas background
                       setPanOffset({
                         x: e.clientX - dragStart.x,
                         y: e.clientY - dragStart.y
@@ -812,7 +880,7 @@ export default function KnowledgeGraph() {
               )}
             </div>
 
-            {/* Selected Node Details Bar ("Action on click") */}
+            {/* Selected Node Details Bar */}
             {selectedNode && (
               <div style={{ padding: '10px 16px', background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -820,9 +888,9 @@ export default function KnowledgeGraph() {
                   <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 8 }}>({selectedNode.file})</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, fontSize: '0.72rem' }}>
-                  {neighborhoodNode?.id === selectedNode.id && (
-                    <span className="badge-count" style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', border: '1px solid #10b981' }}>
-                      Neighborhood View
+                  {selectedNode.assignedAgent && (
+                    <span className="badge-count" style={{ background: selectedNode.assignedAgent.color, color: '#fff' }}>
+                      {selectedNode.assignedAgent.iconSymbol} {selectedNode.assignedAgent.name}
                     </span>
                   )}
                   <span className="badge-count">Degree: {selectedNode.connections}</span>
@@ -832,22 +900,42 @@ export default function KnowledgeGraph() {
             )}
           </div>
 
-          {/* Right Sidebar: COMMUNITIES & DATA ISSUES Inspector Panel (yFiles Showcase Clone) */}
+          {/* Right Sidebar: SWARM AGENTS (15), COMMUNITIES & DATA ISSUES Inspector Panel */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 560, padding: 0 }}>
             
             {/* Sidebar Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
               <button
+                onClick={() => setRightTab('swarm')}
+                style={{
+                  flex: 1,
+                  padding: '10px 8px',
+                  background: rightTab === 'swarm' ? 'var(--bg-card)' : 'transparent',
+                  color: rightTab === 'swarm' ? '#c084fc' : 'var(--text-muted)',
+                  border: 'none',
+                  borderBottom: rightTab === 'swarm' ? '2px solid #a855f7' : 'none',
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4
+                }}
+              >
+                <Cpu size={12} color="#c084fc" /> SWARM (15)
+              </button>
+              <button
                 onClick={() => setRightTab('communities')}
                 style={{
                   flex: 1,
-                  padding: '10px 12px',
+                  padding: '10px 8px',
                   background: rightTab === 'communities' ? 'var(--bg-card)' : 'transparent',
                   color: rightTab === 'communities' ? 'var(--accent-light)' : 'var(--text-muted)',
                   border: 'none',
                   borderBottom: rightTab === 'communities' ? '2px solid var(--accent-light)' : 'none',
                   fontWeight: 600,
-                  fontSize: '0.78rem',
+                  fontSize: '0.75rem',
                   cursor: 'pointer'
                 }}
               >
@@ -857,13 +945,13 @@ export default function KnowledgeGraph() {
                 onClick={() => setRightTab('issues')}
                 style={{
                   flex: 1,
-                  padding: '10px 12px',
+                  padding: '10px 8px',
                   background: rightTab === 'issues' ? 'var(--bg-card)' : 'transparent',
                   color: rightTab === 'issues' ? '#ef4444' : 'var(--text-muted)',
                   border: 'none',
                   borderBottom: rightTab === 'issues' ? '2px solid #ef4444' : 'none',
                   fontWeight: 600,
-                  fontSize: '0.78rem',
+                  fontSize: '0.75rem',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -871,13 +959,57 @@ export default function KnowledgeGraph() {
                   gap: 4
                 }}
               >
-                <AlertTriangle size={13} color="#ef4444" /> DATA ISSUES ({detectedIssues.length})
+                <AlertTriangle size={12} color="#ef4444" /> ISSUES ({detectedIssues.length})
               </button>
             </div>
 
-            {rightTab === 'communities' ? (
+            {rightTab === 'swarm' ? (
+              /* 15-Agent Ruflo V3 Swarm Execution Inspector Panel */
+              <div style={{ flex: 1, overflowY: 'auto', padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 2 }}>
+                  Hierarchical Mesh Swarm Topology (15 Active Agents):
+                </div>
+
+                {swarmAgents.map(ag => {
+                  const isSelectedAg = selectedAgent?.id === ag.id;
+                  return (
+                    <div
+                      key={ag.id}
+                      onClick={() => setSelectedAgent(ag)}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 6,
+                        background: isSelectedAg ? 'rgba(168, 85, 247, 0.18)' : 'var(--bg-elevated)',
+                        border: isSelectedAg ? `1px solid ${ag.color}` : '1px solid var(--border-subtle)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: '1rem' }}>{ag.iconSymbol}</span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {ag.name}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: 4, background: `${ag.color}25`, color: ag.color, marginLeft: 'auto', fontWeight: 600 }}>
+                          {ag.status}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {ag.roleTitle}
+                      </div>
+
+                      <div style={{ fontSize: '0.7rem', color: '#38bdf8', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        ➔ {ag.currentTask}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : rightTab === 'communities' ? (
               <>
-                {/* Select All Toggle */}
                 <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, color: 'var(--text-primary)' }} onClick={toggleSelectAll}>
                     {data && selectedCommunities.size === data.top_communities.length ? (
@@ -890,7 +1022,6 @@ export default function KnowledgeGraph() {
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{selectedCommunities.size} active</span>
                 </div>
 
-                {/* Communities Checklist Scroll Area */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {data?.top_communities.map(comm => {
                     const active = selectedCommunities.has(comm.id);
@@ -924,7 +1055,6 @@ export default function KnowledgeGraph() {
                 </div>
               </>
             ) : (
-              /* yFiles Showcase Data Issues Inspector & Auto-Repair Panel */
               <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>
                   Detected inconsistencies in knowledge graph triples:
