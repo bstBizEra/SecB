@@ -1,90 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Network, Database, Code, Shield, Search, RefreshCw, Zap, Folder, Layers, Sparkles, Activity, Globe, CheckSquare, Square, ExternalLink, ZoomIn, ZoomOut, Maximize2, Move, RotateCw, Play, Pause, FolderPlus, Terminal, Check, AlertTriangle, Radio, Wrench, Eye, CornerDownRight } from 'lucide-react';
-
-export interface GraphDataIssue {
-  id: string;
-  type: 'DUPLICATED_NODE' | 'ISOLATED_NODE' | 'INVALID_EDGE';
-  severity: 'HIGH' | 'MEDIUM' | 'LOW';
-  title: string;
-  description: string;
-  affectedNodeIds: string[];
-  suggestedAction: string;
-}
-
-export function detectKnowledgeGraphIssues(nodes: any[], edges: any[]): GraphDataIssue[] {
-  const issues: GraphDataIssue[] = [];
-  const nodeMap = new Map<string, any>();
-  const degreeMap = new Map<string, number>();
-
-  nodes.forEach(n => {
-    nodeMap.set(String(n.id), n);
-    degreeMap.set(String(n.id), 0);
-  });
-
-  // Calculate degree centrality
-  edges.forEach(e => {
-    const src = String(e.source);
-    const tgt = String(e.target);
-    if (degreeMap.has(src)) degreeMap.set(src, (degreeMap.get(src) || 0) + 1);
-    if (degreeMap.has(tgt)) degreeMap.set(tgt, (degreeMap.get(tgt) || 0) + 1);
-
-    // Check for Invalid / Dangling Edges
-    if (!nodeMap.has(src) || !nodeMap.has(tgt)) {
-      issues.push({
-        id: `ISSUE-EDGE-${src}-${tgt}`,
-        type: 'INVALID_EDGE',
-        severity: 'HIGH',
-        title: `Invalid Edge Endpoint (${src} ➔ ${tgt})`,
-        description: `Edge references target node "${!nodeMap.has(tgt) ? tgt : src}" which does not exist in the graph.`,
-        affectedNodeIds: [nodeMap.has(src) ? src : tgt],
-        suggestedAction: 'Repair edge endpoint'
-      });
-    }
-  });
-
-  // Check for Isolated Nodes
-  nodes.forEach(n => {
-    const id = String(n.id);
-    const deg = degreeMap.get(id) || 0;
-    if (deg === 0) {
-      issues.push({
-        id: `ISSUE-ISOLATED-${id}`,
-        type: 'ISOLATED_NODE',
-        severity: 'MEDIUM',
-        title: `Isolated Orphan Node: "${n.name || n.label || id}"`,
-        description: `Node has 0 connected relationships in the graph.`,
-        affectedNodeIds: [id],
-        suggestedAction: 'Relink or purge'
-      });
-    }
-  });
-
-  // Check for Duplicated Nodes (same symbol label across different paths)
-  const nameOccurrences = new Map<string, string[]>();
-  nodes.forEach(n => {
-    const name = String(n.name || n.label || n.id).toLowerCase();
-    if (name.length > 2) {
-      if (!nameOccurrences.has(name)) nameOccurrences.set(name, []);
-      nameOccurrences.get(name)!.push(String(n.id));
-    }
-  });
-
-  nameOccurrences.forEach((ids, name) => {
-    if (ids.length > 1) {
-      issues.push({
-        id: `ISSUE-DUP-${name}`,
-        type: 'DUPLICATED_NODE',
-        severity: 'LOW',
-        title: `Duplicated Entity Label: "${name}"`,
-        description: `Found ${ids.length} separate nodes sharing the identical symbol name across different files.`,
-        affectedNodeIds: ids,
-        suggestedAction: 'Consolidate concepts'
-      });
-    }
-  });
-
-  return issues;
-}
+import { detectKnowledgeGraphIssues, GraphDataIssue } from '../plugins/secb-graph-issue-detector';
 
 interface CommunityItem {
   id: number;
@@ -473,12 +389,45 @@ export default function KnowledgeGraph() {
     }
   };
 
+  // Perform Real Auto-Repair ("Relink / Purge" & "Consolidate Concepts")
   const handleFixIssue = (issue: GraphDataIssue) => {
-    setDetectedIssues(prev => prev.filter(i => i.id !== issue.id));
-    if (issue.affectedNodeIds.length > 0 && data) {
-      const node = data.nodes.find(n => n.id === issue.affectedNodeIds[0]);
-      if (node) setSelectedNode(node);
+    if (!data) return;
+
+    if (issue.type === 'ISOLATED_NODE') {
+      // Auto-relink orphan node to core god node or purge
+      const targetId = issue.affectedNodeIds[0];
+      const godNode = data.nodes.find(n => n.isGodNode);
+      if (godNode && targetId) {
+        // Relink to core god node
+        data.edges.push({ source: targetId, target: godNode.id, relationship: 'relinked_dependency' });
+        const targetNode = data.nodes.find(n => n.id === targetId);
+        if (targetNode) targetNode.connections = 1;
+      } else {
+        // Purge orphan node
+        data.nodes = data.nodes.filter(n => n.id !== targetId);
+      }
+    } else if (issue.type === 'DUPLICATED_NODE') {
+      // Consolidate duplicate concepts into primary node
+      const [primaryId, ...duplicateIds] = issue.affectedNodeIds;
+      const dupSet = new Set(duplicateIds);
+      
+      // Rewire edges pointing to duplicates over to primaryId
+      data.edges.forEach(e => {
+        if (dupSet.has(e.source)) e.source = primaryId;
+        if (dupSet.has(e.target)) e.target = primaryId;
+      });
+
+      // Remove duplicate nodes
+      data.nodes = data.nodes.filter(n => !dupSet.has(n.id));
+    } else if (issue.type === 'INVALID_EDGE') {
+      // Prune dangling edges
+      data.edges = data.edges.filter(e => data.nodes.some(n => n.id === e.source) && data.nodes.some(n => n.id === e.target));
     }
+
+    // Re-detect remaining issues and trigger state update
+    const remainingIssues = detectKnowledgeGraphIssues(data.nodes, data.edges);
+    setDetectedIssues(remainingIssues);
+    setData({ ...data, nodes: [...data.nodes], edges: [...data.edges] });
   };
 
   // Convert raw screen event coordinates into un-transformed canvas coordinates
@@ -975,7 +924,7 @@ export default function KnowledgeGraph() {
                 </div>
               </>
             ) : (
-              /* yFiles Showcase Data Issues Inspector & Repair Panel */
+              /* yFiles Showcase Data Issues Inspector & Auto-Repair Panel */
               <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>
                   Detected inconsistencies in knowledge graph triples:

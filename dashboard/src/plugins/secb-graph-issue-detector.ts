@@ -1,44 +1,28 @@
 /**
  * SecB Knowledge Graph Data Issues Detector & Quality Repair Engine
  * (Inspired by yFiles Interactive Knowledge Graph Showcase)
- * 
- * Detects common knowledge graph inconsistencies:
- * 1. Duplicated Nodes (identical labels or fuzzy symbol alias collisions across different domain entities)
- * 2. Isolated / Orphan Nodes (degree = 0 with no relationships)
- * 3. Dangling / Invalid Edges (relationships referencing non-existent nodes)
  */
 
-/**
- * Common ubiquitous JSON schema / AST keywords to exclude from duplicate symbol collision alerts.
- */
+export interface GraphDataIssue {
+  id: string;
+  type: 'DUPLICATED_NODE' | 'ISOLATED_NODE' | 'INVALID_EDGE';
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  title: string;
+  description: string;
+  affectedNodeIds: string[];
+  suggestedAction: string;
+}
+
 const UBIQUITOUS_KEYWORDS = new Set([
   'type', 'properties', 'items', 'required', '$schema', 'enum', 'title',
   'description', 'name', 'status', 'id', 'draft', 'accepted', 'superseded',
   'review-required', 'in', 'out', 'claim', 'source_ref', 'minitems', 'minlength'
 ]);
 
-/**
- * @typedef {Object} GraphDataIssue
- * @property {string} id
- * @property {'DUPLICATED_NODE' | 'ISOLATED_NODE' | 'INVALID_EDGE'} type
- * @property {'HIGH' | 'MEDIUM' | 'LOW'} severity
- * @property {string} title
- * @property {string} description
- * @property {string[]} affectedNodeIds
- * @property {string} suggestedAction
- */
-
-/**
- * Detect data issues in a knowledge graph payload.
- *
- * @param {Array<Object>} nodes
- * @param {Array<Object>} edges
- * @returns {GraphDataIssue[]}
- */
-export function detectKnowledgeGraphIssues(nodes = [], edges = []) {
-  const issues = [];
-  const nodeMap = new Map();
-  const degreeMap = new Map();
+export function detectKnowledgeGraphIssues(nodes: any[] = [], edges: any[] = []): GraphDataIssue[] {
+  const issues: GraphDataIssue[] = [];
+  const nodeMap = new Map<string, any>();
+  const degreeMap = new Map<string, number>();
 
   nodes.forEach(n => {
     nodeMap.set(String(n.id), n);
@@ -82,13 +66,13 @@ export function detectKnowledgeGraphIssues(nodes = [], edges = []) {
     }
   });
 
-  // Check for Duplicated Domain Symbol Nodes (ignoring generic JSON schema keywords)
-  const nameOccurrences = new Map();
+  // Check for Duplicated Domain Symbol Nodes
+  const nameOccurrences = new Map<string, string[]>();
   nodes.forEach(n => {
     const rawName = String(n.name || n.label || n.id).toLowerCase();
     if (rawName.length > 2 && !UBIQUITOUS_KEYWORDS.has(rawName)) {
       if (!nameOccurrences.has(rawName)) nameOccurrences.set(rawName, []);
-      nameOccurrences.get(rawName).push(String(n.id));
+      nameOccurrences.get(rawName)!.push(String(n.id));
     }
   });
 
