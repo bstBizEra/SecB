@@ -4,6 +4,7 @@ import { validateContract } from "../contracts/contract-validator.mjs";
 import { classificationDecision, projectEvents, projectEvidence } from "../ui/report-projections.mjs";
 import { CATALOG_BY_NAME, PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "./tool-catalog.mjs";
 import { formatGraphDataForDashboard } from "../../tools/build-graphify-data.mjs";
+import { SecBAgentRegistry } from "../gateway/secb-agent-registry.mjs";
 
 // P0-21 SecB MCP Server dispatch core (GOV-MCP-01..09, adopted). A
 // projection of existing authority, never a source of it: every answer is
@@ -187,6 +188,10 @@ export class SecBMcpServer {
           god_nodes_count: payload.god_nodes_count,
           quality_rating: "100%"
         };
+      }
+      case "secb_agent_config_resolve": {
+        const agentRegistry = s.agentRegistry ?? new SecBAgentRegistry({ services: s });
+        return agentRegistry.resolveCapability(args.agent_type);
       }
       default:
         throw new Error(`Unrouted tool: ${name}`);

@@ -85,6 +85,13 @@ export const TOOL_CATALOG = freeze([
     required: [],
     optional: ["targetDir"],
     idParams: []
+  },
+  {
+    name: "secb_agent_config_resolve",
+    description: "Resolve effective agent role capabilities, security ceilings, and profile rules from .secb/agent-config.toml. Pure function; returns resolution verdict.",
+    required: ["agent_type"],
+    optional: [],
+    idParams: ["agent_type"]
   }
 ]);
 
