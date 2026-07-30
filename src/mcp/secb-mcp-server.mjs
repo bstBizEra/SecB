@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
 import { findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
 import { validateContract } from "../contracts/contract-validator.mjs";
@@ -6,6 +8,25 @@ import { CATALOG_BY_NAME, PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "./tool-c
 import { formatGraphDataForDashboard } from "../../tools/build-graphify-data.mjs";
 import { SecBAgentRegistry } from "../gateway/secb-agent-registry.mjs";
 import { SecBSkillsHub } from "../skills/skills-hub-service.mjs";
+import { secbWorktreeStatus, secbWorktreeListCrates, secbWorktreeInspectStorage } from "./worktree-mcp-tools.mjs";
+import { ProjectRegistrationService } from "../project/project-registration-service.mjs";
+import { projectRegistrationProjection } from "../ui/registration-projection.mjs";
+import { SecBPlaneAdapter } from "../plugins/secb-plane-adapter.mjs";
+import { CrossProjectKnowledgeService } from "../services/cross-project-knowledge.mjs";
+import { SwarmDelegationService } from "../services/swarm-delegation-service.mjs";
+import { SecBModuleRecommender } from "../control/module-recommender.mjs";
+import { SecondBrainService } from "../brain/second-brain-service.mjs";
+import { KnowledgeMaturityPipeline } from "../brain/knowledge-maturity-pipeline.mjs";
+import { ProjectWorktreeManager } from "../project/project-worktree-manager.mjs";
+import { ProjectMilestoneService } from "../project/project-milestone-service.mjs";
+import { ImplementationMergeOrchestrator } from "../control/implementation-merge-orchestrator.mjs";
+import { SecBOpenProjectAdapter } from "../plugins/secb-openproject-adapter.mjs";
+import { SecBControlPlaneBus } from "../bus/secb-control-plane-bus.mjs";
+import { MemoryConsolidationService } from "../memory/memory-consolidation-service.mjs";
+import { CommandCenterDashboardServer } from "../ui/dashboard-server.mjs";
+import { getSystemSettings } from "../config/system-settings.mjs";
+import { GovernanceAuditDossier } from "../control/governance-audit-dossier.mjs";
+import { detectHost, loadUpstreamRegistry, resolveRegistry } from "./upstream-registry.mjs";
 
 // P0-21 SecB MCP Server dispatch core (GOV-MCP-01..09, adopted). A
 // projection of existing authority, never a source of it: every answer is
@@ -21,6 +42,9 @@ import { SecBSkillsHub } from "../skills/skills-hub-service.mjs";
 
 const CLASS_ORDER = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"];
 const DATA_UNTRUSTED = { content_disposition: "data_untrusted" };
+// Resolved from this module's own location so the path is identical whether the
+// server was spawned from Windows or from inside WSL.
+const UPSTREAM_REGISTRY_PATH = resolve(import.meta.dirname, "..", "..", ".secb", "mcp-upstreams.json");
 
 const rpcError = (id, code, message, data) => ({ jsonrpc: "2.0", id, error: { code, message, ...(data ? { data } : {}) } });
 const rpcResult = (id, result) => ({ jsonrpc: "2.0", id, result });
@@ -118,6 +142,12 @@ export class SecBMcpServer {
       }
     }
     for (const field of tool.idParams) {
+      // An absent OPTIONAL id param is not a violation. Requiredness is already
+      // enforced by the tool.required loop above, so a required id param can
+      // never be undefined here; without this skip, every catalog entry that
+      // declared an id param as optional was in fact uncallable without it.
+      // An explicit null still falls through and is denied.
+      if (args[field] === undefined && !tool.required.includes(field)) continue;
       if (typeof args[field] !== "string") {
         return auditAndReturn("DENY_INVALID_PARAMS", ceiling, () => rpcError(id, -32602, `${field} must be a string`, { code: "DENY_INVALID_PARAMS" }));
       }
@@ -197,6 +227,100 @@ export class SecBMcpServer {
       case "secb_skill_hub_search": {
         const skillsHub = s.skillsHub ?? new SecBSkillsHub({ services: s });
         return skillsHub.searchSkills(args.query ?? "", { classificationFloor: ceiling });
+      }
+      case "secb_worktree_status":
+        return secbWorktreeStatus({ worktreeDir: args.worktreeDir });
+      case "secb_worktree_list_crates":
+        return secbWorktreeListCrates({ worktreeDir: args.worktreeDir });
+      case "secb_worktree_inspect_storage":
+        return secbWorktreeInspectStorage({ worktreeDir: args.worktreeDir });
+      case "secb_project_register_draft": {
+        const regService = s.registrationService ?? new ProjectRegistrationService();
+        return regService.registerDraft({
+          projectId: args.project_id,
+          name: args.name,
+          owners: args.owners,
+          classification: args.classification,
+          repositoryPath: args.repository_path
+        });
+      }
+      case "secb_project_registration_inspect": {
+        const regService = s.registrationService ?? new ProjectRegistrationService();
+        return regService.inspectRegistration(args.project_id);
+      }
+      case "secb_project_proposed_manifest_verify": {
+        const regService = s.registrationService ?? new ProjectRegistrationService();
+        return regService.verifyProposedManifest(args.project_id);
+      }
+      case "secb_project_registration_projection":
+        return projectRegistrationProjection(args.stagingBaseDir);
+      case "secb_plane_adapter_inspect": {
+        const adapter = new SecBPlaneAdapter({ planeEndpoint: args.planeEndpoint, projectId: args.projectId });
+        return adapter.inspectPlugin();
+      }
+      case "secb_knowledge_cross_project_synthesize": {
+        const knowService = s.crossProjectKnowledgeService ?? new CrossProjectKnowledgeService();
+        return knowService.synthesizeProjectKnowledge({ projectId: args.projectId });
+      }
+      case "secb_swarm_delegation_verify": {
+        const delegationService = s.swarmDelegationService ?? new SwarmDelegationService();
+        return delegationService.verifyDelegationChain(args.delegation_id);
+      }
+      case "secb_module_recommend": {
+        const recommender = s.moduleRecommender ?? new SecBModuleRecommender();
+        return recommender.recommendNextAction({ module: args.module, currentStatus: args.currentStatus });
+      }
+      case "secb_brain_query": {
+        const brain = s.secondBrainService ?? new SecondBrainService();
+        return brain.queryBrain({ query: args.query, category: args.category, dataClassification: ceiling });
+      }
+      case "secb_brain_inspect_para": {
+        const brain = s.secondBrainService ?? new SecondBrainService();
+        return brain.inspectPARA();
+      }
+      case "secb_brain_maturity_promote": {
+        const pipeline = s.knowledgeMaturityPipeline ?? new KnowledgeMaturityPipeline();
+        return pipeline.getPipelineStatus(args.pipeline_id);
+      }
+      case "secb_project_worktree_manage": {
+        const pwm = s.projectWorktreeManager ?? new ProjectWorktreeManager();
+        return pwm.inspectWorktreeAllocation(args.allocation_id);
+      }
+      case "secb_project_milestones_inspect": {
+        const pms = s.projectMilestoneService ?? new ProjectMilestoneService();
+        return pms.inspectMilestone(args.milestone_id);
+      }
+      case "secb_implementation_merge_verify": {
+        const imo = s.implementationMergeOrchestrator ?? new ImplementationMergeOrchestrator();
+        return { status: "INSPECTED", release_id: args.release_id };
+      }
+      case "secb_openproject_adapter_inspect": {
+        const adapter = new SecBOpenProjectAdapter({ openprojectEndpoint: args.openprojectEndpoint, projectId: args.projectId });
+        return adapter.inspectPlugin();
+      }
+      case "secb_bus_events_inspect": {
+        const bus = s.controlPlaneBus ?? new SecBControlPlaneBus();
+        return bus.inspectEventHistory({ limit: args.limit, eventType: args.eventType });
+      }
+      case "secb_memory_consolidate_inspect": {
+        const mcs = s.memoryConsolidationService ?? new MemoryConsolidationService();
+        return mcs.inspectMemorySummary();
+      }
+      case "secb_dashboard_inspect": {
+        const dash = s.dashboardServer ?? new CommandCenterDashboardServer(s);
+        return dash.getDashboardState();
+      }
+      case "secb_system_settings_inspect":
+        return getSystemSettings();
+      case "secb_governance_dossier_generate": {
+        const dossier = s.governanceAuditDossier ?? new GovernanceAuditDossier(s);
+        return dossier.generateDossier({ projectId: args.projectId });
+      }
+      case "secb_mcp_upstream_resolve": {
+        // The registry path is fixed, never caller-supplied: an arbitrary path
+        // argument would turn this read-only projection into a file-read oracle.
+        const registry = s.upstreamRegistry ?? loadUpstreamRegistry(UPSTREAM_REGISTRY_PATH);
+        return resolveRegistry(registry, { host: args.host ?? detectHost() });
       }
       default:
         throw new Error(`Unrouted tool: ${name}`);

@@ -60,10 +60,10 @@ test("deny-by-default methods and malformed requests", () => {
   assert.equal(server.handle({ jsonrpc: "2.0", method: "notifications/initialized" }), null);
 });
 
-test("tools/list projects the frozen catalog (12 read-only tools)", () => {
+test("tools/list projects the frozen catalog (36 read-only tools)", () => {
   const { server } = harness();
   const tools = server.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }).result.tools;
-  assert.equal(tools.length, 12);
+  assert.equal(tools.length, 36);
   assert.ok(tools.every((t) => typeof t.description === "string"));
   assert.throws(() => { TOOL_CATALOG.push({}); }, TypeError);
 });
@@ -83,6 +83,17 @@ test("unknown tool, missing params, and reserved delimiters deny (all ledgered)"
   assert.equal(call("secb_work_package_resolve_effective", { project_id: "p|x", work_package_id: "w" }).error.data.code, "DENY_RESERVED_DELIMITER");
   assert.equal(call("secb_registry_resolve", { agent_instance_id: "a@b" }).error.data.code, "DENY_RESERVED_DELIMITER");
   assert.ok(calls.length >= 4);
+});
+
+test("an optional id param may be omitted, but a present one is still screened", () => {
+  const { call } = harness();
+  // Omitted: the catalog declares host optional, so this must dispatch.
+  assert.ok(call("secb_mcp_upstream_resolve", {}).result);
+  // Present but not a string, and present with a reserved delimiter: still denied.
+  assert.equal(call("secb_mcp_upstream_resolve", { host: 7 }).error.data.code, "DENY_INVALID_PARAMS");
+  assert.equal(call("secb_mcp_upstream_resolve", { host: "wsl|x" }).error.data.code, "DENY_RESERVED_DELIMITER");
+  // A required id param is still mandatory.
+  assert.equal(call("secb_registry_resolve", {}).error.data.code, "DENY_INVALID_PARAMS");
 });
 
 test("happy path returns a data_untrusted-marked projection", () => {

@@ -62,12 +62,16 @@ const expectedSchemas = [
   "contracts/outcome-receipt.schema.json",
   "contracts/skill-manifest.schema.json",
   "contracts/capability-record.schema.json",
-  "contracts/goal.schema.json"
+  "contracts/goal.schema.json",
+  "contracts/project-registration-package.schema.json",
+  "contracts/swarm-execution-contract.schema.json",
+  "contracts/system-settings.schema.json",
+  "contracts/mcp-upstream-registry.schema.json"
 ];
 assert(
   schemaFiles.length === expectedSchemas.length && expectedSchemas.every((file) => schemaFiles.includes(file)),
   "schemas.count",
-  "7 canonical bootstrap schemas + 6 governed extensions (P0-14, skill resolver, capability record, MOD-WORK goal)"
+  "7 canonical bootstrap schemas + 9 governed extensions (P0-14, skill resolver, capability record, MOD-WORK goal, project registration, swarm execution, system settings)"
 );
 const mandatoryIdentityFields = {
   "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_instance_id", "evaluation_status", "lifecycle_state"],
@@ -82,7 +86,11 @@ const mandatoryIdentityFields = {
   "contracts/knowledge-claim.schema.json": ["claim_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "truth_status", "evidence_refs", "valid_from", "valid_until"],
   "contracts/outcome-receipt.schema.json": ["outcome_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_ref", "outcome_status", "reversion_required"],
   "contracts/skill-manifest.schema.json": ["skill_id", "version", "status", "owner", "source", "project_scopes", "max_data_classification", "approval_history"],
-  "contracts/goal.schema.json": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "content_hash"]
+  "contracts/goal.schema.json": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "content_hash"],
+  "contracts/project-registration-package.schema.json": ["registration_id", "project_id", "version", "status", "mode"],
+  "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "validity"],
+  "contracts/system-settings.schema.json": ["schema_version", "environment", "governance"],
+  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "wsl_distro", "upstreams"]
 };
 for (const file of schemaFiles) {
   const schema = JSON.parse(read(file));

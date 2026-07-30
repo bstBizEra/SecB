@@ -28,7 +28,9 @@ export class SecBSkillsHub {
     const defaults = [
       { name: "claims", title: "Claims Management", description: "Claims-based authorization and verification for agent operations", content: "# Claims Skill\nEnforces claims-based authorization." },
       { name: "embeddings", title: "Vector Embeddings", description: "HNSW vector embeddings with AgentDB persistence", content: "# Embeddings Skill\nHNSW vector search." },
-      { name: "graphify", title: "Graphify Knowledge Graph", description: "AST knowledge graph extraction and Louvain clustering", content: "# Graphify Skill\nAST graph extraction." }
+      { name: "graphify", title: "Graphify Knowledge Graph", description: "AST knowledge graph extraction and Louvain clustering", content: "# Graphify Skill\nAST graph extraction." },
+      { name: "worktree", title: "Worktree Management", description: "Governed skill for managing and inspecting Worktree Rust workspace crates and storage backends", content: "# Worktree Skill\nGoverned Worktree workspace management." },
+      { name: "secb-project-registry", title: "SecB Project Registry", description: "Governed reference architecture, catalog entity models, project definition contracts, and non-mutating registry composition", content: "# SecB Project Registry Skill\nGoverned non-mutating project registry composition." }
     ];
     for (const d of defaults) this.registerSkill(d);
   }
