@@ -8,12 +8,16 @@
   "exports": "./src/index.mjs",
   "bin": {
     "secb-graph": "./tools/secb-graph.mjs",
-    "secb-skills": "./tools/secb-skills.mjs"
+    "secb-skills": "./tools/secb-skills.mjs",
+    "secb-mcp-config": "./tools/secb-mcp-config.mjs",
+    "secb-mcp-doctor": "./tools/secb-mcp-doctor.mjs"
   },
   "scripts": {
     "dev": "npm --prefix dashboard run dev",
     "secb:graph": "node tools/secb-graph.mjs",
     "secb:skills": "node tools/secb-skills.mjs",
+    "secb:mcp-config": "node tools/secb-mcp-config.mjs",
+    "secb:mcp-doctor": "node tools/secb-mcp-doctor.mjs",
     "validate": "node tools/validate-foundation.mjs",
     "test": "npm run validate && node --test tests/*.test.mjs"
   },

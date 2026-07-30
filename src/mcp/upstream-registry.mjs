@@ -159,15 +159,23 @@ export function resolveUpstream(upstream, { host = detectHost(), wslDistro } = {
     };
   }
 
-  // runtime "windows" resolved from wsl/linux. WSL->Windows interop is opt-in
-  // (binfmt_misc WSLInterop) and absent on hardened or systemd-managed distros,
-  // so this is declared unreachable rather than emitted as a plan that may fail
-  // at spawn time with "Exec format error".
+  // Every remaining combination is a runtime this host cannot satisfy, and it is
+  // declared unreachable rather than emitted as a plan that fails at spawn time.
+  // Two distinct cases land here, so the detail names the actual one:
+  //   - runtime "windows" from wsl/linux: WSL->Windows interop is opt-in
+  //     (binfmt_misc WSLInterop) and absent on hardened or systemd-managed
+  //     distros, so the bridge cannot be assumed.
+  //   - runtime "wsl" from plain linux: there is no distro to enter, and the
+  //     wsl.exe bridge exists only on a Windows host.
+  const rationale =
+    upstream.runtime === "windows"
+      ? "WSL->Windows interop is not guaranteed."
+      : "Only a Windows host can build the wsl.exe bridge into a distro.";
   return {
     ...base,
     reachable: false,
     reason: "HOST_UNREACHABLE",
-    detail: `Upstream must run on 'windows' but is being resolved from '${host}'; WSL->Windows interop is not guaranteed.`
+    detail: `Upstream must run on '${upstream.runtime}' but is being resolved from '${host}'; ${rationale}`
   };
 }
 

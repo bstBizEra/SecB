@@ -350,13 +350,27 @@
     "contracts/swarm-execution-contract.schema.json",
     "contracts/system-settings.schema.json",
     "contracts/mcp-upstream-registry.schema.json",
+    ".secb/mcp-upstreams.json",
     "src/mcp/upstream-registry.mjs",
     "tests/mcp-upstream-registry.test.mjs",
     "src/mcp/upstream-client.mjs",
     "src/mcp/upstream-proxy.mjs",
+    "tools/start-secb-mcp.mjs",
     "tools/start-secb-mcp-hub.mjs",
     "tests/mcp-upstream-proxy.test.mjs",
     "tests/fixtures/fake-upstream-mcp-server.mjs",
-    "tests/mcp-hub-launcher.test.mjs"
+    "tests/mcp-hub-launcher.test.mjs",
+    "tools/secb-mcp-config.mjs",
+    "tests/secb-mcp-config.test.mjs",
+    "tools/secb-mcp-doctor.mjs",
+    "tests/secb-mcp-doctor.test.mjs",
+    "src/gateway/secb-agent-registry.mjs",
+    "src/config/agent-config-parser.mjs",
+    "tests/secb-agent-registry.test.mjs",
+    "src/skills/skills-hub-service.mjs",
+    "tests/secb-skills-hub.test.mjs",
+    "src/config/system-settings.mjs",
+    "tests/system-settings.test.mjs",
+    "tools/build-graphify-data.mjs"
   ]
 }
