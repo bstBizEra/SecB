@@ -1,5 +1,9 @@
 // P0-21 SecB MCP Server - FROZEN alpha tool catalog (GOV-MCP-03).
-// READ-ONLY tools only; no mutation surface exists in alpha. Descriptions
+// Read-only EXCEPT the tools in MUTATING_TOOLS below. The previous claim here
+// was "READ-ONLY tools only; no mutation surface exists in alpha", which was
+// false: secb_project_register_draft writes a registration package into the
+// staging boundary. An inaccurate blanket claim is worse than an accurate
+// narrow one, because it is what a reader trusts instead of checking. Descriptions
 // are static constants (a description is itself a model-instruction channel;
 // no ledger- or caller-derived text may ever reach it). idParams are scanned
 // for reserved delimiters before dispatch. The catalog is deep-frozen and
@@ -29,6 +33,39 @@ function freeze(value) {
  * channel, and this file's contract is that such text stays a static constant.
  * additionalProperties is left open because dispatch ignores unknown args.
  */
+/**
+ * Tools that mutate state. Everything else is advertised readOnlyHint: true.
+ *
+ * An explicit deny-set rather than a per-entry flag, so a newly added tool cannot
+ * silently inherit a read-only claim: a test invokes every zero-argument tool and
+ * fails if the filesystem changes, catching a mutating tool omitted from this set.
+ */
+export const MUTATING_TOOLS = Object.freeze(new Set(["secb_project_register_draft"]));
+
+/**
+ * Project a catalog entry into MCP tool annotations.
+ *
+ * The spec's defaults are pessimistic: an omitted annotations block means
+ * destructiveHint true and openWorldHint true. SecB set none, so all 36
+ * read-only tools were advertised to hosts as destructive and open-world. That is
+ * false, and it is a direct cause of confirmation fatigue — which is how the one
+ * tool that IS dangerous eventually gets approved on reflex.
+ *
+ * openWorldHint is false for every native tool: they project local governed state
+ * and contact no external entity. Fronted upstream tools are classified by the
+ * proxy instead, and never trusted from the upstream's own annotations.
+ */
+export function buildAnnotations(name) {
+  const mutates = MUTATING_TOOLS.has(name);
+  return {
+    readOnlyHint: !mutates,
+    // Meaningful only when readOnlyHint is false. register_draft ADDS a staging
+    // package; it does not destroy or overwrite governed state.
+    ...(mutates ? { destructiveHint: false, idempotentHint: false } : {}),
+    openWorldHint: false
+  };
+}
+
 export function buildInputSchema({ required = [], optional = [], idParams = [] }) {
   const properties = {};
   for (const field of [...required, ...optional]) {
@@ -307,6 +344,7 @@ export const TOOL_LIST_PROJECTION = freeze(
   TOOL_CATALOG.map((tool) => ({
     name: tool.name,
     description: tool.description,
-    inputSchema: buildInputSchema(tool)
+    inputSchema: buildInputSchema(tool),
+    annotations: buildAnnotations(tool.name)
   }))
 );

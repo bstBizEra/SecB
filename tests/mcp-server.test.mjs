@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "../src/mcp/tool-catalog.mjs";
+import { MUTATING_TOOLS, PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "../src/mcp/tool-catalog.mjs";
 import { SecBMcpServer } from "../src/mcp/secb-mcp-server.mjs";
 
 const CALLER = "inst_ok";
@@ -250,5 +250,53 @@ test("an inherited property name is an unknown tool, denied and ledgered", () =>
     assert.equal(response.error.data.code, "DENY_UNKNOWN_TOOL", `${name} must deny as unknown tool`);
     assert.equal(calls.length, before + 1, `${name} must be ledgered exactly once`);
     assert.equal(/is not iterable|Internal error/.test(response.error.message), false, "must not leak internals");
+  }
+});
+
+test("every advertised tool carries honest annotations", () => {
+  const { server } = harness();
+  const { tools } = server.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }).result;
+  for (const tool of tools) {
+    assert.equal(typeof tool.annotations, "object", `${tool.name} has no annotations`);
+    // Omitting annotations means destructiveHint/openWorldHint default to TRUE,
+    // so every read-only tool was previously advertised as destructive.
+    assert.equal(tool.annotations.openWorldHint, false, `${tool.name}: native tools contact no external entity`);
+    assert.equal(tool.annotations.readOnlyHint, !MUTATING_TOOLS.has(tool.name), `${tool.name}: readOnlyHint disagrees with MUTATING_TOOLS`);
+  }
+  const mutating = tools.filter((t) => !t.annotations.readOnlyHint).map((t) => t.name);
+  assert.deepEqual(mutating, ["secb_project_register_draft"]);
+});
+
+test("a readOnlyHint claim is backed by the filesystem, not by intent", () => {
+  // Mechanised guard for the annotation above. Any tool callable with no
+  // arguments and advertised read-only must leave the tree untouched. This is
+  // what stops a newly added mutating tool from silently inheriting the claim —
+  // the GOV-MCP-03 failure was exactly a read-only claim nothing ever checked.
+  const { call } = harness();
+  const repoRoot = resolve(import.meta.dirname, "..");
+  const watched = [resolve(repoRoot, "dashboard", "public"), resolve(repoRoot, ".secb")];
+  const snapshot = () =>
+    watched
+      .flatMap((dir) => (existsSync(dir) ? readdirSync(dir, { recursive: true, withFileTypes: true }) : []))
+      .filter((e) => e.isFile())
+      .map((e) => {
+        const file = resolve(e.parentPath ?? e.path, e.name);
+        try {
+          return `${file}:${statSync(file).size}:${statSync(file).mtimeMs}`;
+        } catch {
+          return `${file}:gone`;
+        }
+      })
+      .sort()
+      .join("\n");
+
+  const zeroArg = TOOL_CATALOG.filter((t) => t.required.length === 0).map((t) => t.name);
+  assert.ok(zeroArg.length >= 10, "expected a meaningful sample of zero-argument tools");
+
+  for (const name of zeroArg) {
+    if (MUTATING_TOOLS.has(name)) continue;
+    const before = snapshot();
+    call(name, {});
+    assert.equal(snapshot(), before, `${name} is advertised readOnlyHint:true but changed the filesystem`);
   }
 });

@@ -42,6 +42,20 @@ const rpcResult = (id, result) => ({ jsonrpc: "2.0", id, result });
 const isObjectSchema = (schema) =>
   schema !== null && typeof schema === "object" && !Array.isArray(schema) && schema.type === "object";
 
+/**
+ * Classify a fronted tool's annotations. SecB's own verdict, never the upstream's.
+ *
+ * An upstream-supplied `readOnlyHint: true` is trivially forgeable and is exactly
+ * the value a host uses to decide whether to skip a confirmation prompt, so
+ * forwarding it hands any upstream an auto-approve bypass. SecB cannot verify what
+ * foreign code does, so it declines to claim read-only for ANY fronted tool: the
+ * annotations here are deliberately pessimistic and match the spec's own defaults.
+ *
+ * This is a floor, not an analysis. It is not a substitute for the operator
+ * deciding which upstreams should be fronted with write tools at all.
+ */
+const proxiedAnnotations = () => ({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+
 export function namespaceToolName(upstreamId, toolName) {
   return `${upstreamId}${NAMESPACE_SEPARATOR}${toolName}`;
 }
@@ -180,7 +194,9 @@ export class SecBMcpUpstreamProxy {
             // the upstream's schema here hid every native tool too. The upstream
             // client already preserves it; fall back to an open object schema if
             // a non-conformant upstream sent none.
-            inputSchema: isObjectSchema(tool.inputSchema) ? tool.inputSchema : { type: "object", properties: {} }
+            inputSchema: isObjectSchema(tool.inputSchema) ? tool.inputSchema : { type: "object", properties: {} },
+            // Deliberately NOT tool.annotations — see proxiedAnnotations().
+            annotations: proxiedAnnotations()
           });
         }
       }
