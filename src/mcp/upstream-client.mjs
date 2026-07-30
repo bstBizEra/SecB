@@ -179,18 +179,62 @@ export class UpstreamClient {
     return this.#request("tools/call", { name, arguments: args });
   }
 
-  async close() {
+  /**
+   * Stop the child, escalating if it ignores the polite request.
+   *
+   * SIGTERM alone is a request, not a guarantee: an upstream that traps it, or
+   * one wedged in a syscall, simply stays alive, and because it holds our pipes
+   * the hub cannot exit either. Work-package item U5. graceMs 0 skips straight
+   * to SIGKILL, which is what an exit handler needs since it cannot await.
+   */
+  async close({ graceMs = 2000 } = {}) {
     if (this.#state === STATES.CLOSED) return;
     const previous = this.#state;
     this.#state = STATES.CLOSED;
     this.#rejectAll(new UpstreamClientError("DENY_UPSTREAM_CLOSED", `Upstream '${this.id}' was closed`));
-    if (this.#child && previous !== STATES.FAILED) {
+    const child = this.#child;
+    if (!child || previous === STATES.FAILED) return;
+    if (child.exitCode !== null || child.signalCode !== null) return; // already reaped
+
+    const exited = new Promise((resolveExit) => {
+      child.once("exit", resolveExit);
+      child.once("error", resolveExit);
+    });
+
+    try {
+      child.stdin?.end();
+      child.kill(graceMs > 0 ? "SIGTERM" : "SIGKILL");
+    } catch {
+      return; // already gone; closing is best-effort by design
+    }
+    if (graceMs <= 0) return;
+
+    let timer;
+    const grace = new Promise((resolveGrace) => {
+      timer = setTimeout(resolveGrace, graceMs);
+      timer.unref?.();
+    });
+    const winner = await Promise.race([exited.then(() => "exited"), grace.then(() => "timeout")]);
+    clearTimeout(timer);
+    if (winner === "timeout") {
       try {
-        this.#child.stdin?.end();
-        this.#child.kill();
+        child.kill("SIGKILL");
       } catch {
-        // Already gone; closing is best-effort by design.
+        // Raced with a natural exit.
       }
+    }
+  }
+
+  /**
+   * Synchronous best-effort kill for process-exit handlers, where nothing may
+   * be awaited. Without this an abnormal exit leaves every child running.
+   */
+  killNow() {
+    this.#state = STATES.CLOSED;
+    try {
+      this.#child?.kill("SIGKILL");
+    } catch {
+      // Nothing to do at exit time.
     }
   }
 

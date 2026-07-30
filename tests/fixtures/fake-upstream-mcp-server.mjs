@@ -12,11 +12,22 @@
  *   silent   - never answers (exercises the request timeout)
  *   crash    - exits non-zero immediately after initialize
  *   toolfail - returns a JSON-RPC error from tools/call
+ *   clingy   - never answers AND does not exit when stdin closes
+ *
+ * "clingy" exists for the orphan test. Every other mode only reads stdin, so
+ * when the parent dies the pipe closes, readline ends, nothing is left holding
+ * the loop, and the process exits on its own — which made an orphan test pass
+ * whether or not the hub had any signal handling at all. A real upstream
+ * routinely holds a socket, a watcher, or a timer, so it does NOT exit for free.
+ * This mode holds a timer to reproduce that, and is the only mode that can tell
+ * a reaped child from a self-terminating one.
  */
 
 import { createInterface } from "node:readline";
 
 const mode = process.argv[2] ?? "normal";
+
+if (mode === "clingy") setInterval(() => {}, 1000);
 
 if (mode === "noisy") {
   process.stdout.write("fake-upstream starting up, please wait\n");
@@ -35,7 +46,7 @@ const write = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
 createInterface({ input: process.stdin, crlfDelay: Infinity }).on("line", (line) => {
   const trimmed = line.trim();
   if (trimmed === "") return;
-  if (mode === "silent") return;
+  if (mode === "silent" || mode === "clingy") return;
 
   let message;
   try {

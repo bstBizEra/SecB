@@ -97,6 +97,7 @@ async function startUpstreams() {
 
   note(`host=${host} registry=${projection.registry_id} total=${projection.total} reachable=${projection.reachable}`);
 
+  const startable = [];
   for (const [id, plan] of byId) {
     if (!plan.reachable) {
       note(`skip ${id}: ${plan.reason}`);
@@ -106,20 +107,39 @@ async function startUpstreams() {
       note(`skip ${id}: ${plan.transport} upstreams are declared but not yet fronted`);
       continue;
     }
-    const client = new UpstreamClient({ plan, timeoutMs: declaredById.get(id)?.timeout_ms });
-    try {
-      const info = await client.start();
-      clients.set(id, client);
-      note(`up ${id} (${info.serverInfo?.name ?? "unknown"})`);
-    } catch (error) {
-      // One bad upstream degrades that upstream, never the hub.
-      note(`down ${id}: ${error.code ?? error.name} ${error.message}`);
-      await client.close();
-    }
+    startable.push([id, plan]);
   }
+
+  // Concurrently, not one at a time. Startup is dominated by each upstream's own
+  // package resolution and interpreter boot, which are independent; serialising
+  // them made total time the SUM of eight such waits (18.2s measured warm, and
+  // minutes cold). Work-package item U2.
+  await Promise.all(
+    startable.map(async ([id, plan]) => {
+      // Registered before start() so a signal arriving mid-startup still finds
+      // the child through the shutdown path — U5's orphan window.
+      const client = new UpstreamClient({ plan, timeoutMs: declaredById.get(id)?.timeout_ms });
+      clients.set(id, client);
+      try {
+        const info = await client.start();
+        note(`up ${id} (${info.serverInfo?.name ?? "unknown"})`);
+      } catch (error) {
+        // One bad upstream degrades that upstream, never the hub.
+        note(`down ${id}: ${error.code ?? error.name} ${error.message}`);
+        clients.delete(id);
+        await client.close();
+      }
+    })
+  );
 }
 
-await startUpstreams();
+// Readiness is a deferred rather than the startup promise itself, because the
+// proxy must exist before startup begins: startup is what populates `clients`,
+// and the proxy holds that same Map by reference.
+let markReady;
+const ready = new Promise((resolveReady) => {
+  markReady = resolveReady;
+});
 
 // Proxied calls land in the SAME durable invocation ledger as native calls.
 // A separate (or absent) sink would mean the upstream traffic — the part that
@@ -131,13 +151,9 @@ const proxy = new SecBMcpUpstreamProxy({
   invocationLog: createInvocationLedgerWriter(config.ledgerPath),
   classificationCeiling: config.classificationCeiling,
   // The same instance the core already holds, so one budget covers both paths.
-  rateLimiter
+  rateLimiter,
+  ready
 });
-
-const report = await proxy.refreshTools();
-for (const row of report) {
-  note(row.ok ? `tools ${row.id}: ${row.count}` : `tools ${row.id}: unavailable (${row.reason})`);
-}
 
 // Track in-flight work so shutdown can drain. stdin closing and a proxied call
 // resolving are independent events: tearing down on close alone killed the
@@ -162,8 +178,6 @@ const draining = {
   }
 };
 
-const rl = serveStdio(draining, { callerInstanceId });
-
 let shuttingDown = false;
 const shutdown = async () => {
   if (shuttingDown) return;
@@ -171,13 +185,43 @@ const shutdown = async () => {
   // No further input can arrive once close has fired, so one drain pass is
   // enough to settle everything already accepted.
   await Promise.allSettled([...inFlight]);
+  // close() escalates SIGTERM to SIGKILL, so an upstream that traps the polite
+  // signal cannot hold the hub open by holding our pipes.
   await Promise.all([...clients.values()].map((client) => client.close()));
   process.exit(0);
 };
 
+// Installed BEFORE any child is spawned. They used to be registered only after
+// startup finished, so a SIGINT during the startup window — 18.2s of it —
+// terminated the hub with every child already spawned and none of them known to
+// a handler, orphaning all of them. Work-package item U5.
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+// Last resort: 'exit' cannot await, so this is the synchronous SIGKILL sweep
+// that stops an abnormal termination from leaving children behind.
+process.on("exit", () => {
+  for (const client of clients.values()) client.killNow();
+});
+
+// Serve BEFORE contacting any upstream. The handshake is the request with a
+// client-side timeout, and it needs nothing from an upstream to answer.
+const rl = serveStdio(draining, { callerInstanceId });
 // Closed stdin means the MCP client is gone. Without this the spawned children
 // keep the event loop alive and the hub lingers as an orphan holding every
 // upstream open.
 rl.on("close", shutdown);
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+
+// Startup now runs in the background; only the paths that need an upstream wait
+// on `ready`. A failure here must still release the gate, or tools/list would
+// hang forever instead of reporting a degraded hub.
+startUpstreams()
+  .then(() => proxy.refreshTools())
+  .then((report) => {
+    for (const row of report) {
+      note(row.ok ? `tools ${row.id}: ${row.count}` : `tools ${row.id}: unavailable (${row.reason})`);
+    }
+  })
+  .catch((error) => {
+    note(`FATAL: upstream startup failed (${error.code ?? error.name}): ${error.message}`);
+  })
+  .finally(() => markReady());

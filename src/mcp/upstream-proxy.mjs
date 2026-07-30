@@ -171,6 +171,7 @@ export class SecBMcpUpstreamProxy {
   #invocationLog;
   #ceiling;
   #rateLimiter;
+  #ready;
   #now;
   #limits;
   #toolsByUpstream = new Map();
@@ -182,12 +183,15 @@ export class SecBMcpUpstreamProxy {
    * @param upstreamPolicy Map<upstreamId, { classification_ceiling }>
    * @param invocationLog  (entry) => void; throwing is the fail-closed signal
    */
-  constructor({ core, clients = new Map(), upstreamPolicy = new Map(), invocationLog, classificationCeiling = "INTERNAL", limits = {}, rateLimiter = null, now = () => new Date() } = {}) {
+  constructor({ core, clients = new Map(), upstreamPolicy = new Map(), invocationLog, classificationCeiling = "INTERNAL", limits = {}, rateLimiter = null, ready = null, now = () => new Date() } = {}) {
     if (!core || typeof core.handle !== "function") {
       throw new Error("SecBMcpUpstreamProxy requires a core server with handle()");
     }
     if (rateLimiter !== null && typeof rateLimiter?.admit !== "function") {
       throw new Error("rateLimiter, when provided, requires an admit function");
+    }
+    if (ready !== null && typeof ready?.then !== "function") {
+      throw new Error("ready, when provided, must be a promise");
     }
     if (typeof invocationLog !== "function") {
       throw new Error("SecBMcpUpstreamProxy requires an invocationLog function (fail-closed audit)");
@@ -205,6 +209,12 @@ export class SecBMcpUpstreamProxy {
     // full budget, so a caller alternating native and proxied tools would get
     // double the intended rate while both paths reported enforcing it.
     this.#rateLimiter = rateLimiter;
+    // Resolves when upstreams have been started and listed. Only the paths that
+    // actually need an upstream wait on it: the handshake must be answerable
+    // before any child is spawned, because sequential pre-serve startup measured
+    // 18.2s and clients time the handshake out long before that. Work-package
+    // item U2.
+    this.#ready = ready;
     this.#now = now;
   }
 
@@ -393,6 +403,11 @@ export class SecBMcpUpstreamProxy {
     }
 
     if (message.method === "tools/list") {
+      // Waits, rather than answering early with native tools only: a client
+      // caches the first listing, so a short answer here would hide every
+      // upstream tool for the rest of the session. The handshake is what has a
+      // timeout; a listing can afford to block.
+      if (this.#ready) await this.#ready;
       const base = this.#core.handle(message, { callerInstanceId });
       if (base?.error) return base;
       const proxied = [];
@@ -421,7 +436,16 @@ export class SecBMcpUpstreamProxy {
     }
 
     if (message.method === "tools/call") {
+      // A namespaced call always waits for readiness. Map membership is NOT a
+      // usable "already started" signal: the launcher registers each client
+      // before start() so a signal mid-startup can still find it, so a present
+      // entry may be a client that is merely spawning. Gating on membership
+      // therefore let a call through to a not-yet-ready client and answered
+      // DENY_UPSTREAM_UNAVAILABLE — a wrong answer, not a slow one. Awaiting an
+      // already-settled promise costs one microtask. Native names are resolvable
+      // immediately and are deliberately not gated.
       const split = splitNamespacedToolName(message.params?.name);
+      if (this.#ready && split) await this.#ready;
       if (split && this.#clients.has(split.upstreamId)) {
         return this.#proxyCall(message, split, callerInstanceId);
       }
