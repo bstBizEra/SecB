@@ -274,7 +274,18 @@ test("a readOnlyHint claim is backed by the filesystem, not by intent", () => {
   // the GOV-MCP-03 failure was exactly a read-only claim nothing ever checked.
   const { call } = harness();
   const repoRoot = resolve(import.meta.dirname, "..");
-  const watched = [resolve(repoRoot, "dashboard", "public"), resolve(repoRoot, ".secb")];
+  // Source and build-output trees only. .secb is deliberately EXCLUDED: it is
+  // runtime state (the append-only invocation ledger, staging, worktrees) that
+  // other suites in the same parallel `node --test` run write to by design, so
+  // including it made this assertion fail on concurrent activity rather than on
+  // a real violation. The GOV-MCP-03 class of defect — a read-only tool writing
+  // dashboard/public/graph-data.json — is still fully covered here.
+  const watched = [
+    resolve(repoRoot, "dashboard", "public"),
+    resolve(repoRoot, "src"),
+    resolve(repoRoot, "tools"),
+    resolve(repoRoot, "contracts")
+  ];
   const snapshot = () =>
     watched
       .flatMap((dir) => (existsSync(dir) ? readdirSync(dir, { recursive: true, withFileTypes: true }) : []))

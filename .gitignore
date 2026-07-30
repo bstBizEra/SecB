@@ -23,3 +23,13 @@ Thumbs.db
 # Local Graphify output
 graphify-out/
 
+# SecB runtime state written by the server at run time, not source.
+# The invocation ledger carries audit rows (caller ids, tool names, decisions);
+# staging holds generated registration packages. Neither is reproducible input.
+.secb/ledgers/
+.secb/staging/
+.secb/worktrees/
+
+# An external repository cloned into the tree for the worktree adapter tools.
+# It is a separate git repo and must never be committed into this one.
+/worktree/

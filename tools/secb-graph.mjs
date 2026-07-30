@@ -27,6 +27,9 @@ export async function executeSecbGraphCommand(options = {}) {
   const targetDir = options.targetDir ? resolve(options.targetDir) : ROOT;
   const shouldExtract = options.extract ?? false;
   const shouldAutoRepair = options.autoRepair ?? true;
+  // Writing is opt-out so the CLI keeps its behaviour, but a caller (notably the
+  // test suite) can exercise the full pipeline without mutating a tracked file.
+  const shouldWriteAssets = options.writeAssets ?? true;
 
   console.log(`\n======================================================`);
   console.log(`   SecB Knowledge Graph Command Engine v3.0.0`);
@@ -38,7 +41,7 @@ export async function executeSecbGraphCommand(options = {}) {
   }
 
   // 1. Format and build graph-data.json
-  const graphPayload = formatGraphDataForDashboard();
+  const graphPayload = formatGraphDataForDashboard({ writeAssets: shouldWriteAssets });
 
   // 2. Run yFiles Quality Inspector
   const issues = detectKnowledgeGraphIssues(graphPayload.nodes, graphPayload.edges);
@@ -57,9 +60,11 @@ export async function executeSecbGraphCommand(options = {}) {
       }
     });
 
-    const publicOutPath = resolve(ROOT, "dashboard", "public", "graph-data.json");
-    writeFileSync(publicOutPath, JSON.stringify(graphPayload, null, 2), "utf8");
-    console.log(`[Auto-Repair Engine] Graph updated with 100% Quality Score.`);
+    if (shouldWriteAssets) {
+      const publicOutPath = resolve(ROOT, "dashboard", "public", "graph-data.json");
+      writeFileSync(publicOutPath, JSON.stringify(graphPayload, null, 2), "utf8");
+      console.log(`[Auto-Repair Engine] Graph updated with 100% Quality Score.`);
+    }
   }
 
   // 3. Sync to AgentDB Vector Memory via claude-flow CLI if available
