@@ -402,6 +402,7 @@
     "tests/pilot-work-package.test.mjs",
     "tools/v3-swarm-graph-generator.mjs",
     "docs/03-project-control/candidates/secb-mcp-p4-operator-tooling-producer-verification.handoff.yaml",
-    "docs/adr/0009-mcp-upstream-fronting.md"
+    "docs/adr/0009-mcp-upstream-fronting.md",
+    "docs/03-project-control/candidates/wp-mcp-hardening-and-real-use.work-package.yaml"
   ]
 }

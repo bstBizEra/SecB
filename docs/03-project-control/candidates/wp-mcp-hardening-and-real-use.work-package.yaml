@@ -1,0 +1,203 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "work_package_wp_secb_mcp_hardening_real_use_001_v1_candidate"
+  record_status: "DRAFT_NOT_AUTHORIZED"
+  source_template: "docs/templates/work-package.yaml"
+  source: "SARCHI research and four adversarial audits against feat/secb-ruflo-command-center at 39fdbcc, 2026-07-30"
+  producer_runtime: "Claude"
+  producer_actor_id: "claude-sarchi-secb-mcp-hardening"
+  limitations:
+    - "Candidate plan only. It authorizes nothing, activates nothing, and is not an acceptance of the work already committed."
+    - "Producer evidence is not independent REV, QA, SEC, or GOV. The producer of this plan may not issue its review verdict."
+    - "Phase 0 items are operator/GOV decisions. No agent may resolve them by implementing a preferred option."
+    - "External research was verified at source where cited; two sources could not be retrieved and are excluded rather than paraphrased."
+
+work_package:
+  work_package_id: "wp_secb_mcp_hardening_real_use_001"
+  project_id: "prj_secb_local"
+  project_contract_ref: "docs/03-project-control/candidates/secb-local-v2-r2.project-contract.yaml#version=1"
+  version: 1
+  status: "DRAFT"
+  risk_class: "R3"
+  risk_class_rationale: >-
+    R3, not R2. The work changes a security boundary: it sandboxes spawned third-party
+    processes, scopes credentials, and decides whether an arbitrary shell-execution tool
+    stays exposed. Per docs/AGENTS.md this requires SEC review and a human GOV decision,
+    and per AGENTS.md rule 3 candidate preparation is authorized but activation is not.
+  baseline: "39fdbcc on feat/secb-ruflo-command-center"
+  valid_until: "2026-10-31"
+
+  objective: >-
+    Take the SecB MCP server from "protocol-conformant and no longer writing outside its
+    boundary" to "safe and economical to run every day", without granting it any authority
+    it does not already have.
+
+  problem_statement: >-
+    At 39fdbcc the server is spec-conformant against 2025-06-18 and two write escapes are
+    closed, but it is not fit for daily use. Measured: a tools/list of 83 tools costs
+    ~11,129 tokens on every request, of which 8,669 are upstream tools that cannot be
+    individually deselected because the registry has no per-tool allowlist. The core
+    answers its first request after 8.3s, of which 4.5s is eagerly importing 28 subsystem
+    modules; the hub takes 17.5s with packages already warm. Fifteen fronted tools mutate
+    state and one executes arbitrary shell commands, all under a namespace that reads as
+    uniformly governed, with no sandboxing and with every child inheriting the full hub
+    environment including the operator activation flags.
+
+  evidence_base:
+    measured_by_producer:
+      - "tools/list at 83 tools = 41,176 bytes ~ 11,129 tokens; native 36 = 2,460 tokens; fronted 47 = 8,669 tokens."
+      - "First initialize response: core 8,267 ms, hub 17,458 ms (upstream packages warm)."
+      - "import of src/mcp/secb-mcp-server.mjs alone = 4,518 ms; import of tool-catalog.mjs = 2 ms."
+      - "36 native tools are read-only; of 47 fronted tools, 15 mutate state and 1 is arbitrary shell execution."
+      - "contracts/mcp-upstream-registry.schema.json has no per-upstream tool allow/deny field."
+    verified_external:
+      - "Current MCP revision is 2026-07-28 (verified directly at modelcontextprotocol.io/specification/versioning). SecB pins 2025-06-18, two revisions behind."
+      - "2026-07-28 removes initialize, negotiates per-request via _meta io.modelcontextprotocol/protocolVersion, and makes server/discover a mandatory RPC. SecB answers -32601 for server/discover."
+      - "Spec MUST for servers: validate all tool inputs, rate limit tool invocations, sanitize tool outputs. A gateway is both server and client, so both obligation lists bind it."
+      - "Spec SHOULD for stdio proxy architectures specifically: sandbox or containerize spawned processes, restrict their filesystem access, log all stdio usage, require additional authorization for dangerous commands."
+      - "Tool annotation defaults are pessimistic: omitting annotations means destructiveHint true and openWorldHint true. SecB sets no annotations, so its 36 read-only tools are advertised as destructive."
+      - "Tool poisoning, rug-pull redefinition, and cross-server shadowing have no normative coverage beyond 'annotations are untrusted'. SHA-256 pinning of canonical tool JSON with block-on-drift is the best-documented community mitigation."
+
+  scope:
+    phase_0_operator_decisions_no_code:
+      - id: "D1"
+        item: "Does wsl-shell (arbitrary command execution in the distro) stay enabled when fronted?"
+        note: "Carried enabled at migration parity with bizera-win-mcp-hub. Parity is not a security judgement. One-line change in .secb/mcp-upstreams.json, which is operator-owned."
+      - id: "D2"
+        item: "Do the two filesystem upstreams stay fronted with write tools, or read-only?"
+        note: "12 of the 15 mutating fronted tools are filesystem writes across two scopes."
+      - id: "D3"
+        item: "Does tools/start-secb-mcp.mjs keep defaulting all four authorization inputs, including a seed that self-documents as EXAMPLE ONLY?"
+        note: "This is what made the two write escapes reachable with no SECB_* variable set. Reversing a deliberate earlier decision is a governance call."
+      - id: "D4"
+        item: "Should audit move BEFORE dispatch, so a failed ledger write prevents the side effect rather than only withholding the response?"
+        note: "Currently fail-closed for the response, fail-open for effects. Changes the authority model."
+
+    phase_1_safety_before_activation:
+      - id: "S1"
+        item: "Set tool annotations honestly on all 36 native tools (readOnlyHint true)."
+        why: "Defaults advertise them as destructive and open-world, which is false and trains the operator to click through confirmations."
+        acceptance: "Every native tool carries readOnlyHint true; a test asserts no native tool is advertised as destructive."
+      - id: "S2"
+        item: "Derive SecB's own annotations for all 47 fronted tools; never forward an upstream's readOnlyHint."
+        why: "An upstream-supplied readOnlyHint true is a trivially forgeable auto-approve bypass."
+        acceptance: "A fake upstream advertising readOnlyHint true on a mutating tool is re-classified by SecB, proven by test."
+      - id: "S3"
+        item: "SHA-256 pin the canonical JSON (name, description, inputSchema) of every upstream tool at first listing; block a tool whose hash changes and require re-approval."
+        why: "Closes rug-pull redefinition, which the spec does not address at all. Highest-leverage control available."
+        acceptance: "A fake upstream that changes a tool description between two refreshes has that tool withheld, with a typed deny and a ledger row."
+      - id: "S4"
+        item: "Sandbox spawned upstream processes and restrict their filesystem access."
+        why: "Spec SHOULD written for exactly this architecture. Anthropic's sandbox-runtime wraps a command without requiring containers."
+        acceptance: "Upstreams launch under the sandbox wrapper; an upstream cannot read outside its declared scope."
+      - id: "S5"
+        item: "Scope environment per upstream instead of inheriting process.env."
+        why: "Every one of 16 third-party servers currently sees SECB_MCP_UPSTREAMS_AUTHORIZED, SECB_MCP_DEPLOYMENT_AUTHORIZED, the caller instance, and all three ledger paths."
+        acceptance: "A probe upstream observes only its declared env keys."
+      - id: "S6"
+        item: "Sanitize upstream tool descriptions before advertising them: strip ANSI escapes, NFKC-normalize, strip Unicode Tags/zero-width/bidi controls, and neutralize instruction-like tags."
+        why: "Descriptions are a model-instruction channel authored outside SecB; the entire schema is injection surface, not just the description field."
+        acceptance: "Adversarial description fixtures round-trip to inert text; test covers each character class."
+      - id: "S7"
+        item: "Cap the upstream framing buffer and apply the response ceiling to tools/list, which is currently neither ceiling-checked nor audited."
+        why: "An upstream that never emits a newline exhausts memory and kills the hub; a 400-tool upstream produced a 4 MB listing against a 1 KB cap."
+        acceptance: "A newline-free upstream is denied, not fatal; an oversized listing is refused and ledgered."
+      - id: "S8"
+        item: "Rate limit tool invocations."
+        why: "Spec MUST for servers; currently absent."
+        acceptance: "A per-caller rate limit denies with a typed code and a ledger row."
+
+    phase_2_daily_usability:
+      - id: "U1"
+        item: "Lazy-load dispatch targets via dynamic import inside the dispatch switch."
+        why: "4.5s of the core's 8.3s first response is importing 28 subsystems, including a dashboard HTTP server, to answer requests that need none of them."
+        acceptance: "First initialize response under 1s on the same host; a tools/call for a pure tool does not load the dashboard or brain modules."
+      - id: "U2"
+        item: "Start upstreams concurrently and lazily; serve the handshake immediately and connect an upstream on first use."
+        why: "Sequential pre-serve startup measured 17.5s warm and up to minutes cold, past client handshake timeouts."
+        acceptance: "Handshake is answered before any upstream is contacted; a proxied call still succeeds."
+      - id: "U3"
+        item: "Add a per-upstream tool allow/deny list to contracts/mcp-upstream-registry.schema.json and honour it in the proxy."
+        why: "Exposure is all-or-nothing per upstream today, which is what forces the full 11,129-token listing."
+        acceptance: "An upstream with an allowlist of 3 advertises exactly 3 tools; token cost of the merged listing drops proportionally and is reported."
+      - id: "U4"
+        item: "Return tools/list in a deterministic order."
+        why: "New spec SHOULD; improves client cache hit rates and makes drift-diffing for S3 cheap."
+        acceptance: "Two listings of an unchanged registry are byte-identical."
+      - id: "U5"
+        item: "Register signal handlers before starting upstreams, escalate SIGTERM to SIGKILL, and reap children on abnormal exit."
+        why: "Handlers are installed only after startup completes, so a signal during the startup window orphans every child."
+        acceptance: "SIGINT during startup leaves no orphaned child process."
+
+    phase_3_spec_currency:
+      - id: "C1"
+        item: "Implement server/discover and per-request _meta protocol-version handling for 2026-07-28, retaining the handshake path for 2025-11-25 and earlier."
+        acceptance: "A 2026-07-28 client and a 2025-06-18 client both work against the same server."
+      - id: "C2"
+        item: "Adopt CacheableResult ttlMs/cacheScope, emitting cacheScope private if the tool list ever varies by caller."
+        why: "Otherwise tool visibility can leak across callers through a shared intermediary."
+      - id: "C3"
+        item: "Evaluate exposing governance reads (work packages, contracts, evidence) as MCP resources rather than tools."
+        why: "Resources are application-driven rather than model-controlled, shrinking both the model-controlled surface and the tool list. Costs the per-call tool audit trail, so resources/read must be logged too."
+
+    phase_4_governance_closure:
+      - id: "G1"
+        item: "Independent REV and QA of 39fdbcc and of this work package."
+      - id: "G2"
+        item: "SEC review of the trust-boundary items: unsandboxed upstreams, wsl-shell parity, response-size sufficiency, namespace collision, environment inheritance."
+      - id: "G3"
+        item: "Human GOV decision on ADR-0009 and on Phase 0 D1-D4; then operator-only merge."
+      - id: "G4"
+        item: "Windows-host verification of both CLIs and the --host windows resolution path."
+        note: "Impossible in the producer environment: /proc/sys/fs/binfmt_misc/WSLInterop is absent, so Windows execution cannot be attempted at all."
+      - id: "G5"
+        item: "Fix test hygiene: npm test writes dashboard/public/graph-data.json via tests/secb-graph.test.mjs, so the suite dirties a tracked file on every run."
+
+  non_scope:
+    - "Activation of the hub. Adopting a generated client config remains a separate operator authorization beyond merge."
+    - "Any write to .secb/mcp-upstreams.json. The registry is operator-owned; D1 and D2 are decisions, not agent edits."
+    - "Merging to main. No agent merges."
+    - "Adding an OAuth flow. If one is ever added, the spec's confused-deputy MUSTs apply in full and this work package does not cover them."
+    - "The 12 tracked docs/** files still absent from both manifests, and the docs/ops-report.json misnamed HTML artifact. Both are real but belong to their own slices."
+
+  acceptance_criteria:
+    - "Every Phase 1 item has a regression test that inspects the actual effect, not the returned payload. The GOV-MCP-03 lesson is explicit: a test titled 'zero disk side-effects' passed for the entire period the tool was writing to disk, because it asserted only node counts."
+    - "npm test passes with exact counts reported after the final change; the baseline to beat is 796 tests, 791 pass, 0 fail, 5 skipped at 39fdbcc."
+    - "node tools/validate-foundation.mjs exits 0 with no FAIL."
+    - "The official MCP SDK client connects, lists tools with schemas, and receives real content blocks."
+    - "Measured token cost of the merged tools/list is reported before and after U3."
+    - "Measured first-response latency is reported before and after U1 and U2."
+    - "No Phase 1 item is reported complete on the basis of a passing test alone; each states the observation that confirms it."
+
+  roles:
+    producer: "ENGIN (agent, advise-and-proceed under AMD-002)"
+    reviewer: "Independent REV — must not be the producer"
+    qa: "Independent QA"
+    security: "SEC — mandatory for Phase 1, R3"
+    governance: "Human GOV operator — sole authority for Phase 0 and activation"
+
+  allowed_paths:
+    - "src/**"
+    - "tests/**"
+    - "tools/**"
+    - "contracts/**"
+    - "MANIFEST.json"
+
+  prohibited_paths:
+    - ".secb/mcp-upstreams.json"
+    - "Any path outside this repository"
+    - "Any user MCP client configuration (~/.codex/, claude_desktop_config.json)"
+
+  evidence_obligations:
+    - "Exact check results after the final change, per AGENTS.md working rule 6."
+    - "Before/after measurements for every performance and context-cost claim."
+    - "A producer-verification record in docs/03-project-control/candidates/ on completion, marked not-effective pending independent review."
+    - "Residual risks restated and re-scoped, not silently dropped."
+
+  sequencing_rationale: >-
+    Phase 0 first because D1 and D2 can delete work: if wsl-shell is disabled and the
+    filesystem upstreams are fronted read-only, the mutating surface drops from 16 tools to
+    3 and several Phase 1 controls shrink accordingly. Phase 1 before Phase 2 because
+    latency is an annoyance and an unsandboxed shell tool is not. Phase 3 last because
+    2025-06-18 still interoperates through the spec's documented backward-compatibility
+    path, so currency is real debt but not a live outage.
