@@ -829,3 +829,31 @@ test("the CALLER's ceiling governs an upstream call, not only the server's", asy
     await client.close();
   }
 });
+
+// --- controls verified equivalent on both paths ----------------------------
+//
+// Three review passes each found a control present on the native path and
+// absent on the proxy path. These two were checked in a fourth pass and found
+// genuinely equivalent — but they were equivalent by having been written twice,
+// which is what the other three were assumed to be right before they weren't.
+// Asserting them makes them equivalent by being checked.
+
+test("a reserved delimiter in a proxied tool name is refused, as on the native path", async () => {
+  await withProxy(async ({ proxy, calls }) => {
+    for (const name of ["fake__ec|ho", "fake__ec@ho"]) {
+      const res = await call(proxy, name, {});
+      assert.equal(res.error.data.code, "DENY_RESERVED_DELIMITER", `${name} must be refused`);
+    }
+    assert.ok(calls.some((c) => c.decision === "DENY_RESERVED_DELIMITER"), "refusals are ledgered");
+  });
+});
+
+test("a reserved delimiter in the upstream id half cannot name a real upstream", async () => {
+  await withProxy(async ({ proxy }) => {
+    // Splits to upstreamId "fa|ke", which is not a registered client, so it
+    // falls through to the core rather than reaching an upstream. The registry
+    // schema forbids such ids, so no upstream can ever answer to one.
+    const res = await call(proxy, "fa|ke__echo", {});
+    assert.equal(res.error.data.code, "DENY_UNKNOWN_TOOL");
+  });
+});
