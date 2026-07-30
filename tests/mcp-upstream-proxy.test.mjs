@@ -765,3 +765,67 @@ test("an exposed tool is still callable with a filter in place", async () => {
     { policy: new Map([["fake", { tools_deny: ["big"] }]]) }
   );
 });
+
+// --- caller identity must hold on the proxy path too -----------------------
+
+test("an identity the registry rejects cannot reach an upstream", async () => {
+  // Regression, and the most serious of the three bypasses found in review: the
+  // proxy checked only that the caller id was a non-blank STRING and never
+  // resolved it, so an unregistered, unapproved, or quarantined identity was
+  // denied on a native tool and SERVED on an upstream one. Caller identity is
+  // this server's authentication boundary.
+  await withProxy(async ({ proxy, calls }) => {
+    const res = await call(proxy, "fake__echo", { message: "x" }, "inst_NOT_REGISTERED");
+    assert.equal(res.error.data.code, "DENY_UNRESOLVED_CALLER");
+    assert.ok(calls.some((c) => c.decision === "DENY_UNRESOLVED_CALLER"), "the attempt is ledgered");
+    // The same identity is refused by the core, which is the point.
+    const native = await call(proxy, "secb_canonical_fingerprint", { document: {} }, "inst_NOT_REGISTERED");
+    assert.equal(native.error.data.code, "DENY_UNRESOLVED_CALLER");
+  });
+});
+
+test("a resolvable caller is still served", async () => {
+  await withProxy(async ({ proxy }) => {
+    assert.ok((await call(proxy, "fake__echo", { message: "ok" })).result);
+  });
+});
+
+test("the CALLER's ceiling governs an upstream call, not only the server's", async () => {
+  // The proxy compared the upstream's declared ceiling against the server's and
+  // never against the caller's, so a PUBLIC caller reached an INTERNAL
+  // upstream: the per-caller ceiling that governs every native read did not
+  // govern the calls that leave the organism.
+  const calls = [];
+  const lowCaller = {
+    resolve: () => ({ resolved: true, identity: { agent_instance_id: "inst_low", max_data_classification: "PUBLIC" } })
+  };
+  const client = new UpstreamClient({ plan: planFor("fake"), timeoutMs: 5_000 });
+  await client.start();
+  try {
+    const core = new SecBMcpServer({
+      services: {
+        registry: lowCaller,
+        workPackage: { resolveEffective: () => ({ ok: true }) },
+        eventLedger: { verify: () => ({ valid: true }), read: () => [] },
+        evidenceLedger: { verify: () => ({ valid: true }), read: () => [] },
+        skillResolver: { resolveSkill: () => ({ ok: true }) }
+      },
+      invocationLog: (entry) => calls.push(entry),
+      classificationCeiling: "INTERNAL"
+    });
+    const proxy = new SecBMcpUpstreamProxy({
+      core,
+      clients: new Map([["fake", client]]),
+      upstreamPolicy: new Map([["fake", { classification_ceiling: "INTERNAL" }]]),
+      invocationLog: (entry) => calls.push(entry),
+      classificationCeiling: "INTERNAL"
+    });
+    await proxy.refreshTools();
+    const res = await call(proxy, "fake__echo", { message: "x" }, "inst_low");
+    assert.equal(res.error.data.code, "DENY_CLASSIFICATION_CEILING");
+    const row = calls.find((c) => c.decision === "DENY_CLASSIFICATION_CEILING");
+    assert.equal(row.effective_ceiling, "PUBLIC", "the ledger records the caller's capped ceiling, not the server's");
+  } finally {
+    await client.close();
+  }
+});

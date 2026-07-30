@@ -307,6 +307,35 @@ export class SecBMcpServer {
     }
   }
 
+  /**
+   * Resolve a caller against the runtime registry and return its effective
+   * classification ceiling.
+   *
+   * Public because the upstream proxy dispatches namespaced calls itself and
+   * never reaches #toolsCall, where this used to live exclusively. The proxy
+   * checked only that the caller id was a non-blank STRING, so an identity the
+   * registry rejects — unregistered, unapproved, or quarantined — was denied on
+   * a native tool and served on an upstream one. Caller identity is the
+   * authentication boundary of this server; it cannot hold on one dispatch path
+   * only.
+   *
+   * Returning the ceiling as well as the verdict is deliberate: the proxy
+   * previously compared an upstream's declared ceiling against the SERVER's
+   * ceiling and never against the CALLER's, so a PUBLIC caller reached an
+   * INTERNAL upstream. Handing back the already-capped value means there is no
+   * second copy of the ceiling arithmetic to drift.
+   */
+  resolveCaller(callerInstanceId) {
+    if (isBlank(callerInstanceId)) {
+      return { resolved: false, reason: "Caller instance id is required" };
+    }
+    const resolved = this.#services.registry.resolve(callerInstanceId);
+    if (!resolved?.resolved) {
+      return { resolved: false, reason: resolved?.reason ?? "unknown" };
+    }
+    return { resolved: true, ceiling: this.#effectiveCeiling(resolved.identity.max_data_classification) };
+  }
+
   #audit(entry) {
     // fail-closed: an unauditable read channel is a covert read channel.
     try {

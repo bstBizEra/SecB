@@ -533,9 +533,16 @@ export class SecBMcpUpstreamProxy {
     // is refused before the upstream is contacted, not after.
     const denyUnaudited = () => rpcError(id, -32000, "Invocation audit unavailable; call withheld", { code: "DENY_AUDIT_UNAVAILABLE" });
 
-    if (typeof callerInstanceId !== "string" || callerInstanceId.trim() === "") {
-      if (!audit("DENY_UNRESOLVED_CALLER")) return denyUnaudited();
-      return rpcError(id, -32001, "Caller instance id is required", { code: "DENY_UNRESOLVED_CALLER" });
+    // Resolved through the CORE's registry, not merely checked for being a
+    // non-blank string. The string check alone let any identity the registry
+    // rejects — unregistered, unapproved, quarantined — reach a third-party
+    // upstream, while the same identity was denied on a native tool. Caller
+    // identity is this server's authentication boundary and cannot hold on one
+    // dispatch path only.
+    const caller = this.#core.resolveCaller(callerInstanceId);
+    if (!caller.resolved) {
+      if (!audit("DENY_UNRESOLVED_CALLER", { reason: caller.reason })) return denyUnaudited();
+      return rpcError(id, -32001, `Caller not resolvable: ${caller.reason}`, { code: "DENY_UNRESOLVED_CALLER", reason: caller.reason });
     }
 
     // Rate limit FIRST among the post-resolution checks, matching the order the
@@ -577,13 +584,15 @@ export class SecBMcpUpstreamProxy {
       });
     }
 
-    // The upstream's declared ceiling is capped by the server's. An upstream
-    // permitted to handle CONFIDENTIAL data is not reachable through a server
-    // running at INTERNAL.
+    // The upstream's declared ceiling is capped by the CALLER's effective
+    // ceiling, which the core has already capped by the server's. Comparing
+    // against the server's alone ignored the caller entirely, so a PUBLIC
+    // caller reached an INTERNAL upstream: the per-caller ceiling that governs
+    // every native read did not govern the calls that leave the organism.
     const declared = this.#upstreamPolicy.get(upstreamId)?.classification_ceiling;
-    if (declared && CLASS_ORDER.indexOf(declared) > CLASS_ORDER.indexOf(this.#ceiling)) {
-      if (!audit("DENY_CLASSIFICATION_CEILING", { declared, server_ceiling: this.#ceiling })) return denyUnaudited();
-      return rpcError(id, -32001, `Upstream '${upstreamId}' declares ${declared}, above the server ceiling ${this.#ceiling}`, { code: "DENY_CLASSIFICATION_CEILING" });
+    if (declared && CLASS_ORDER.indexOf(declared) > CLASS_ORDER.indexOf(caller.ceiling)) {
+      if (!audit("DENY_CLASSIFICATION_CEILING", { declared, effective_ceiling: caller.ceiling })) return denyUnaudited();
+      return rpcError(id, -32001, `Upstream '${upstreamId}' declares ${declared}, above the effective ceiling ${caller.ceiling}`, { code: "DENY_CLASSIFICATION_CEILING" });
     }
 
     const client = this.#clients.get(upstreamId);
