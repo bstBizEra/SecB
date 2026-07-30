@@ -33,6 +33,51 @@ const STATES = Object.freeze({
   CLOSED: "closed"
 });
 
+/**
+ * Ceiling on a single unterminated stdout line.
+ *
+ * The framing buffer was unbounded and never reset, so an upstream that simply
+ * never emits a newline grew it without limit: measured ~2.5 GB of heap at
+ * 500 MB of input, then a RangeError thrown out of the 'data' handler that took
+ * the whole hub down. No response ceiling, timeout, or concurrency cap
+ * intervened, because none of them are on this path — the reply never became a
+ * message. 8 MiB matches the registry's max_response_bytes maximum, so a line
+ * that could never be an acceptable response is refused before it is buffered.
+ */
+/**
+ * Variables a spawned upstream is allowed to inherit from this process.
+ *
+ * Children previously received the FULL parent environment. A probe upstream
+ * could therefore read SECB_MCP_UPSTREAMS_AUTHORIZED and
+ * SECB_MCP_DEPLOYMENT_AUTHORIZED — the operator activation flags — along with
+ * the caller instance and the path of every audit ledger. Sixteen third-party
+ * servers learning where the audit trail lives is not a theoretical concern.
+ *
+ * The allowlist is what a process genuinely needs to execute: PATH to find its
+ * interpreter, HOME and the XDG/APPDATA paths that npx and uvx use for their
+ * package caches, TMPDIR, and locale/terminal settings. Anything an upstream
+ * actually requires is declared per-entry in the registry's `env` field, which
+ * is the reviewable place for it.
+ */
+export const INHERITED_ENV_KEYS = Object.freeze([
+  "PATH", "Path", "HOME", "USERPROFILE", "SHELL", "LANG", "LC_ALL", "TZ",
+  "TMPDIR", "TEMP", "TMP", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME",
+  "APPDATA", "LOCALAPPDATA", "SYSTEMROOT", "windir", "COMSPEC", "PATHEXT",
+  "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR"
+]);
+
+export function scopedChildEnv(declared = {}, source = process.env) {
+  const env = {};
+  for (const key of INHERITED_ENV_KEYS) {
+    if (typeof source[key] === "string") env[key] = source[key];
+  }
+  // Registry-declared values win, and are the only non-allowlisted keys that
+  // ever reach a child.
+  return { ...env, ...declared };
+}
+
+export const DEFAULT_MAX_LINE_BYTES = 8 * 1024 * 1024;
+
 export class UpstreamClient {
   #plan;
   #timeoutMs;
@@ -42,11 +87,12 @@ export class UpstreamClient {
   #pending = new Map();
   #nextId = 1;
   #buffer = "";
+  #maxLineBytes;
   #state = STATES.IDLE;
   #failure = null;
   #stderr = "";
 
-  constructor({ plan, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, protocolVersion = DEFAULT_UPSTREAM_PROTOCOL_VERSION, spawn = nodeSpawn } = {}) {
+  constructor({ plan, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, protocolVersion = DEFAULT_UPSTREAM_PROTOCOL_VERSION, spawn = nodeSpawn, maxLineBytes = DEFAULT_MAX_LINE_BYTES } = {}) {
     if (!plan || typeof plan.id !== "string" || plan.id.trim() === "") {
       throw new UpstreamClientError("DENY_UPSTREAM_PLAN", "UpstreamClient requires a resolved plan carrying an id");
     }
@@ -63,6 +109,7 @@ export class UpstreamClient {
     this.#timeoutMs = timeoutMs;
     this.#protocolVersion = protocolVersion;
     this.#spawn = spawn;
+    this.#maxLineBytes = maxLineBytes;
   }
 
   get id() {
@@ -85,7 +132,7 @@ export class UpstreamClient {
     try {
       this.#child = this.#spawn(this.#plan.command, this.#plan.args ?? [], {
         stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env, ...(this.#plan.env ?? {}) }
+        env: scopedChildEnv(this.#plan.env)
       });
     } catch (error) {
       return this.#fail("DENY_UPSTREAM_SPAWN", `Spawn failed: ${error.code ?? error.message}`);
@@ -170,6 +217,16 @@ export class UpstreamClient {
 
   #onStdout(chunk) {
     this.#buffer += chunk;
+    // Refuse before buffering more: without a newline there is no message to
+    // parse, so an unterminated stream is not slow data, it is unbounded growth.
+    if (Buffer.byteLength(this.#buffer, "utf8") > this.#maxLineBytes && !this.#buffer.includes("\n")) {
+      this.#buffer = "";
+      this.#fail(
+        "DENY_UPSTREAM_LINE_TOO_LARGE",
+        `Upstream '${this.id}' sent more than ${this.#maxLineBytes} bytes with no line terminator`
+      );
+      return;
+    }
     let index;
     while ((index = this.#buffer.indexOf("\n")) !== -1) {
       const line = this.#buffer.slice(0, index).trim();

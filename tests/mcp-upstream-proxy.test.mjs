@@ -10,7 +10,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { resolve } from "node:path";
 
-import { UpstreamClient, UpstreamClientError } from "../src/mcp/upstream-client.mjs";
+import { INHERITED_ENV_KEYS, UpstreamClient, UpstreamClientError, scopedChildEnv } from "../src/mcp/upstream-client.mjs";
 import {
   NAMESPACE_SEPARATOR,
   SecBMcpUpstreamProxy,
@@ -452,4 +452,136 @@ test("toolPins returns a copy that cannot be mutated by a caller", async () => {
   const pins = proxy.toolPins();
   pins.get("up").set("search", "tampered");
   assert.notEqual(proxy.toolPins().get("up").get("search"), "tampered");
+});
+
+// --- S5: a child inherits an allowlist, not the whole environment ------------
+
+test("a spawned upstream never inherits the operator activation flags or ledger paths", () => {
+  const parent = {
+    PATH: "/usr/bin",
+    HOME: "/home/vily",
+    SECB_MCP_UPSTREAMS_AUTHORIZED: "operator",
+    SECB_MCP_DEPLOYMENT_AUTHORIZED: "operator",
+    SECB_MCP_CALLER_INSTANCE: "inst_claude_alpha_ro",
+    SECB_MCP_INVOCATION_LEDGER: "/repo/.secb/ledgers/invocation-ledger.jsonl",
+    SECB_MCP_EVENT_LEDGER: "/repo/.secb/ledgers/event-ledger.jsonl",
+    AWS_SECRET_ACCESS_KEY: "should-not-leak"
+  };
+  const env = scopedChildEnv({}, parent);
+  for (const leaked of Object.keys(parent).filter((k) => k.startsWith("SECB_") || k.startsWith("AWS_"))) {
+    assert.equal(leaked in env, false, `${leaked} must not reach a third-party upstream`);
+  }
+  // What a process genuinely needs to run is still present.
+  assert.equal(env.PATH, "/usr/bin");
+  assert.equal(env.HOME, "/home/vily");
+});
+
+test("registry-declared env is the only non-allowlisted way in, and it wins", () => {
+  const env = scopedChildEnv({ LOCAL_TIMEZONE: "Asia/Bangkok", PATH: "/override" }, { PATH: "/usr/bin", SECRET: "x" });
+  assert.equal(env.LOCAL_TIMEZONE, "Asia/Bangkok");
+  assert.equal(env.PATH, "/override");
+  assert.equal("SECRET" in env, false);
+});
+
+test("the inherit allowlist carries no SecB or credential-shaped key", () => {
+  for (const key of INHERITED_ENV_KEYS) {
+    assert.equal(/^SECB_|SECRET|TOKEN|PASSWORD|_KEY$/i.test(key), false, `${key} must not be inheritable`);
+  }
+});
+
+// --- S7: the upstream listing is bounded and audited -------------------------
+
+test("an oversized upstream tools/list is refused and ledgered, not cached", async () => {
+  const fat = Array.from({ length: 50 }, (_, i) => ({
+    name: `t${i}`,
+    description: "x".repeat(2000),
+    inputSchema: { type: "object", properties: {} }
+  }));
+  const calls = [];
+  const proxy = new SecBMcpUpstreamProxy({
+    core: coreServer(calls),
+    clients: new Map([["up", { state: "ready", listTools: async () => fat }]]),
+    invocationLog: (entry) => calls.push(entry),
+    upstreamPolicy: new Map([["up", { max_response_bytes: 1024 }]]),
+    now: () => new Date("2026-07-30T00:00:00Z")
+  });
+
+  const result = await proxy.refreshTools();
+  assert.deepEqual(result, [{ id: "up", ok: false, reason: "DENY_UPSTREAM_LISTING_TOO_LARGE" }]);
+
+  const listed = (await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" })).result.tools;
+  assert.equal(listed.some((t) => t.name.startsWith("up__")), false, "an over-cap listing must not be cached or advertised");
+
+  const denial = calls.find((c) => c.decision === "DENY_UPSTREAM_LISTING_TOO_LARGE");
+  assert.ok(denial, "the refusal must be ledgered");
+  assert.ok(denial.size > 1024);
+});
+
+test("an accepted listing is ledgered too, so enumeration is not an unaudited call", async () => {
+  const calls = [];
+  const proxy = new SecBMcpUpstreamProxy({
+    core: coreServer(calls),
+    clients: new Map([["up", { state: "ready", listTools: async () => [toolDef()] }]]),
+    invocationLog: (entry) => calls.push(entry),
+    now: () => new Date("2026-07-30T00:00:00Z")
+  });
+  await proxy.refreshTools();
+  const allow = calls.find((c) => c.decision === "ALLOW_UPSTREAM_LISTING");
+  assert.ok(allow, "spawning and enumerating produced no ledger row before this");
+  assert.equal(allow.advertised, 1);
+  assert.equal(allow.type, "MCP_UPSTREAM_LISTING");
+});
+
+// A fake child that speaks just enough protocol for start() to complete, so the
+// framing buffer can be exercised on a client in a real READY state.
+function fakeStdioChild() {
+  const stdoutListeners = [];
+  const emit = (text) => stdoutListeners.forEach((cb) => cb(text));
+  const child = {
+    stdout: { setEncoding() {}, on(_e, cb) { stdoutListeners.push(cb); } },
+    stderr: { setEncoding() {}, on() {} },
+    stdin: {
+      writable: true,
+      write(data) {
+        for (const line of String(data).split("\n").filter(Boolean)) {
+          const message = JSON.parse(line);
+          if (message.method === "initialize") {
+            emit(`${JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2024-11-05", capabilities: {} } })}\n`);
+          }
+        }
+        return true;
+      },
+      end() {}
+    },
+    on() {},
+    kill() {}
+  };
+  return { child, emit };
+}
+
+test("an upstream that never emits a newline is failed, not buffered without limit", async () => {
+  // Before the cap this grew unbounded: ~2.5 GB of heap at 500 MB of input, then
+  // a RangeError out of the 'data' handler that killed the whole hub. No response
+  // ceiling or timeout applied, because the bytes never became a message.
+  const { child, emit } = fakeStdioChild();
+  const client = new UpstreamClient({ plan: planFor("flood"), spawn: () => child, maxLineBytes: 64 * 1024 });
+  await client.start();
+  assert.equal(client.state, "ready");
+
+  emit("x".repeat(32 * 1024));
+  assert.equal(client.state, "ready", "under the cap the client keeps reading");
+
+  emit("x".repeat(64 * 1024)); // past the cap, still no newline
+  assert.equal(client.state, "failed");
+  assert.equal(client.failure.code, "DENY_UPSTREAM_LINE_TOO_LARGE");
+});
+
+test("a large but newline-terminated stream is accepted, so volume alone is not the trigger", async () => {
+  const { child, emit } = fakeStdioChild();
+  const client = new UpstreamClient({ plan: planFor("ok"), spawn: () => child, maxLineBytes: 64 * 1024 });
+  await client.start();
+  // Newlines mean the buffer drains each time, so total volume far above the cap
+  // is fine — only an unterminated line is refused.
+  for (let i = 0; i < 10; i += 1) emit(`${"y".repeat(32 * 1024)}\n`);
+  assert.equal(client.state, "ready");
 });

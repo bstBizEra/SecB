@@ -228,6 +228,28 @@ export class SecBMcpUpstreamProxy {
     return { accepted, blocked };
   }
 
+  /**
+   * Record a listing decision. Spawning a child and enumerating its tools were
+   * the two calls SecB itself made that produced no ledger row at all, so
+   * "every upstream call passes the same audit ledger" was not true of them.
+   */
+  #logListing(upstreamId, decision, extra = {}) {
+    try {
+      this.#invocationLog({
+        type: "MCP_UPSTREAM_LISTING",
+        upstream: upstreamId,
+        tool: null,
+        caller: null,
+        decision,
+        timestamp: this.#now().toISOString(),
+        ...extra
+      });
+    } catch {
+      // A listing that cannot be recorded is still governed by its ceiling
+      // above; the tools were already accepted or refused on their own merits.
+    }
+  }
+
   /** Current pins, for operator inspection. Copied so callers cannot mutate them. */
   toolPins() {
     return new Map([...this.#toolPins].map(([id, pins]) => [id, new Map(pins)]));
@@ -248,7 +270,20 @@ export class SecBMcpUpstreamProxy {
       }
       try {
         const tools = await client.listTools();
+        // The listing path had no ceiling and no audit, so an upstream
+        // advertising 400 tools with 10 KB descriptions produced a ~4 MB merged
+        // listing against a 1 KB response cap — the exact context-flooding
+        // channel max_response_bytes exists to close, left open on the one path
+        // whose output is injected into EVERY subsequent request.
+        const listingBytes = Buffer.byteLength(JSON.stringify(tools ?? []), "utf8");
+        const listingCap = this.#limitFor(id, "max_response_bytes");
+        if (listingBytes > listingCap) {
+          this.#logListing(id, "DENY_UPSTREAM_LISTING_TOO_LARGE", { size: listingBytes, max_response_bytes: listingCap });
+          results.push({ id, ok: false, reason: "DENY_UPSTREAM_LISTING_TOO_LARGE" });
+          continue;
+        }
         const { accepted, blocked } = this.#applyToolPins(id, tools);
+        this.#logListing(id, "ALLOW_UPSTREAM_LISTING", { size: listingBytes, advertised: accepted.length, blocked: blocked.length });
         this.#toolsByUpstream.set(id, accepted);
         results.push({ id, ok: true, count: accepted.length, ...(blocked.length > 0 ? { blocked } : {}) });
       } catch (error) {
