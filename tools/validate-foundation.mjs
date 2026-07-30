@@ -44,11 +44,20 @@ for (const file of docsManifest.files) {
   assert(existsSync(resolve(root, file)), `docs-manifest.file.${file}`, "exists");
 }
 
-const schemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"));
+// Schemas are allowlisted in two sets rather than one. A governed CONTRACT
+// under contracts/ and a subsystem-internal schema under src/**/schemas/ carry
+// different authority, and a single suffix-matched list conflated them: it made
+// inventorying a subsystem schema in MANIFEST fail the contract check. Both sets
+// are asserted for set equality, so an unexpected addition or a missing entry
+// still fails closed in EITHER category — the split preserves the distinction
+// without narrowing what the gate covers.
+const allSchemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"));
+const schemaFiles = allSchemaFiles.filter((file) => file.startsWith("contracts/"));
+const subsystemSchemaFiles = allSchemaFiles.filter((file) => !file.startsWith("contracts/"));
 // 7 canonical bootstrap schemas plus governed extensions (P0-14 temporal
 // ledgers, skill resolver, MOD-MCP capability registry, MOD-WORK goal graph).
-// Set equality keeps this fail-closed: an unexpected schema addition or a
-// missing canonical schema both fail.
+// Set equality keeps this fail-closed: an unexpected contract addition or a
+// missing canonical contract both fail.
 const expectedSchemas = [
   "contracts/agent-registration.schema.json",
   "contracts/context-receipt.schema.json",
@@ -72,6 +81,18 @@ assert(
   schemaFiles.length === expectedSchemas.length && expectedSchemas.every((file) => schemaFiles.includes(file)),
   "schemas.count",
   "7 canonical bootstrap schemas + 9 governed extensions (P0-14, skill resolver, capability record, MOD-WORK goal, project registration, swarm execution, system settings)"
+);
+// Subsystem schemas are module-internal and carry no contract authority, but
+// they are still allowlisted so that adding one is a deliberate, reviewed act.
+const expectedSubsystemSchemas = [
+  "src/events/schemas/event-envelope.schema.json",
+  "src/registry/schemas/runtime-deployment.schema.json"
+];
+assert(
+  subsystemSchemaFiles.length === expectedSubsystemSchemas.length &&
+    expectedSubsystemSchemas.every((file) => subsystemSchemaFiles.includes(file)),
+  "schemas.subsystem",
+  "2 subsystem-internal schemas (events envelope, runtime deployment) — not governed contracts"
 );
 const mandatoryIdentityFields = {
   "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_instance_id", "evaluation_status", "lifecycle_state"],

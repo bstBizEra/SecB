@@ -1,5 +1,23 @@
 # Codex work package — SecB MCP operator tooling (Phase 4)
 
+> **SUPERSEDED 2026-07-30 — do not execute this brief as written.**
+>
+> On explicit operator instruction, Phase 4 was reassigned from Codex to Claude
+> and is delivered in commit `fe64aac` on `feat/secb-ruflo-command-center`. All
+> four files below now exist. Executing this brief unchanged will recreate them
+> and collide.
+>
+> Producer evidence and residuals:
+> [`docs/03-project-control/candidates/secb-mcp-p4-operator-tooling-producer-verification.handoff.yaml`](docs/03-project-control/candidates/secb-mcp-p4-operator-tooling-producer-verification.handoff.yaml)
+>
+> **Still genuinely open, and the reason this brief is kept rather than deleted:**
+> acceptance item 2 below. Neither CLI has been run from Windows PowerShell.
+> `/proc/sys/fs/binfmt_misc/WSLInterop` is absent in Claude's environment, so
+> Windows execution is impossible there by any means. A Windows-host run of both
+> CLIs, plus the `--host windows` resolution path, remains unverified and is
+> genuinely new information. The test-count baseline in acceptance item 1 is
+> now `789 tests, 784 pass, 0 fail, 5 skipped` at `fe64aac`.
+
 Repo: `C:\laragon\www\SecB`
 Branch: `feat/secb-ruflo-command-center` (do NOT merge to `main`, do NOT push)
 Governance: follow `AGENTS.md` in the repo root. `src/**`, `tests/**`, `tools/**`, `contracts/**`
@@ -53,8 +71,8 @@ A resolution verdict is either:
       // "DISABLED" | "HOST_UNREACHABLE" | "LOOPBACK_ACROSS_BOUNDARY"
 ```
 
-Registry path: `<repo>/.secb/mcp-upstreams.json` (17 upstreams migrated from the old
-`bizera-win-mcp-hub/config/servers.yaml`; 8 enabled, 9 carried disabled with reasons).
+Registry path: `<repo>/.secb/mcp-upstreams.json` (16 upstreams migrated from the old
+`bizera-win-mcp-hub/config/servers.yaml`; 9 enabled, 7 carried disabled with reasons).
 
 ---
 
@@ -118,8 +136,9 @@ rewrite the registry file.
 
 ## Acceptance
 
-1. `npm test` passes with exact counts reported (baseline before your work: 693 tests, 688 pass,
-   0 fail, 5 skipped). Your new tests should raise the total; nothing should start failing.
+1. `npm test` passes with exact counts reported. Baseline before your work, measured at commit
+   `1718f2b`: **726 tests, 721 pass, 0 fail, 5 skipped, exit 0**. Your new tests should raise the
+   total; nothing should start failing.
 2. Both CLIs run from **WSL** and produce sane output. If you can also run them from Windows
    PowerShell, do — Claude could not (WSL interop is off in Claude's environment), so a Windows
    run is genuinely new information worth reporting.
