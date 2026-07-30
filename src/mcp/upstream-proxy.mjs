@@ -467,7 +467,13 @@ export class SecBMcpUpstreamProxy {
           });
         }
       }
-      return rpcResult(message.id, { tools: [...base.result.tools, ...proxied] });
+      // Spread the core's result rather than rebuilding it from `tools` alone.
+      // A modern-era listing carries resultType and the caching hints the spec
+      // makes a MUST, and naming only `tools` silently dropped them — so the
+      // merged listing through the hub was uncacheable while the same listing
+      // from the core alone was cacheable. The hub is the surface that most
+      // needs the hint: its listing is the larger one.
+      return rpcResult(message.id, { ...base.result, tools: [...base.result.tools, ...proxied] });
     }
 
     if (message.method === "tools/call") {

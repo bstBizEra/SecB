@@ -49,6 +49,68 @@ const DATA_UNTRUSTED = { content_disposition: "data_untrusted" };
 // version into the client-facing error message.
 const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(["2024-11-05", "2024-10-07", "2025-03-26", PINNED_PROTOCOL_VERSION]);
 
+// --- Modern era (revision 2026-07-28) --------------------------------------
+//
+// See docs/03-project-control/candidates/mcp-spec-2026-07-28-research.md for
+// the retrieved specification text these constants implement.
+//
+// The spec splits implementations into two eras: LEGACY establishes a session
+// with an `initialize` handshake (2025-11-25 and earlier), MODERN carries the
+// version on every request in `_meta` and is served statelessly. A dual-era
+// server MAY serve both, selecting behaviour from how the client opens.
+//
+// Why dual-era rather than migrating: a legacy client has no fall-forward
+// mechanism, so dropping `initialize` would strand every currently working
+// host. Adding the modern path breaks nothing, because a request that carries
+// no `_meta` version is untouched by any of this.
+export const MODERN_PROTOCOL_VERSION = "2026-07-28";
+export const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
+export const CLIENT_INFO_META_KEY = "io.modelcontextprotocol/clientInfo";
+export const SERVER_INFO_META_KEY = "io.modelcontextprotocol/serverInfo";
+
+// Only the modern revisions this server actually implements. Legacy versions
+// are deliberately NOT listed: a client that reached this path declared a
+// version in `_meta`, so telling it to retry with a handshake-era version would
+// be telling it to send a contradiction.
+const SUPPORTED_MODERN_VERSIONS = Object.freeze([MODERN_PROTOCOL_VERSION]);
+
+const UNSUPPORTED_PROTOCOL_VERSION_CODE = -32022;
+
+// Freshness hint for cacheable results. The native catalog is frozen for the
+// life of the process and SecB does not advertise listChanged, so a client has
+// only the TTL to work from. Five minutes is a hint, not a guarantee: the spec
+// is explicit that data MAY change before it expires, and a restart does change
+// it.
+const TOOL_LIST_TTL_MS = 300_000;
+
+const SERVER_INFO = Object.freeze({ name: "secb-mcp-server", version: "0.1.0-alpha" });
+
+/**
+ * Read the protocol version a request declares, if it declares one.
+ *
+ * Presence of this key is what makes a request modern-era. Absence is not an
+ * error: it means legacy, which is served exactly as before.
+ */
+export function declaredProtocolVersion(params) {
+  const declared = params?._meta?.[PROTOCOL_VERSION_META_KEY];
+  return typeof declared === "string" && declared.trim() !== "" ? declared : null;
+}
+
+/**
+ * Cache scope for the tool listing.
+ *
+ * Derived rather than fixed. "public" is truthful only while the listing is
+ * identical for every caller, which it is today: the native catalog is a frozen
+ * projection and the upstream allow/deny lists in U3 are per-upstream, not
+ * per-caller. If that filtering ever becomes per-caller, this MUST become
+ * "private" — the spec states a public response MAY be shared between callers
+ * even when it came from an authenticated endpoint, so a stale "public" here
+ * would leak which tools other callers can see.
+ */
+export function toolListCacheScope({ variesByCaller = false } = {}) {
+  return variesByCaller ? "private" : "public";
+}
+
 /**
  * Wrap a tool payload as a spec-shaped CallToolResult.
  *
@@ -125,6 +187,17 @@ export class SecBMcpServer {
     // session produced spurious -32601 frames the client reported as
     // "response for an unknown message ID".
     if (id === undefined) return null;
+
+    // Modern era is decided BEFORE the legacy switch, because the hazard being
+    // closed is that a request declaring 2026-07-28 was previously served under
+    // 2025-06-18 semantics with no error: the client believed one version, the
+    // server another, and neither learned otherwise. Reading the declared
+    // version is what makes the two eras distinguishable at all.
+    const declared = declaredProtocolVersion(params);
+    if (method === "server/discover" || declared !== null) {
+      return this.#modernHandle(id, method, params, declared, callerInstanceId);
+    }
+
     switch (method) {
       case "initialize": {
         const requested = params?.protocolVersion;
@@ -146,6 +219,67 @@ export class SecBMcpServer {
         return rpcResult(id, { tools: TOOL_LIST_PROJECTION });
       case "tools/call":
         return this.#toolsCall(id, params, callerInstanceId);
+      default:
+        return rpcError(id, -32601, `Method not found: ${method}`);
+    }
+  }
+
+  /**
+   * Serve a modern-era (2026-07-28) request, statelessly.
+   *
+   * `server/discover` is answered even without a declared version, because it
+   * is the probe a dual-era client uses to find out what this server speaks;
+   * requiring the answer to know the question would defeat it.
+   *
+   * Scope, stated honestly: this implements the parts of 2026-07-28 that SecB
+   * actually serves — discovery, per-request version negotiation, and the
+   * caching hints those results MUST carry. It does not implement MRTR,
+   * subscriptions, resources, or prompts, and does not advertise them in
+   * capabilities. Advertising only `tools` is how a server declines the rest.
+   */
+  #modernHandle(id, method, params, declared, callerInstanceId) {
+    // A declared version is checked before anything is served under it. The
+    // spec's MUST: respond with UnsupportedProtocolVersionError listing what is
+    // supported, so the client can retry rather than guess.
+    if (declared !== null && !SUPPORTED_MODERN_VERSIONS.includes(declared)) {
+      return rpcError(id, UNSUPPORTED_PROTOCOL_VERSION_CODE, "Unsupported protocol version", {
+        supported: [...SUPPORTED_MODERN_VERSIONS],
+        requested: declared
+      });
+    }
+
+    switch (method) {
+      case "server/discover":
+        return rpcResult(id, {
+          resultType: "complete",
+          supportedVersions: [...SUPPORTED_MODERN_VERSIONS],
+          capabilities: { tools: {} },
+          _meta: { [SERVER_INFO_META_KEY]: { ...SERVER_INFO } },
+          ttlMs: TOOL_LIST_TTL_MS,
+          cacheScope: toolListCacheScope()
+        });
+      case "ping":
+        return rpcResult(id, { resultType: "complete" });
+      case "tools/list":
+        // Caching hints are a MUST on a complete tools/list result, not a
+        // nicety: without them a client assumes ttlMs 0 and re-fetches an
+        // 11,779-token listing on every request.
+        return rpcResult(id, {
+          resultType: "complete",
+          tools: TOOL_LIST_PROJECTION,
+          ttlMs: TOOL_LIST_TTL_MS,
+          cacheScope: toolListCacheScope()
+        });
+      case "tools/call":
+        return this.#toolsCall(id, params, callerInstanceId);
+      case "initialize":
+        // A handshake carrying modern metadata is a contradiction: initialize
+        // IS the legacy era. Answering it would put the two ends back into the
+        // disagreement this path exists to prevent.
+        return rpcError(id, UNSUPPORTED_PROTOCOL_VERSION_CODE, "initialize is a legacy-era method; omit the _meta protocol version to use it", {
+          supported: [...SUPPORTED_MODERN_VERSIONS],
+          requested: declared
+        });
       default:
         return rpcError(id, -32601, `Method not found: ${method}`);
     }

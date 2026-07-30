@@ -407,6 +407,7 @@
     "src/mcp/invocation-rate-limiter.mjs",
     "tests/mcp-invocation-rate-limit.test.mjs",
     "src/contracts/lazy-ajv.mjs",
-    "tests/mcp-lazy-ajv.test.mjs"
+    "tests/mcp-lazy-ajv.test.mjs",
+    "tests/mcp-protocol-2026-07-28.test.mjs"
   ]
 }
