@@ -405,6 +405,8 @@
     "docs/adr/0009-mcp-upstream-fronting.md",
     "docs/03-project-control/candidates/wp-mcp-hardening-and-real-use.work-package.yaml",
     "src/mcp/invocation-rate-limiter.mjs",
-    "tests/mcp-invocation-rate-limit.test.mjs"
+    "tests/mcp-invocation-rate-limit.test.mjs",
+    "src/contracts/lazy-ajv.mjs",
+    "tests/mcp-lazy-ajv.test.mjs"
   ]
 }

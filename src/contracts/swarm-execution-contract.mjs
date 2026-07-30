@@ -5,17 +5,17 @@
  * execution providers (e.g. Ruflo RT-RUFLO-LOCAL-001) per ADR-SECB-RUFLO-001 §6.
  */
 
-import Ajv2020 from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { createAjv } from "./lazy-ajv.mjs";
 
 const schema = JSON.parse(
   readFileSync(resolve(import.meta.dirname, "..", "..", "contracts", "swarm-execution-contract.schema.json"), "utf8")
 );
-const ajv = new Ajv2020({ allErrors: true, strict: true, useDefaults: true });
-addFormats(ajv);
-const validate = ajv.compile(schema);
+// Compiled on first validation, not at import — see lazy-ajv.mjs.
+let validate = null;
+const getValidate = () => (validate ??= createAjv({ allErrors: true, strict: true, useDefaults: true }).compile(schema));
 
 export class ContractError extends Error {
   constructor(code, message) {
@@ -30,8 +30,9 @@ export class ContractError extends Error {
  */
 export function validateSwarmExecutionContract(contract) {
   const candidate = structuredClone(contract);
-  if (!validate(candidate)) {
-    const errors = validate.errors?.map(e => `${e.instancePath} ${e.message}`).join("; ") ?? "Schema error";
+  const check = getValidate();
+  if (!check(candidate)) {
+    const errors = check.errors?.map(e => `${e.instancePath} ${e.message}`).join("; ") ?? "Schema error";
     throw new ContractError("DENY_INVALID_CONTRACT", `SwarmExecutionContract validation failed: ${errors}`);
   }
   return Object.freeze(candidate);

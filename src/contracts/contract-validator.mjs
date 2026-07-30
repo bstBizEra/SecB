@@ -1,7 +1,7 @@
-import Ajv2020 from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { createAjv } from "./lazy-ajv.mjs";
 
 const schemaPaths = {
   project: "project-contract.schema.json",
@@ -19,16 +19,34 @@ const schemaPaths = {
   goal: "goal.schema.json"
 };
 
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats(ajv);
+let ajv = null;
+const getAjv = () => (ajv ??= createAjv({ allErrors: true, strict: true }));
 
-const validators = new Map(
-  Object.entries(schemaPaths).map(([kind, file]) => {
-    const path = resolve(import.meta.dirname, "..", "..", "contracts", file);
-    const schema = JSON.parse(readFileSync(path, "utf8"));
-    return [kind, ajv.compile(schema)];
-  })
-);
+/**
+ * Compiled validators, populated on first use rather than at import.
+ *
+ * Work-package item U1. Compiling all 13 schemas eagerly cost 3,525ms of the
+ * 3,964ms it took to import secb-mcp-server.mjs — 89% of the MCP server's
+ * time-to-first-response, paid in full before answering a handshake that needs
+ * no schema at all, and paid again by every CLI and test that touches this
+ * module. Ajv construction and addFormats are cheap; compile() is not.
+ *
+ * Safe to defer because no schema $refs another file, so each compiles
+ * independently. Compilation is still synchronous, so validateContract and
+ * every caller above it stay synchronous.
+ */
+const validators = new Map();
+
+function validatorFor(kind) {
+  const cached = validators.get(kind);
+  if (cached) return cached;
+  const file = schemaPaths[kind];
+  if (file === undefined) return null;
+  const path = resolve(import.meta.dirname, "..", "..", "contracts", file);
+  const compiled = getAjv().compile(JSON.parse(readFileSync(path, "utf8")));
+  validators.set(kind, compiled);
+  return compiled;
+}
 
 export class ContractValidationError extends Error {
   constructor(code, message, errors = []) {
@@ -40,7 +58,7 @@ export class ContractValidationError extends Error {
 }
 
 export function validateContract(kind, candidate) {
-  const validate = validators.get(kind);
+  const validate = validatorFor(kind);
   if (!validate) {
     throw new ContractValidationError("DENY_UNKNOWN_CONTRACT", `Unknown contract kind: ${kind}`);
   }
@@ -57,5 +75,10 @@ export function validateContract(kind, candidate) {
 }
 
 export function supportedContractKinds() {
-  return [...validators.keys()];
+  // Declared kinds, NOT compiled ones. Reading the cache here was equivalent
+  // while every schema was compiled at import; under lazy compilation it would
+  // report a shrinking set that depends on which contracts happened to have
+  // been validated already, so a caller checking support would get a different
+  // answer depending on when it asked.
+  return Object.keys(schemaPaths);
 }

@@ -1,14 +1,14 @@
-import Ajv2020 from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { createAjv } from "../contracts/lazy-ajv.mjs";
 
 const schema = JSON.parse(
   readFileSync(resolve(import.meta.dirname, "..", "..", "contracts", "agent-registration.schema.json"), "utf8")
 );
-const ajv = new Ajv2020({ allErrors: true, strict: true, useDefaults: true });
-addFormats(ajv);
-const validate = ajv.compile(schema);
+// Compiled on first validation, not at import — see lazy-ajv.mjs.
+let validate = null;
+const getValidate = () => (validate ??= createAjv({ allErrors: true, strict: true, useDefaults: true }).compile(schema));
 
 const AUTHORITY_LEVELS = ["A0", "A1", "A2", "A3", "A4", "A5"];
 
@@ -47,7 +47,8 @@ export class RuntimeRegistry {
 
   register(record) {
     const candidate = structuredClone(record);
-    if (!validate(candidate)) {
+    const check = getValidate();
+    if (!check(candidate)) {
       throw new RegistryError(
         "DENY_INVALID_REGISTRATION",
         `Agent registration failed schema validation`,

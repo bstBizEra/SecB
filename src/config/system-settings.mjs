@@ -5,17 +5,17 @@
  * security limits, and ledger storage locations per ADR-SECB-RUFLO-001 & ADR-002.
  */
 
-import Ajv2020 from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+import { createAjv } from "../contracts/lazy-ajv.mjs";
 
 const schemaPath = resolve(import.meta.dirname, "..", "..", "contracts", "system-settings.schema.json");
 const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
 
-const ajv = new Ajv2020({ allErrors: true, strict: true, useDefaults: true });
-addFormats(ajv);
-const validate = ajv.compile(schema);
+// Compiled on first validation, not at import — see lazy-ajv.mjs.
+let validate = null;
+const getValidate = () => (validate ??= createAjv({ allErrors: true, strict: true, useDefaults: true }).compile(schema));
 
 export class SystemSettingsError extends Error {
   constructor(code, message) {
@@ -78,8 +78,9 @@ let _activeSettings = structuredClone(DEFAULT_SYSTEM_SETTINGS);
  */
 export function validateSystemSettings(settings) {
   const candidate = structuredClone(settings);
-  if (!validate(candidate)) {
-    const errors = validate.errors?.map(e => `${e.instancePath} ${e.message}`).join("; ") ?? "Schema error";
+  const check = getValidate();
+  if (!check(candidate)) {
+    const errors = check.errors?.map(e => `${e.instancePath} ${e.message}`).join("; ") ?? "Schema error";
     throw new SystemSettingsError("INVALID_SYSTEM_SETTINGS", `System settings validation failed: ${errors}`);
   }
   return Object.freeze(candidate);

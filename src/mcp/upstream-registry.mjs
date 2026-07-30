@@ -13,15 +13,20 @@
  * Activation stays a separate operator-authorized step.
  */
 
-import Ajv2020 from "ajv/dist/2020.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const schemaPath = resolve(import.meta.dirname, "..", "..", "contracts", "mcp-upstream-registry.schema.json");
-const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
+import { createAjv } from "../contracts/lazy-ajv.mjs";
 
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-const validate = ajv.compile(schema);
+const schemaPath = resolve(import.meta.dirname, "..", "..", "contracts", "mcp-upstream-registry.schema.json");
+
+// Compiled on first validation, not at import — see lazy-ajv.mjs. This schema
+// declares no `format`, so ajv-formats is not loaded for it.
+let validate = null;
+const getValidate = () =>
+  (validate ??= createAjv({ allErrors: true, strict: true, formats: false }).compile(
+    JSON.parse(readFileSync(schemaPath, "utf8"))
+  ));
 
 export const HOSTS = Object.freeze(["windows", "wsl", "linux"]);
 
@@ -69,8 +74,9 @@ export function buildShellCommand(command, args = []) {
 
 export function validateUpstreamRegistry(document) {
   const candidate = structuredClone(document);
-  if (!validate(candidate)) {
-    const errors = validate.errors?.map((e) => `${e.instancePath || "/"} ${e.message}`).join("; ") ?? "Schema error";
+  const check = getValidate();
+  if (!check(candidate)) {
+    const errors = check.errors?.map((e) => `${e.instancePath || "/"} ${e.message}`).join("; ") ?? "Schema error";
     throw new UpstreamRegistryError("DENY_UPSTREAM_REGISTRY_INVALID", `Upstream registry validation failed: ${errors}`);
   }
   const seen = new Set();
