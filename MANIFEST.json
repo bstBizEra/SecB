@@ -403,6 +403,8 @@
     "tools/v3-swarm-graph-generator.mjs",
     "docs/03-project-control/candidates/secb-mcp-p4-operator-tooling-producer-verification.handoff.yaml",
     "docs/adr/0009-mcp-upstream-fronting.md",
-    "docs/03-project-control/candidates/wp-mcp-hardening-and-real-use.work-package.yaml"
+    "docs/03-project-control/candidates/wp-mcp-hardening-and-real-use.work-package.yaml",
+    "src/mcp/invocation-rate-limiter.mjs",
+    "tests/mcp-invocation-rate-limit.test.mjs"
   ]
 }

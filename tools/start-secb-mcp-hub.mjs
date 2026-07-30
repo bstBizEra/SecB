@@ -60,7 +60,7 @@ setDefault("SECB_MCP_EVENT_LEDGER", resolve(ROOT, ".secb", "ledgers", "event-led
 setDefault("SECB_MCP_EVIDENCE_LEDGER", resolve(ROOT, ".secb", "ledgers", "evidence-ledger.jsonl"));
 setDefault("SECB_MCP_CALLER_INSTANCE", "inst_claude_alpha_ro");
 
-const { server: core, callerInstanceId, config } = prepareDeployment({ argv, env: process.env });
+const { server: core, callerInstanceId, config, rateLimiter } = prepareDeployment({ argv, env: process.env });
 
 const clients = new Map();
 const upstreamPolicy = new Map();
@@ -129,7 +129,9 @@ const proxy = new SecBMcpUpstreamProxy({
   clients,
   upstreamPolicy,
   invocationLog: createInvocationLedgerWriter(config.ledgerPath),
-  classificationCeiling: config.classificationCeiling
+  classificationCeiling: config.classificationCeiling,
+  // The same instance the core already holds, so one budget covers both paths.
+  rateLimiter
 });
 
 const report = await proxy.refreshTools();

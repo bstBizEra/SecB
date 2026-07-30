@@ -170,6 +170,7 @@ export class SecBMcpUpstreamProxy {
   #upstreamPolicy;
   #invocationLog;
   #ceiling;
+  #rateLimiter;
   #now;
   #limits;
   #toolsByUpstream = new Map();
@@ -181,9 +182,12 @@ export class SecBMcpUpstreamProxy {
    * @param upstreamPolicy Map<upstreamId, { classification_ceiling }>
    * @param invocationLog  (entry) => void; throwing is the fail-closed signal
    */
-  constructor({ core, clients = new Map(), upstreamPolicy = new Map(), invocationLog, classificationCeiling = "INTERNAL", limits = {}, now = () => new Date() } = {}) {
+  constructor({ core, clients = new Map(), upstreamPolicy = new Map(), invocationLog, classificationCeiling = "INTERNAL", limits = {}, rateLimiter = null, now = () => new Date() } = {}) {
     if (!core || typeof core.handle !== "function") {
       throw new Error("SecBMcpUpstreamProxy requires a core server with handle()");
+    }
+    if (rateLimiter !== null && typeof rateLimiter?.admit !== "function") {
+      throw new Error("rateLimiter, when provided, requires an admit function");
     }
     if (typeof invocationLog !== "function") {
       throw new Error("SecBMcpUpstreamProxy requires an invocationLog function (fail-closed audit)");
@@ -197,6 +201,10 @@ export class SecBMcpUpstreamProxy {
     this.#invocationLog = invocationLog;
     this.#ceiling = classificationCeiling;
     this.#limits = { ...DEFAULT_UPSTREAM_LIMITS, ...limits };
+    // Must be the SAME instance the core holds: two limiters would each grant a
+    // full budget, so a caller alternating native and proxied tools would get
+    // double the intended rate while both paths reported enforcing it.
+    this.#rateLimiter = rateLimiter;
     this.#now = now;
   }
 
@@ -457,6 +465,19 @@ export class SecBMcpUpstreamProxy {
     if (hit) {
       if (!audit("DENY_RESERVED_DELIMITER")) return denyUnaudited();
       return rpcError(id, -32602, `Tool name must not contain '${hit}'`, { code: "DENY_RESERVED_DELIMITER" });
+    }
+
+    // Budget is spent before the upstream is contacted, so a rate-limited caller
+    // cannot make SecB do the third-party work it is being denied the result of.
+    if (this.#rateLimiter) {
+      const verdict = this.#rateLimiter.admit(callerInstanceId);
+      if (!verdict.allowed) {
+        if (!audit("DENY_RATE_LIMITED", { observed: verdict.observed, max_per_window: verdict.maxPerWindow })) return denyUnaudited();
+        return rpcError(id, -32000, `Rate limit exceeded: ${verdict.maxPerWindow} invocations per ${verdict.windowMs}ms`, {
+          code: "DENY_RATE_LIMITED",
+          retryAfterMs: verdict.retryAfterMs
+        });
+      }
     }
 
     // The upstream's declared ceiling is capped by the server's. An upstream

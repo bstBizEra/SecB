@@ -85,19 +85,26 @@ export class SecBMcpServer {
   #services;
   #invocationLog;
   #serverCeiling;
+  #rateLimiter;
   #now;
 
   // services: { workPackage, project?, eventLedger, evidenceLedger, skillResolver, registry }
   // invocationLog: (entry) => void — MUST record every call; throwing => fail-closed.
-  constructor({ services, invocationLog, classificationCeiling = "INTERNAL", now = () => new Date() } = {}) {
+  // rateLimiter: optional { admit(callerId) }; SHARE one instance with the
+  // upstream proxy, or a caller gets the full budget on each dispatch path.
+  constructor({ services, invocationLog, classificationCeiling = "INTERNAL", rateLimiter = null, now = () => new Date() } = {}) {
     if (!services || typeof services.registry?.resolve !== "function") {
       throw new Error("SecBMcpServer requires services.registry.resolve");
     }
     if (typeof invocationLog !== "function") throw new Error("SecBMcpServer requires an invocationLog function (fail-closed audit)");
     if (!CLASS_ORDER.includes(classificationCeiling)) throw new Error(`Unknown classificationCeiling: ${classificationCeiling}`);
+    if (rateLimiter !== null && typeof rateLimiter?.admit !== "function") {
+      throw new Error("rateLimiter, when provided, requires an admit function");
+    }
     this.#services = services;
     this.#invocationLog = invocationLog;
     this.#serverCeiling = classificationCeiling;
+    this.#rateLimiter = rateLimiter;
     this.#now = now;
   }
 
@@ -174,6 +181,21 @@ export class SecBMcpServer {
       return auditAndReturn("DENY_UNRESOLVED_CALLER", null, () => rpcError(id, -32001, `Caller not resolvable: ${resolved?.reason ?? "unknown"}`, { code: "DENY_UNRESOLVED_CALLER", reason: resolved?.reason }));
     }
     const ceiling = this.#effectiveCeiling(resolved.identity.max_data_classification);
+
+    // Rate limit AFTER resolution: keying on resolved identities bounds the
+    // limiter's memory to the registry, whereas admitting unresolved ids would
+    // let anything holding the transport grow it by inventing new ones.
+    if (this.#rateLimiter) {
+      const verdict = this.#rateLimiter.admit(callerInstanceId);
+      if (!verdict.allowed) {
+        return auditAndReturn("DENY_RATE_LIMITED", ceiling, () =>
+          rpcError(id, -32000, `Rate limit exceeded: ${verdict.maxPerWindow} invocations per ${verdict.windowMs}ms`, {
+            code: "DENY_RATE_LIMITED",
+            retryAfterMs: verdict.retryAfterMs
+          })
+        );
+      }
+    }
 
     // Own-property check as well as the null-prototype map: an inherited key
     // such as "__proto__" or "constructor" previously passed the !tool guard,
