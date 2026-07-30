@@ -44,6 +44,76 @@ const isObjectSchema = (schema) =>
   schema !== null && typeof schema === "object" && !Array.isArray(schema) && schema.type === "object";
 
 /**
+ * Neutralise an upstream-authored string before it is advertised to a model.
+ *
+ * A tool description is a model-instruction channel written by third-party code,
+ * and the documented attacks against it do not look like text: ANSI escapes can
+ * hide content from a human reviewing the same string in a terminal, Unicode Tag
+ * characters (U+E0000-U+E007F) are invisible everywhere yet tokenise, and bidi
+ * controls reorder what a reader sees relative to what the model receives. All
+ * three let a description read as benign to the operator who approves it while
+ * carrying something else to the model.
+ *
+ * Prose only. Identifiers, enum values, and defaults are deliberately NOT
+ * rewritten — altering them would silently break a working tool — so a name
+ * carrying control characters is rejected instead (see sanitizeToolForAdvertising).
+ */
+export function sanitizeUpstreamText(text) {
+  if (typeof text !== "string") return text;
+  return (
+    text
+      // CSI/OSC and single-character escapes. OSC-8 hyperlinks are the reason
+      // this runs first: the visible label need not match the target.
+      .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+      .replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, "")
+      .replace(/\x1b./g, "")
+      // NFKC folds compatibility forms that render identically but tokenise
+      // differently, so a filter on the raw form can be evaded.
+      .normalize("NFKC")
+      // Invisible: Unicode Tags block, zero-width, BOM, bidi overrides.
+      .replace(/[\u{E0000}-\u{E007F}]/gu, "")
+      .replace(/[\u200b-\u200d\ufeff\u2060]/g, "")
+      .replace(/[\u202a-\u202e\u2066-\u2069]/g, "")
+      // Remaining C0/C1 controls, keeping tab and newline as legitimate layout.
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "")
+      // Instruction-shaped markup carries no meaning in a description and is the
+      // documented wrapper for injected directives. The angle brackets are removed
+      // so the result is no longer markup and cannot contain the original tag as a
+      // substring, but the words are kept: the attempt stays legible to a reviewer
+      // instead of vanishing.
+      .replace(/<(\/?)(IMPORTANT|SYSTEM|INSTRUCTIONS?|PROMPT|ADMIN|OVERRIDE)>/gi, "($1$2)")
+      .trim()
+  );
+}
+
+// An identifier is not prose: rewriting it would break calls, so a name carrying
+// anything invisible or control-like disqualifies the tool instead.
+const IDENTIFIER_IS_CLEAN = (name) =>
+  typeof name === "string" && name === sanitizeUpstreamText(name) && /^[A-Za-z0-9_.-]+$/.test(name);
+
+/**
+ * Return an advertising-safe copy of an upstream tool, or null to withhold it.
+ * Prose is sanitised recursively through the schema; structure is left untouched.
+ */
+export function sanitizeToolForAdvertising(tool) {
+  if (!tool || !IDENTIFIER_IS_CLEAN(tool.name)) return null;
+  const scrubProse = (node) => {
+    if (Array.isArray(node)) return node.map(scrubProse);
+    if (node === null || typeof node !== "object") return node;
+    const out = {};
+    for (const [key, value] of Object.entries(node)) {
+      out[key] = key === "description" || key === "title" ? sanitizeUpstreamText(value) : scrubProse(value);
+    }
+    return out;
+  };
+  return {
+    ...tool,
+    description: sanitizeUpstreamText(tool.description),
+    ...(tool.inputSchema !== undefined ? { inputSchema: scrubProse(tool.inputSchema) } : {})
+  };
+}
+
+/**
  * Fingerprint the parts of a tool definition that steer a model.
  *
  * Covers name, description, and inputSchema, because the whole schema is
@@ -198,12 +268,24 @@ export class SecBMcpUpstreamProxy {
       const fingerprint = fingerprintToolDefinition(tool);
       const pinned = pins.get(name);
       if (pinned === undefined) {
+        // Pin the RAW definition, then advertise a sanitised copy: fingerprinting
+        // the sanitised form would miss a change that scrubs to the same output.
         pins.set(name, fingerprint);
-        accepted.push(tool);
+        const safe = sanitizeToolForAdvertising(tool);
+        if (safe === null) {
+          blocked.push(name);
+          continue;
+        }
+        accepted.push(safe);
         continue;
       }
       if (pinned === fingerprint) {
-        accepted.push(tool);
+        const safe = sanitizeToolForAdvertising(tool);
+        if (safe === null) {
+          blocked.push(name);
+          continue;
+        }
+        accepted.push(safe);
         continue;
       }
       blocked.push(name);
