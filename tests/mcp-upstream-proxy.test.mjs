@@ -675,3 +675,93 @@ test("advertised upstream tools are sanitised, and pins still see the raw defini
   // as a redefinition on the next listing.
   assert.equal(proxy.toolPins().get("up").get("search"), fingerprintToolDefinition(hostile));
 });
+
+// --- U4: deterministic listing order ---------------------------------------
+
+test("two listings of an unchanged registry are byte-identical", async () => {
+  await withProxy(async ({ proxy }) => {
+    const list = () => proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+    const first = JSON.stringify((await list()).result);
+    const second = JSON.stringify((await list()).result);
+    assert.equal(first, second);
+  });
+});
+
+test("upstream tools are advertised in sorted order, not the upstream's", async () => {
+  await withProxy(async ({ proxy }) => {
+    const res = await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+    const fronted = res.result.tools.filter((t) => t.name.startsWith("fake__")).map((t) => t.name);
+    // The fixture advertises echo, add, big, slow in that order.
+    assert.deepEqual(fronted, [...fronted].sort(), "the listing does not inherit the upstream's ordering");
+  });
+});
+
+// --- U3: per-upstream tool exposure ----------------------------------------
+
+test("an allowlist advertises exactly the named tools", async () => {
+  await withProxy(
+    async ({ proxy }) => {
+      const res = await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+      const fronted = res.result.tools.filter((t) => t.name.startsWith("fake__")).map((t) => t.name);
+      assert.deepEqual(fronted, ["fake__add", "fake__echo"], "four fixture tools, two allowed");
+    },
+    { policy: new Map([["fake", { tools_allow: ["echo", "add"] }]]) }
+  );
+});
+
+test("a denylist withholds the named tool and leaves the rest", async () => {
+  await withProxy(
+    async ({ proxy }) => {
+      const res = await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+      const fronted = res.result.tools.filter((t) => t.name.startsWith("fake__")).map((t) => t.name);
+      assert.ok(!fronted.includes("fake__big"));
+      assert.ok(fronted.includes("fake__echo"));
+    },
+    { policy: new Map([["fake", { tools_deny: ["big"] }]]) }
+  );
+});
+
+test("deny wins over allow when a registry names a tool in both", async () => {
+  await withProxy(
+    async ({ proxy }) => {
+      const res = await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+      const fronted = res.result.tools.filter((t) => t.name.startsWith("fake__")).map((t) => t.name);
+      assert.deepEqual(fronted, ["fake__add"], "the safer reading of a contradictory registry");
+    },
+    { policy: new Map([["fake", { tools_allow: ["echo", "add"], tools_deny: ["echo"] }]]) }
+  );
+});
+
+test("an empty allowlist exposes nothing while keeping the upstream declared", async () => {
+  await withProxy(
+    async ({ proxy }) => {
+      const res = await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+      assert.equal(res.result.tools.filter((t) => t.name.startsWith("fake__")).length, 0);
+      assert.ok(res.result.tools.length > 0, "native tools are unaffected");
+    },
+    { policy: new Map([["fake", { tools_allow: [] }]]) }
+  );
+});
+
+test("a filtered tool cannot be called even by exact name", async () => {
+  await withProxy(
+    async ({ proxy, calls }) => {
+      // Hiding a tool from tools/list is a naming convention, not a control:
+      // the caller supplies the name.
+      const res = await call(proxy, "fake__big", { bytes: 10 });
+      assert.equal(res.error.data.code, "DENY_UPSTREAM_TOOL_NOT_EXPOSED");
+      assert.ok(calls.some((c) => c.decision === "DENY_UPSTREAM_TOOL_NOT_EXPOSED"), "the attempt is ledgered");
+    },
+    { policy: new Map([["fake", { tools_deny: ["big"] }]]) }
+  );
+});
+
+test("an exposed tool is still callable with a filter in place", async () => {
+  await withProxy(
+    async ({ proxy }) => {
+      const res = await call(proxy, "fake__echo", { message: "allowed" });
+      assert.equal(res.result.data.content[0].text, "allowed");
+    },
+    { policy: new Map([["fake", { tools_deny: ["big"] }]]) }
+  );
+});

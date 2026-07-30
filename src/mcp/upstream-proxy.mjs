@@ -224,6 +224,25 @@ export class SecBMcpUpstreamProxy {
   }
 
   /**
+   * Is this upstream tool exposed through SecB? Work-package item U3.
+   *
+   * Exposure was all-or-nothing per upstream, which is what forced the full
+   * merged listing: fronting one useful tool meant fronting all fifteen beside
+   * it. An absent allow list means everything (unchanged behaviour); an empty
+   * one means nothing, which is a usable way to declare an upstream without
+   * exposing it yet. Deny is applied after allow so it wins on overlap — the
+   * safer reading when a registry says both.
+   */
+  #isToolExposed(upstreamId, toolName) {
+    const policy = this.#upstreamPolicy.get(upstreamId);
+    const allow = policy?.tools_allow;
+    const deny = policy?.tools_deny;
+    if (Array.isArray(allow) && !allow.includes(toolName)) return false;
+    if (Array.isArray(deny) && deny.includes(toolName)) return false;
+    return true;
+  }
+
+  /**
    * Bounded concurrency gate per upstream. A saturated gate queues, and a
    * queue past max_queue_depth denies rather than growing without limit — an
    * unbounded queue only converts a slow upstream into a memory leak.
@@ -382,7 +401,13 @@ export class SecBMcpUpstreamProxy {
           results.push({ id, ok: false, reason: "DENY_UPSTREAM_LISTING_TOO_LARGE" });
           continue;
         }
-        const { accepted, blocked } = this.#applyToolPins(id, tools);
+        // Filtered before pinning: a tool that is never exposed does not need a
+        // fingerprint, and keeping the pin set equal to the exposed set means a
+        // later drift report cannot name a tool the operator cannot see.
+        const exposed = tools.filter((tool) => this.#isToolExposed(id, tool?.name));
+        const filteredOut = tools.length - exposed.length;
+        if (filteredOut > 0) this.#logListing(id, "UPSTREAM_TOOLS_FILTERED", { withheld: filteredOut, advertised: exposed.length });
+        const { accepted, blocked } = this.#applyToolPins(id, exposed);
         this.#logListing(id, "ALLOW_UPSTREAM_LISTING", { size: listingBytes, advertised: accepted.length, blocked: blocked.length });
         this.#toolsByUpstream.set(id, accepted);
         results.push({ id, ok: true, count: accepted.length, ...(blocked.length > 0 ? { blocked } : {}) });
@@ -411,7 +436,17 @@ export class SecBMcpUpstreamProxy {
       const base = this.#core.handle(message, { callerInstanceId });
       if (base?.error) return base;
       const proxied = [];
-      for (const [upstreamId, tools] of this.#toolsByUpstream) {
+      // Deterministic order, sorted explicitly rather than inherited. Two
+      // sources of drift feed this listing: the clients map is populated by
+      // concurrent startup, and the tool order inside one upstream is whatever
+      // that upstream chose to send. Neither is a promise anyone made. Work-
+      // package item U4: a stable order is what lets a client cache a listing
+      // and makes the S3 pin diff a line comparison instead of a set
+      // comparison. Native tools keep TOOL_CATALOG's order, which is already a
+      // frozen, curated, deterministic sequence.
+      const orderedUpstreams = [...this.#toolsByUpstream.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      for (const [upstreamId, upstreamTools] of orderedUpstreams) {
+        const tools = [...upstreamTools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
         for (const tool of tools) {
           proxied.push({
             name: namespaceToolName(upstreamId, tool.name),
@@ -489,6 +524,17 @@ export class SecBMcpUpstreamProxy {
     if (hit) {
       if (!audit("DENY_RESERVED_DELIMITER")) return denyUnaudited();
       return rpcError(id, -32602, `Tool name must not contain '${hit}'`, { code: "DENY_RESERVED_DELIMITER" });
+    }
+
+    // Enforced at CALL time, not only at listing time. A filter that merely
+    // hides a tool from tools/list is a naming convention, not a control: the
+    // caller supplies the name, and a model that saw the tool in an earlier
+    // session — or guessed it — would otherwise still reach it.
+    if (!this.#isToolExposed(upstreamId, toolName)) {
+      if (!audit("DENY_UPSTREAM_TOOL_NOT_EXPOSED")) return denyUnaudited();
+      return rpcError(id, -32602, `Tool '${toolName}' is not exposed for upstream '${upstreamId}'`, {
+        code: "DENY_UPSTREAM_TOOL_NOT_EXPOSED"
+      });
     }
 
     // Budget is spent before the upstream is contacted, so a rate-limited caller

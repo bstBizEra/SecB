@@ -91,7 +91,9 @@ async function startUpstreams() {
     upstreamPolicy.set(declared.id, {
       classification_ceiling: declared.classification_ceiling,
       max_concurrency: declared.max_concurrency,
-      max_response_bytes: declared.max_response_bytes
+      max_response_bytes: declared.max_response_bytes,
+      tools_allow: declared.tools_allow,
+      tools_deny: declared.tools_deny
     });
   }
 
