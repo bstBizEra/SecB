@@ -211,3 +211,49 @@ test("the proxy rejects a limiter that cannot admit", () => {
     /admit function/
   );
 });
+
+// --- ordering: the limit must precede every other post-resolution deny -------
+
+test("a denied tool name still spends budget, so refused calls cannot be unbounded", async () => {
+  // Regression. The exposure and delimiter checks sat ABOVE the rate limit, so
+  // both were reachable without spending any: 50 calls against a limit of 3
+  // produced 50 exposure denials and 0 rate-limit denials. Every one of those
+  // writes a ledger row, which in deployment is a synchronous appendFileSync,
+  // so a resolvable caller could drive unbounded disk writes through exactly
+  // the path the limit exists to bound.
+  const limiter = new InvocationRateLimiter({ maxPerWindow: 3, windowMs: 60_000, now: () => 0 });
+  const calls = [];
+  const proxy = new SecBMcpUpstreamProxy({
+    core: coreServer(calls, limiter),
+    clients: new Map([["u", { state: "ready" }]]),
+    upstreamPolicy: new Map([["u", { tools_deny: ["secret"] }]]),
+    invocationLog: (entry) => calls.push(entry),
+    classificationCeiling: "INTERNAL",
+    rateLimiter: limiter
+  });
+  for (let i = 0; i < 50; i += 1) {
+    await proxy.handle(
+      { jsonrpc: "2.0", id: i, method: "tools/call", params: { name: "u__secret", arguments: {} } },
+      { callerInstanceId: "inst_ok" }
+    );
+  }
+  const notExposed = calls.filter((c) => c.decision === "DENY_UPSTREAM_TOOL_NOT_EXPOSED").length;
+  const limited = calls.filter((c) => c.decision === "DENY_RATE_LIMITED").length;
+  assert.equal(notExposed, 3, "only the budget's worth of attempts reach the exposure check");
+  assert.equal(limited, 47, "the rest are refused by the limit");
+});
+
+test("the limit is checked at the same point on both dispatch paths", () => {
+  // Both orders are "immediately after caller resolution". Divergence is what
+  // produced the bug above, so it is asserted rather than left to review.
+  const nativeLimiter = new InvocationRateLimiter({ maxPerWindow: 1, windowMs: 60_000, now: () => 0 });
+  const server = coreServer([], nativeLimiter);
+  assert.ok(nativeCall(server).result);
+  // An UNKNOWN tool on the core path is still rate limited, not answered
+  // DENY_UNKNOWN_TOOL, which is the same precedence the proxy now uses.
+  const denied = server.handle(
+    { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "secb_no_such_tool", arguments: {} } },
+    { callerInstanceId: "inst_ok" }
+  );
+  assert.equal(denied.error.data.code, "DENY_RATE_LIMITED");
+});

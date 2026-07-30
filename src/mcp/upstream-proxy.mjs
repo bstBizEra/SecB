@@ -520,6 +520,28 @@ export class SecBMcpUpstreamProxy {
       return rpcError(id, -32001, "Caller instance id is required", { code: "DENY_UNRESOLVED_CALLER" });
     }
 
+    // Rate limit FIRST among the post-resolution checks, matching the order the
+    // core uses. It sat below the delimiter and exposure checks, so both of
+    // those were reachable without spending budget — and each writes a ledger
+    // row, which in deployment is a synchronous appendFileSync. A resolvable
+    // caller could therefore drive unbounded synchronous disk writes through
+    // exactly the paths the limit exists to bound: measured 50 calls against a
+    // limit of 3/min produced 50 ledger rows and 0 rate-limit denials.
+    //
+    // Spending budget on a malformed or denied call is correct: it cost work,
+    // and a caller that only ever sends refused names is precisely the caller a
+    // limit should slow down.
+    if (this.#rateLimiter) {
+      const verdict = this.#rateLimiter.admit(callerInstanceId);
+      if (!verdict.allowed) {
+        if (!audit("DENY_RATE_LIMITED", { observed: verdict.observed, max_per_window: verdict.maxPerWindow })) return denyUnaudited();
+        return rpcError(id, -32000, `Rate limit exceeded: ${verdict.maxPerWindow} invocations per ${verdict.windowMs}ms`, {
+          code: "DENY_RATE_LIMITED",
+          retryAfterMs: verdict.retryAfterMs
+        });
+      }
+    }
+
     const hit = findReservedDelimiter(toolName);
     if (hit) {
       if (!audit("DENY_RESERVED_DELIMITER")) return denyUnaudited();
@@ -535,19 +557,6 @@ export class SecBMcpUpstreamProxy {
       return rpcError(id, -32602, `Tool '${toolName}' is not exposed for upstream '${upstreamId}'`, {
         code: "DENY_UPSTREAM_TOOL_NOT_EXPOSED"
       });
-    }
-
-    // Budget is spent before the upstream is contacted, so a rate-limited caller
-    // cannot make SecB do the third-party work it is being denied the result of.
-    if (this.#rateLimiter) {
-      const verdict = this.#rateLimiter.admit(callerInstanceId);
-      if (!verdict.allowed) {
-        if (!audit("DENY_RATE_LIMITED", { observed: verdict.observed, max_per_window: verdict.maxPerWindow })) return denyUnaudited();
-        return rpcError(id, -32000, `Rate limit exceeded: ${verdict.maxPerWindow} invocations per ${verdict.windowMs}ms`, {
-          code: "DENY_RATE_LIMITED",
-          retryAfterMs: verdict.retryAfterMs
-        });
-      }
     }
 
     // The upstream's declared ceiling is capped by the server's. An upstream
