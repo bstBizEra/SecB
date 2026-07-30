@@ -103,8 +103,13 @@ function tomlEntry(verdict) {
   return lines.join("\n");
 }
 
+// TOML forbids control characters in comments (tab excepted). Values are already
+// scrubbed by tomlString, but registry_id and an upstream note flow into comment
+// text, where a bare CR or ESC produced a file no TOML parser would accept.
+const scrubControls = (text) => String(text).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "\uFFFD");
+
 const commentBlock = (text) =>
-  text
+  scrubControls(text)
     .split("\n")
     .map((line) => (line === "" ? "#" : `# ${line}`))
     .join("\n");
@@ -291,7 +296,9 @@ export function main(argv = process.argv.slice(2)) {
   try {
     process.stdout.write(
       generateClientConfig({
-        registryPath: options.registry ? resolve(options.registry) : DEFAULT_REGISTRY_PATH,
+        // `!== undefined`, not truthiness: --registry "" is falsy and silently
+        // fell back to the default registry instead of failing closed.
+        registryPath: options.registry !== undefined ? resolve(options.registry) : DEFAULT_REGISTRY_PATH,
         format: options.format,
         host: options.host ?? detectHost(),
         includeUnreachable: options.includeUnreachable

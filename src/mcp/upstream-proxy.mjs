@@ -35,6 +35,13 @@ export const DEFAULT_UPSTREAM_LIMITS = Object.freeze({
 const rpcError = (id, code, message, data) => ({ jsonrpc: "2.0", id, error: { code, message, ...(data ? { data } : {}) } });
 const rpcResult = (id, result) => ({ jsonrpc: "2.0", id, result });
 
+// An upstream is foreign code and may advertise a malformed schema. Anything that
+// is not an object-typed JSON Schema is replaced rather than forwarded, because
+// one bad entry makes a client reject the entire merged tools/list — including
+// SecB's own native tools.
+const isObjectSchema = (schema) =>
+  schema !== null && typeof schema === "object" && !Array.isArray(schema) && schema.type === "object";
+
 export function namespaceToolName(upstreamId, toolName) {
   return `${upstreamId}${NAMESPACE_SEPARATOR}${toolName}`;
 }
@@ -164,8 +171,16 @@ export class SecBMcpUpstreamProxy {
             name: namespaceToolName(upstreamId, tool.name),
             // Upstream descriptions are model-instruction channels authored
             // outside SecB. They are passed through so the tool is usable, but
-            // prefixed so a reader can always see whose text this is.
-            description: `[upstream:${upstreamId}] ${tool.description}`
+            // prefixed so a reader can always see whose text this is. An
+            // upstream may omit a description, so it is coalesced rather than
+            // interpolated blind, which produced the literal text "undefined".
+            description: `[upstream:${upstreamId}] ${tool.description ?? "(no description provided by upstream)"}`,
+            // inputSchema is REQUIRED on every advertised tool: the official
+            // client SDK rejects an entire tools/list that omits it, so dropping
+            // the upstream's schema here hid every native tool too. The upstream
+            // client already preserves it; fall back to an open object schema if
+            // a non-conformant upstream sent none.
+            inputSchema: isObjectSchema(tool.inputSchema) ? tool.inputSchema : { type: "object", properties: {} }
           });
         }
       }
@@ -251,19 +266,54 @@ export class SecBMcpUpstreamProxy {
       slot.release();
     }
 
-    // Size is checked here, after the call, because that is where the reply
-    // first becomes text bound for a model context. Refusing an oversized reply
-    // is a context-integrity control, not a memory one.
+    // Upstream output is foreign data crossing into the organism; it carries the
+    // same data_untrusted marking as every native projection.
+    //
+    // An upstream already returns a spec-shaped CallToolResult. Burying it whole
+    // under `data` left the OUTER result with no `content`, which the client SDK
+    // defaults to [] — so a proxied call succeeded while delivering nothing. The
+    // upstream's own content/structuredContent/isError are therefore surfaced at
+    // the top level, and `data` retains the untouched reply.
+    let serialisedPayload;
+    try {
+      serialisedPayload = JSON.stringify(payload ?? null);
+    } catch (error) {
+      // JSON.parse is iterative but JSON.stringify recurses, so a deeply nested
+      // upstream reply parses and then throws RangeError here. Unguarded, that
+      // escaped the proxy and killed the whole hub — one upstream taking down
+      // the other fifteen and the native tool surface with them.
+      if (!audit("DENY_UPSTREAM_UNSERIALISABLE", { reason: error.name })) return denyUnaudited();
+      return rpcError(id, -32000, `Upstream '${upstreamId}' returned a reply that cannot be serialised (${error.name})`, { code: "DENY_UPSTREAM_UNSERIALISABLE" });
+    }
+
+    const result = {
+      content: Array.isArray(payload?.content) ? payload.content : [{ type: "text", text: serialisedPayload }],
+      ...(payload?.structuredContent !== undefined ? { structuredContent: payload.structuredContent } : {}),
+      ...(payload?.isError !== undefined ? { isError: payload.isError } : {}),
+      ...DATA_UNTRUSTED,
+      tool: message.params.name,
+      upstream: upstreamId,
+      data: payload
+    };
+
+    // The ceiling measures the bytes actually EMITTED, not the raw payload.
+    // Measuring the payload alone under-counted: the result carries it in both
+    // `content` and `data`, so a ~2x larger response than the declared cap
+    // reached the client — a context-integrity control silently off by half.
     const maxBytes = this.#limitFor(upstreamId, "max_response_bytes");
-    const size = Buffer.byteLength(JSON.stringify(payload ?? null), "utf8");
+    let size;
+    try {
+      size = Buffer.byteLength(JSON.stringify(result), "utf8");
+    } catch (error) {
+      if (!audit("DENY_UPSTREAM_UNSERIALISABLE", { reason: error.name })) return denyUnaudited();
+      return rpcError(id, -32000, `Upstream '${upstreamId}' reply could not be measured (${error.name})`, { code: "DENY_UPSTREAM_UNSERIALISABLE" });
+    }
     if (size > maxBytes) {
       if (!audit("DENY_UPSTREAM_RESPONSE_TOO_LARGE", { size, max_response_bytes: maxBytes })) return denyUnaudited();
       return rpcError(id, -32000, `Upstream '${upstreamId}' returned ${size} bytes, above the ${maxBytes}-byte cap`, { code: "DENY_UPSTREAM_RESPONSE_TOO_LARGE" });
     }
 
     if (!audit("ALLOW", { size })) return denyUnaudited();
-    // Upstream output is foreign data crossing into the organism; it carries the
-    // same data_untrusted marking as every native projection.
-    return rpcResult(id, { ...DATA_UNTRUSTED, tool: message.params.name, upstream: upstreamId, data: payload });
+    return rpcResult(id, result);
   }
 }

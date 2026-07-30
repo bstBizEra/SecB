@@ -145,7 +145,17 @@ const draining = {
   handle: (message, context) => {
     const answer = Promise.resolve(proxy.handle(message, context));
     inFlight.add(answer);
-    answer.finally(() => inFlight.delete(answer));
+    // .finally() returns a DERIVED promise that re-rejects. serveStdio handles
+    // `answer`, but nothing handled that derivative, so any rejection in the
+    // proxy path became an unhandledRejection and killed the entire hub — every
+    // upstream and the native tool surface with it. A deeply nested upstream
+    // reply, or one malformed native call, was therefore a whole-hub kill
+    // switch; the same input against the non-hub launcher exits cleanly.
+    // .then(cb, cb) settles the tracking without creating an unhandled branch.
+    answer.then(
+      () => inFlight.delete(answer),
+      () => inFlight.delete(answer)
+    );
     return answer;
   }
 };

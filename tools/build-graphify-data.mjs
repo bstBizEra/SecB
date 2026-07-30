@@ -23,7 +23,7 @@ const COLOR_PALETTE = [
 ];
 
 export function runGraphifyExtraction(targetDir = projectRoot) {
-  console.log(`[Graphify Pipeline] Running AST extraction on ${targetDir}...`);
+  console.error(`[Graphify Pipeline] Running AST extraction on ${targetDir}...`);
   try {
     execSync(`python -m graphify extract "${targetDir}" --code-only`, { stdio: "inherit", cwd: targetDir });
     execSync(`python -m graphify cluster-only "${targetDir}" --no-label`, { stdio: "inherit", cwd: targetDir });
@@ -32,13 +32,17 @@ export function runGraphifyExtraction(targetDir = projectRoot) {
   }
 }
 
+// Diagnostics go to stderr, never stdout: this module is reachable from the MCP
+// server (secb_graph_build), where stdout is the JSON-RPC channel. A progress
+// line there corrupted the frame stream for the client and leaked an absolute
+// repository path into it.
 export function formatGraphDataForDashboard(options = { writeAssets: true }) {
   const shouldWrite = options?.writeAssets ?? true;
   if (!existsSync(graphifyJsonPath)) {
     if (shouldWrite) runGraphifyExtraction();
   }
 
-  console.log(`[Graphify Pipeline] Loading ${graphifyJsonPath}...`);
+  console.error(`[Graphify Pipeline] Loading ${graphifyJsonPath}...`);
   const raw = JSON.parse(readFileSync(graphifyJsonPath, "utf8"));
 
   const rawNodes = raw.nodes ?? [];
@@ -131,12 +135,22 @@ export function formatGraphDataForDashboard(options = { writeAssets: true }) {
     edges: formattedEdges
   };
 
-  mkdirSync(resolve(projectRoot, "dashboard", "public"), { recursive: true });
-  writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
+  // GOV-MCP-03: this pair was NOT gated on shouldWrite, unlike the writes at the
+  // end of this function. secb_graph_build calls in with writeAssets:false and
+  // still rewrote dashboard/public/graph-data.json on every invocation, so the
+  // MCP server mutated the repository on a tool declared strictly read-only.
+  // The guarding test asserted only node counts and never inspected the
+  // filesystem, which is why a full suite stayed green over it.
+  if (shouldWrite) {
+    mkdirSync(resolve(projectRoot, "dashboard", "public"), { recursive: true });
+    writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
+  }
 
   // Enhance Native Graphify HTML (vis-network) with Working Toolbar Button Actions
   if (existsSync(graphifyHtmlPath)) {
-    mkdirSync(publicHtmlDir, { recursive: true });
+    // Also gated: creating the output directory is itself a disk mutation, so an
+    // ungated mkdir broke GOV-MCP-03 even when every write below was skipped.
+    if (shouldWrite) mkdirSync(publicHtmlDir, { recursive: true });
     let htmlContent = readFileSync(graphifyHtmlPath, "utf8");
 
     // Transform node sizes in RAW_NODES JS array inside graph.html
@@ -367,13 +381,13 @@ window.addEventListener('message', function(e) {
 
     if (shouldWrite) {
       writeFileSync(resolve(publicHtmlDir, "graph.html"), htmlContent);
-      console.log(`[Graphify Pipeline] Synced working toolbar button actions in native graph.html to ${publicHtmlDir}/graph.html`);
+      console.error(`[Graphify Pipeline] Synced working toolbar button actions in native graph.html to ${publicHtmlDir}/graph.html`);
     }
   }
 
   if (shouldWrite) {
     writeFileSync(publicOutPath, JSON.stringify(payload, null, 2));
-    console.log(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
+    console.error(`[Graphify Pipeline] Successfully wrote ${formattedNodes.length} nodes & ${topCommunities.length} communities to ${publicOutPath}`);
   }
   return payload;
 }

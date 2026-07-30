@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "../src/mcp/tool-catalog.mjs";
 import { SecBMcpServer } from "../src/mcp/secb-mcp-server.mjs";
 
@@ -45,11 +48,85 @@ function harness({ log } = {}) {
   return { server, calls, call };
 }
 
-test("initialize pins the protocol version and refuses others", () => {
+// Spec (Lifecycle / version negotiation): a server MUST echo a version it
+// supports, and MUST otherwise answer with one it DOES support so the client can
+// decide. This previously asserted the opposite — that an unsupported version is
+// refused — which made the server unreachable from any client newer than the
+// pinned revision and would have re-broken at every future spec revision.
+test("initialize echoes a supported protocol version", () => {
   const { server } = harness();
-  assert.equal(server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: PINNED_PROTOCOL_VERSION } }).result.protocolVersion, PINNED_PROTOCOL_VERSION);
-  const bad = server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "1999-01-01" } });
-  assert.equal(bad.error.data.code, "DENY_PROTOCOL_VERSION");
+  const init = (protocolVersion) => server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion } });
+  assert.equal(init(PINNED_PROTOCOL_VERSION).result.protocolVersion, PINNED_PROTOCOL_VERSION);
+  assert.equal(init("2024-11-05").result.protocolVersion, "2024-11-05");
+});
+
+test("initialize downgrades an unsupported version instead of refusing it", () => {
+  const { server } = harness();
+  for (const newer of ["2025-11-25", "2026-07-28", "1999-01-01"]) {
+    const response = server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: newer } });
+    assert.equal(response.error, undefined, `${newer} must not be refused`);
+    assert.equal(response.result.protocolVersion, PINNED_PROTOCOL_VERSION);
+  }
+});
+
+test("initialize still refuses a missing or malformed protocolVersion", () => {
+  const { server } = harness();
+  for (const params of [{}, { protocolVersion: "" }, { protocolVersion: "   " }, { protocolVersion: 20250618 }, { protocolVersion: null }]) {
+    const response = server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params });
+    assert.equal(response.error.data.code, "DENY_PROTOCOL_VERSION", `${JSON.stringify(params)} must be refused`);
+  }
+  // The advertised list must not repeat the pinned version.
+  const message = server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }).error.message;
+  const listed = message.slice(message.indexOf("supports ") + 9).split(", ");
+  assert.equal(new Set(listed).size, listed.length, `duplicate version advertised: ${message}`);
+});
+
+test("advertised tools carry a spec-required inputSchema derived from the catalog", () => {
+  const { server } = harness();
+  const { tools } = server.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }).result;
+  // The official client SDK's Tool schema makes inputSchema REQUIRED and rejects
+  // the whole listing without it, so an omitted schema hid every tool.
+  for (const tool of tools) {
+    assert.equal(tool.inputSchema?.type, "object", `${tool.name} has no object inputSchema`);
+    assert.equal(typeof tool.inputSchema.properties, "object");
+  }
+  const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+  const wp = byName.secb_work_package_resolve_effective.inputSchema;
+  assert.deepEqual(wp.required, ["project_id", "work_package_id"]);
+  // id params are type-checked as strings at dispatch, so they are typed here.
+  assert.deepEqual(wp.properties.project_id, { type: "string" });
+  // a declared-but-untyped param stays unconstrained rather than guessed
+  assert.deepEqual(wp.properties.baseline, {});
+  // a no-argument tool still gets a valid empty object schema, not a missing one
+  assert.deepEqual(byName.secb_events_read.inputSchema, { type: "object", properties: {} });
+});
+
+test("a tool result carries a spec content block without losing the governance envelope", () => {
+  const { call } = harness();
+  const result = call("secb_canonical_fingerprint", { document: { a: 1 } }).result;
+  // Spec shape: the client reads content; a missing content array is defaulted to
+  // [] by the SDK, so the payload was silently invisible rather than erroring.
+  assert.equal(Array.isArray(result.content), true);
+  assert.equal(result.content.length, 1);
+  assert.equal(result.content[0].type, "text");
+  assert.deepEqual(JSON.parse(result.content[0].text), result.data);
+  assert.deepEqual(result.structuredContent, result.data);
+  // Retained: the untrusted-data marker is a governance control, and `data` keeps
+  // the payload at a stable path for existing callers.
+  assert.equal(result.content_disposition, "data_untrusted");
+  assert.equal(typeof result.data.content_hash, "string");
+});
+
+test("notifications are never answered, whatever their method", () => {
+  const { server } = harness();
+  // No id means notification. Enumerating only notifications/initialized meant
+  // every other notification got an id-less response, which real clients report
+  // as "response for an unknown message ID".
+  for (const method of ["notifications/initialized", "notifications/cancelled", "notifications/roots/list_changed", "notifications/anything"]) {
+    assert.equal(server.handle({ jsonrpc: "2.0", method }), null, `${method} must not be answered`);
+  }
+  // A request with an id is still answered normally.
+  assert.equal(server.handle({ jsonrpc: "2.0", id: 7, method: "ping" }).id, 7);
 });
 
 test("deny-by-default methods and malformed requests", () => {
@@ -133,9 +210,45 @@ test("constructor requires registry and a fail-closed invocation log", () => {
 
 test("secb_graph_build is strictly pure read-only with zero disk side-effects (GOV-MCP-03)", () => {
   const { call } = harness();
+
+  // This test previously asserted ONLY the returned node counts, so it passed
+  // green for the entire period during which the tool rewrote
+  // dashboard/public/graph-data.json on every call. A read-only claim has to be
+  // checked against the filesystem, not against the payload.
+  const repoRoot = resolve(import.meta.dirname, "..");
+  const watched = [
+    resolve(repoRoot, "dashboard", "public", "graph-data.json"),
+    resolve(repoRoot, "dashboard", "public", "graphify-out", "graph.html")
+  ];
+  const digest = (file) => (existsSync(file) ? createHash("sha256").update(readFileSync(file)).digest("hex") : "ABSENT");
+  const before = watched.map(digest);
+
   const r = call("secb_graph_build", {}).result;
+
+  const after = watched.map(digest);
+  for (const [index, file] of watched.entries()) {
+    assert.equal(after[index], before[index], `GOV-MCP-03 violated: ${file} changed during secb_graph_build`);
+  }
+
   assert.equal(r.content_disposition, "data_untrusted");
   assert.equal(r.tool, "secb_graph_build");
   assert.ok(r.data.total_nodes > 0, "Returns graph nodes");
   assert.equal(r.data.quality_rating, "100%");
+});
+
+test("an inherited property name is an unknown tool, denied and ledgered", () => {
+  const { call, calls } = harness();
+  // CATALOG_BY_NAME was a plain object, so "__proto__" and "constructor"
+  // resolved to something truthy off Object.prototype: the !tool guard was
+  // skipped, dispatch threw, the client got -32603 carrying internal
+  // implementation text, and the throw escaped before the audit — leaving no
+  // ledger row for a call that was never recorded as denied.
+  for (const name of ["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"]) {
+    const before = calls.length;
+    const response = call(name, {});
+    assert.equal(response.error.code, -32602, `${name} must be a protocol error`);
+    assert.equal(response.error.data.code, "DENY_UNKNOWN_TOOL", `${name} must deny as unknown tool`);
+    assert.equal(calls.length, before + 1, `${name} must be ledgered exactly once`);
+    assert.equal(/is not iterable|Internal error/.test(response.error.message), false, "must not leak internals");
+  }
 });

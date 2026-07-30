@@ -15,6 +15,30 @@ function freeze(value) {
   return value;
 }
 
+/**
+ * Project one catalog entry's param metadata into an MCP `inputSchema`.
+ *
+ * The spec makes `inputSchema` REQUIRED on every Tool, and the official client
+ * SDK parses tools/list strictly: a missing schema rejects the WHOLE listing, so
+ * omitting it made all 36 tools invisible rather than merely under-described.
+ *
+ * The schema states only what dispatch actually enforces. idParams are
+ * type-checked as strings, so they are typed; every other param is accepted at
+ * any type, so it is left unconstrained rather than given a guessed type. No
+ * per-property description is generated: a description is a model-instruction
+ * channel, and this file's contract is that such text stays a static constant.
+ * additionalProperties is left open because dispatch ignores unknown args.
+ */
+export function buildInputSchema({ required = [], optional = [], idParams = [] }) {
+  const properties = {};
+  for (const field of [...required, ...optional]) {
+    properties[field] = idParams.includes(field) ? { type: "string" } : {};
+  }
+  const schema = { type: "object", properties };
+  if (required.length > 0) schema.required = [...required];
+  return schema;
+}
+
 export const TOOL_CATALOG = freeze([
   {
     name: "secb_work_package_resolve_effective",
@@ -270,4 +294,19 @@ export const TOOL_CATALOG = freeze([
   }
 ]);
 
-export const CATALOG_BY_NAME = freeze(Object.fromEntries(TOOL_CATALOG.map((t) => [t.name, t])));
+// Null-prototype: with a normal object literal, a tool name of "__proto__",
+// "constructor", or "toString" resolved to something truthy off
+// Object.prototype, so the unknown-tool guard was skipped and dispatch threw.
+export const CATALOG_BY_NAME = freeze(
+  Object.assign(Object.create(null), Object.fromEntries(TOOL_CATALOG.map((t) => [t.name, t])))
+);
+
+// Precomputed so tools/list stays a pure projection of the frozen catalogue and
+// cannot vary per caller or per call.
+export const TOOL_LIST_PROJECTION = freeze(
+  TOOL_CATALOG.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: buildInputSchema(tool)
+  }))
+);

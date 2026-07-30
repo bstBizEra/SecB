@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { resolve, join, sep } from "node:path";
 import { validateContract } from "../contracts/contract-validator.mjs";
 
 export class ProjectRegistrationError extends Error {
@@ -24,6 +24,39 @@ const LIFECYCLE_STAGES = Object.freeze([
   "BOOTSTRAPPED",
   "AUTHORIZED_FOR_IMPLEMENTATION"
 ]);
+
+/**
+ * Resolve `<stagingBaseDir>/<projectId>` and refuse anything that escapes the
+ * staging boundary.
+ *
+ * projectId reaches here from an MCP `tools/call` argument. It was only
+ * type-checked and delimiter-scanned upstream, so `../` passed through into
+ * join() + mkdirSync(recursive) + writeFileSync — turning a tool that declares
+ * `repository_write` and `directory_creation` among its own prohibited_actions
+ * into an arbitrary directory-create and file-write primitive anywhere the
+ * process could reach. Confinement is enforced here, at the filesystem boundary,
+ * rather than by pattern-matching the id, because only the resolved path can say
+ * whether the boundary was actually crossed.
+ */
+function resolveWithinStaging(stagingBaseDir, projectId, label = "project_id") {
+  if (typeof projectId !== "string" || projectId.trim() === "") {
+    throw new ProjectRegistrationError("DENY_REGISTRATION_PATH", `${label} must be a non-blank string`);
+  }
+  const base = resolve(stagingBaseDir);
+  const target = resolve(base, projectId);
+  // Compare against base + separator so a sibling like "<base>-evil" cannot pass
+  // a bare startsWith check.
+  if (target !== base && !target.startsWith(base + sep)) {
+    throw new ProjectRegistrationError(
+      "DENY_REGISTRATION_PATH_ESCAPE",
+      `${label} must resolve inside the staging boundary`
+    );
+  }
+  if (target === base) {
+    throw new ProjectRegistrationError("DENY_REGISTRATION_PATH_ESCAPE", `${label} must name a directory inside the staging boundary`);
+  }
+  return target;
+}
 
 const PROHIBITED_REGISTRATION_ACTIONS = Object.freeze([
   "repository_write",
@@ -115,7 +148,7 @@ export class ProjectRegistrationService {
     }
 
     // Persist package in external staging boundary only
-    const projectStagingDir = join(this.#stagingBaseDir, projectId);
+    const projectStagingDir = resolveWithinStaging(this.#stagingBaseDir, projectId);
     if (!existsSync(projectStagingDir)) {
       mkdirSync(projectStagingDir, { recursive: true });
     }
@@ -127,7 +160,9 @@ export class ProjectRegistrationService {
   }
 
   inspectRegistration(projectId) {
-    const pkgPath = join(this.#stagingBaseDir, projectId, "registration-package.json");
+    // Confined too: unguarded, this read any file named
+    // registration-package.json that the process could reach.
+    const pkgPath = join(resolveWithinStaging(this.#stagingBaseDir, projectId), "registration-package.json");
     if (!existsSync(pkgPath)) {
       throw new ProjectRegistrationError("REGISTRATION_NOT_FOUND", `No registration package found for project ${projectId}`);
     }
@@ -171,7 +206,8 @@ export class ProjectRegistrationService {
     }
 
     pkg.status = targetState;
-    const pkgPath = join(this.#stagingBaseDir, projectId, "registration-package.json");
+    // Second write path through the same untrusted id; confined identically.
+    const pkgPath = join(resolveWithinStaging(this.#stagingBaseDir, projectId), "registration-package.json");
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), "utf8");
 
     return pkg;

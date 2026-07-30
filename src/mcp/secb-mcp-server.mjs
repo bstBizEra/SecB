@@ -4,7 +4,7 @@ import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
 import { findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
 import { validateContract } from "../contracts/contract-validator.mjs";
 import { classificationDecision, projectEvents, projectEvidence } from "../ui/report-projections.mjs";
-import { CATALOG_BY_NAME, PINNED_PROTOCOL_VERSION, TOOL_CATALOG } from "./tool-catalog.mjs";
+import { CATALOG_BY_NAME, PINNED_PROTOCOL_VERSION, TOOL_CATALOG, TOOL_LIST_PROJECTION } from "./tool-catalog.mjs";
 import { formatGraphDataForDashboard } from "../../tools/build-graphify-data.mjs";
 import { SecBAgentRegistry } from "../gateway/secb-agent-registry.mjs";
 import { SecBSkillsHub } from "../skills/skills-hub-service.mjs";
@@ -42,6 +42,37 @@ import { detectHost, loadUpstreamRegistry, resolveRegistry } from "./upstream-re
 
 const CLASS_ORDER = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"];
 const DATA_UNTRUSTED = { content_disposition: "data_untrusted" };
+
+// Published MCP revisions this server will negotiate. PINNED_PROTOCOL_VERSION is
+// the one it prefers and the one it falls back to; it is NOT re-listed here,
+// because appending it to a list that already contained it leaked a duplicated
+// version into the client-facing error message.
+const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze(["2024-11-05", "2024-10-07", "2025-03-26", PINNED_PROTOCOL_VERSION]);
+
+/**
+ * Wrap a tool payload as a spec-shaped CallToolResult.
+ *
+ * The spec requires `content` on every tool result; SecB previously returned only
+ * its own `{content_disposition, tool, data}` envelope. The official client SDK
+ * defaults a missing `content` to [] rather than erroring, so every call
+ * "succeeded" while the model received nothing — a silent failure, worse than a
+ * loud one.
+ *
+ * `data` and `content_disposition` are RETAINED alongside the spec fields. The
+ * disposition marker is a governance control (it tells a reader the payload is
+ * untrusted data, not instructions), and keeping `data` means existing callers
+ * and tests still read the payload at a stable path.
+ */
+const toolResult = (tool, payload) => {
+  const structured = payload !== null && typeof payload === "object" && !Array.isArray(payload);
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload ?? null) }],
+    ...(structured ? { structuredContent: payload } : {}),
+    ...DATA_UNTRUSTED,
+    tool,
+    data: payload
+  };
+};
 // Resolved from this module's own location so the path is identical whether the
 // server was spawned from Windows or from inside WSL.
 const UPSTREAM_REGISTRY_PATH = resolve(import.meta.dirname, "..", "..", ".secb", "mcp-upstreams.json");
@@ -78,21 +109,34 @@ export class SecBMcpServer {
       return rpcError(message?.id ?? null, -32600, "Invalid Request");
     }
     const { id, method, params } = message;
+    // A JSON-RPC notification carries no id and MUST NOT be answered. Matching
+    // only "notifications/initialized" by name meant every OTHER notification
+    // fell through to the default branch and was answered — and since id is
+    // absent, JSON.stringify dropped the key, emitting a response with no id at
+    // all. Real hosts send notifications/cancelled on every request timeout and
+    // notifications/roots/list_changed when the workspace changes, so a healthy
+    // session produced spurious -32601 frames the client reported as
+    // "response for an unknown message ID".
+    if (id === undefined) return null;
     switch (method) {
       case "initialize": {
         const requested = params?.protocolVersion;
-        const SUPPORTED_VERSIONS = ["2024-11-05", "2024-10-07", "2025-03-26", "2025-06-18", PINNED_PROTOCOL_VERSION];
-        if (!requested || !SUPPORTED_VERSIONS.includes(requested)) {
-          return rpcError(id, -32602, `Unsupported protocolVersion; this server supports ${SUPPORTED_VERSIONS.join(", ")}`, { code: "DENY_PROTOCOL_VERSION", pinned: PINNED_PROTOCOL_VERSION });
+        if (typeof requested !== "string" || requested.trim() === "") {
+          return rpcError(id, -32602, `Missing or malformed protocolVersion; this server supports ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")}`, { code: "DENY_PROTOCOL_VERSION", pinned: PINNED_PROTOCOL_VERSION });
         }
-        return rpcResult(id, { protocolVersion: requested, capabilities: { tools: {} }, serverInfo: { name: "secb-mcp-server", version: "0.1.0-alpha" } });
+        // Spec (Lifecycle / version negotiation): if the server supports the
+        // requested version it MUST echo it; OTHERWISE it MUST respond with a
+        // version it does support, and the client decides whether to proceed.
+        // Erroring instead made the server unreachable from any client newer
+        // than the pinned revision — which is every current-generation host —
+        // and would have re-broken on each future spec revision.
+        const agreed = SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : PINNED_PROTOCOL_VERSION;
+        return rpcResult(id, { protocolVersion: agreed, capabilities: { tools: {} }, serverInfo: { name: "secb-mcp-server", version: "0.1.0-alpha" } });
       }
-      case "notifications/initialized":
-        return null; // notification, no response
       case "ping":
         return rpcResult(id, {});
       case "tools/list":
-        return rpcResult(id, { tools: TOOL_CATALOG.map((t) => ({ name: t.name, description: t.description })) });
+        return rpcResult(id, { tools: TOOL_LIST_PROJECTION });
       case "tools/call":
         return this.#toolsCall(id, params, callerInstanceId);
       default:
@@ -131,7 +175,11 @@ export class SecBMcpServer {
     }
     const ceiling = this.#effectiveCeiling(resolved.identity.max_data_classification);
 
-    const tool = CATALOG_BY_NAME[name];
+    // Own-property check as well as the null-prototype map: an inherited key
+    // such as "__proto__" or "constructor" previously passed the !tool guard,
+    // threw inside dispatch, returned -32603 with internal implementation text,
+    // and — because the throw escaped before auditAndReturn — left NO ledger row.
+    const tool = Object.hasOwn(CATALOG_BY_NAME, name) ? CATALOG_BY_NAME[name] : undefined;
     if (!tool) {
       return auditAndReturn("DENY_UNKNOWN_TOOL", ceiling, () => rpcError(id, -32602, `Unknown tool: ${name}`, { code: "DENY_UNKNOWN_TOOL" }));
     }
@@ -161,7 +209,7 @@ export class SecBMcpServer {
     } catch (error) {
       return auditAndReturn("DENY_TOOL_ERROR", ceiling, () => rpcError(id, -32000, `Tool error: ${error.code ?? error.name}`, { code: error.code ?? "DENY_TOOL_ERROR" }));
     }
-    return auditAndReturn("ALLOW", ceiling, () => rpcResult(id, { ...DATA_UNTRUSTED, tool: name, data: payload }));
+    return auditAndReturn("ALLOW", ceiling, () => rpcResult(id, toolResult(name, payload)));
   }
 
   #effectiveCeiling(callerMax) {

@@ -127,3 +127,45 @@ test("SecBMcpServer dispatches project registration tools", () => {
   assert.equal(verifyRes.result.data.project_id, "SECB-MCP-PROJ");
   assert.equal(verifyRes.result.data.repository_mutation_authorized, false);
 });
+
+test("projectId cannot escape the staging boundary on any path", () => {
+  // projectId arrives from an MCP tools/call argument and was only type-checked
+  // and delimiter-scanned, so "../" reached join() + mkdirSync(recursive) +
+  // writeFileSync. A tool that lists repository_write and directory_creation in
+  // its OWN prohibited_actions was therefore an arbitrary directory-create and
+  // file-write primitive anywhere the process could reach.
+  const service = new ProjectRegistrationService({ stagingBaseDir: testStagingDir });
+  const escapes = [
+    "../escaped",
+    "../../escaped",
+    "a/../../escaped",
+    "./../escaped",
+    resolve(testStagingDir, "..", "sibling-escape"),
+    "/etc/secb-escape"
+  ];
+  for (const projectId of escapes) {
+    assert.throws(
+      () => service.registerDraft({ projectId, name: "escape attempt" }),
+      (error) => {
+        assert.ok(error instanceof ProjectRegistrationError, `${projectId}: wrong error type`);
+        assert.equal(error.code, "DENY_REGISTRATION_PATH_ESCAPE", `${projectId}: wrong code`);
+        return true;
+      },
+      `registerDraft must refuse ${projectId}`
+    );
+    // Nothing may be created outside the boundary, not even the directory.
+    assert.equal(existsSync(resolve(testStagingDir, "..", "escaped")), false);
+    assert.equal(existsSync(resolve(testStagingDir, "..", "sibling-escape")), false);
+    // The read and the second write path take the same id and must refuse too.
+    assert.throws(() => service.inspectRegistration(projectId), (e) => e.code === "DENY_REGISTRATION_PATH_ESCAPE");
+    assert.throws(() => service.transitionState(projectId, "REVIEW_REQUIRED"), (e) => e.code === "DENY_REGISTRATION_PATH_ESCAPE");
+  }
+
+  // The boundary itself is not a valid target either.
+  assert.throws(() => service.registerDraft({ projectId: "." }), (e) => e.code === "DENY_REGISTRATION_PATH_ESCAPE");
+
+  // A legitimate id still works, so the guard is confinement and not a blanket refusal.
+  const ok = service.registerDraft({ projectId: "SECB-CONFINED-OK", name: "fine" });
+  assert.equal(ok.project_id, "SECB-CONFINED-OK");
+  assert.equal(existsSync(join(testStagingDir, "SECB-CONFINED-OK", "registration-package.json")), true);
+});

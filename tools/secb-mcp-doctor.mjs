@@ -35,6 +35,9 @@ const ROOT = resolve(HERE, "..");
 
 export const DEFAULT_REGISTRY_PATH = resolve(ROOT, ".secb", "mcp-upstreams.json");
 export const DEFAULT_PROBE_TIMEOUT_MS = 2000;
+// Node clamps an AbortSignal.timeout delay above 2^31-1, so anything larger is
+// not a longer wait — it is a 1ms wait wearing a big number.
+export const MAX_PROBE_TIMEOUT_MS = 2147483647;
 export const VERDICTS = Object.freeze(["ok", "unreachable", "disabled", "unknown"]);
 
 export class McpDoctorError extends Error {
@@ -369,10 +372,14 @@ export function parseArgs(argv) {
         // Matched as a whole token rather than parseInt'd: parseInt("1.5") is 1
         // and parseInt("30s") is 30, so a malformed timeout would be silently
         // truncated into a plausible-looking one.
-        if (!/^[0-9]+$/.test(raw) || Number.parseInt(raw, 10) <= 0) {
-          throw new McpDoctorError("DENY_DOCTOR_ARG", `--timeout-ms must be a positive integer, got: ${raw}`);
+        // Upper bound matters: AbortSignal.timeout silently CLAMPS a delay above
+        // 2^31-1 down to 1ms and throws RangeError above 2^32-1, so a larger
+        // grace period made the probe report a LIVE upstream as unreachable.
+        const parsed = Number.parseInt(raw, 10);
+        if (!/^[0-9]+$/.test(raw) || parsed <= 0 || parsed > MAX_PROBE_TIMEOUT_MS) {
+          throw new McpDoctorError("DENY_DOCTOR_ARG", `--timeout-ms must be an integer in 1..${MAX_PROBE_TIMEOUT_MS}, got: ${raw}`);
         }
-        options.timeoutMs = Number.parseInt(raw, 10);
+        options.timeoutMs = parsed;
         break;
       }
       case "--json":
@@ -403,7 +410,9 @@ export async function main(argv = process.argv.slice(2)) {
   }
   let report;
   try {
-    const registry = loadUpstreamRegistry(options.registry ? resolve(options.registry) : DEFAULT_REGISTRY_PATH);
+    // `!== undefined`, not truthiness: --registry "" is falsy, so an explicitly
+    // empty path silently reported on the DEFAULT registry instead of failing.
+    const registry = loadUpstreamRegistry(options.registry !== undefined ? resolve(options.registry) : DEFAULT_REGISTRY_PATH);
     report = await inspectRegistry(registry, {
       host: options.host ?? detectHost(),
       probeEnabled: options.probe,
