@@ -14,6 +14,7 @@
  */
 
 import { findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
+import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
 
 // "__" is safe: RESERVED_ID_DELIMITERS is ["|", "@"], and underscore is legal in
 // MCP tool names, so a namespaced name stays a valid single identifier.
@@ -41,6 +42,27 @@ const rpcResult = (id, result) => ({ jsonrpc: "2.0", id, result });
 // SecB's own native tools.
 const isObjectSchema = (schema) =>
   schema !== null && typeof schema === "object" && !Array.isArray(schema) && schema.type === "object";
+
+/**
+ * Fingerprint the parts of a tool definition that steer a model.
+ *
+ * Covers name, description, and inputSchema, because the whole schema is
+ * injection surface — parameter names, enums, and defaults carry instructions
+ * just as the description does. Annotations are excluded deliberately: SecB
+ * overwrites them with its own verdict, so an upstream changing them is not a
+ * redefinition of anything SecB forwards.
+ *
+ * Reuses the repository's canonicalizer so the hash is stable under key
+ * reordering, rather than hashing whatever key order the upstream happened to
+ * serialize.
+ */
+export function fingerprintToolDefinition(tool) {
+  return canonicalFingerprint({
+    name: tool?.name ?? null,
+    description: tool?.description ?? null,
+    inputSchema: tool?.inputSchema ?? null
+  });
+}
 
 /**
  * Classify a fronted tool's annotations. SecB's own verdict, never the upstream's.
@@ -73,6 +95,8 @@ export function splitNamespacedToolName(name) {
 export class SecBMcpUpstreamProxy {
   #core;
   #clients;
+  // upstreamId -> Map<toolName, fingerprint>. Trust-on-first-use pins.
+  #toolPins = new Map();
   #upstreamPolicy;
   #invocationLog;
   #ceiling;
@@ -143,6 +167,73 @@ export class SecBMcpUpstreamProxy {
   }
 
   /**
+   * Trust-on-first-use pinning of upstream tool definitions.
+   *
+   * A "rug pull" is an upstream that advertises a benign tool, gets approved,
+   * and later redefines it — the description is a model-instruction channel, so
+   * redefining it silently re-tasks the agent. The MCP specification has no
+   * normative coverage of this at all; pinning is the best-documented mitigation
+   * available, and almost no gateway implements it.
+   *
+   * First sighting pins the fingerprint. Any later listing whose fingerprint
+   * differs has that tool WITHHELD rather than advertised, and the block is
+   * audited. Withholding one tool is deliberate: dropping the whole upstream
+   * would let a single altered tool disable fifteen working ones.
+   *
+   * Scope, stated honestly: pins live for the lifetime of this process, so this
+   * closes redefinition WITHIN a session. Cross-restart pinning needs a
+   * persisted store and an operator re-approval path, which is not built here.
+   */
+  #applyToolPins(upstreamId, tools) {
+    let pins = this.#toolPins.get(upstreamId);
+    if (!pins) {
+      pins = new Map();
+      this.#toolPins.set(upstreamId, pins);
+    }
+    const accepted = [];
+    const blocked = [];
+    for (const tool of tools) {
+      const name = tool?.name;
+      if (typeof name !== "string" || name === "") continue;
+      const fingerprint = fingerprintToolDefinition(tool);
+      const pinned = pins.get(name);
+      if (pinned === undefined) {
+        pins.set(name, fingerprint);
+        accepted.push(tool);
+        continue;
+      }
+      if (pinned === fingerprint) {
+        accepted.push(tool);
+        continue;
+      }
+      blocked.push(name);
+      // Audited, not silent: a redefinition attempt is exactly the event an
+      // operator needs to see, and the pin is deliberately NOT updated.
+      try {
+        this.#invocationLog({
+          type: "MCP_UPSTREAM_INVOCATION",
+          upstream: upstreamId,
+          tool: name,
+          caller: null,
+          decision: "DENY_UPSTREAM_TOOL_REDEFINED",
+          timestamp: this.#now().toISOString(),
+          pinned_fingerprint: pinned,
+          observed_fingerprint: fingerprint
+        });
+      } catch {
+        // The tool stays blocked regardless. An unrecordable block is still a
+        // block: failing to log must never be a reason to admit the tool.
+      }
+    }
+    return { accepted, blocked };
+  }
+
+  /** Current pins, for operator inspection. Copied so callers cannot mutate them. */
+  toolPins() {
+    return new Map([...this.#toolPins].map(([id, pins]) => [id, new Map(pins)]));
+  }
+
+  /**
    * Cache each ready upstream's tool list. Called once after the clients start;
    * tools/list must never fan out to live upstreams on the request path, or one
    * slow upstream would stall every listing.
@@ -157,8 +248,9 @@ export class SecBMcpUpstreamProxy {
       }
       try {
         const tools = await client.listTools();
-        this.#toolsByUpstream.set(id, tools);
-        results.push({ id, ok: true, count: tools.length });
+        const { accepted, blocked } = this.#applyToolPins(id, tools);
+        this.#toolsByUpstream.set(id, accepted);
+        results.push({ id, ok: true, count: accepted.length, ...(blocked.length > 0 ? { blocked } : {}) });
       } catch (error) {
         results.push({ id, ok: false, reason: error.code ?? "DENY_UPSTREAM_ERROR" });
       }
