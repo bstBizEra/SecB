@@ -166,3 +166,55 @@ test("an unknown method is still method-not-found in both eras", () => {
   assert.equal(server().handle(modern("no/such")).error.code, -32601);
   assert.equal(server().handle(legacy("no/such")).error.code, -32601);
 });
+
+// --- the guard must cover BOTH dispatch paths ------------------------------
+
+test("the version guard is one function, reachable from either path", async () => {
+  // Regression. The proxy routes a namespaced tools/call to its own dispatch and
+  // never passes through the core's handle(), so the check that lived inside the
+  // core was unreachable for upstream calls: a client declaring a version SecB
+  // does not implement was refused on a native tool and SERVED on an upstream
+  // one — the control was bypassable for exactly the traffic that leaves the
+  // organism. Both paths now call the same exported guard.
+  const { SecBMcpUpstreamProxy } = await import("../src/mcp/upstream-proxy.mjs");
+  const { UpstreamClient } = await import("../src/mcp/upstream-client.mjs");
+  const { resolve: resolvePath } = await import("node:path");
+  const fixture = resolvePath(import.meta.dirname, "fixtures", "fake-upstream-mcp-server.mjs");
+
+  const client = new UpstreamClient({
+    plan: { id: "fake", transport: "stdio", runtime: "any", host: "wsl", reachable: true, command: process.execPath, args: [fixture, "normal"], env: {} },
+    timeoutMs: 5_000
+  });
+  await client.start();
+  try {
+    const proxy = new SecBMcpUpstreamProxy({
+      core: server(),
+      clients: new Map([["fake", client]]),
+      invocationLog: () => {},
+      classificationCeiling: "INTERNAL"
+    });
+    await proxy.refreshTools();
+
+    const send = (name, version) =>
+      proxy.handle(
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name,
+            arguments: { message: "x", document: {} },
+            ...(version ? { _meta: { [PROTOCOL_VERSION_META_KEY]: version } } : {})
+          }
+        },
+        { callerInstanceId: "inst_ok" }
+      );
+
+    assert.equal((await send("secb_canonical_fingerprint", "1900-01-01")).error.code, -32022, "native path refuses");
+    assert.equal((await send("fake__echo", "1900-01-01")).error.code, -32022, "upstream path refuses too");
+    assert.ok((await send("fake__echo", MODERN_PROTOCOL_VERSION)).result, "a supported version still works");
+    assert.ok((await send("fake__echo", null)).result, "an undeclared version is legacy and untouched");
+  } finally {
+    await client.close();
+  }
+});

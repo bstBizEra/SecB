@@ -112,6 +112,31 @@ export function toolListCacheScope({ variesByCaller = false } = {}) {
 }
 
 /**
+ * The version guard, exported so there is exactly ONE of it.
+ *
+ * Returns a JSON-RPC error when a request declares a modern version this server
+ * does not implement, or null when there is nothing to refuse (no declaration,
+ * or a supported one).
+ *
+ * Exported rather than kept private because the upstream proxy routes
+ * namespaced tools/call straight to its own dispatch without passing through
+ * this server's handle(). It therefore never reached the check that lived
+ * inside it, and a client declaring any version at all — including one that
+ * does not exist — reached third-party upstreams while the same declaration on
+ * a native tool was correctly refused. Two dispatch paths with the control on
+ * only one is the same defect shape as the rate-limit ordering bug; a shared
+ * function is the fix that does not drift.
+ */
+export function unsupportedProtocolVersionError(id, params) {
+  const declared = declaredProtocolVersion(params);
+  if (declared === null || SUPPORTED_MODERN_VERSIONS.includes(declared)) return null;
+  return rpcError(id, UNSUPPORTED_PROTOCOL_VERSION_CODE, "Unsupported protocol version", {
+    supported: [...SUPPORTED_MODERN_VERSIONS],
+    requested: declared
+  });
+}
+
+/**
  * Wrap a tool payload as a spec-shaped CallToolResult.
  *
  * The spec requires `content` on every tool result; SecB previously returned only
@@ -240,13 +265,10 @@ export class SecBMcpServer {
   #modernHandle(id, method, params, declared, callerInstanceId) {
     // A declared version is checked before anything is served under it. The
     // spec's MUST: respond with UnsupportedProtocolVersionError listing what is
-    // supported, so the client can retry rather than guess.
-    if (declared !== null && !SUPPORTED_MODERN_VERSIONS.includes(declared)) {
-      return rpcError(id, UNSUPPORTED_PROTOCOL_VERSION_CODE, "Unsupported protocol version", {
-        supported: [...SUPPORTED_MODERN_VERSIONS],
-        requested: declared
-      });
-    }
+    // supported, so the client can retry rather than guess. Shared with the
+    // proxy — see unsupportedProtocolVersionError.
+    const versionRefusal = unsupportedProtocolVersionError(id, params);
+    if (versionRefusal) return versionRefusal;
 
     switch (method) {
       case "server/discover":

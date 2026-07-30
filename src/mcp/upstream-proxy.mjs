@@ -15,6 +15,7 @@
 
 import { findReservedDelimiter } from "../contracts/reserved-delimiters.mjs";
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
+import { unsupportedProtocolVersionError } from "./secb-mcp-server.mjs";
 
 // "__" is safe: RESERVED_ID_DELIMITERS is ["|", "@"], and underscore is legal in
 // MCP tool names, so a namespaced name stays a valid single identifier.
@@ -425,6 +426,17 @@ export class SecBMcpUpstreamProxy {
   async handle(message, { callerInstanceId } = {}) {
     if (!message || message.jsonrpc !== "2.0" || typeof message.method !== "string") {
       return this.#core.handle(message, { callerInstanceId });
+    }
+
+    // The version guard runs here, before any routing decision, because a
+    // namespaced tools/call is dispatched by this class and never reaches the
+    // core's copy of it. Without this, a client declaring a version SecB does
+    // not implement was refused on native tools and served on upstream ones —
+    // the control was bypassable for precisely the traffic that leaves the
+    // organism.
+    if (message.id !== undefined) {
+      const versionRefusal = unsupportedProtocolVersionError(message.id, message.params);
+      if (versionRefusal) return versionRefusal;
     }
 
     if (message.method === "tools/list") {
