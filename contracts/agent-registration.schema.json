@@ -58,6 +58,11 @@
       "items": { "type": "string", "minLength": 1 },
       "default": []
     },
+    "project_scopes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
     "environment_scopes": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },

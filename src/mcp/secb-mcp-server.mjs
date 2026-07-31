@@ -327,13 +327,23 @@ export class SecBMcpServer {
    */
   resolveCaller(callerInstanceId) {
     if (isBlank(callerInstanceId)) {
-      return { resolved: false, reason: "Caller instance id is required" };
+      return { resolved: false, code: "DENY_UNRESOLVED_CALLER", reason: "Caller instance id is required" };
     }
-    const resolved = this.#services.registry.resolve(callerInstanceId);
+    let resolved;
+    try {
+      resolved = this.#services.registry.resolve(callerInstanceId);
+    } catch {
+      return { resolved: false, code: "DENY_REGISTRY_UNAVAILABLE", reason: "Registry unavailable" };
+    }
     if (!resolved?.resolved) {
-      return { resolved: false, reason: resolved?.reason ?? "unknown" };
+      return { resolved: false, code: "DENY_UNRESOLVED_CALLER", reason: resolved?.reason ?? "unknown" };
     }
-    return { resolved: true, ceiling: this.#effectiveCeiling(resolved.identity.max_data_classification) };
+    const identity = resolved.identity;
+    if (!identity || identity.agent_instance_id !== callerInstanceId || !CLASS_ORDER.includes(identity.max_data_classification) ||
+        (identity.project_scopes !== undefined && (!Array.isArray(identity.project_scopes) || identity.project_scopes.some(isBlank)))) {
+      return { resolved: false, code: "DENY_REGISTRY_UNAVAILABLE", reason: "Registry unavailable" };
+    }
+    return { resolved: true, identity, ceiling: this.#effectiveCeiling(identity.max_data_classification) };
   }
 
   #audit(entry) {
@@ -403,14 +413,12 @@ export class SecBMcpServer {
     }
 
     // caller resolution (APPROVED + ACTIVE)
-    if (isBlank(callerInstanceId)) {
-      return auditAndReturn("DENY_UNRESOLVED_CALLER", null, () => rpcError(id, -32001, "Caller instance id is required", { code: "DENY_UNRESOLVED_CALLER" }));
+    const caller = this.resolveCaller(callerInstanceId);
+    if (!caller.resolved) {
+      const message = caller.code === "DENY_REGISTRY_UNAVAILABLE" ? "Registry unavailable" : `Caller not resolvable: ${caller.reason}`;
+      return auditAndReturn(caller.code, null, () => rpcError(id, -32001, message, { code: caller.code }));
     }
-    const resolved = this.#services.registry.resolve(callerInstanceId);
-    if (!resolved?.resolved) {
-      return auditAndReturn("DENY_UNRESOLVED_CALLER", null, () => rpcError(id, -32001, `Caller not resolvable: ${resolved?.reason ?? "unknown"}`, { code: "DENY_UNRESOLVED_CALLER", reason: resolved?.reason }));
-    }
-    const ceiling = this.#effectiveCeiling(resolved.identity.max_data_classification);
+    const ceiling = caller.ceiling;
 
     // Rate limit AFTER resolution: keying on resolved identities bounds the
     // limiter's memory to the registry, whereas admitting unresolved ids would
@@ -455,9 +463,16 @@ export class SecBMcpServer {
       if (hit) return auditAndReturn("DENY_RESERVED_DELIMITER", ceiling, () => rpcError(id, -32602, `${field} must not contain '${hit}'`, { code: "DENY_RESERVED_DELIMITER" }));
     }
 
+    if ((name === "secb_skill_resolve" || name === "secb_skill_hub_search") &&
+        (!Array.isArray(caller.identity.project_scopes) || !caller.identity.project_scopes.includes(args.project_id))) {
+      return auditAndReturn("DENY_CALLER_PROJECT_SCOPE", ceiling, () =>
+        rpcError(id, -32001, "Caller is not authorized for the requested project", { code: "DENY_CALLER_PROJECT_SCOPE" })
+      );
+    }
+
     let payload;
     try {
-      payload = this.#dispatch(name, args, ceiling, resolved.identity);
+      payload = this.#dispatch(name, args, ceiling, caller.identity);
     } catch (error) {
       return auditAndReturn("DENY_TOOL_ERROR", ceiling, () => rpcError(id, -32000, `Tool error: ${error.code ?? error.name}`, { code: error.code ?? "DENY_TOOL_ERROR" }));
     }
@@ -494,7 +509,11 @@ export class SecBMcpServer {
         s.evidenceLedger.verify();
         return projectEvidence(s.evidenceLedger.read(), ceiling);
       case "secb_skill_resolve":
-        return s.skillResolver.resolveSkill(args.skill_id, args.version, args.context ?? {});
+        return s.skillResolver.resolveSkill(args.skill_id, args.version, {
+          projectId: args.project_id,
+          runtime: callerIdentity.runtime_product_id,
+          dataClassification: ceiling
+        });
       case "secb_registry_resolve": {
         const r = s.registry.resolve(args.agent_instance_id);
         // never leak another instance's full identity above the ceiling
@@ -511,7 +530,7 @@ export class SecBMcpServer {
       case "secb_canonical_fingerprint":
         return { content_hash: canonicalFingerprint(args.document) };
       case "secb_graph_build": {
-        const payload = formatGraphDataForDashboard({ writeAssets: false });
+        const payload = (s.graphBuilder ?? formatGraphDataForDashboard)({ writeAssets: false });
         return {
           total_nodes: payload.total_nodes,
           total_edges: payload.total_edges,

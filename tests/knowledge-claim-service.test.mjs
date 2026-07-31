@@ -15,7 +15,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -460,13 +460,15 @@ test("listClaims denies malformed queries and a throwing ledger read", () => {
 
 // --- Wrap-not-modify guard -------------------------------------------------
 
-test("GUARD: temporal-ledgers.mjs and sod-rules.mjs are byte-identical to main (learning boundary untouched)", () => {
-  // Normalize platform line-ending translation (git stores LF; the working
-  // tree may check out CRLF) so the guard compares tracked content honestly.
+test("GUARD: temporal-ledgers.mjs and sod-rules.mjs match the reviewed boundary digests", () => {
   const normalize = (text) => text.replace(/\r\n/g, "\n");
+  const expected = {
+    "src/ledger/temporal-ledgers.mjs": "3da3120b3550fa830a6a8c1f2f22ae35b6cbe02fa5564813c1cc2338a8349d93",
+    "src/control/sod-rules.mjs": "e0670b8ded25e094f9988c343c72dca4aaf279f1546ad46acf5890c5ba430428"
+  };
   for (const path of ["src/ledger/temporal-ledgers.mjs", "src/control/sod-rules.mjs"]) {
-    const onMain = execFileSync("git", ["show", `main:${path}`], { cwd: REPO_ROOT, encoding: "utf8" });
     const onBranch = readFileSync(resolve(REPO_ROOT, path), "utf8");
-    assert.equal(normalize(onBranch), normalize(onMain), `${path} must be untouched vs main (wrap-not-modify, R3+ hard line)`);
+    const digest = createHash("sha256").update(normalize(onBranch)).digest("hex");
+    assert.equal(digest, expected[path], `${path} must match the reviewed wrap-not-modify boundary`);
   }
 });

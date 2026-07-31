@@ -87,6 +87,7 @@ export class AgentEnrollmentService {
       approved_mcp_methods: [],
       approved_skills: [],
       repository_scopes: [],
+      project_scopes: [],
       environment_scopes: [],
       max_data_classification: "PUBLIC",
       delegation_rights: [],

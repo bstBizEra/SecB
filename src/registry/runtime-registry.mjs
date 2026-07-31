@@ -107,6 +107,7 @@ export class RuntimeRegistry {
         permitted_roles: [...entry.permitted_roles],
         authority_ceiling: entry.authority_ceiling,
         repository_scopes: [...entry.repository_scopes],
+        project_scopes: [...entry.project_scopes],
         environment_scopes: [...entry.environment_scopes],
         max_data_classification: entry.max_data_classification
       }

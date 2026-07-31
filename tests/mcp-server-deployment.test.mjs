@@ -292,6 +292,21 @@ test("wired end-to-end: initialize + tools/list + a read tool call, audited", as
   }
 });
 
+test("stdio sanitizes synchronous and asynchronous internal failures", async () => {
+  for (const handle of [
+    () => { throw new Error("database password=do-not-leak"); },
+    async () => { throw new Error("async token=do-not-leak"); }
+  ]) {
+    const responses = await roundTrip({ handle }, "inst_ok", [
+      { jsonrpc: "2.0", id: 91, method: "tools/call", params: { name: "x", arguments: {} } }
+    ]);
+    assert.equal(responses[0].error.code, -32603);
+    assert.equal(responses[0].error.message, "Internal error");
+    assert.equal(responses[0].error.data.code, "DENY_INTERNAL_ERROR");
+    assert.equal(JSON.stringify(responses[0]).includes("do-not-leak"), false);
+  }
+});
+
 test("wired end-to-end: an invocation-ledger write failure denies the call (fail-closed audit)", async () => {
   const dir = scratch();
   try {

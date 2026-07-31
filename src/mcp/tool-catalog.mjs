@@ -146,10 +146,10 @@ export const TOOL_CATALOG = freeze([
   },
   {
     name: "secb_skill_resolve",
-    description: "Resolve a skill version for a project/runtime/data-classification context. Read-only policy query; returns the ALLOW or typed-DENY verdict.",
-    required: ["skill_id", "version", "context"],
+    description: "Resolve a skill version for a caller-authorized project. Runtime and classification are derived from the resolved caller identity.",
+    required: ["skill_id", "version", "project_id"],
     optional: [],
-    idParams: ["skill_id"]
+    idParams: ["skill_id", "project_id"]
   },
   {
     name: "secb_registry_resolve",

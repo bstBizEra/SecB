@@ -30,6 +30,7 @@ export async function executeSecbGraphCommand(options = {}) {
   // Writing is opt-out so the CLI keeps its behaviour, but a caller (notably the
   // test suite) can exercise the full pipeline without mutating a tracked file.
   const shouldWriteAssets = options.writeAssets ?? true;
+  const shouldSyncMemory = options.syncMemory ?? true;
 
   console.log(`\n======================================================`);
   console.log(`   SecB Knowledge Graph Command Engine v3.0.0`);
@@ -41,7 +42,7 @@ export async function executeSecbGraphCommand(options = {}) {
   }
 
   // 1. Format and build graph-data.json
-  const graphPayload = formatGraphDataForDashboard({ writeAssets: shouldWriteAssets });
+  const graphPayload = formatGraphDataForDashboard({ writeAssets: shouldWriteAssets, graphPath: options.graphPath });
 
   // 2. Run yFiles Quality Inspector
   const issues = detectKnowledgeGraphIssues(graphPayload.nodes, graphPayload.edges);
@@ -68,13 +69,15 @@ export async function executeSecbGraphCommand(options = {}) {
   }
 
   // 3. Sync to AgentDB Vector Memory via claude-flow CLI if available
-  try {
-    const memoryKey = `secb-graph-${Date.now()}`;
-    const memoryValue = `${graphPayload.total_nodes} AST nodes, ${graphPayload.total_edges} edges, ${graphPayload.communities_count} communities in ${targetDir}`;
-    execSync(`npx claude-flow memory store --key "${memoryKey}" --value "${memoryValue}" --namespace patterns`, { stdio: "ignore" });
-    console.log(`[AgentDB Sync] Graph snapshot stored into vector memory (${memoryKey}).`);
-  } catch (_err) {
-    // Memory store optional fallback
+  if (shouldSyncMemory) {
+    try {
+      const memoryKey = `secb-graph-${Date.now()}`;
+      const memoryValue = `${graphPayload.total_nodes} AST nodes, ${graphPayload.total_edges} edges, ${graphPayload.communities_count} communities in ${targetDir}`;
+      execSync(`npx claude-flow memory store --key "${memoryKey}" --value "${memoryValue}" --namespace patterns`, { stdio: "ignore" });
+      console.log(`[AgentDB Sync] Graph snapshot stored into vector memory (${memoryKey}).`);
+    } catch (_err) {
+      // Memory store optional fallback
+    }
   }
 
   console.log(`\n[SUCCESS] Knowledge Graph successfully generated for agents!`);

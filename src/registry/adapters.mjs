@@ -2,6 +2,7 @@ const ADAPTER_DEFAULTS = Object.freeze({
   evaluation_status: "CANDIDATE",
   lifecycle_state: "PENDING",
   delegation_rights: [],
+  project_scopes: [],
   workload_identity_ref: ""
 });
 
@@ -25,6 +26,7 @@ export const CLAUDE_CODE_ADAPTER = adapter({
   approved_mcp_methods: [],
   approved_skills: [],
   repository_scopes: ["secb"],
+  project_scopes: ["prj_secb_local"],
   environment_scopes: ["local"],
   max_data_classification: "INTERNAL",
   evidence_obligations: ["context-receipt", "event-envelope"]
@@ -46,6 +48,7 @@ export const CODEX_ADAPTER = adapter({
   approved_mcp_methods: [],
   approved_skills: [],
   repository_scopes: ["secb"],
+  project_scopes: ["prj_secb_local"],
   environment_scopes: ["local"],
   max_data_classification: "INTERNAL",
   evidence_obligations: ["context-receipt", "event-envelope"]
@@ -88,6 +91,7 @@ export const GEMINI_CLI_ADAPTER = adapter({
   approved_mcp_methods: [],
   approved_skills: [],
   repository_scopes: ["secb"],
+  project_scopes: ["prj_secb_local"],
   environment_scopes: ["local"],
   max_data_classification: "INTERNAL",
   evidence_obligations: ["context-receipt", "event-envelope"]
@@ -109,6 +113,7 @@ export const KIMI_CLI_ADAPTER = adapter({
   approved_mcp_methods: [],
   approved_skills: [],
   repository_scopes: ["secb"],
+  project_scopes: ["prj_secb_local"],
   environment_scopes: ["local"],
   max_data_classification: "INTERNAL",
   evidence_obligations: ["context-receipt", "event-envelope"]

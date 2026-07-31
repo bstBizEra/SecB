@@ -14,6 +14,7 @@
   "approved_mcp_methods": [],
   "approved_skills": [],
   "repository_scopes": ["secb"],
+  "project_scopes": ["prj_secb_local"],
   "environment_scopes": ["local"],
   "max_data_classification": "INTERNAL",
   "delegation_rights": [],

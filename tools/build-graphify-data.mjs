@@ -38,12 +38,13 @@ export function runGraphifyExtraction(targetDir = projectRoot) {
 // repository path into it.
 export function formatGraphDataForDashboard(options = { writeAssets: true }) {
   const shouldWrite = options?.writeAssets ?? true;
-  if (!existsSync(graphifyJsonPath)) {
+  const sourceGraphPath = options?.graphPath ? resolve(options.graphPath) : graphifyJsonPath;
+  if (!existsSync(sourceGraphPath)) {
     if (shouldWrite) runGraphifyExtraction();
   }
 
-  console.error(`[Graphify Pipeline] Loading ${graphifyJsonPath}...`);
-  const raw = JSON.parse(readFileSync(graphifyJsonPath, "utf8"));
+  console.error(`[Graphify Pipeline] Loading ${sourceGraphPath}...`);
+  const raw = JSON.parse(readFileSync(sourceGraphPath, "utf8"));
 
   const rawNodes = raw.nodes ?? [];
   let rawLinks = raw.links ?? raw.edges ?? [];

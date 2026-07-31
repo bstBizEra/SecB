@@ -13,6 +13,7 @@ const ADAPTER_DEFAULTS = Object.freeze({
   evaluation_status: "CANDIDATE",
   lifecycle_state: "PENDING",
   delegation_rights: [],
+  project_scopes: [],
   workload_identity_ref: ""
 });
 
@@ -49,6 +50,7 @@ export const RUFLO_SWARM_ADAPTER = adapter({
     "swarm-orchestration", "memory-management", "verification-quality"
   ],
   repository_scopes: ["secb", "ruflo"],
+  project_scopes: ["prj_secb_local"],
   environment_scopes: ["local"],
   max_data_classification: "INTERNAL",
   evidence_obligations: [
@@ -76,6 +78,7 @@ export const RUFLO_CODER_ADAPTER = adapter({
   approved_mcp_methods: [],
   approved_skills: [],
   repository_scopes: ["secb", "ruflo"],
+  project_scopes: ["prj_secb_local"],
   environment_scopes: ["local"],
   max_data_classification: "INTERNAL",
   evidence_obligations: ["context-receipt", "event-envelope"]
@@ -102,6 +105,7 @@ export const RUFLO_REVIEWER_ADAPTER = adapter({
   approved_mcp_methods: [],
   approved_skills: ["verification-quality"],
   repository_scopes: ["secb", "ruflo"],
+  project_scopes: ["prj_secb_local"],
   environment_scopes: ["local"],
   max_data_classification: "INTERNAL",
   evidence_obligations: ["context-receipt", "event-envelope", "outcome-receipt"]

@@ -19,7 +19,8 @@ function registryStub() {
             agent_instance_id: CALLER,
             runtime_product_id: "claude-code",
             max_data_classification: "INTERNAL",
-            permitted_roles: ["ENGIN"]
+            permitted_roles: ["ENGIN"],
+            project_scopes: ["prj_secb_local"]
           }
         };
       }
@@ -39,16 +40,17 @@ function eventLedgerStub(classification = "RESTRICTED") {
   };
 }
 
-function harness({ log } = {}) {
+function harness({ log, registry = registryStub() } = {}) {
   const calls = [];
   const invocationLog = log ?? ((entry) => { calls.push(entry); });
   const server = new SecBMcpServer({
     services: {
-      registry: registryStub(),
+      registry,
       workPackage: { resolveEffective: (p, w) => ({ effective: { project_id: p, work_package_id: w }, code: "ALLOW", version: 1 }) },
       eventLedger: eventLedgerStub(),
       evidenceLedger: eventLedgerStub("INTERNAL"),
-      skillResolver: { resolveSkill: () => ({ code: "ALLOW" }) }
+      skillResolver: { resolveSkill: () => ({ code: "ALLOW" }) },
+      graphBuilder: () => ({ total_nodes: 2, total_edges: 1, communities_count: 1, god_nodes_count: 0 })
     },
     invocationLog,
     now: () => new Date("2026-07-19T00:00:00Z")
@@ -162,6 +164,21 @@ test("caller resolution: unresolved and quarantined callers are denied and ledge
   assert.equal(calls.filter((c) => c.decision === "DENY_UNRESOLVED_CALLER").length, 2);
 });
 
+test("a throwing or malformed registry fails closed with a generic audited denial", () => {
+  for (const registry of [
+    { resolve: () => { throw new Error("postgres password=do-not-leak"); } },
+    { resolve: () => ({ resolved: true, identity: null }) },
+    { resolve: () => ({ resolved: true, identity: { agent_instance_id: CALLER, max_data_classification: "TOP_SECRET" } }) }
+  ]) {
+    const { call, calls } = harness({ registry });
+    const response = call("secb_canonical_fingerprint", { document: {} });
+    assert.equal(response.error.data.code, "DENY_REGISTRY_UNAVAILABLE");
+    assert.equal(response.error.message, "Registry unavailable");
+    assert.equal(JSON.stringify(response).includes("do-not-leak"), false);
+    assert.equal(calls.at(-1).decision, "DENY_REGISTRY_UNAVAILABLE");
+  }
+});
+
 test("unknown tool, missing params, and reserved delimiters deny (all ledgered)", () => {
   const { call, calls } = harness();
   assert.equal(call("secb_ghost", {}).error.data.code, "DENY_UNKNOWN_TOOL");
@@ -205,6 +222,8 @@ test("skill search binds declared project to the resolved caller runtime and cei
 
   assert.equal(call({ query: "threat" }).error.data.code, "DENY_INVALID_PARAMS");
   assert.equal(call({ project_id: "prj|other", query: "threat" }).error.data.code, "DENY_RESERVED_DELIMITER");
+  assert.equal(call({ project_id: "prj_other", query: "threat" }).error.data.code, "DENY_CALLER_PROJECT_SCOPE");
+  assert.equal(observed, undefined, "the hub must not be reached cross-project");
 
   const allowed = call({ project_id: "prj_secb_local", query: "threat" });
   assert.ok(allowed.result);
@@ -215,6 +234,40 @@ test("skill search binds declared project to the resolved caller runtime and cei
       runtime: "claude-code",
       dataClassification: "INTERNAL"
     }
+  });
+});
+
+test("skill resolution derives all authorization context from the resolved caller", () => {
+  let observed;
+  const calls = [];
+  const server = new SecBMcpServer({
+    services: {
+      registry: registryStub(),
+      skillResolver: {
+        resolveSkill(skillId, version, context) {
+          observed = { skillId, version, context };
+          return { code: "ALLOW" };
+        }
+      }
+    },
+    invocationLog: (entry) => calls.push(entry)
+  });
+  const call = (args) => server.handle({
+    jsonrpc: "2.0", id: 1, method: "tools/call",
+    params: { name: "secb_skill_resolve", arguments: args }
+  }, { callerInstanceId: CALLER });
+
+  const denied = call({ skill_id: "security-threat-modeling", version: "1", project_id: "prj_other", context: { projectId: "prj_secb_local", runtime: "forged", dataClassification: "RESTRICTED" } });
+  assert.equal(denied.error.data.code, "DENY_CALLER_PROJECT_SCOPE");
+  assert.equal(observed, undefined, "the resolver must not be reached cross-project");
+  assert.equal(calls.at(-1).decision, "DENY_CALLER_PROJECT_SCOPE");
+
+  const allowed = call({ skill_id: "security-threat-modeling", version: "1", project_id: "prj_secb_local", context: { projectId: "prj_other", runtime: "forged", dataClassification: "RESTRICTED" } });
+  assert.ok(allowed.result);
+  assert.deepEqual(observed, {
+    skillId: "security-threat-modeling",
+    version: "1",
+    context: { projectId: "prj_secb_local", runtime: "claude-code", dataClassification: "INTERNAL" }
   });
 });
 

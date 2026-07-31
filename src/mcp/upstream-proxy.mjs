@@ -541,8 +541,10 @@ export class SecBMcpUpstreamProxy {
     // dispatch path only.
     const caller = this.#core.resolveCaller(callerInstanceId);
     if (!caller.resolved) {
-      if (!audit("DENY_UNRESOLVED_CALLER", { reason: caller.reason })) return denyUnaudited();
-      return rpcError(id, -32001, `Caller not resolvable: ${caller.reason}`, { code: "DENY_UNRESOLVED_CALLER", reason: caller.reason });
+      const decision = caller.code ?? "DENY_UNRESOLVED_CALLER";
+      if (!audit(decision)) return denyUnaudited();
+      const message = decision === "DENY_REGISTRY_UNAVAILABLE" ? "Registry unavailable" : `Caller not resolvable: ${caller.reason}`;
+      return rpcError(id, -32001, message, { code: decision });
     }
 
     // Rate limit FIRST among the post-resolution checks, matching the order the

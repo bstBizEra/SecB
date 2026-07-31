@@ -152,12 +152,12 @@ test("a client refuses a plan it cannot honour", () => {
 
 // --- proxy -----------------------------------------------------------------
 
-async function withProxy(fn, { ceiling = "INTERNAL", policy = new Map(), mode = "normal", limits = {} } = {}) {
+async function withProxy(fn, { ceiling = "INTERNAL", policy = new Map(), mode = "normal", limits = {}, core = null } = {}) {
   const calls = [];
   const client = new UpstreamClient({ plan: planFor("fake", mode), timeoutMs: 5_000 });
   await client.start();
   const proxy = new SecBMcpUpstreamProxy({
-    core: coreServer(calls),
+    core: core ?? coreServer(calls),
     clients: new Map([["fake", client]]),
     upstreamPolicy: policy,
     invocationLog: (entry) => calls.push(entry),
@@ -782,6 +782,24 @@ test("an identity the registry rejects cannot reach an upstream", async () => {
     const native = await call(proxy, "secb_canonical_fingerprint", { document: {} }, "inst_NOT_REGISTERED");
     assert.equal(native.error.data.code, "DENY_UNRESOLVED_CALLER");
   });
+});
+
+test("a throwing registry is generically denied and audited before any upstream call", async () => {
+  const brokenCore = new SecBMcpServer({
+    services: { registry: { resolve: () => { throw new Error("backend secret"); } } },
+    invocationLog: () => {}
+  });
+  await withProxy(async ({ proxy, calls, client }) => {
+    let upstreamCalls = 0;
+    const original = client.callTool.bind(client);
+    client.callTool = (...args) => { upstreamCalls += 1; return original(...args); };
+    const response = await call(proxy, "fake__echo", { message: "x" });
+    assert.equal(response.error.data.code, "DENY_REGISTRY_UNAVAILABLE");
+    assert.equal(response.error.message, "Registry unavailable");
+    assert.equal(JSON.stringify(response).includes("backend secret"), false);
+    assert.equal(upstreamCalls, 0);
+    assert.equal(calls.at(-1).decision, "DENY_REGISTRY_UNAVAILABLE");
+  }, { core: brokenCore });
 });
 
 test("a resolvable caller is still served", async () => {

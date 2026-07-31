@@ -29,14 +29,14 @@ export function serveStdio(server, { callerInstanceId, input = process.stdin, ou
     try {
       const answer = server.handle(message, { callerInstanceId });
       if (answer && typeof answer.then === "function") {
-        answer.then(write, (error) => {
-          write({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32603, message: `Internal error: ${error.message}` } });
+        answer.then(write, () => {
+          write({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32603, message: "Internal error", data: { code: "DENY_INTERNAL_ERROR" } } });
         });
       } else {
         write(answer);
       }
-    } catch (error) {
-      write({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32603, message: `Internal error: ${error.message}` } });
+    } catch {
+      write({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32603, message: "Internal error", data: { code: "DENY_INTERNAL_ERROR" } } });
     }
   });
   return rl;
