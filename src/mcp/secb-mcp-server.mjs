@@ -357,6 +357,51 @@ export class SecBMcpServer {
       return respond();
     };
 
+    // Enrollment is the only pre-resolution MCP surface. Without it, an agent
+    // must already be APPROVED/ACTIVE in order to request registration, which
+    // is a bootstrap deadlock. The injected service is absent by default, so
+    // deployment must explicitly enable this candidate path. Its API can only
+    // create CANDIDATE/PENDING/A0/PUBLIC records and inspect them using an
+    // opaque receipt; approval and activation do not exist here.
+    if (name === "secb_agent_registration_propose" || name === "secb_agent_registration_inspect") {
+      const tool = CATALOG_BY_NAME[name];
+      for (const field of tool.required) {
+        if (args[field] === undefined || args[field] === null || args[field] === "") {
+          return auditAndReturn("DENY_INVALID_PARAMS", null, () =>
+            rpcError(id, -32602, `Missing required argument: ${field}`, { code: "DENY_INVALID_PARAMS" })
+          );
+        }
+      }
+      for (const field of tool.idParams) {
+        if (typeof args[field] !== "string") {
+          return auditAndReturn("DENY_INVALID_PARAMS", null, () =>
+            rpcError(id, -32602, `${field} must be a string`, { code: "DENY_INVALID_PARAMS" })
+          );
+        }
+        const hit = findReservedDelimiter(args[field]);
+        if (hit) {
+          return auditAndReturn("DENY_RESERVED_DELIMITER", null, () =>
+            rpcError(id, -32602, `${field} must not contain '${hit}'`, { code: "DENY_RESERVED_DELIMITER" })
+          );
+        }
+      }
+      const enrollment = this.#services.agentEnrollment;
+      if (!enrollment) {
+        return auditAndReturn("DENY_ENROLLMENT_DISABLED", null, () =>
+          rpcError(id, -32000, "Agent enrollment is disabled", { code: "DENY_ENROLLMENT_DISABLED" })
+        );
+      }
+      const payload = name === "secb_agent_registration_propose"
+        ? enrollment.propose(args)
+        : enrollment.inspect(args.agent_instance_id, args.registration_receipt);
+      const decision = payload.ok ? "ALLOW_ENROLLMENT_CANDIDATE" : payload.deny_code;
+      return auditAndReturn(decision, "PUBLIC", () =>
+        payload.ok
+          ? rpcResult(id, toolResult(name, payload))
+          : rpcError(id, -32000, "Agent enrollment denied", { code: payload.deny_code })
+      );
+    }
+
     // caller resolution (APPROVED + ACTIVE)
     if (isBlank(callerInstanceId)) {
       return auditAndReturn("DENY_UNRESOLVED_CALLER", null, () => rpcError(id, -32001, "Caller instance id is required", { code: "DENY_UNRESOLVED_CALLER" }));

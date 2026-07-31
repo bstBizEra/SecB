@@ -226,5 +226,5 @@ test("Complete End-to-End System Workflow (Stage 1 to Stage 9)", () => {
   });
 
   const toolsListRes = server.handle({ jsonrpc: "2.0", id: 999, method: "tools/list" });
-  assert.equal(toolsListRes.result.tools.length, 36);
+  assert.equal(toolsListRes.result.tools.length, 38);
 });

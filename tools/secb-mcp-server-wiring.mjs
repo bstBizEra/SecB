@@ -23,6 +23,7 @@ import { WorkPackageContractService } from "../src/services/work-package-service
 import { ProjectContractService } from "../src/project/project-contract-service.mjs";
 import { EventLedger, EvidenceLedger } from "../src/ledger/governed-ledgers.mjs";
 import { InvocationRateLimiter } from "../src/mcp/invocation-rate-limiter.mjs";
+import { AgentEnrollmentService } from "../src/services/agent-enrollment-service.mjs";
 
 // The single operator-authorization message. Reused by the skeleton entry so
 // the missing-authorization failure reads identically whether the guard trips
@@ -32,6 +33,8 @@ export const OPERATOR_AUTH_MESSAGE =
 
 export const DEPLOYMENT_ENV_FLAG = "SECB_MCP_DEPLOYMENT_AUTHORIZED";
 export const DEPLOYMENT_ENV_VALUE = "operator";
+export const ENROLLMENT_ENV_FLAG = "SECB_MCP_AGENT_ENROLLMENT_AUTHORIZED";
+export const ENROLLMENT_ENV_VALUE = "operator";
 export const SEED_VERSION = "1";
 const CLASSIFICATION_CEILINGS = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"];
 
@@ -180,6 +183,7 @@ export function composeServices({
   invocationLog,
   eventLedgerPath,
   evidenceLedgerPath,
+  agentEnrollment = null,
   classificationCeiling = "INTERNAL",
   rateLimiter = null,
   now = () => new Date()
@@ -205,6 +209,7 @@ export function composeServices({
     evidenceLedger: new EvidenceLedger({ filePath: resolve(evidenceLedgerPath) }),
     skillResolver: new SkillResolver({ decisionLookup: () => null })
   };
+  if (agentEnrollment !== null) services.agentEnrollment = agentEnrollment;
 
   return new SecBMcpServer({ services, invocationLog, classificationCeiling, rateLimiter, now });
 }
@@ -223,8 +228,10 @@ export function resolveDeploymentConfig({ argv = [], env = {} } = {}) {
   const pick = (flag, envKey) => argValue(argv, flag) ?? env[envKey];
   return {
     authorized: env[DEPLOYMENT_ENV_FLAG] === DEPLOYMENT_ENV_VALUE,
+    enrollmentAuthorized: env[ENROLLMENT_ENV_FLAG] === ENROLLMENT_ENV_VALUE,
     seedPath: pick("--seed", "SECB_MCP_REGISTRY_SEED"),
     ledgerPath: pick("--ledger", "SECB_MCP_INVOCATION_LEDGER"),
+    enrollmentLedgerPath: pick("--enrollment-ledger", "SECB_MCP_AGENT_ENROLLMENT_LEDGER"),
     callerInstanceId: pick("--caller", "SECB_MCP_CALLER_INSTANCE"),
     eventLedgerPath: pick("--event-ledger", "SECB_MCP_EVENT_LEDGER"),
     evidenceLedgerPath: pick("--evidence-ledger", "SECB_MCP_EVIDENCE_LEDGER"),
@@ -275,6 +282,12 @@ export function prepareDeployment({ argv = [], env = {}, now = () => new Date() 
   const registry = seedRegistry(loadRegistrySeed(config.seedPath));
 
   const invocationLog = createInvocationLedgerWriter(config.ledgerPath);
+  const agentEnrollment = config.enrollmentAuthorized
+    ? new AgentEnrollmentService({
+        registry,
+        ledgerWriter: createInvocationLedgerWriter(config.enrollmentLedgerPath)
+      })
+    : null;
   // Returned as well as installed: the hub must hand this SAME instance to the
   // upstream proxy, or each dispatch path grants its own full budget.
   const rateLimiter = resolveRateLimiter(config.rateLimitPerMinute);
@@ -283,6 +296,7 @@ export function prepareDeployment({ argv = [], env = {}, now = () => new Date() 
     invocationLog,
     eventLedgerPath: config.eventLedgerPath,
     evidenceLedgerPath: config.evidenceLedgerPath,
+    agentEnrollment,
     classificationCeiling: config.classificationCeiling,
     rateLimiter,
     now

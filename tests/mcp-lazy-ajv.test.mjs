@@ -25,9 +25,12 @@ function inChild(source) {
 
 const AJV_LOADED = `
   import { createRequire } from "node:module";
-  const req = createRequire("${ROOT}/x.mjs");
+  const req = createRequire(${JSON.stringify(`${ROOT}/x.mjs`)});
   globalThis.__ajvLoaded = () =>
-    Object.keys(req.cache).some((p) => p.includes("node_modules/ajv/") || p.endsWith("node_modules/ajv"));
+    Object.keys(req.cache).some((p) => {
+      const normalized = p.replaceAll("\\\\", "/");
+      return normalized.includes("node_modules/ajv/") || normalized.endsWith("node_modules/ajv");
+    });
 `;
 
 test("importing the MCP server does not load Ajv", () => {
@@ -80,7 +83,7 @@ test("supportedContractKinds reports every declared kind, not just compiled ones
   `);
   // Reading the compiled-validator cache here would have reported a set that
   // grew as contracts happened to be validated.
-  assert.equal(out, "13|13");
+  assert.equal(out, "21|21");
 });
 
 test("a validated contract still round-trips after lazy compilation", () => {

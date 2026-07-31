@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "session_id": "brsess_windows_alpha_001",
+  "handshake_id": "bhs_windows_alpha_001",
+  "proof_id": "brproof_windows_alpha_001",
+  "harness_installation_id": "inst_codex_windows_alpha_001",
+  "runtime_deployment_id": "codex-windows",
+  "service_instance_id": "svc_windows_alpha_001",
+  "authority_domain_id": "authdom_local_alpha_001",
+  "protocol_version": "2",
+  "authority_source": "SERVER_DERIVED",
+  "proof_verification_status": "NOT_VERIFIED",
+  "replay_commit_status": "NOT_COMMITTED",
+  "authorization_reference": null,
+  "lifecycle_state": "CANDIDATE",
+  "issued_at": "2026-07-31T08:02:02Z",
+  "expires_at": "2026-07-31T08:07:02Z"
+}

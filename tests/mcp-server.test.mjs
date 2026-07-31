@@ -137,10 +137,10 @@ test("deny-by-default methods and malformed requests", () => {
   assert.equal(server.handle({ jsonrpc: "2.0", method: "notifications/initialized" }), null);
 });
 
-test("tools/list projects the frozen catalog (36 read-only tools)", () => {
+test("tools/list projects the frozen catalog (38 governed tools)", () => {
   const { server } = harness();
   const tools = server.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }).result.tools;
-  assert.equal(tools.length, 36);
+  assert.equal(tools.length, 38);
   assert.ok(tools.every((t) => typeof t.description === "string"));
   assert.throws(() => { TOOL_CATALOG.push({}); }, TypeError);
 });
@@ -264,7 +264,7 @@ test("every advertised tool carries honest annotations", () => {
     assert.equal(tool.annotations.readOnlyHint, !MUTATING_TOOLS.has(tool.name), `${tool.name}: readOnlyHint disagrees with MUTATING_TOOLS`);
   }
   const mutating = tools.filter((t) => !t.annotations.readOnlyHint).map((t) => t.name);
-  assert.deepEqual(mutating, ["secb_project_register_draft"]);
+  assert.deepEqual(mutating, ["secb_agent_registration_propose", "secb_project_register_draft"]);
 });
 
 test("a readOnlyHint claim is backed by the filesystem, not by intent", () => {

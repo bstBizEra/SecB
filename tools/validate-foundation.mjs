@@ -59,7 +59,15 @@ const subsystemSchemaFiles = allSchemaFiles.filter((file) => !file.startsWith("c
 // Set equality keeps this fail-closed: an unexpected contract addition or a
 // missing canonical contract both fail.
 const expectedSchemas = [
+  "contracts/agent-enrollment-request.schema.json",
   "contracts/agent-registration.schema.json",
+  "contracts/local-bridge-endpoint.schema.json",
+  "contracts/local-bridge-frame.schema.json",
+  "contracts/local-bridge-handshake-transcript.schema.json",
+  "contracts/local-bridge-installation-proof.schema.json",
+  "contracts/local-bridge-session.schema.json",
+  "contracts/local-bridge-denial.schema.json",
+  "contracts/local-bridge-lifecycle.schema.json",
   "contracts/context-receipt.schema.json",
   "contracts/event-envelope.schema.json",
   "contracts/evidence-envelope.schema.json",
@@ -80,7 +88,7 @@ const expectedSchemas = [
 assert(
   schemaFiles.length === expectedSchemas.length && expectedSchemas.every((file) => schemaFiles.includes(file)),
   "schemas.count",
-  "7 canonical bootstrap schemas + 9 governed extensions (P0-14, skill resolver, capability record, MOD-WORK goal, project registration, swarm execution, system settings)"
+  "7 canonical bootstrap schemas + governed extensions including agent enrollment, temporal ledgers, skills, capabilities, goals, project registration, swarm execution, system settings, and MCP upstreams"
 );
 // Subsystem schemas are module-internal and carry no contract authority, but
 // they are still allowlisted so that adding one is a deliberate, reviewed act.
@@ -95,7 +103,15 @@ assert(
   "2 subsystem-internal schemas (events envelope, runtime deployment) — not governed contracts"
 );
 const mandatoryIdentityFields = {
+  "contracts/agent-enrollment-request.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_profile_id", "public_key_fingerprint", "idempotency_key"],
   "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_instance_id", "evaluation_status", "lifecycle_state"],
+  "contracts/local-bridge-endpoint.schema.json": ["schema_version", "locator_id", "service_instance_id", "authority_domain_id", "transport", "owner_scope", "endpoint_name", "service_key_id", "service_public_key_fingerprint", "bridge_protocol_version", "issued_at", "expires_at"],
+  "contracts/local-bridge-frame.schema.json": ["schema_version", "frame_id", "connection_id", "session_id", "request_id", "message_type", "sequence", "trace_id", "protocol_version", "declared_payload_bytes"],
+  "contracts/local-bridge-handshake-transcript.schema.json": ["schema_version", "handshake_id", "purpose", "harness_installation_id", "runtime_deployment_id", "service_instance_id", "authority_domain_id", "locator_id", "installation_key_id", "service_key_id", "endpoint_binding_id", "client_nonce", "service_nonce", "client_supported_protocol_versions", "service_supported_protocol_versions", "selected_protocol_version", "requested_at", "expires_at"],
+  "contracts/local-bridge-installation-proof.schema.json": ["schema_version", "proof_id", "purpose", "handshake_id", "harness_installation_id", "runtime_deployment_id", "installation_key_id", "service_instance_id", "service_key_id", "authority_domain_id", "locator_id", "endpoint_binding_id", "client_nonce", "service_nonce", "selected_protocol_version", "proof_profile_id", "proof_material_class", "proof_value", "issued_at", "expires_at"],
+  "contracts/local-bridge-session.schema.json": ["schema_version", "session_id", "handshake_id", "proof_id", "harness_installation_id", "runtime_deployment_id", "service_instance_id", "authority_domain_id", "protocol_version", "authority_source", "proof_verification_status", "replay_commit_status", "authorization_reference", "lifecycle_state", "issued_at", "expires_at"],
+  "contracts/local-bridge-denial.schema.json": ["schema_version", "denial_id", "phase", "public_code", "retryable", "trace_id", "occurred_at"],
+  "contracts/local-bridge-lifecycle.schema.json": ["schema_version", "lifecycle_event_id", "subject_type", "subject_id", "from_state", "to_state", "decision_status", "authority_reference", "occurred_at"],
   "contracts/project-contract.schema.json": ["project_id", "version", "status", "approvals"],
   "contracts/work-package.schema.json": ["work_package_id", "version", "project_id", "baseline", "status"],
   "contracts/context-receipt.schema.json": ["receipt_id", "version", "project_id", "work_package_id", "session_id", "content_hash"],

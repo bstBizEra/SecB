@@ -1,0 +1,10 @@
+{
+  "provider_id": "openai",
+  "runtime_product_id": "codex",
+  "runtime_deployment_id": "codex-windows",
+  "agent_profile_id": "codex-engineer",
+  "runtime_version": "1.0.0",
+  "deployment_location": "local",
+  "public_key_fingerprint": "caller-controlled-identity",
+  "idempotency_key": "enroll-codex-fixture-001"
+}

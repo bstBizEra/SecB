@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "lifecycle_event_id": "brlife_session_alpha_001",
+  "subject_type": "SESSION",
+  "subject_id": "brsess_windows_alpha_001",
+  "from_state": "ABSENT",
+  "to_state": "CANDIDATE",
+  "decision_status": "CANDIDATE_NOT_EFFECTIVE",
+  "authority_reference": null,
+  "occurred_at": "2026-07-31T08:02:02Z"
+}

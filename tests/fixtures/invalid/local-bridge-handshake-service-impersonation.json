@@ -1,0 +1,20 @@
+{
+  "schema_version": "1",
+  "handshake_id": "bhs_fake_service_001",
+  "purpose": "SECB_LOCAL_BRIDGE_SESSION",
+  "harness_installation_id": "inst_codex_windows_alpha_001",
+  "runtime_deployment_id": "codex-windows",
+  "service_instance_id": "svc_attacker_service_001",
+  "authority_domain_id": "authdom_local_alpha_001",
+  "locator_id": "brloc_windows_alpha_001",
+  "installation_key_id": "key_installation_alpha_001",
+  "service_key_id": "key_attacker_service_001",
+  "endpoint_binding_id": "epbind_windows_alpha_001",
+  "client_nonce": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  "service_nonce": "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+  "client_supported_protocol_versions": ["1", "2"],
+  "service_supported_protocol_versions": ["1", "2"],
+  "selected_protocol_version": "2",
+  "requested_at": "2026-07-31T08:02:00Z",
+  "expires_at": "2026-07-31T08:02:30Z"
+}

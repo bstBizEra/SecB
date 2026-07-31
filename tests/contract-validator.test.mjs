@@ -9,7 +9,15 @@ function fixture(relativePath) {
 }
 
 const validFixtures = {
+  agentEnrollmentRequest: "valid/agent-enrollment-request.json",
   agentRegistration: "valid/agent-registration.json",
+  localBridgeEndpoint: "valid/local-bridge-endpoint-windows.json",
+  localBridgeFrame: "valid/local-bridge-frame.json",
+  localBridgeHandshakeTranscript: "valid/local-bridge-handshake-transcript.json",
+  localBridgeInstallationProof: "valid/local-bridge-installation-proof.json",
+  localBridgeSession: "valid/local-bridge-session.json",
+  localBridgeDenial: "valid/local-bridge-denial.json",
+  localBridgeLifecycle: "valid/local-bridge-lifecycle.json",
   project: "valid/project.json",
   workPackage: "valid/work-package.json",
   contextReceipt: "valid/context-receipt.json",
@@ -25,7 +33,15 @@ const validFixtures = {
 };
 
 const invalidFixtures = {
+  agentEnrollmentRequest: "invalid/agent-enrollment-request-bad-key.json",
   agentRegistration: "invalid/agent-registration-bad-ceiling.json",
+  localBridgeEndpoint: "invalid/local-bridge-endpoint-http.json",
+  localBridgeFrame: "invalid/local-bridge-frame-caller-authority.json",
+  localBridgeHandshakeTranscript: "invalid/local-bridge-handshake-transcript-secret.json",
+  localBridgeInstallationProof: "invalid/local-bridge-installation-proof-secret.json",
+  localBridgeSession: "invalid/local-bridge-session-bearer.json",
+  localBridgeDenial: "invalid/local-bridge-denial-detail.json",
+  localBridgeLifecycle: "invalid/local-bridge-lifecycle-token.json",
   project: "invalid/project-missing-id.json",
   workPackage: "invalid/work-package-unknown-field.json",
   contextReceipt: "invalid/context-bad-hash.json",

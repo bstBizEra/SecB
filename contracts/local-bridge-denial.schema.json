@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/local-bridge-denial.schema.json",
+  "title": "SecB Local Bridge Public Denial",
+  "description": "Bounded public denial metadata. Detailed authentication diagnostics, identifiers, credentials, proof values, and stack traces are prohibited.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "denial_id",
+    "phase",
+    "public_code",
+    "retryable",
+    "trace_id",
+    "occurred_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "denial_id": {
+      "type": "string",
+      "pattern": "^brdeny_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "phase": {
+      "enum": [
+        "ENDPOINT",
+        "HANDSHAKE",
+        "PROOF",
+        "SESSION",
+        "FRAME",
+        "LIFECYCLE",
+        "OVERLOAD"
+      ]
+    },
+    "public_code": {
+      "enum": [
+        "DENY_LOCAL_ENDPOINT",
+        "DENY_LOCAL_AUTHENTICATION",
+        "DENY_LOCAL_REPLAY",
+        "DENY_LOCAL_VERSION",
+        "DENY_LOCAL_SESSION",
+        "DENY_LOCAL_PROTOCOL",
+        "DENY_LOCAL_LIFECYCLE",
+        "DENY_LOCAL_OVERLOAD"
+      ]
+    },
+    "retryable": { "type": "boolean" },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^trace_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

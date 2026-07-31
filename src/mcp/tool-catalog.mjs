@@ -40,7 +40,10 @@ function freeze(value) {
  * silently inherit a read-only claim: a test invokes every zero-argument tool and
  * fails if the filesystem changes, catching a mutating tool omitted from this set.
  */
-export const MUTATING_TOOLS = Object.freeze(new Set(["secb_project_register_draft"]));
+export const MUTATING_TOOLS = Object.freeze(new Set([
+  "secb_project_register_draft",
+  "secb_agent_registration_propose"
+]));
 
 /**
  * Project a catalog entry into MCP tool annotations.
@@ -77,6 +80,35 @@ export function buildInputSchema({ required = [], optional = [], idParams = [] }
 }
 
 export const TOOL_CATALOG = freeze([
+  {
+    name: "secb_agent_registration_propose",
+    description: "Submit an untrusted harness enrollment request. Creates only a CANDIDATE/PENDING agent with A0, PUBLIC, and no roles; cannot approve or activate.",
+    required: [
+      "provider_id",
+      "runtime_product_id",
+      "runtime_deployment_id",
+      "agent_profile_id",
+      "runtime_version",
+      "deployment_location",
+      "public_key_fingerprint",
+      "idempotency_key"
+    ],
+    optional: [],
+    idParams: [
+      "provider_id",
+      "runtime_product_id",
+      "runtime_deployment_id",
+      "agent_profile_id",
+      "idempotency_key"
+    ]
+  },
+  {
+    name: "secb_agent_registration_inspect",
+    description: "Inspect a pending agent enrollment using its opaque registration receipt. Does not approve, activate, or change the registration.",
+    required: ["agent_instance_id", "registration_receipt"],
+    optional: [],
+    idParams: ["agent_instance_id"]
+  },
   {
     name: "secb_work_package_resolve_effective",
     description: "Resolve the effective work-package contract for a project and work package at an asserted baseline. Read-only; returns the governed resolution verdict.",
