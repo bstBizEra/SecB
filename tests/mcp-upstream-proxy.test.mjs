@@ -802,6 +802,42 @@ test("a throwing registry is generically denied and audited before any upstream 
   }, { core: brokenCore });
 });
 
+test("malformed registry verdicts and throwing accessors never reach an upstream", async () => {
+  const throwing = (field, value = {}) => {
+    Object.defineProperty(value, field, { get: () => { throw new Error(`secret getter ${field}`); } });
+    return value;
+  };
+  const registries = [
+    { resolve: () => ({ resolved: "DENY", identity: { agent_instance_id: "inst_ok", max_data_classification: "INTERNAL" } }) },
+    { resolve: () => ({ resolved: 1, identity: { agent_instance_id: "inst_ok", max_data_classification: "INTERNAL" } }) },
+    { resolve: () => throwing("resolved") },
+    { resolve: () => throwing("reason", { resolved: false }) },
+    { resolve: () => throwing("identity", { resolved: true }) },
+    { resolve: () => ({ resolved: true, identity: throwing("project_scopes", { agent_instance_id: "inst_ok", max_data_classification: "INTERNAL" }) }) }
+  ];
+
+  for (const registry of registries) {
+    const core = new SecBMcpServer({ services: { registry }, invocationLog: () => {} });
+    const rows = [];
+    let upstreamCalls = 0;
+    const client = {
+      state: "ready",
+      callTool: async () => { upstreamCalls += 1; return { content: [] }; }
+    };
+    const proxy = new SecBMcpUpstreamProxy({
+      core,
+      clients: new Map([["fake", client]]),
+      invocationLog: (entry) => rows.push(entry)
+    });
+    const response = await call(proxy, "fake__echo", { message: "x" });
+    assert.equal(response.error.data.code, "DENY_REGISTRY_UNAVAILABLE");
+    assert.equal(response.error.message, "Registry unavailable");
+    assert.equal(/secret getter/.test(JSON.stringify(response)), false);
+    assert.equal(upstreamCalls, 0);
+    assert.equal(rows.at(-1).decision, "DENY_REGISTRY_UNAVAILABLE");
+  }
+});
+
 test("a resolvable caller is still served", async () => {
   await withProxy(async ({ proxy }) => {
     assert.ok((await call(proxy, "fake__echo", { message: "ok" })).result);

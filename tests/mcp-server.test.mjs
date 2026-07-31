@@ -165,16 +165,26 @@ test("caller resolution: unresolved and quarantined callers are denied and ledge
 });
 
 test("a throwing or malformed registry fails closed with a generic audited denial", () => {
+  const throwing = (field, value = {}) => {
+    Object.defineProperty(value, field, { get: () => { throw new Error(`secret getter ${field}`); } });
+    return value;
+  };
   for (const registry of [
     { resolve: () => { throw new Error("postgres password=do-not-leak"); } },
     { resolve: () => ({ resolved: true, identity: null }) },
-    { resolve: () => ({ resolved: true, identity: { agent_instance_id: CALLER, max_data_classification: "TOP_SECRET" } }) }
+    { resolve: () => ({ resolved: true, identity: { agent_instance_id: CALLER, max_data_classification: "TOP_SECRET" } }) },
+    { resolve: () => ({ resolved: "DENY", identity: { agent_instance_id: CALLER, max_data_classification: "INTERNAL" } }) },
+    { resolve: () => ({ resolved: 1, identity: { agent_instance_id: CALLER, max_data_classification: "INTERNAL" } }) },
+    { resolve: () => throwing("resolved") },
+    { resolve: () => throwing("reason", { resolved: false }) },
+    { resolve: () => throwing("identity", { resolved: true }) },
+    { resolve: () => ({ resolved: true, identity: throwing("project_scopes", { agent_instance_id: CALLER, max_data_classification: "INTERNAL" }) }) }
   ]) {
     const { call, calls } = harness({ registry });
     const response = call("secb_canonical_fingerprint", { document: {} });
     assert.equal(response.error.data.code, "DENY_REGISTRY_UNAVAILABLE");
     assert.equal(response.error.message, "Registry unavailable");
-    assert.equal(JSON.stringify(response).includes("do-not-leak"), false);
+    assert.equal(/do-not-leak|secret getter/.test(JSON.stringify(response)), false);
     assert.equal(calls.at(-1).decision, "DENY_REGISTRY_UNAVAILABLE");
   }
 });

@@ -329,21 +329,23 @@ export class SecBMcpServer {
     if (isBlank(callerInstanceId)) {
       return { resolved: false, code: "DENY_UNRESOLVED_CALLER", reason: "Caller instance id is required" };
     }
-    let resolved;
     try {
-      resolved = this.#services.registry.resolve(callerInstanceId);
+      const resolved = this.#services.registry.resolve(callerInstanceId);
+      if (resolved?.resolved !== true) {
+        if (resolved?.resolved !== false) {
+          return { resolved: false, code: "DENY_REGISTRY_UNAVAILABLE", reason: "Registry unavailable" };
+        }
+        return { resolved: false, code: "DENY_UNRESOLVED_CALLER", reason: typeof resolved.reason === "string" ? resolved.reason : "unknown" };
+      }
+      const identity = resolved.identity;
+      if (!identity || identity.agent_instance_id !== callerInstanceId || !CLASS_ORDER.includes(identity.max_data_classification) ||
+          (identity.project_scopes !== undefined && (!Array.isArray(identity.project_scopes) || identity.project_scopes.some(isBlank)))) {
+        return { resolved: false, code: "DENY_REGISTRY_UNAVAILABLE", reason: "Registry unavailable" };
+      }
+      return { resolved: true, identity, ceiling: this.#effectiveCeiling(identity.max_data_classification) };
     } catch {
       return { resolved: false, code: "DENY_REGISTRY_UNAVAILABLE", reason: "Registry unavailable" };
     }
-    if (!resolved?.resolved) {
-      return { resolved: false, code: "DENY_UNRESOLVED_CALLER", reason: resolved?.reason ?? "unknown" };
-    }
-    const identity = resolved.identity;
-    if (!identity || identity.agent_instance_id !== callerInstanceId || !CLASS_ORDER.includes(identity.max_data_classification) ||
-        (identity.project_scopes !== undefined && (!Array.isArray(identity.project_scopes) || identity.project_scopes.some(isBlank)))) {
-      return { resolved: false, code: "DENY_REGISTRY_UNAVAILABLE", reason: "Registry unavailable" };
-    }
-    return { resolved: true, identity, ceiling: this.#effectiveCeiling(identity.max_data_classification) };
   }
 
   #audit(entry) {
