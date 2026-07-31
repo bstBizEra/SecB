@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document ID | `SECB-PRD-SKILLSHUB-001` |
-| Version | `0.2.0-draft` |
+| Version | `0.3.0-draft` |
 | Status | `DRAFT / NOT EFFECTIVE` |
 | Product | SecB SkillsHub (`MOD-SKILL`) |
 | Product owner | Unassigned — operator to appoint |
@@ -330,7 +330,7 @@ All observations verified at baseline `e0de4f3` on 2026-08-01.
 | Pack installers | [`.agents/install/`](../../../.agents/install/) — `install-codex.{sh,ps1}` copy packages to `<target>/.agents/skills`; `install-claude.{sh,ps1}` copy to `<target>/.claude/skills`; both refuse to overwrite |
 | Resolver | [`skill-resolver.mjs`](../../../src/registry/skill-resolver.mjs) — fail-closed; **7** distinct resolution-time deny codes, plus 3 registration-time error codes |
 | Discovery service | [`skills-hub-service.mjs`](../../../src/skills/skills-hub-service.mjs) — indexes packages, gates all reads on the resolver |
-| MCP surface | **Two** tools: `secb_skill_hub_search` (requires `project_id`; runtime and ceiling server-derived) and `secb_skill_resolve` (scope context **entirely caller-supplied** — see `SKILL-DRIFT-14`) |
+| MCP surface | **Two** tools, `secb_skill_hub_search` and `secb_skill_resolve`. Both require `project_id`, screen it as an identity param, verify it against the caller identity's own `project_scopes` before dispatch (`DENY_CALLER_PROJECT_SCOPE`), and derive runtime and classification from the resolved caller. See `SKILL-FIX-07` |
 | CLI surface | `secb-skills` binary; search only |
 | UI surface | [`SkillsHub.tsx`](../../../dashboard/src/pages/SkillsHub.tsx) — 6 hardcoded skills; 1 (`graphify`) is a real package, the other 5 are not |
 | YAML tooling | No YAML dependency in `package.json`; a minimal top-level scalar parser is embedded in the hub service. The pack validator is Python and uses `yaml` |
@@ -379,7 +379,7 @@ flowchart TB
     Install ==>|UNGOVERNED distribution:<br/>no identity, scope, or promotion check| Harness[Harness skill directories<br/>.claude/skills, .agents/skills]
     AgentsY -.->|read by no SecB code| X2[ ]
     MCP --> Hub
-    Resolve[secb_skill_resolve<br/>caller-supplied context] ==>|bypasses hub gating| Resolver
+    Resolve[secb_skill_resolve] -->|scope verified against<br/>caller project_scopes| Resolver
     CLI --> Hub
     Hub --> Resolver
     Resolver --> Registry
@@ -391,7 +391,6 @@ flowchart TB
     style Registry fill:#7f1d1d,color:#fff
     style X2 fill:#7f1d1d,color:#fff
     style Install fill:#7f1d1d,color:#fff
-    style Resolve fill:#7f1d1d,color:#fff
 ```
 
 ### 7.3 Documented versus observed
@@ -411,7 +410,7 @@ flowchart TB
 | `SKILL-DRIFT-11` | Promotion is reachable | The resolver requires each claimed `HUMAN_PROMOTION` to resolve in the DecisionLedger as a `GOVERNANCE` decision; nothing in the repository mints such a decision for a skill | **Gap** — `PUBLISHED` is currently unreachable by construction |
 | `SKILL-DRIFT-12` | The authoring template produces a valid manifest | [`docs/templates/skill-manifest.yaml`](../../templates/skill-manifest.yaml) declares 21 fields under a `skill:` key plus a top-level `schema_version`. The governed contract's field set is a **strict subset** of the template's: every one of the contract's 13 properties is present in the template, and the contract defines none the template lacks. The 9 fields the template has and the contract does not are `input_schema`, `output_schema`, `required_models`, `required_tools`, `required_mcp_methods`, `tests`, `evaluations`, `known_limitations`, and `schema_version`. Because the contract is flat and closed, the template fails validation as written. No package uses it. *(The subset relation is verified; the direction of derivation is not — no ADR, commit message, or comment records which came first.)* | **Contradiction** — a richer declared intent and a narrower enforced contract coexist with no recorded decision reconciling them |
 | `SKILL-DRIFT-13` | Capability requirements are declared | The template's `required_models`, `required_tools`, and `required_mcp_methods` express the model/tool/MCP dependencies that [`SECB-SKILL-001`](../../07-capabilities/skillshub-lifecycle.md) names as part of a skill package; the enforced contract drops all three | **Gap** — a skill cannot currently declare what it needs to run |
-| `SKILL-DRIFT-14` | The agent does not choose its own effective scope | `secb_skill_resolve` dispatches at [`secb-mcp-server.mjs`](../../../src/mcp/secb-mcp-server.mjs) as `resolveSkill(args.skill_id, args.version, args.context ?? {})` — the **entire** scope context is caller-supplied. A caller bound to project A may assert project B and resolve a skill scoped to B. This is the same defect class fixed on the `secb_skill_hub_search` path in `e0de4f3`, still open on this path. Latent only because the resolver registry is empty at runtime | **Contradiction, highest technical severity** — an authorization bypass by construction; owned by the MCP producer, not this document |
+| ~~`SKILL-DRIFT-14`~~ | The agent does not choose its own effective scope | **WITHDRAWN — the finding was already closed when this document first asserted it.** `secb_skill_resolve` did dispatch as `resolveSkill(args.skill_id, args.version, args.context ?? {})` at `e0de4f3`, making the whole scope caller-supplied. The MCP producer fixed it in `42c2190`, 56 minutes before this document was committed, and this document's producer did not re-verify against `HEAD` before publishing. See `SKILL-FIX-07` | **Producer error** — a stale observation published as a live finding |
 | `SKILL-DRIFT-15` | Distribution is authorized | The four [`.agents/install/`](../../../.agents/install/) scripts copy every package into a harness skills directory with no identity, scope, classification, promotion, or revocation check. They are the operative distribution path today, and they bypass the SkillsHub entirely — the outcome [`superpowers-intake.md`](../../07-capabilities/superpowers-intake.md) requires adapters to prevent | **Contradiction** — an ungoverned distribution channel exists and works |
 
 ### 7.4 Producer-asserted dispositions, pending independent verification
@@ -428,8 +427,9 @@ this section and §7.3 to REV.
 | `SKILL-FIX-02` | The indexer read `SKILL.md` line 1 as the title, yielding `---` for all 25 packages and leaking frontmatter into token-budgeted snippets | Fixed in `e0de4f3` |
 | `SKILL-FIX-03` | Resolution used a hardcoded version `"1.0.0"` and a hardcoded `projectId` | Fixed in `e0de4f3`; identity now comes from `manifest.yaml`, context from the caller |
 | `SKILL-FIX-04` | `seedDefaultSkills()` fabricated five in-memory skills with no provenance | Removed in `e0de4f3` |
-| `SKILL-FIX-05` | The `secb_skill_hub_search` tool passed no governed context | Producer asserts fixed in `e0de4f3`; `project_id` is a required, delimiter-screened argument, runtime is taken from the resolved caller identity, and the ceiling remains server-derived. **Scope limitation:** this fixed one of the two skill tools. `secb_skill_resolve` still accepts a fully caller-supplied context — see `SKILL-DRIFT-14` |
+| `SKILL-FIX-05` | The `secb_skill_hub_search` tool passed no governed context | Producer asserts fixed in `e0de4f3`; `project_id` is a required, delimiter-screened argument, runtime is taken from the resolved caller identity, and the ceiling remains server-derived. At the time this was written it fixed one of the two skill tools; `42c2190` subsequently closed the other and added a caller-project-scope check covering both — see `SKILL-FIX-07` |
 | `SKILL-FIX-06` | The `withheld_count`/`withheld_reasons` aggregate introduced by `e0de4f3` was computed over the query-matched subset, making it a query-conditioned existence oracle: an unauthorized caller probing `"graphify"` read back a count of 1, and iterating the query space recovered the withheld corpus by name | Producer asserts fixed after this document's first independent review; authorization now runs over the whole index and the query narrows only authorized results, so the tally is constant for a given caller context. **Requires a SEC verdict** — the disclosure design itself has not been reviewed, only this leak closed |
+| `SKILL-FIX-07` | `secb_skill_resolve` accepted a fully caller-supplied scope context, so a caller bound to project A could assert project B — an authorization bypass by construction | **Closed by the MCP producer in `42c2190`, independently of this document.** `context` was removed from the tool's arguments in favour of a required `project_id`; runtime is taken from `callerIdentity.runtime_product_id` and classification from the server-derived ceiling. The fix goes further than the sibling path did: a new `DENY_CALLER_PROJECT_SCOPE` check verifies `args.project_id` against the caller identity's own `project_scopes` **before dispatch, for both skill tools**, so the caller cannot name a project it is not authorized for. Covered by [`tests/mcp-server.test.mjs`](../../../tests/mcp-server.test.mjs). Verified by this document's producer at `HEAD`; still owed independent REV |
 
 ### 7.5 Evidence and uncertainty register
 
@@ -688,7 +688,7 @@ reviewed trade-off defers it, `COULD` is future scope.
 | `FR-SKD-001` | MUST | Resolution remains fail-closed: only an explicit `ALLOW` authorizes; every other outcome denies with a typed code |
 | `FR-SKD-002` | MUST | Resolution requires a fully asserted caller context; a missing dimension denies |
 | `FR-SKD-003` | MUST | Any withheld-count disclosure MUST be invariant to the caller's query — authorization is evaluated over the whole index and the query narrows only authorized results. *The inverse ordering made the counter a query-conditioned existence oracle (`SKILL-FIX-06`). **The disclosure design itself is unreviewed and requires a SEC verdict**: even a query-invariant tally discloses corpus size, and the per-code breakdown discloses cross-project existence (`DENY_PROJECT_SCOPE`), above-ceiling existence (`DENY_DATA_CLASSIFICATION`), incident volume (`DENY_REVOKED`), and candidate pipeline volume (`DENY_NOT_PUBLISHED`). SEC may require a single untyped boolean for low-ceiling callers instead* |
-| `FR-SKD-003a` | MUST | `secb_skill_resolve` derives scope from the resolved caller identity rather than accepting it as an argument, matching the `secb_skill_hub_search` path (`SKILL-DRIFT-14`) |
+| `FR-SKD-003a` | MUST | Every skill tool derives scope from the resolved caller identity rather than accepting it as an argument, and verifies any caller-named project against the caller's own authorized scopes. *Satisfied at `HEAD` by `42c2190` (`SKILL-FIX-07`); retained as a standing requirement so a future tool cannot reintroduce the pattern* |
 | `FR-SKD-003b` | MUST | The `.agents/install/` file-copy path is either bound to governed distribution or explicitly quarantined as a development-only tool that must not be used to provision an authorized agent (`SKILL-DRIFT-15`) |
 | `FR-SKD-004` | MUST | Package self-assertions — including `status` and `allow_implicit_invocation` — are never authorization inputs (`SKILL-DRIFT-04`) |
 | `FR-SKD-005` | MUST | Implicit or automatic skill invocation is denied unless policy authorized that skill for that context |
@@ -829,7 +829,7 @@ evaluation, or a test pass as governance acceptance.
 | Revocation lag | Resolution-time revocation re-check; measured containment time |
 | Silent withholding | A withheld indicator on every surface, at a disclosure level SEC has approved (`OD-SK-11`). **Not** an unreviewed aggregate: the first implementation of this control was itself an existence oracle (`SKILL-FIX-06`) |
 | Withheld-count enumeration | Query-invariant tallies; SEC-approved disclosure level; negative test asserting the tally does not vary with the caller query |
-| Caller-chosen scope | Scope derived from resolved caller identity on every skill tool, not accepted as an argument (`SKILL-DRIFT-14`); cross-project negative tests |
+| Caller-chosen scope | Scope derived from resolved caller identity on every skill tool, not accepted as an argument, plus a pre-dispatch check of any caller-named project against the caller's own scopes (`SKILL-FIX-07`); cross-project negative tests |
 | Out-of-band distribution | Ungoverned file-copy paths bound to governed distribution or quarantined (`SKILL-DRIFT-15`); doctor-style detection of skills present in a harness directory but not authorized |
 | Fabricated efficiency claims | Measured-or-absent rule on every displayed figure |
 | Registry divergence | One authoritative contract and registry; intake mapper is the only import path |
@@ -864,7 +864,7 @@ which is not isolated non-production mutation.
 | `WP-SK-03` | Intake and mapping service with licence, secret, dependency, and knowledge-provenance gates | `WP-SK-02` | R3/M2 | 22 packages produce candidate manifests or typed findings; a candidate with no approved knowledge claim is refused |
 | `WP-SK-04` | Evaluation runner — baseline, skill-enabled, adversarial, boundary, rationalization; sandbox, workspace lease, budget measurement, Evidence Ledger submission | `WP-SK-03` | R3/M2 | One suite executes end to end and emits **independently accepted** evidence |
 | `WP-SK-05` | Promotion service — evidence binding, separation of duties, decision minting, resolver registration | `WP-SK-04` | R3/**M3** | One skill reaches `PUBLISHED`; self-promotion refused under test |
-| `WP-SK-06` | Distribution hardening — full scope set, resolution-time revocation, resolution events, `secb_skill_resolve` scope derivation | `WP-SK-05` | R3/**M3** | Scope and revocation negative tests pass; `SKILL-DRIFT-14` closed |
+| `WP-SK-06` | Distribution hardening — full scope set, resolution-time revocation, resolution events | `WP-SK-05` | R3/**M3** | Scope and revocation negative tests pass |
 | `WP-SK-07` | Maturity-pipeline correction — stage 5 renamed to candidate, no `.agents/skills` path claim, no write path | `WP-SK-01` | R2/M2 | `SKILL-DRIFT-05` closed |
 | `WP-SK-08` | Consumption events and outcome monitoring | `WP-SK-06` | R2/M2 | Attribution coverage measurable |
 | `WP-SK-09` | Command Center SkillsHub view from authoritative records | `WP-SK-06` | R1/M2 | Zero fixture fields; `SKILL-DRIFT-07` closed |
@@ -1028,7 +1028,7 @@ behaviour changes.
 | [`.agents/scripts/validate_pack.py`](../../../.agents/scripts/validate_pack.py) | Structural conformance mechanism; `SKILL-DRIFT-02` |
 | [`.agents/install/`](../../../.agents/install/) | Ungoverned distribution path; `SKILL-DRIFT-15` |
 | [`.agents/PACK.yaml`](../../../.agents/PACK.yaml), `.agents/MANIFEST.sha256`, [`source-traceability.md`](../../../.agents/docs/source-traceability.md) | Pack provenance chain; §20 |
-| [`src/mcp/secb-mcp-server.mjs`](../../../src/mcp/secb-mcp-server.mjs), [`tool-catalog.mjs`](../../../src/mcp/tool-catalog.mjs) | MCP skill surfaces; `SKILL-DRIFT-06`, `SKILL-DRIFT-14` |
+| [`src/mcp/secb-mcp-server.mjs`](../../../src/mcp/secb-mcp-server.mjs), [`tool-catalog.mjs`](../../../src/mcp/tool-catalog.mjs) | MCP skill surfaces; `SKILL-DRIFT-06`, `SKILL-FIX-07` |
 | [`work-package-contract.md`](../work-package-contract.md), [`05-work-package-lifecycle.md`](../../12-execution/05-work-package-lifecycle.md) | Work-package field requirements; §15 |
 | [`governance-baseline.md`](../../00-governance/governance-baseline.md) | Standing-exception prohibition; `FR-SKM-007` |
 | [`skill-resolver.mjs`](../../../src/registry/skill-resolver.mjs) | Distribution enforcement, deny codes |
@@ -1065,9 +1065,12 @@ behaviour changes.
    disclosure is shipped code the producer authored, and this document elevates
    it to a MUST and to a §14 threat control. It must not be entrenched before
    SEC has assessed the design.
-6. **MCP producer** — `SKILL-DRIFT-14` (`secb_skill_resolve` caller-supplied
-   scope) is in `src/mcp/`, outside this document's producer's scope. Reported,
-   not fixed here.
+6. **REV, second item** — the withdrawal of `SKILL-DRIFT-14` (see `SKILL-FIX-07`
+   and the v0.3.0 change-log entry). This document published a stale observation
+   as a live authorization finding, and the same failure mode — asserting a state
+   without re-verifying against a moving `HEAD` — produced three false absences
+   in v0.1.0. REV should treat every remaining state claim as suspect until
+   re-derived, not just the ones already corrected.
 7. **ENGIN** — no implementation is authorized by this document, including
    `WP-SK-07`. *An earlier revision released `WP-SK-07` on the producer's own
    assessment of its dependency profile; that was an authority the producer does
@@ -1085,3 +1088,4 @@ authorized — not that anyone is required to build it.
 |---|---|---|---|
 | `0.1.0-draft` | 2026-08-01 | Claude Code (worker agent) | Initial SkillsHub PRD candidate at baseline `e0de4f3` |
 | `0.2.0-draft` | 2026-08-01 | Claude Code (worker agent) | Rework after two independent producer-side reviews. **Retractions:** the document asserted that no code read `evals/`, that no distribution machinery existed, and that no provenance record existed — all three false, caused by auditing `.agents/skills/**` without opening `.agents/`. A fourth manifest shape (the pack schema), the pack validator, four installers, and the pack provenance chain are now recorded. **Corrections:** resolver deny codes 8→7; template-only fields 8→9; `graphify` is a real package; the test-count contradiction; the stale baseline declaration; roadmap exit-criterion attribution; the unevidenced derivation claim in `SKILL-DRIFT-12`. **New findings:** `SKILL-DRIFT-14` (`secb_skill_resolve` caller-supplied scope) and `SKILL-DRIFT-15` (ungoverned installers). **Authority corrections:** withdrew the `WP-SK-07` implementation carve-out, added a GOV authorization step, restored Restricted Publication and budget acceptance to MUST, added rationalization testing, removed the standing-exception escape hatch from `FR-SKM-007`, separated permanent prohibitions from MVP scoping, added the knowledge-claim precondition and Evidence Ledger routing, added per-WP risk/mutation classes. **Code:** `SKILL-FIX-06` closed a withheld-count existence oracle introduced by `e0de4f3` |
+| `0.3.0-draft` | 2026-08-01 | Claude Code (worker agent) | **Withdraws `SKILL-DRIFT-14`, which was never true at this document's own pin.** The producer observed `secb_skill_resolve` passing a caller-supplied context at an early `HEAD`, then published it as a live authorization bypass without re-verifying. The MCP producer had already closed it in `42c2190` at 01:15:31; the PRD asserting it was committed at 02:11:24 and the REV request at 02:13:47. Recorded as `SKILL-FIX-07`, which also documents that the landed fix is stronger than the one this document would have proposed: it adds a pre-dispatch `DENY_CALLER_PROJECT_SCOPE` check binding any caller-named project to the caller identity's own `project_scopes`, across **both** skill tools. Root cause is the same failure mode that produced the v0.1.0 false absences — asserting a state without re-deriving it against a moving `HEAD` — and §22 now directs REV accordingly. `FR-SKD-003a` is retained as a standing requirement rather than deleted, so the pattern cannot be reintroduced |

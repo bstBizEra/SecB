@@ -60,12 +60,14 @@ handoff:
     - "tests/mcp-hub-launcher.test.mjs was excluded from the suite run. It fails on this host with 'ps: unknown option -- o' under Git Bash on Windows and takes over ten minutes to time out. Unrelated to SkillsHub; not verified against a pristine baseline."
     - "PRD section 7 observations were taken at e0de4f3. HEAD has since advanced through concurrent MCP work. Observations are baseline-accurate but stale relative to the pin."
     - "The document asserts several absences. A search proves absence only for the patterns searched, and v0.1.0 was wrong about three of them for exactly that reason."
-  unresolved_findings:
+  corrections_after_dispatch:
     - id: "SKILL-DRIFT-14"
-      severity: "highest technical severity in this round"
-      finding: "secb_skill_resolve dispatches as resolveSkill(args.skill_id, args.version, args.context ?? {}). The entire scope context is caller-supplied, so a caller bound to project A may assert project B. Same defect class as the one fixed on the secb_skill_hub_search path in e0de4f3, still open on this path. Latent only because the resolver registry is empty at runtime."
-      owner: "MCP producer (src/mcp)"
-      status: "reported, not fixed"
+      correction: "WITHDRAWN. This packet dispatched it as the highest-severity unresolved finding. It was not true at the pin. secb_skill_resolve did accept a fully caller-supplied scope context at e0de4f3, but the MCP producer closed it in 42c2190 at 01:15:31 - 56 minutes before the reviewed PRD was committed at 02:11:24 and 58 before this packet at 02:13:47. The producer observed the defect at an earlier HEAD and published it without re-verifying."
+      landed_fix: "42c2190 removed context from the tool arguments in favour of a required project_id, derives runtime from callerIdentity.runtime_product_id and classification from the server ceiling, and adds a pre-dispatch DENY_CALLER_PROJECT_SCOPE check verifying args.project_id against the caller identity's own project_scopes for BOTH skill tools. Covered by tests/mcp-server.test.mjs. This is stronger than the fix this document would have proposed."
+      recorded_as: "SKILL-FIX-07 in SECB-PRD-SKILLSHUB-001 v0.3.0-draft"
+      status: "closed by another producer, independently of this work"
+      review_implication: "The root cause is the same failure mode that produced three false absence claims in PRD v0.1.0: asserting a state without re-deriving it against a moving HEAD. REV should treat every remaining state claim in the reviewed document as suspect until independently re-derived."
+  unresolved_findings:
     - id: "SKILL-DRIFT-15"
       severity: "high"
       finding: "The four .agents/install scripts copy every package into a harness skills directory with no identity, scope, classification, promotion or revocation check. This is the operative distribution path today and it bypasses the SkillsHub entirely."
