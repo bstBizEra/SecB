@@ -145,6 +145,32 @@ function runHubStreaming(lines, { args = [], closeAfterFirstResponseMs = 0, time
   });
 }
 
+/** Await one child exit without allowing a failed signal path to hang the suite. */
+function waitForChildExit(child, timeoutMs = 10_000) {
+  return new Promise((resolvePromise, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.off("exit", onExit);
+      child.off("error", onError);
+      callback(value);
+    };
+    const onExit = (code, signal) => finish(resolvePromise, { code, signal });
+    const onError = (error) => finish(reject, error);
+    const timer = setTimeout(
+      () => finish(reject, new Error(`child did not exit within ${timeoutMs}ms`)),
+      timeoutMs
+    );
+    child.once("exit", onExit);
+    child.once("error", onError);
+    if (child.exitCode !== null || child.signalCode !== null) {
+      onExit(child.exitCode, child.signalCode);
+    }
+  });
+}
+
 /** Count live fixture processes carrying this test's unique marker. */
 function countFixtureProcesses(execFileSync, marker) {
   let out = "";
@@ -287,7 +313,13 @@ test("a proxied call still succeeds once the background startup completes", asyn
 
 // --- U5: no orphan on a signal during startup ------------------------------
 
-test("SIGINT during startup leaves no orphaned child", async () => {
+test("SIGINT during startup leaves no orphaned child", {
+  // Node's Windows child-process API does not deliver POSIX SIGINT semantics,
+  // and this assertion also depends on ps/pkill. Windows shutdown coverage is
+  // provided by the stdin-close process test above, which is the MCP client
+  // disconnect path used on that host.
+  skip: process.platform === "win32" ? "POSIX signal/orphan assertion" : false
+}, async () => {
   const { execFileSync } = await import("node:child_process");
   const marker = `secb-u5-orphan-${process.pid}-${Date.now()}`;
   // clingy, not silent: a silent fixture exits by itself the moment the parent's
@@ -320,7 +352,7 @@ test("SIGINT during startup leaves no orphaned child", async () => {
     });
 
     child.kill("SIGINT");
-    await new Promise((resolveExit) => child.once("exit", resolveExit));
+    await waitForChildExit(child);
     // Let the OS finish reaping before counting.
     await new Promise((r) => setTimeout(r, 500));
 
