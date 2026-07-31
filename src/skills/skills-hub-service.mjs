@@ -197,8 +197,21 @@ export class SecBSkillsHub {
    * Token-efficient search across authorized skills.
    *
    * Withheld packages are reported as aggregate counts by deny code — enough
-   * for an operator to see that the hub is gated rather than empty, without
-   * disclosing which packages exist or any of their content.
+   * for an operator to see that the hub is gated rather than empty.
+   *
+   * ORDERING IS THE CONTROL (IMM-SKILL-HUB-02): authorization runs over the
+   * WHOLE index and the caller's query is applied only to what it is already
+   * authorized to see. The reverse order — filter by query, then tally the
+   * denials among the matches — made the counter a query-conditioned existence
+   * oracle: an unauthorized caller searching "graphify" and reading back
+   * withheld_count === 1 learned that package exists, and iterating the query
+   * space recovered the withheld corpus by name. The per-code breakdown leaked
+   * further by category (DENY_PROJECT_SCOPE confirmed cross-project skills,
+   * DENY_REVOKED disclosed incident volume).
+   *
+   * Because the tally no longer depends on `query`, it is constant for a given
+   * caller context and carries no per-package signal. The corpus size is still
+   * disclosed, but as a constant rather than a probe channel.
    *
    * @param {string} query
    * @param {object} context - { projectId, runtime, dataClassification }
@@ -209,17 +222,19 @@ export class SecBSkillsHub {
     const q = query.toLowerCase().trim();
 
     for (const skill of this.#skillsIndex.values()) {
-      const isMatch = !q
-        || skill.name.toLowerCase().includes(q)
-        || skill.description.toLowerCase().includes(q)
-        || skill.title.toLowerCase().includes(q);
-      if (!isMatch) continue;
-
       const verdict = this.#authorize(skill, context);
       if (!verdict.allowed) {
         withheld[verdict.deny_code] = (withheld[verdict.deny_code] ?? 0) + 1;
         continue;
       }
+
+      // Query narrowing applies only to authorized entries, so it cannot
+      // become a channel for probing what was withheld.
+      const isMatch = !q
+        || skill.name.toLowerCase().includes(q)
+        || skill.description.toLowerCase().includes(q)
+        || skill.title.toLowerCase().includes(q);
+      if (!isMatch) continue;
 
       results.push({
         name: skill.name,

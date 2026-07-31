@@ -136,6 +136,32 @@ describe('SecBSkillsHub fail-closed authorization', () => {
     assert.equal(denied.deny_code, 'DENY_NOT_PUBLISHED');
   });
 
+  // IMM-SKILL-HUB-02 regression pin. The withheld tally previously counted only
+  // packages matching the caller's query, so an unauthorized caller could probe
+  // it for package existence and recover the corpus by name. The tally must not
+  // vary with the query.
+  it('AC-SKILLS-HUB-06a: withheld counts do not vary with the caller query', () => {
+    const hub = new SecBSkillsHub();
+    const probe = (q) => hub.searchSkills(q, CONTEXT);
+
+    const baseline = probe('');
+    assert.ok(baseline.withheld_count > 1, 'fixture must withhold more than one package');
+
+    for (const q of ['threat', 'graphify', 'worktree', 'zzzz-no-such-package', 'a', 'z']) {
+      const probed = probe(q);
+      assert.equal(
+        probed.withheld_count,
+        baseline.withheld_count,
+        `query "${q}" must not change the withheld count`
+      );
+      assert.deepEqual(
+        probed.withheld_reasons,
+        baseline.withheld_reasons,
+        `query "${q}" must not change the withheld breakdown`
+      );
+    }
+  });
+
   it('AC-SKILLS-HUB-07: unknown skill names return a typed not-found deny', () => {
     const hub = new SecBSkillsHub({ services: { skillResolver: allowAll() } });
     assert.equal(hub.getSkill('no-such-skill', CONTEXT).deny_code, 'DENY_SKILL_NOT_FOUND');
