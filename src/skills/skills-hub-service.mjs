@@ -14,9 +14,30 @@
  * DENY_UNBOUND_CONTEXT — was read as an allow, and an unwired resolver
  * skipped the check entirely.
  *
- * A package's own `manifest.yaml` is discovery metadata and is never an
- * authorization input: `status: published` in a file on disk is a
- * self-attestation, not a promotion decision.
+ * A package's own `manifest.yaml` supplies its LOOKUP IDENTITY, and nothing
+ * more. `status: published` in a file on disk is a self-attestation, not a
+ * promotion decision, and is never read here.
+ *
+ * IDENTITY BINDING (IMM-SKILL-HUB-03). An earlier revision of this header
+ * claimed the package manifest "is never an authorization input". That was
+ * false: `skill_id` and `version` are lifted from the package's own
+ * manifest.yaml and used as the resolver lookup key, so a package that
+ * declared a governed identity inherited that identity's authorization and
+ * was then served with its OWN body — a confused deputy. Two controls now
+ * stand between a declared identity and an ALLOW:
+ *
+ *   1. an identity claimed by more than one indexed package is poisoned for
+ *      all of them (DENY_AMBIGUOUS_IDENTITY), so impersonation cannot win a
+ *      race with the genuine package; and
+ *   2. the resolved governed manifest must name the directory it was found
+ *      in (DENY_IDENTITY_MISMATCH).
+ *
+ * RESIDUAL, deliberately not closed here: control 2 binds to a filesystem
+ * name, not to content. An actor who can both displace the genuine package
+ * directory and author its manifest still impersonates it. Closing that needs
+ * a content digest carried IN the governed manifest and verified at
+ * resolution — the `source.commit_sha` field the contract already reserves.
+ * That is intake and promotion work (FR-SKI-002), not a hub-local fix.
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -25,29 +46,102 @@ import { resolve, join } from "node:path";
 const SNIPPET_LIMIT = 400;
 const DESCRIPTION_LIMIT = 150;
 
+// Every deny code the hub will report. A resolver-supplied code outside this
+// set is bucketed as DENY_UNRESOLVED rather than trusted into an output key:
+// the resolver is an injected dependency, so its codes are not this module's
+// to vouch for.
+const DENY_CODES = new Set([
+  // hub-local
+  "DENY_NO_RESOLVER",
+  "DENY_UNGOVERNED_PACKAGE",
+  "DENY_AMBIGUOUS_IDENTITY",
+  "DENY_IDENTITY_MISMATCH",
+  "DENY_RESOLVER_ERROR",
+  "DENY_SKILL_NOT_FOUND",
+  "DENY_UNRESOLVED",
+  // governed SkillResolver resolution-time codes
+  "DENY_UNBOUND_CONTEXT",
+  "DENY_DATA_CLASSIFICATION",
+  "DENY_UNKNOWN_SKILL",
+  "DENY_NOT_PUBLISHED",
+  "DENY_REVOKED",
+  "DENY_PROJECT_SCOPE",
+  "DENY_RUNTIME"
+]);
+
 /**
- * Parses the top-level scalar entries of a YAML document. Nested maps and
- * sequences are skipped on purpose: the hub reads identity and labels only,
- * so an indented block is never silently promoted to a top-level key.
+ * Parses the top-level scalar entries of a YAML document.
+ *
+ * This is NOT a YAML parser and must never be treated as one. It reads
+ * identity and labels only, and every divergence from real YAML below is
+ * resolved in the direction that denies rather than admits, because the keys
+ * it extracts are used as an authorization lookup key.
+ *
+ * Divergences a real loader would handle, closed here because each one let a
+ * crafted manifest smuggle a `skill_id` past a reviewer reading the same file:
+ *
+ *   - a second `---` document separator ends parsing; only document 1 is read,
+ *     so an identity hidden in document 2 is not seen;
+ *   - a multi-line double- or single-quoted scalar is consumed to its closing
+ *     quote, so a `skill_id:` line sitting at column 0 INSIDE a quoted value
+ *     is part of that value, not a key;
+ *   - a duplicate top-level key poisons that key entirely rather than taking
+ *     last-wins, because strict loaders reject the document and the hub must
+ *     not silently pick a different answer than the validator does; and
+ *   - an unquoted inline `# comment` is stripped from the value.
+ *
+ * Nested maps and sequences are skipped: an indented key is never promoted to
+ * a top-level one.
  */
 function parseTopLevelScalars(text) {
-  const data = {};
-  for (const rawLine of text.split(/\r?\n/)) {
+  const data = Object.create(null);
+  const duplicated = new Set();
+  const lines = text.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const rawLine = lines[i];
+    if (rawLine.trim() === "---" && i > 0) break; // document 2 onward is not ours
     if (rawLine.trim() === "" || rawLine.trimStart().startsWith("#")) continue;
     if (/^\s/.test(rawLine) || rawLine.startsWith("-")) continue;
+
     const match = /^([A-Za-z0-9_.-]+):\s*(.*)$/.exec(rawLine);
     if (!match) continue;
-    const value = match[2].trim();
+    const key = match[1];
+    let value = match[2].trim();
+
+    // Consume a quoted scalar to its close so its interior cannot be read as
+    // further keys. An unterminated quote swallows the rest of the document,
+    // which is the fail-closed direction.
+    const quote = value[0] === '"' || value[0] === "'" ? value[0] : null;
+    if (quote && !(value.length > 1 && value.endsWith(quote))) {
+      while (i + 1 < lines.length) {
+        i += 1;
+        value += `\n${lines[i]}`;
+        if (lines[i].trimEnd().endsWith(quote)) break;
+      }
+    }
+
+    if (!quote) value = value.replace(/\s+#.*$/, "").trim();
     if (value === "") continue; // block opener, not a scalar
-    data[match[1]] = value.replace(/^["']|["']$/g, "");
+
+    if (key in data) {
+      duplicated.add(key);
+      continue;
+    }
+    data[key] = quote ? value.slice(1, -1) : value.replace(/^["']|["']$/g, "");
   }
+
+  for (const key of duplicated) delete data[key];
   return data;
 }
 
 function parseFrontmatter(content) {
   const lines = content.split(/\r?\n/);
   if (lines[0]?.trim() !== "---") return { data: {}, body: content };
-  const closing = lines.indexOf("---", 1);
+  // Trailing whitespace on the closing delimiter previously made it
+  // unmatchable, so the entire file - frontmatter included - became the body
+  // and leaked into title, description, and snippet.
+  const closing = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
   if (closing === -1) return { data: {}, body: content };
   return {
     data: parseTopLevelScalars(lines.slice(1, closing).join("\n")),
@@ -93,6 +187,11 @@ export class SecBSkillsHub {
   registerSkill({ name, title = name, description = name, content = `# ${name}\n${description}`, skillId = null, version = null, packageStatus = null }) {
     this.#skillsIndex.set(name, {
       name,
+      // The binding key: what the governed manifest must name for this entry
+      // to resolve. For an on-disk package it is the directory, which is
+      // filesystem-derived; for a programmatic registration it is the
+      // caller-supplied name.
+      bindingName: name,
       title,
       description,
       content,
@@ -101,6 +200,30 @@ export class SecBSkillsHub {
       version,
       packageStatus
     });
+    this.#markAmbiguousIdentities();
+  }
+
+  /**
+   * Poisons any governed identity claimed by more than one indexed package.
+   *
+   * Without this, several packages could each declare the same
+   * `skill_id@version` and every one of them would resolve, because the
+   * resolver is asked only about the identity and knows nothing about who
+   * claimed it. Denying all claimants is the fail-closed reading: an
+   * ambiguous identity is not evidence that one of them is genuine.
+   */
+  #markAmbiguousIdentities() {
+    const claims = new Map();
+    for (const entry of this.#skillsIndex.values()) {
+      entry.ambiguousIdentity = false;
+      if (!entry.skillId || !entry.version) continue;
+      const key = `${entry.skillId}@${entry.version}`;
+      if (!claims.has(key)) claims.set(key, []);
+      claims.get(key).push(entry);
+    }
+    for (const claimants of claims.values()) {
+      if (claimants.length > 1) for (const entry of claimants) entry.ambiguousIdentity = true;
+    }
   }
 
   /**
@@ -133,6 +256,10 @@ export class SecBSkillsHub {
 
         this.#skillsIndex.set(entry.name, {
           name: data.name ?? entry.name,
+          // Filesystem-derived, NOT content-derived. The frontmatter `name`
+          // is authored by whoever wrote the package, so binding to it would
+          // let a package rename itself into another skill's identity.
+          bindingName: entry.name,
           title: firstHeading(body) ?? data.name ?? entry.name,
           path: skillMdPath,
           description: data.description ?? firstProse(body),
@@ -148,6 +275,8 @@ export class SecBSkillsHub {
         // An unreadable package is simply not indexed.
       }
     }
+
+    this.#markAmbiguousIdentities();
   }
 
   #readPackageManifest(manifestPath) {
@@ -169,10 +298,13 @@ export class SecBSkillsHub {
   #authorize(entry, context = {}) {
     const resolver = this.#services?.skillResolver;
     if (typeof resolver?.resolveSkill !== "function") {
-      return { allowed: false, deny_code: "DENY_NO_RESOLVER", message: "No governed skill resolver is wired" };
+      return { allowed: false, deny_code: "DENY_NO_RESOLVER" };
     }
     if (!entry.skillId || !entry.version) {
-      return { allowed: false, deny_code: "DENY_UNGOVERNED_PACKAGE", message: "Package carries no governed skill identity" };
+      return { allowed: false, deny_code: "DENY_UNGOVERNED_PACKAGE" };
+    }
+    if (entry.ambiguousIdentity) {
+      return { allowed: false, deny_code: "DENY_AMBIGUOUS_IDENTITY" };
     }
 
     let verdict;
@@ -183,12 +315,22 @@ export class SecBSkillsHub {
         dataClassification: context.dataClassification
       });
     } catch (_err) {
-      return { allowed: false, deny_code: "DENY_RESOLVER_ERROR", message: "Skill resolution failed" };
+      return { allowed: false, deny_code: "DENY_RESOLVER_ERROR" };
     }
 
     if (verdict?.code !== "ALLOW" || !verdict.skill) {
+      // The resolver's `reason` is deliberately NOT propagated: it names the
+      // governed skill_id@version, which is exactly what a caller denied this
+      // skill must not learn.
       const code = typeof verdict?.code === "string" ? verdict.code : "DENY_UNRESOLVED";
-      return { allowed: false, deny_code: code, message: verdict?.reason ?? "Skill resolution did not return ALLOW" };
+      return { allowed: false, deny_code: code };
+    }
+
+    // The resolved manifest must describe THIS package. Without this, any
+    // package declaring a governed identity is served under that identity's
+    // authorization with its own body.
+    if (verdict.skill.name !== entry.bindingName) {
+      return { allowed: false, deny_code: "DENY_IDENTITY_MISMATCH" };
     }
     return { allowed: true, skill: verdict.skill };
   }
@@ -218,13 +360,20 @@ export class SecBSkillsHub {
    */
   searchSkills(query = "", context = {}) {
     const results = [];
-    const withheld = {};
-    const q = query.toLowerCase().trim();
+    // Null-prototype: the key is a resolver-supplied deny code, and on a plain
+    // object a code of "__proto__" or "toString" corrupted the aggregate
+    // instead of incrementing it - reporting 3 withheld when 25 were, which
+    // defeats the one thing the tally exists to say.
+    const withheld = Object.create(null);
+    // `query` is an optional MCP argument and is therefore never type-screened
+    // upstream; a non-string previously threw out of the tool handler.
+    const q = String(query ?? "").toLowerCase().trim();
 
     for (const skill of this.#skillsIndex.values()) {
       const verdict = this.#authorize(skill, context);
       if (!verdict.allowed) {
-        withheld[verdict.deny_code] = (withheld[verdict.deny_code] ?? 0) + 1;
+        const code = DENY_CODES.has(verdict.deny_code) ? verdict.deny_code : "DENY_UNRESOLVED";
+        withheld[code] = (withheld[code] ?? 0) + 1;
         continue;
       }
 
@@ -246,29 +395,47 @@ export class SecBSkillsHub {
       });
     }
 
+    // Sorted: insertion order followed index order, which revealed the deny
+    // category of the alphabetically-first withheld package. Query-invariant,
+    // so not an enumeration channel, but a positional signal with no purpose.
+    const sortedWithheld = Object.create(null);
+    for (const code of Object.keys(withheld).sort()) sortedWithheld[code] = withheld[code];
+
     return {
       ok: true,
-      query,
+      query: String(query ?? ""),
       count: results.length,
       skills: results,
-      withheld_count: Object.values(withheld).reduce((sum, n) => sum + n, 0),
-      withheld_reasons: withheld
+      withheld_count: Object.values(sortedWithheld).reduce((sum, n) => sum + n, 0),
+      withheld_reasons: sortedWithheld
     };
   }
 
   /**
    * Returns full skill content, gated on the same authorization decision.
    *
+   * INTERNAL API - NOT CALLER-FACING. It is not in the MCP tool catalog and
+   * has no callers outside tests. That matters, because its typed deny codes
+   * distinguish "present but you may not see it" from "absent", which is a
+   * per-name existence oracle of exactly the shape closed in searchSkills.
+   * The resolver `reason` string, which named the governed skill_id@version,
+   * is no longer propagated; the code distinction remains because it is
+   * useful internally and unreachable externally.
+   *
+   * BEFORE EXPOSING THIS ON ANY CALLER-FACING SURFACE, collapse every deny to
+   * one opaque code with a constant message and log the typed code
+   * server-side. Routed to SEC as part of OD-SK-11.
+   *
    * @param {string} name
    * @param {object} context - { projectId, runtime, dataClassification }
    */
   getSkill(name, context = {}) {
     const skill = this.#skillsIndex.get(name);
-    if (!skill) return { ok: false, deny_code: "DENY_SKILL_NOT_FOUND", message: `Skill ${name} not found` };
+    if (!skill) return { ok: false, deny_code: "DENY_SKILL_NOT_FOUND", message: "Skill unavailable" };
 
     const verdict = this.#authorize(skill, context);
     if (!verdict.allowed) {
-      return { ok: false, deny_code: verdict.deny_code, message: verdict.message };
+      return { ok: false, deny_code: verdict.deny_code, message: "Skill unavailable" };
     }
 
     return {

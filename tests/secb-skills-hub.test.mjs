@@ -1,5 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 import { SecBSkillsHub } from '../src/skills/skills-hub-service.mjs';
 import { SkillResolver } from '../src/registry/skill-resolver.mjs';
 import { runSecbSkillsCLI } from '../tools/secb-skills.mjs';
@@ -10,8 +12,29 @@ const CONTEXT = { projectId: 'prj_secb', runtime: 'claude-code', dataClassificat
 const PACKAGE_SKILL_ID = 'SECB-ARCH-014';
 const PACKAGE_VERSION = '0.1.0';
 
+// A permissive resolver that still returns a REALISTIC governed manifest: one
+// that names the package the identity belongs to. A stub returning a nameless
+// manifest is now correctly denied (DENY_IDENTITY_MISMATCH), because the hub
+// binds the resolved manifest to the directory it was found in.
 function allowAll() {
-  return { resolveSkill: () => ({ skill: { skill_id: 'stub' }, code: 'ALLOW' }) };
+  const owners = new Map();
+  const root = resolve(process.cwd(), '.agents/skills');
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const manifestPath = join(root, entry.name, 'manifest.yaml');
+    if (!existsSync(manifestPath)) continue;
+    const text = readFileSync(manifestPath, 'utf8');
+    const id = /^skill_id:\s*(\S+)/m.exec(text)?.[1];
+    const version = /^version:\s*(\S+)/m.exec(text)?.[1];
+    if (id && version) owners.set(`${id}@${version}`, entry.name);
+  }
+  return {
+    resolveSkill: (id, version) => {
+      const name = owners.get(`${id}@${version}`);
+      if (!name) return { skill: null, code: 'DENY_UNKNOWN_SKILL' };
+      return { skill: { skill_id: id, version, name }, code: 'ALLOW' };
+    }
+  };
 }
 
 function governedManifest(overrides = {}) {
@@ -159,6 +182,83 @@ describe('SecBSkillsHub fail-closed authorization', () => {
         baseline.withheld_reasons,
         `query "${q}" must not change the withheld breakdown`
       );
+    }
+  });
+
+  // IMM-SKILL-HUB-03 regression pin. skill_id/version are lifted from the
+  // package's OWN manifest and used as the resolver lookup key, so without a
+  // binding any package could declare a governed identity and be served under
+  // that identity's authorization with its own body.
+  it('AC-SKILLS-HUB-06b: a package may not be served under an identity that does not name it', () => {
+    // An identity no on-disk package claims, so the ambiguity check does not
+    // fire first and the name binding is tested in isolation.
+    const genuine = { skill_id: 'SECB-GEN-001', version: '1.0.0', name: 'security-threat-modeling' };
+    const hub = new SecBSkillsHub({
+      services: { skillResolver: { resolveSkill: () => ({ skill: genuine, code: 'ALLOW' }) } }
+    });
+
+    hub.registerSkill({
+      name: 'impostor',
+      skillId: genuine.skill_id,
+      version: genuine.version,
+      content: '# Impostor\nATTACKER-CONTROLLED-BODY'
+    });
+
+    const denied = hub.getSkill('impostor', CONTEXT);
+    assert.equal(denied.ok, false, 'a package claiming another skill identity must not resolve');
+    assert.equal(denied.deny_code, 'DENY_IDENTITY_MISMATCH');
+    assert.ok(
+      !hub.searchSkills('', CONTEXT).skills.some((s) => s.name === 'impostor'),
+      'the impostor must not appear in search results either'
+    );
+  });
+
+  it('AC-SKILLS-HUB-06c: an identity claimed by two packages is denied to both', () => {
+    const hub = new SecBSkillsHub({
+      services: { skillResolver: { resolveSkill: (id, v) => ({ skill: { skill_id: id, version: v, name: 'first' }, code: 'ALLOW' }) } }
+    });
+    hub.registerSkill({ name: 'first', skillId: 'SECB-DUP-001', version: '1.0.0' });
+    hub.registerSkill({ name: 'second', skillId: 'SECB-DUP-001', version: '1.0.0' });
+
+    // 'first' would otherwise pass the name binding; ambiguity denies it anyway.
+    assert.equal(hub.getSkill('first', CONTEXT).deny_code, 'DENY_AMBIGUOUS_IDENTITY');
+    assert.equal(hub.getSkill('second', CONTEXT).deny_code, 'DENY_AMBIGUOUS_IDENTITY');
+  });
+
+  it('AC-SKILLS-HUB-06d: deny responses do not disclose the governed identity', () => {
+    const hub = new SecBSkillsHub({
+      services: {
+        skillResolver: {
+          resolveSkill: (id, v) => ({ skill: null, code: 'DENY_UNKNOWN_SKILL', reason: `Unknown skill version: ${id}@${v}` })
+        }
+      }
+    });
+    const denied = hub.getSkill('security-threat-modeling', CONTEXT);
+    assert.equal(denied.ok, false);
+    assert.ok(!/SECB-ARCH/.test(denied.message ?? ''), 'resolver reason must not be echoed to the caller');
+  });
+
+  it('AC-SKILLS-HUB-06e: an unrecognized deny code cannot corrupt the withheld tally', () => {
+    for (const code of ['__proto__', 'toString', 'constructor']) {
+      const hub = new SecBSkillsHub({
+        services: { skillResolver: { resolveSkill: () => ({ skill: null, code }) } }
+      });
+      const result = hub.searchSkills('', CONTEXT);
+      assert.equal(typeof result.withheld_count, 'number', `${code} must not corrupt withheld_count`);
+      assert.ok(result.withheld_reasons.DENY_UNRESOLVED > 0, `${code} must be bucketed as DENY_UNRESOLVED`);
+      assert.ok(!(code in result.withheld_reasons), `${code} must not become an output key`);
+      // The tally must still account for every indexed package: the packages
+      // that carry no governed identity deny before the resolver is consulted.
+      const summed = Object.values(result.withheld_reasons).reduce((a, b) => a + b, 0);
+      assert.equal(summed, result.withheld_count, `${code} must not desync the total`);
+      assert.ok(result.withheld_count > 20, `${code} must not make withheld packages vanish`);
+    }
+  });
+
+  it('AC-SKILLS-HUB-06f: a non-string query does not throw', () => {
+    const hub = new SecBSkillsHub({ services: { skillResolver: allowAll() } });
+    for (const q of [null, undefined, 42, {}, []]) {
+      assert.equal(hub.searchSkills(q, CONTEXT).ok, true, `query ${JSON.stringify(q)} must not throw`);
     }
   });
 
