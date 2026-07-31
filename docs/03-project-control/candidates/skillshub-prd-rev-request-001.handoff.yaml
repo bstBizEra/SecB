@@ -1,0 +1,112 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_skillshub_prd_rev_request_001_v1_candidate"
+  record_status: "DRAFT_CANDIDATE"
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: "SkillsHub research and PRD session, 2026-08-01"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer may not self-review. This packet requests independent REV and QA per agent-team-and-sod; it is not a self-certification of the work."
+    - "The producer authored BOTH the reviewed document and the code it assesses (e0de4f3, e7d14ee). Section 7.4 of the PRD is producer-asserted disposition, not accepted evidence."
+    - "The two reviews already performed were producer-side subagents dispatched by the producer. They found real defects and the document was reworked accordingly, but they are NOT the independent REV/QA/SEC verdict required by decision-rights.md."
+    - "Review scope is FROZEN at the pinned commit. Commits after the pin, including this packet and its manifest registration, are governance records and not review targets."
+    - "No Work Package authorized this work. It was produced as advisory research at operator request. The absence of a work-package record is itself a finding for REV disposition."
+handoff:
+  handoff_id: "HANDOFF-SKILLSHUB-PRD-REV-001"
+  sequence: 1
+  source_agent_instance_id: "claude-code-secb-session-2026-08-01"
+  source_session_id: "bfb2c907-d860-4d79-a475-042b1ebdf7ee"
+  destination_role: "REV + QA + SEC (identities distinct from the producer), then human GOV"
+  project_id: "prj_secb_local"
+  work_package_id: null
+  objective: >-
+    Independent review of SECB-PRD-SKILLSHUB-001 v0.2.0-draft and of the two
+    SkillsHub code commits it assesses, plus a SEC verdict on the withheld-count
+    disclosure design (OD-SK-11) and disposition of two live authorization
+    findings the document reports but does not fix.
+  authorized_scope:
+    - "Branch feat/secb-ruflo-command-center, PINNED at commit 894b720."
+    - "Review targets: 894b720 (PRD + registration) and e7d14ee (oracle fix), and e0de4f3 (the prior SkillsHub fail-closed commit that the PRD section 7.4 asserts dispositions about)."
+    - "Read-only review. Findings as records. No fixes on the frozen range without a new pinned round."
+  work_completed:
+    - "Current-state discovery of MOD-SKILL across the skill corpus, the governed contract, the resolver, the MCP and CLI surfaces, the dashboard, and the .agents pack."
+    - "Produced SECB-PRD-SKILLSHUB-001: 15 drift findings, 6 producer-asserted dispositions, an evidence-and-uncertainty register, a target architecture, a domain model, 12 candidate work-package outlines, 7 exit gates, and 12 open decisions."
+    - "Fixed a fail-open authorization gate in the SkillsHub (e0de4f3, jointly with the MCP producer who bound the search tool to a governed caller context)."
+    - "Fixed a query-conditioned existence oracle in the withheld-count aggregate (e7d14ee)."
+    - "Reworked the PRD to v0.2.0 after two producer-side reviews: 3 retractions, 6 factual corrections, 2 new findings, and 8 authority or gate corrections."
+  artifacts_created:
+    - "docs/03-project-control/candidates/secb-skillshub-prd-001.md"
+    - "src/skills/skills-hub-service.mjs (modified)"
+    - "tests/secb-skills-hub.test.mjs (modified)"
+    - "MANIFEST.json, docs/MANIFEST.json, docs/README.md (registration only)"
+  decisions_made:
+    - "Fail closed on unknown: the hub allow-lists the resolver's single ALLOW code rather than deny-listing known deny codes. Consequence: zero skills are consumable today, which is the correct governed state and not a regression."
+    - "Did not fabricate governed manifest fields to make on-disk packages registrable. owner, source, project_scopes, max_data_classification, evidence_refs and approval_history are promotion-granted, not author-declared."
+    - "Did not edit src/mcp for SKILL-DRIFT-14 despite it being the highest-severity technical finding, because that area is under concurrent work by the MCP producer. Reported instead."
+    - "Registration and document committed together, because the validator asserts every manifest path exists and splitting them would break npm run validate on this branch."
+  assumptions:
+    - "The DecisionLedger can carry skill promotion decisions without contract change. UNVERIFIED, and load-bearing for WP-SK-05: if false, that work package becomes a governance-contract change at a higher risk class."
+    - "The 22 structurally complete packages are authored SecB content designed against public references, per .agents/docs/source-traceability.md. No independent REV/QA/SEC verdict on the corpus was found."
+    - "Evaluation execution requires a harness invocation capability that exists operationally but is wired to no runner today."
+  evidence_refs:
+    - "npm run validate at 894b720: 0 FAIL."
+    - "node --test over tests/*.test.mjs excluding mcp-hub-launcher at 894b720: 911 tests, 905 pass, 0 fail, 6 pre-existing BLOCKED skips."
+    - "Direct probe of the oracle before and after e7d14ee: 26 single-letter queries returned varying counts before, an identical constant after."
+  checks_performed:
+    - "node tools/validate-foundation.mjs (manifest existence, path uniqueness, docs count, schema closure, markdown link resolution across every registered file)."
+    - "Targeted node --test over the SkillsHub, worktree, and MCP server suites: 41 pass, 0 fail."
+    - "Two producer-side subagent reviews: a quantitative claim audit (62 claims checked, 14 not confirmed) and a governance authority-boundary review (2 CRITICAL, 6 HIGH, 5 MEDIUM, 2 LOW)."
+  known_limitations:
+    - "tests/mcp-hub-launcher.test.mjs was excluded from the suite run. It fails on this host with 'ps: unknown option -- o' under Git Bash on Windows and takes over ten minutes to time out. Unrelated to SkillsHub; not verified against a pristine baseline."
+    - "PRD section 7 observations were taken at e0de4f3. HEAD has since advanced through concurrent MCP work. Observations are baseline-accurate but stale relative to the pin."
+    - "The document asserts several absences. A search proves absence only for the patterns searched, and v0.1.0 was wrong about three of them for exactly that reason."
+  unresolved_findings:
+    - id: "SKILL-DRIFT-14"
+      severity: "highest technical severity in this round"
+      finding: "secb_skill_resolve dispatches as resolveSkill(args.skill_id, args.version, args.context ?? {}). The entire scope context is caller-supplied, so a caller bound to project A may assert project B. Same defect class as the one fixed on the secb_skill_hub_search path in e0de4f3, still open on this path. Latent only because the resolver registry is empty at runtime."
+      owner: "MCP producer (src/mcp)"
+      status: "reported, not fixed"
+    - id: "SKILL-DRIFT-15"
+      severity: "high"
+      finding: "The four .agents/install scripts copy every package into a harness skills directory with no identity, scope, classification, promotion or revocation check. This is the operative distribution path today and it bypasses the SkillsHub entirely."
+      owner: "ARCHI + GOV (OD-SK-12)"
+      status: "open"
+    - id: "OD-SK-11"
+      severity: "requires SEC verdict before the requirement is entrenched"
+      finding: "The withheld-count disclosure design is unreviewed. e7d14ee closed the enumeration channel, but a query-invariant tally still discloses corpus size, and the per-code breakdown still discloses cross-project existence, above-ceiling existence, incident volume, and candidate pipeline volume. FR-SKD-003 elevates this producer-authored design to a MUST."
+      owner: "SEC"
+      status: "open"
+    - id: "RATIONALIZATION-CORPUS-GAP"
+      severity: "medium"
+      finding: "Publication gate 7 requires adversarial AND rationalization tests. All 22 evaluation suites declare exactly four case types and none is rationalization. This is a corpus gap as well as a runner gap: no existing suite can satisfy the gate."
+      owner: "SKILL + QA"
+      status: "open"
+    - id: "PRD-7.4-SELF-ASSERTION"
+      severity: "medium"
+      finding: "Section 7.4 records six dispositions about code the producer authored. They are producer claims, not accepted evidence, and are explicitly routed here for REV."
+      owner: "REV"
+      status: "open"
+  risks:
+    - "R3 at activation: skills alter agent behaviour, tool use, and evidence production across every harness. This round reviews an M1 planning artifact and two R2 code changes."
+    - "Two live authorization findings remain open, one of them an authorization bypass by construction."
+    - "No work package governs this work, so there is no declared write set or approval field to check the delivered changes against."
+    - "The PRD proposes restoring three doctrinal gates the producer had previously downgraded. If REV disagrees with the restoration, the requirement set changes materially."
+  recommended_next_action: >-
+    REV: verify the 15 drift findings against source and hunt for further false
+    absences, given that v0.1.0 asserted three that were wrong. Confirm section
+    7.4 dispositions independently. QA: re-run validate and the suite at the pin
+    and confirm the oracle probe. SEC: rule on OD-SK-11 before FR-SKD-003 is
+    accepted, and disposition SKILL-DRIFT-14 and SKILL-DRIFT-15. GOV: decide
+    whether to authorize the programme at all; no work package in PRD section 15
+    is authorized by the document. Return verdicts as records; operator merges or
+    orders rework.
+  confidence: >-
+    medium-high on the current-state discovery after rework and two review
+    rounds; medium on the requirement set, which restores gates the producer had
+    wrongly downgraded and has not been reviewed in its restored form; low on
+    completeness of absence claims, given the v0.1.0 failure mode.
+  context_delta:
+    - "MOD-SKILL tracker status remains QUEUED - partial. This packet does not change it."
+    - "Zero skills are consumable through SecB at the pin. This is the governed state produced by e0de4f3, not a regression."
+    - "docs/MANIFEST.json file_count_excluding_manifests moved 67 to 68."
+  envelope_sha256: "UNSET_AT_AUTHORING"
