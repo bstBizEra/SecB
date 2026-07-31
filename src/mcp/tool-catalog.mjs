@@ -188,10 +188,10 @@ export const TOOL_CATALOG = freeze([
   },
   {
     name: "secb_skill_hub_search",
-    description: "Token-efficient search across local governed skills in .agents/skills/ with classification ceiling enforcement. Pure function; returns minimal skill snippets.",
-    required: [],
+    description: "Token-efficient search across local governed skills in .agents/skills/ for a declared project, using the resolved caller runtime and classification ceiling. Pure function; returns minimal authorized skill snippets.",
+    required: ["project_id"],
     optional: ["query"],
-    idParams: []
+    idParams: ["project_id"]
   },
   {
     name: "secb_worktree_status",

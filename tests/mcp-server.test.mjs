@@ -12,7 +12,16 @@ function registryStub() {
   return {
     resolve(id) {
       if (id === CALLER) {
-        return { resolved: true, quarantined: false, identity: { agent_instance_id: CALLER, max_data_classification: "INTERNAL", permitted_roles: ["ENGIN"] } };
+        return {
+          resolved: true,
+          quarantined: false,
+          identity: {
+            agent_instance_id: CALLER,
+            runtime_product_id: "claude-code",
+            max_data_classification: "INTERNAL",
+            permitted_roles: ["ENGIN"]
+          }
+        };
       }
       if (id === "inst_candidate") return { resolved: false, quarantined: true, reason: "Evaluation status is CANDIDATE, not APPROVED" };
       return { resolved: false, quarantined: true, reason: "Unknown agent instance" };
@@ -171,6 +180,42 @@ test("an optional id param may be omitted, but a present one is still screened",
   assert.equal(call("secb_mcp_upstream_resolve", { host: "wsl|x" }).error.data.code, "DENY_RESERVED_DELIMITER");
   // A required id param is still mandatory.
   assert.equal(call("secb_registry_resolve", {}).error.data.code, "DENY_INVALID_PARAMS");
+});
+
+test("skill search binds declared project to the resolved caller runtime and ceiling", () => {
+  let observed;
+  const server = new SecBMcpServer({
+    services: {
+      registry: registryStub(),
+      skillsHub: {
+        searchSkills(query, context) {
+          observed = { query, context };
+          return { ok: true, query, count: 0, skills: [], withheld_count: 0, withheld_reasons: {} };
+        }
+      }
+    },
+    invocationLog: () => {}
+  });
+  const call = (args) => server.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "secb_skill_hub_search", arguments: args }
+  }, { callerInstanceId: CALLER });
+
+  assert.equal(call({ query: "threat" }).error.data.code, "DENY_INVALID_PARAMS");
+  assert.equal(call({ project_id: "prj|other", query: "threat" }).error.data.code, "DENY_RESERVED_DELIMITER");
+
+  const allowed = call({ project_id: "prj_secb_local", query: "threat" });
+  assert.ok(allowed.result);
+  assert.deepEqual(observed, {
+    query: "threat",
+    context: {
+      projectId: "prj_secb_local",
+      runtime: "claude-code",
+      dataClassification: "INTERNAL"
+    }
+  });
 });
 
 test("happy path returns a data_untrusted-marked projection", () => {

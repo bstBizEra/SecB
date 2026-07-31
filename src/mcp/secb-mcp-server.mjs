@@ -457,7 +457,7 @@ export class SecBMcpServer {
 
     let payload;
     try {
-      payload = this.#dispatch(name, args, ceiling);
+      payload = this.#dispatch(name, args, ceiling, resolved.identity);
     } catch (error) {
       return auditAndReturn("DENY_TOOL_ERROR", ceiling, () => rpcError(id, -32000, `Tool error: ${error.code ?? error.name}`, { code: error.code ?? "DENY_TOOL_ERROR" }));
     }
@@ -473,7 +473,7 @@ export class SecBMcpServer {
   }
 
   // Read-only dispatch. Each handler is a projection of a delivered service.
-  #dispatch(name, args, ceiling) {
+  #dispatch(name, args, ceiling, callerIdentity) {
     const s = this.#services;
     switch (name) {
       case "secb_work_package_resolve_effective":
@@ -526,7 +526,11 @@ export class SecBMcpServer {
       }
       case "secb_skill_hub_search": {
         const skillsHub = s.skillsHub ?? new SecBSkillsHub({ services: s });
-        return skillsHub.searchSkills(args.query ?? "", { classificationFloor: ceiling });
+        return skillsHub.searchSkills(args.query ?? "", {
+          projectId: args.project_id,
+          runtime: callerIdentity.runtime_product_id,
+          dataClassification: ceiling
+        });
       }
       case "secb_worktree_status":
         return secbWorktreeStatus({ worktreeDir: args.worktreeDir });

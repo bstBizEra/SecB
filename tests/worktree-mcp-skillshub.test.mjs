@@ -33,14 +33,22 @@ test("secbWorktreeInspectStorage inspects worktree-server storage", () => {
   assert.equal(zipFile.name, "Software_v2.0.zip");
 });
 
-test("SecBSkillsHub discovers worktree skill", () => {
-  const hub = new SecBSkillsHub();
-  const searchRes = hub.searchSkills("worktree");
+// The worktree and secb-project-registry packages carry no manifest.yaml, so
+// they have no governed identity to resolve. They index for discovery and
+// withhold on access; previously the unwired-resolver path returned their
+// content outright.
+test("SecBSkillsHub withholds the ungoverned worktree package", () => {
+  const hub = new SecBSkillsHub({ services: { skillResolver: { resolveSkill: () => ({ skill: {}, code: "ALLOW" }) } } });
+  const context = { projectId: "prj_secb", runtime: "claude-code", dataClassification: "INTERNAL" };
+
+  const searchRes = hub.searchSkills("worktree", context);
   assert.equal(searchRes.ok, true);
-  assert.ok(searchRes.count >= 1);
-  const skill = hub.getSkill("worktree");
-  assert.equal(skill.ok, true);
-  assert.ok(skill.content.includes("Worktree"));
+  assert.equal(searchRes.count, 0);
+  assert.ok(searchRes.withheld_count >= 1);
+
+  const skill = hub.getSkill("worktree", context);
+  assert.equal(skill.ok, false);
+  assert.equal(skill.deny_code, "DENY_UNGOVERNED_PACKAGE");
 });
 
 test("SecBMcpServer dispatches Worktree tools successfully", () => {
@@ -88,9 +96,13 @@ test("SecBWorktreeAdapter plugin inspects external worktree repository", async (
   assert.equal(report.storage.ok, true);
 });
 
-test("SecBSkillsHub discovers secb-project-registry skill", () => {
+test("SecBSkillsHub withholds the ungoverned secb-project-registry package", () => {
   const hub = new SecBSkillsHub();
-  const skill = hub.getSkill("secb-project-registry");
-  assert.equal(skill.ok, true);
-  assert.ok(skill.content.includes("Project Registry"));
+  const skill = hub.getSkill("secb-project-registry", {
+    projectId: "prj_secb",
+    runtime: "claude-code",
+    dataClassification: "INTERNAL"
+  });
+  assert.equal(skill.ok, false);
+  assert.equal(skill.deny_code, "DENY_NO_RESOLVER");
 });
