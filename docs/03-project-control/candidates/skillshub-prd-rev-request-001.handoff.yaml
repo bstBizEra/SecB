@@ -56,6 +56,21 @@ handoff:
     - "node tools/validate-foundation.mjs (manifest existence, path uniqueness, docs count, schema closure, markdown link resolution across every registered file)."
     - "Targeted node --test over the SkillsHub, worktree, and MCP server suites: 41 pass, 0 fail."
     - "Two producer-side subagent reviews: a quantitative claim audit (62 claims checked, 14 not confirmed) and a governance authority-boundary review (2 CRITICAL, 6 HIGH, 5 MEDIUM, 2 LOW)."
+    - >-
+      Re-derivation sweep at f8b0397, prompted by SKILL-DRIFT-14 being published
+      stale: 24 mechanically checkable state claims re-computed from the tree
+      rather than restated, all passing. Covers corpus counts, both schemas'
+      required-field sets and their four-field intersection, the resolver's 7
+      deny codes, the template superset relation, absence of a yaml dependency,
+      installer count, allow_implicit_invocation across all 22 packages, the
+      dashboard fixture set, the maturity dispatch being status-read-only, the
+      absence of caller-supplied context on the skill tools, and that
+      HUMAN_PROMOTION is minted nowhere in src/ outside the resolver's own check.
+      SCOPE LIMIT: this verifies mechanically checkable facts only. Judgement
+      claims - whether a finding is a Contradiction or a Gap, whether a doctrine
+      reading is correct, whether the requirement set is right - are NOT covered
+      and remain wholly for REV. Claims about src/ may also re-stale: HEAD moved
+      five times during authoring under concurrent MCP work.
   known_limitations:
     - "tests/mcp-hub-launcher.test.mjs was excluded from the suite run. It fails on this host with 'ps: unknown option -- o' under Git Bash on Windows and takes over ten minutes to time out. Unrelated to SkillsHub; not verified against a pristine baseline."
     - "PRD section 7 observations were taken at e0de4f3. HEAD has since advanced through concurrent MCP work. Observations are baseline-accurate but stale relative to the pin."
