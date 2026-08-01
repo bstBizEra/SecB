@@ -192,9 +192,16 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
   // (tested): 1 shape -> 2 clock -> 3 layer -> 4 classification ceiling ->
   // 5 complete memoryRecord contract -> 6 admission SoD -> 7 audit-first ->
   // 8 store append -> ADMITTED.
-  function admit(request) {
+  async function admit(request) {
     const shapeError = validateAdmitShape(request);
     if (shapeError) return deny(shapeError.code, shapeError.reason);
+
+    // The actor attributed by the record must be the same producer evaluated by
+    // admission SoD. Until a server-derived identity port is wired, disagreement
+    // fails closed rather than allowing caller-controlled attribution drift.
+    if (request.record.actor_id !== request.admission.producer) {
+      return deny("DENY_PRODUCER_MISMATCH", "record.actor_id must match admission.producer");
+    }
 
     // 2. Clock: server-derived instant only. A throwing/NaN clock denies.
     const instant = serverInstant();
@@ -278,8 +285,9 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     // 7. Audit-first: the admission audit is written BEFORE any store mutation.
     // A throwing/unavailable audit writer denies with no store side effect.
     try {
-      ledgerWriter({
+      await ledgerWriter({
         type: "MEMORY_ADMISSION_AUDIT",
+        disposition: "ATTEMPTED",
         layer: request.layer,
         admitted_at: instant.iso,
         project_id: admittedRecord.project_id,
@@ -294,8 +302,24 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     // reaches into any existing ledger's admission policy.
     let appendResult;
     try {
-      appendResult = layer.store.append(admittedRecord);
+      appendResult = await layer.store.append(admittedRecord);
     } catch {
+      // The admission attempt is already durable. Record a terminal failure so
+      // an attempted admission can never be mistaken for a committed one.
+      try {
+        await ledgerWriter({
+          type: "MEMORY_ADMISSION_DISPOSITION",
+          disposition: "FAILED",
+          reason: "STORE_UNAVAILABLE",
+          layer: request.layer,
+          admitted_at: instant.iso,
+          project_id: admittedRecord.project_id,
+          actor_id: admittedRecord.actor_id,
+          classification: admittedRecord.classification
+        });
+      } catch {
+        return deny("DENY_AUDIT_UNAVAILABLE", "Store append failed and its terminal failure disposition could not be audited");
+      }
       return deny("DENY_STORE_UNAVAILABLE", "Layer store append failed");
     }
 

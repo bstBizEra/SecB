@@ -128,9 +128,9 @@ test("the gateway surface is frozen and exposes only admit and retrieve", () => 
 
 // --- Admission happy path --------------------------------------------------
 
-test("admit ADMITS a well-formed session record and stamps a server-derived instant", () => {
+test("admit ADMITS a well-formed session record and stamps a server-derived instant", async () => {
   const { gateway, layerStores, ledgerWriter } = makeGateway();
-  const result = gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.decision, "ALLOW");
   assert.equal(result.code, "ADMITTED");
   assert.equal(result.admitted_at, FIXED_NOW.toISOString());
@@ -143,9 +143,9 @@ test("admit ADMITS a well-formed session record and stamps a server-derived inst
   assert.equal(ledgerWriter.entries.length, 1);
 });
 
-test("project-layer admission ADMITS when producer and approver are distinct", () => {
+test("project-layer admission ADMITS when producer and approver are distinct", async () => {
   const { gateway, layerStores } = makeGateway();
-  const result = gateway.admit({
+  const result = await gateway.admit({
     layer: "project",
     record: sessionRecord({ classification: "RESTRICTED" }),
     admission: { producer: "agent-a", approver: "agent-b" }
@@ -156,16 +156,16 @@ test("project-layer admission ADMITS when producer and approver are distinct", (
 
 // --- Admission deny paths --------------------------------------------------
 
-test("admit denies a non-object / unknown-field / missing-field request", () => {
+test("admit denies a non-object / unknown-field / missing-field request", async () => {
   const { gateway } = makeGateway();
-  assert.equal(gateway.admit(null).code, "DENY_MALFORMED_REQUEST");
-  assert.equal(gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "a" }, extra: 1 }).code, "DENY_MALFORMED_REQUEST");
-  assert.equal(gateway.admit({ layer: "session", record: { ...sessionRecord(), rogue: 1 }, admission: { producer: "a" } }).code, "DENY_MALFORMED_REQUEST");
-  const missing = gateway.admit({ layer: "session", record: sessionRecord({ statement: "" }), admission: { producer: "a" } });
+  assert.equal((await gateway.admit(null)).code, "DENY_MALFORMED_REQUEST");
+  assert.equal((await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" }, extra: 1 })).code, "DENY_MALFORMED_REQUEST");
+  assert.equal((await gateway.admit({ layer: "session", record: { ...sessionRecord(), rogue: 1 }, admission: { producer: "agent-a" } })).code, "DENY_MALFORMED_REQUEST");
+  const missing = await gateway.admit({ layer: "session", record: sessionRecord({ statement: "" }), admission: { producer: "agent-a" } });
   assert.equal(missing.code, "DENY_MISSING_FIELDS");
 });
 
-test("admit denies contract-invalid records before audit and store side effects", () => {
+test("admit denies contract-invalid records before audit and store side effects", async () => {
   const cases = [
     sessionRecord({ confidence: 1.1 }),
     sessionRecord({ content_hash: "ABC" }),
@@ -175,7 +175,7 @@ test("admit denies contract-invalid records before audit and store side effects"
 
   for (const record of cases) {
     const { gateway, layerStores, ledgerWriter } = makeGateway();
-    const result = gateway.admit({ layer: "session", record, admission: { producer: "agent-a" } });
+    const result = await gateway.admit({ layer: "session", record, admission: { producer: "agent-a" } });
     assert.equal(result.decision, "DENY");
     assert.equal(result.code, "DENY_MEMORY_RECORD_INVALID");
     assert.equal(ledgerWriter.entries.length, 0, "invalid contract must not be audited as an admission");
@@ -183,10 +183,10 @@ test("admit denies contract-invalid records before audit and store side effects"
   }
 });
 
-test("admit rejects caller-owned layer/admitted_at and stamps trusted values", () => {
+test("admit rejects caller-owned layer/admitted_at and stamps trusted values", async () => {
   for (const ownedField of ["layer", "admitted_at"]) {
     const { gateway, layerStores, ledgerWriter } = makeGateway();
-    const result = gateway.admit({
+    const result = await gateway.admit({
       layer: "session",
       record: sessionRecord({ [ownedField]: ownedField === "layer" ? "project" : "2000-01-01T00:00:00Z" }),
       admission: { producer: "agent-a" }
@@ -197,36 +197,49 @@ test("admit rejects caller-owned layer/admitted_at and stamps trusted values", (
   }
 
   const { gateway } = makeGateway();
-  const admitted = gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  const admitted = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(admitted.record.layer, "session");
   assert.equal(admitted.record.admitted_at, FIXED_NOW.toISOString());
 });
 
-test("admit denies DENY_CLOCK_UNAVAILABLE when the clock throws or returns NaN", () => {
-  const throwing = makeGateway({ now: () => { throw new Error("no clock"); } });
-  assert.equal(throwing.gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "a" } }).code, "DENY_CLOCK_UNAVAILABLE");
-  const nan = makeGateway({ now: () => new Date("not-a-date") });
-  assert.equal(nan.gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "a" } }).code, "DENY_CLOCK_UNAVAILABLE");
+test("admit binds record actor attribution to the producer before SoD, audit, or store", async () => {
+  const { gateway, layerStores, ledgerWriter } = makeGateway();
+  const result = await gateway.admit({
+    layer: "project",
+    record: sessionRecord({ actor_id: "agent-b", classification: "RESTRICTED" }),
+    admission: { producer: "agent-a", approver: "agent-b" }
+  });
+  assert.equal(result.decision, "DENY");
+  assert.equal(result.code, "DENY_PRODUCER_MISMATCH");
+  assert.equal(ledgerWriter.entries.length, 0);
+  assert.equal(layerStores.project.store.rows.length, 0);
 });
 
-test("admit denies DENY_UNKNOWN_LAYER for an unconfigured layer", () => {
+test("admit denies DENY_CLOCK_UNAVAILABLE when the clock throws or returns NaN", async () => {
+  const throwing = makeGateway({ now: () => { throw new Error("no clock"); } });
+  assert.equal((await throwing.gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } })).code, "DENY_CLOCK_UNAVAILABLE");
+  const nan = makeGateway({ now: () => new Date("not-a-date") });
+  assert.equal((await nan.gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } })).code, "DENY_CLOCK_UNAVAILABLE");
+});
+
+test("admit denies DENY_UNKNOWN_LAYER for an unconfigured layer", async () => {
   const { gateway } = makeGateway();
-  const result = gateway.admit({ layer: "procedural", record: sessionRecord(), admission: { producer: "a" } });
+  const result = await gateway.admit({ layer: "procedural", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.code, "DENY_UNKNOWN_LAYER");
 });
 
-test("admit denies DENY_CLASSIFICATION_CEILING for unknown or over-ceiling classification", () => {
+test("admit denies DENY_CLASSIFICATION_CEILING for unknown or over-ceiling classification", async () => {
   const { gateway } = makeGateway();
-  const unknown = gateway.admit({ layer: "session", record: sessionRecord({ classification: "COSMIC" }), admission: { producer: "a" } });
+  const unknown = await gateway.admit({ layer: "session", record: sessionRecord({ classification: "COSMIC" }), admission: { producer: "agent-a" } });
   assert.equal(unknown.code, "DENY_CLASSIFICATION_CEILING");
   // session ceiling is CONFIDENTIAL; RESTRICTED exceeds it.
-  const over = gateway.admit({ layer: "session", record: sessionRecord({ classification: "RESTRICTED" }), admission: { producer: "a" } });
+  const over = await gateway.admit({ layer: "session", record: sessionRecord({ classification: "RESTRICTED" }), admission: { producer: "agent-a" } });
   assert.equal(over.code, "DENY_CLASSIFICATION_CEILING");
 });
 
-test("admit denies DENY_ADMISSION_SOD when the producer is the sole approver (project layer)", () => {
+test("admit denies DENY_ADMISSION_SOD when the producer is the sole approver (project layer)", async () => {
   const { gateway, layerStores } = makeGateway();
-  const result = gateway.admit({
+  const result = await gateway.admit({
     layer: "project",
     record: sessionRecord({ classification: "RESTRICTED" }),
     admission: { producer: "agent-a", approver: "agent-a" }
@@ -236,9 +249,9 @@ test("admit denies DENY_ADMISSION_SOD when the producer is the sole approver (pr
   assert.equal(layerStores.project.store.rows.length, 0, "no store append on SoD denial");
 });
 
-test("admit denies DENY_MISSING_FIELDS when project layer has no approver", () => {
+test("admit denies DENY_MISSING_FIELDS when project layer has no approver", async () => {
   const { gateway } = makeGateway();
-  const result = gateway.admit({
+  const result = await gateway.admit({
     layer: "project",
     record: sessionRecord({ classification: "RESTRICTED" }),
     admission: { producer: "agent-a" }
@@ -246,7 +259,7 @@ test("admit denies DENY_MISSING_FIELDS when project layer has no approver", () =
   assert.equal(result.code, "DENY_MISSING_FIELDS");
 });
 
-test("admit denies DENY_AUDIT_UNAVAILABLE when the audit writer throws, before any store append", () => {
+test("admit denies DENY_AUDIT_UNAVAILABLE when the audit writer throws, before any store append", async () => {
   const store = makeStore();
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const gateway = createMemoryGateway({
@@ -255,12 +268,26 @@ test("admit denies DENY_AUDIT_UNAVAILABLE when the audit writer throws, before a
     now: () => FIXED_NOW,
     ledgerWriter: () => { throw new Error("audit down"); }
   });
-  const result = gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "a" } });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.code, "DENY_AUDIT_UNAVAILABLE");
   assert.equal(store.rows.length, 0, "audit-first: no store mutation when audit is unavailable");
 });
 
-test("audit-first: the audit entry is written strictly before the store append", () => {
+test("admit awaits an asynchronous audit and denies a rejected audit before storage", async () => {
+  const store = makeStore();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({
+    layerStores,
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: async () => { throw new Error("async audit down"); }
+  });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  assert.equal(result.code, "DENY_AUDIT_UNAVAILABLE");
+  assert.equal(store.rows.length, 0, "rejected audit Promise must prevent storage");
+});
+
+test("audit-first: the audit entry is written strictly before the store append", async () => {
   const order = [];
   const store = makeStore();
   const wrappedStore = {
@@ -275,31 +302,58 @@ test("audit-first: the audit entry is written strictly before the store append",
     now: () => FIXED_NOW,
     ledgerWriter: () => { order.push("audit"); }
   });
-  const result = gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "a" } });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.decision, "ALLOW");
   assert.deepEqual(order, ["audit", "store"]);
 });
 
-test("admit denies DENY_STORE_UNAVAILABLE when the store append throws", () => {
+test("admit denies DENY_STORE_UNAVAILABLE when the store append throws", async () => {
   const store = { append() { throw new Error("disk full"); }, read() { return []; } };
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
-  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
-  const result = gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "a" } });
+  const ledgerWriter = makeAuditWriter();
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.code, "DENY_STORE_UNAVAILABLE");
+  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "FAILED"]);
+});
+
+test("admit awaits an asynchronous store and records a terminal failure disposition", async () => {
+  const store = { async append() { throw new Error("async disk full"); }, read() { return []; } };
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const ledgerWriter = makeAuditWriter();
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  assert.equal(result.decision, "DENY");
+  assert.equal(result.code, "DENY_STORE_UNAVAILABLE");
+  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "FAILED"]);
+});
+
+test("admit fails closed when the terminal store-failure disposition cannot be audited", async () => {
+  const entries = [];
+  const ledgerWriter = async (entry) => {
+    entries.push(entry);
+    if (entry.disposition === "FAILED") throw new Error("failure audit down");
+  };
+  const store = { async append() { throw new Error("disk full"); }, read() { return []; } };
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  assert.equal(result.code, "DENY_AUDIT_UNAVAILABLE");
+  assert.deepEqual(entries.map((entry) => entry.disposition), ["ATTEMPTED", "FAILED"]);
 });
 
 // --- Retrieval -------------------------------------------------------------
 
-function seed(gateway, layer, overrides, admission) {
-  const result = gateway.admit({ layer, record: sessionRecord(overrides), admission });
+async function seed(gateway, layer, overrides, admission) {
+  const result = await gateway.admit({ layer, record: sessionRecord(overrides), admission });
   assert.equal(result.decision, "ALLOW", `seed admit should ALLOW: ${result.code}`);
   return result;
 }
 
-test("retrieve returns layer+project scoped records, frozen and marked data_untrusted", () => {
+test("retrieve returns layer+project scoped records, frozen and marked data_untrusted", async () => {
   const { gateway } = makeGateway();
-  seed(gateway, "session", { statement: "fact one" }, { producer: "a" });
-  seed(gateway, "session", { statement: "fact two", project_id: "proj-2" }, { producer: "a" });
+  await seed(gateway, "session", { statement: "fact one" }, { producer: "agent-a" });
+  await seed(gateway, "session", { statement: "fact two", project_id: "proj-2" }, { producer: "agent-a" });
   const result = gateway.retrieve({ layer: "session", project_id: "proj-1", scope_project_id: "proj-1" });
   assert.equal(result.decision, "ALLOW");
   assert.equal(result.code, "RETRIEVED");
@@ -311,9 +365,9 @@ test("retrieve returns layer+project scoped records, frozen and marked data_untr
   assert.ok(Object.isFrozen(result));
 });
 
-test("retrieve denies DENY_CROSS_PROJECT when the requested project differs from the caller scope", () => {
+test("retrieve denies DENY_CROSS_PROJECT when the requested project differs from the caller scope", async () => {
   const { gateway } = makeGateway();
-  seed(gateway, "session", {}, { producer: "a" });
+  await seed(gateway, "session", {}, { producer: "agent-a" });
   const result = gateway.retrieve({ layer: "session", project_id: "proj-2", scope_project_id: "proj-1" });
   assert.equal(result.decision, "DENY");
   assert.equal(result.code, "DENY_CROSS_PROJECT");
@@ -329,12 +383,12 @@ test("retrieve denies malformed / missing-field / unknown-layer queries and a th
   assert.equal(throwing.gateway.retrieve({ layer: "session", project_id: "proj-1", scope_project_id: "proj-1" }).code, "DENY_CLOCK_UNAVAILABLE");
 });
 
-test("retrieve honestly filters TTL-expired records (computed, not stored, no pruning)", () => {
+test("retrieve honestly filters TTL-expired records (computed, not stored, no pruning)", async () => {
   // Admit at T0 into the session layer (ttl 60s), then read at T0+61s.
   let clock = new Date("2026-07-20T10:00:00Z");
   const layerStores = layerConfig();
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => clock, ledgerWriter: makeAuditWriter() });
-  gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "a" } });
+  await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
 
   // Before expiry: visible.
   clock = new Date("2026-07-20T10:00:30Z");
