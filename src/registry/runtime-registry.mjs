@@ -37,12 +37,17 @@ export class RegistryError extends Error {
 export class RuntimeRegistry {
   #entries = new Map();
   #policyCeiling;
+  #runtimeProviderResolver;
 
-  constructor({ policyCeiling = "A0" } = {}) {
+  constructor({ policyCeiling = "A0", runtimeProviderResolver = null } = {}) {
     if (!AUTHORITY_LEVELS.includes(policyCeiling)) {
       throw new RegistryError("INVALID_POLICY_CEILING", `Unknown authority level: ${policyCeiling}`);
     }
+    if (runtimeProviderResolver !== null && typeof runtimeProviderResolver !== "function") {
+      throw new RegistryError("INVALID_PLUGIN_RESOLVER", "runtimeProviderResolver must be a function or null");
+    }
     this.#policyCeiling = policyCeiling;
+    this.#runtimeProviderResolver = runtimeProviderResolver;
   }
 
   register(record) {
@@ -53,6 +58,38 @@ export class RuntimeRegistry {
         "DENY_INVALID_REGISTRATION",
         `Agent registration failed schema validation`,
       );
+    }
+
+    if (candidate.runtime_provider_plugin_id !== undefined) {
+      if (!this.#runtimeProviderResolver) {
+        throw new RegistryError(
+          "DENY_PLUGIN_BINDING_UNAVAILABLE",
+          "Plugin-backed registration requires a SecB-owned runtime provider resolver"
+        );
+      }
+      let binding;
+      try {
+        binding = this.#runtimeProviderResolver({
+          plugin_id: candidate.runtime_provider_plugin_id,
+          plugin_version: candidate.runtime_provider_plugin_version
+        });
+      } catch {
+        throw new RegistryError("DENY_PLUGIN_BINDING_UNAVAILABLE", "Runtime provider binding could not be resolved");
+      }
+      if (binding && typeof binding.then === "function") {
+        throw new RegistryError("DENY_PLUGIN_BINDING_UNAVAILABLE", "Runtime provider resolver must be synchronous");
+      }
+      const expected = {
+        plugin_id: candidate.runtime_provider_plugin_id,
+        plugin_version: candidate.runtime_provider_plugin_version,
+        descriptor_fingerprint: candidate.runtime_provider_plugin_fingerprint,
+        provider_id: candidate.provider_id,
+        runtime_product_id: candidate.runtime_product_id,
+        runtime_deployment_id: candidate.runtime_deployment_id
+      };
+      if (binding?.resolved !== true || Object.entries(expected).some(([field, value]) => binding[field] !== value)) {
+        throw new RegistryError("DENY_PLUGIN_BINDING_MISMATCH", "Runtime provider binding does not match SecB registry state");
+      }
     }
 
     if (this.#entries.has(candidate.agent_instance_id)) {

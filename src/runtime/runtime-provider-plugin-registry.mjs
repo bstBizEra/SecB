@@ -42,6 +42,8 @@ export class RuntimeProviderPluginRegistry {
   #now;
   #candidates = new Map();
   #idempotency = new Map();
+  #inFlightByIdempotency = new Map();
+  #inFlightByPlugin = new Map();
 
   constructor({ auditWriter, now = () => new Date() } = {}) {
     if (typeof auditWriter !== "function") deny("INVALID_AUDIT_WRITER", "auditWriter is required");
@@ -78,8 +80,20 @@ export class RuntimeProviderPluginRegistry {
       }
       return frozenClone({ ...priorReplay.record, replayed: true });
     }
+
+    const pendingReplay = this.#inFlightByIdempotency.get(request.idempotency_key);
+    if (pendingReplay) {
+      if (pendingReplay.fingerprint !== fingerprint || pendingReplay.key !== key) {
+        deny("DENY_IDEMPOTENCY_CONFLICT", "idempotency_key is already in flight for a different plugin candidate");
+      }
+      const record = await pendingReplay.promise;
+      return frozenClone({ ...record, replayed: true });
+    }
     if (this.#candidates.has(key)) {
       deny("DENY_PLUGIN_VERSION_EXISTS", `Plugin candidate already exists: ${key}`);
+    }
+    if (this.#inFlightByPlugin.has(key)) {
+      deny("DENY_PLUGIN_VERSION_IN_FLIGHT", `Plugin candidate registration is already in flight: ${key}`);
     }
 
     let epoch;
@@ -91,33 +105,50 @@ export class RuntimeProviderPluginRegistry {
     if (!Number.isFinite(epoch)) deny("DENY_CLOCK_UNAVAILABLE", "Server time source is unavailable");
     const registeredAt = new Date(epoch).toISOString();
 
-    const record = deepFreeze({
-      plugin_id: descriptor.plugin_id,
-      plugin_version: descriptor.plugin_version,
-      status: "CANDIDATE",
-      operationally_effective: false,
-      registered_at: registeredAt,
-      descriptor_fingerprint: fingerprint,
-      descriptor: deepFreeze(descriptor)
-    });
-
-    try {
-      await this.#auditWriter({
-        type: "RUNTIME_PROVIDER_PLUGIN_CANDIDATE_REGISTERED",
-        plugin_id: record.plugin_id,
-        plugin_version: record.plugin_version,
-        descriptor_fingerprint: fingerprint,
+    const operation = (async () => {
+      const record = deepFreeze({
+        plugin_id: descriptor.plugin_id,
+        plugin_version: descriptor.plugin_version,
+        status: "CANDIDATE",
+        operationally_effective: false,
         registered_at: registeredAt,
-        status: record.status,
-        operationally_effective: false
+        descriptor_fingerprint: fingerprint,
+        descriptor: deepFreeze(descriptor)
       });
-    } catch {
-      deny("DENY_AUDIT_UNAVAILABLE", "Plugin candidate registration audit is unavailable");
-    }
 
-    this.#candidates.set(key, record);
-    this.#idempotency.set(request.idempotency_key, { key, fingerprint, record });
-    return frozenClone({ ...record, replayed: false });
+      try {
+        await this.#auditWriter({
+          type: "RUNTIME_PROVIDER_PLUGIN_CANDIDATE_REGISTERED",
+          plugin_id: record.plugin_id,
+          plugin_version: record.plugin_version,
+          descriptor_fingerprint: fingerprint,
+          registered_at: registeredAt,
+          status: record.status,
+          operationally_effective: false
+        });
+      } catch {
+        deny("DENY_AUDIT_UNAVAILABLE", "Plugin candidate registration audit is unavailable");
+      }
+
+      this.#candidates.set(key, record);
+      this.#idempotency.set(request.idempotency_key, { key, fingerprint, record });
+      return record;
+    })();
+
+    const reservation = { key, fingerprint, promise: operation };
+    this.#inFlightByIdempotency.set(request.idempotency_key, reservation);
+    this.#inFlightByPlugin.set(key, reservation);
+    try {
+      const record = await operation;
+      return frozenClone({ ...record, replayed: false });
+    } finally {
+      if (this.#inFlightByIdempotency.get(request.idempotency_key) === reservation) {
+        this.#inFlightByIdempotency.delete(request.idempotency_key);
+      }
+      if (this.#inFlightByPlugin.get(key) === reservation) {
+        this.#inFlightByPlugin.delete(key);
+      }
+    }
   }
 
   getCandidate(pluginId, pluginVersion) {

@@ -135,7 +135,3 @@ export {
   RUFLO_REVIEWER_ADAPTER,
   createRufloAdapterRegistration
 } from "./registry/ruflo-adapters.mjs";
-
-export {
-  RufloCommandBridge
-} from "./gateway/ruflo-command-bridge.mjs";

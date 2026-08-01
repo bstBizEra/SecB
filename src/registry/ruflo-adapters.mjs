@@ -22,6 +22,15 @@ const ADAPTER_DEFAULTS = Object.freeze({
   workload_identity_ref: ""
 });
 
+const IMMUTABLE_BINDING_FIELDS = Object.freeze([
+  "provider_id",
+  "runtime_product_id",
+  "runtime_provider_plugin_id",
+  "runtime_provider_plugin_version",
+  "runtime_provider_plugin_fingerprint",
+  "runtime_deployment_id"
+]);
+
 function adapter(definition) {
   return Object.freeze({ ...ADAPTER_DEFAULTS, ...definition });
 }
@@ -126,6 +135,11 @@ export const RUFLO_REVIEWER_ADAPTER = adapter({
 });
 
 export function createRufloAdapterRegistration(base, overrides = {}) {
+  for (const field of IMMUTABLE_BINDING_FIELDS) {
+    if (Object.hasOwn(overrides, field) && overrides[field] !== base[field]) {
+      throw new TypeError(`Ruflo adapter binding field cannot be overridden: ${field}`);
+    }
+  }
   const record = { ...base, ...overrides };
   record.evaluation_status = "CANDIDATE";
   record.lifecycle_state = "PENDING";

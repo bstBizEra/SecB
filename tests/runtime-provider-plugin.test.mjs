@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as publicApi from "../src/index.mjs";
 
 import { validateContract } from "../src/contracts/contract-validator.mjs";
 import {
@@ -12,7 +13,12 @@ import {
   RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
   RufloRuntimeProviderCandidate
 } from "../src/runtime/providers/ruflo-runtime-provider-plugin.mjs";
-import { RUFLO_ADAPTERS } from "../src/registry/ruflo-adapters.mjs";
+import {
+  RUFLO_ADAPTERS,
+  RUFLO_CODER_ADAPTER,
+  createRufloAdapterRegistration
+} from "../src/registry/ruflo-adapters.mjs";
+import { RegistryError, RuntimeRegistry } from "../src/registry/runtime-registry.mjs";
 
 const FIXED_NOW = new Date("2026-08-02T00:00:00.000Z");
 
@@ -96,6 +102,7 @@ test("the candidate registry exposes no promotion, activation, authority, or evi
   for (const forbidden of ["promote", "activate", "authorize", "acceptEvidence", "resolveForExecution"]) {
     assert.equal(instance[forbidden], undefined, `${forbidden} must not exist on the candidate registry`);
   }
+  assert.equal(publicApi.RufloCommandBridge, undefined, "legacy bridge must not be publicly exported");
 });
 
 test("idempotent replay is stable and conflicting replay fails closed", async () => {
@@ -201,4 +208,109 @@ test("implementation module traversal is rejected", async () => {
     (error) => error instanceof RuntimeProviderPluginRegistryError
   );
   assert.equal(instance.listCandidates().length, 0);
+});
+
+test("concurrent identical registration shares one audit and one disposition", async () => {
+  let audits = 0;
+  const { instance } = registry({
+    auditWriter: async () => {
+      audits += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  });
+  const request = {
+    descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN,
+    idempotency_key: "idem-concurrent-identical"
+  };
+  const [first, replay] = await Promise.all([
+    instance.registerCandidate(request),
+    instance.registerCandidate(request)
+  ]);
+  assert.equal(first.replayed, false);
+  assert.equal(replay.replayed, true);
+  assert.equal(audits, 1);
+  assert.equal(instance.listCandidates().length, 1);
+});
+
+test("concurrent conflicting idempotency reuse is denied", async () => {
+  let releaseAudit;
+  const auditGate = new Promise((resolve) => { releaseAudit = resolve; });
+  const { instance, audits } = registry({ auditWriter: async (entry) => {
+    audits.push(entry);
+    await auditGate;
+  } });
+  const first = instance.registerCandidate({
+    descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN,
+    idempotency_key: "idem-concurrent-conflict"
+  });
+  const conflicting = structuredClone(RUFLO_RUNTIME_PROVIDER_PLUGIN);
+  conflicting.plugin_version = "0.1.1";
+  await assert.rejects(
+    instance.registerCandidate({ descriptor: conflicting, idempotency_key: "idem-concurrent-conflict" }),
+    (error) => error instanceof RuntimeProviderPluginRegistryError && error.code === "DENY_IDEMPOTENCY_CONFLICT"
+  );
+  releaseAudit();
+  await first;
+  assert.equal(audits.length, 1);
+  assert.equal(instance.listCandidates().length, 1);
+});
+
+test("failed audit releases the in-flight reservation for a safe retry", async () => {
+  let auditAvailable = false;
+  const { instance } = registry({ auditWriter: async () => {
+    if (!auditAvailable) throw new Error("down");
+  } });
+  const request = {
+    descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN,
+    idempotency_key: "idem-reservation-cleanup"
+  };
+  await assert.rejects(instance.registerCandidate(request));
+  auditAvailable = true;
+  const result = await instance.registerCandidate(request);
+  assert.equal(result.replayed, false);
+  assert.equal(instance.listCandidates().length, 1);
+});
+
+function trustedRufloBinding() {
+  return {
+    resolved: true,
+    plugin_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_id,
+    plugin_version: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_version,
+    descriptor_fingerprint: RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
+    provider_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.provider_id,
+    runtime_product_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.runtime_product_id,
+    runtime_deployment_id: "RT-RUFLO-LOCAL-001"
+  };
+}
+
+test("plugin-backed runtime registration requires exact SecB-owned binding", () => {
+  const unresolved = new RuntimeRegistry();
+  assert.throws(
+    () => unresolved.register(RUFLO_CODER_ADAPTER),
+    (error) => error instanceof RegistryError && error.code === "DENY_PLUGIN_BINDING_UNAVAILABLE"
+  );
+
+  const governed = new RuntimeRegistry({ runtimeProviderResolver: trustedRufloBinding });
+  assert.deepEqual(governed.register(RUFLO_CODER_ADAPTER), {
+    registered: true,
+    agent_instance_id: RUFLO_CODER_ADAPTER.agent_instance_id,
+    version: 1
+  });
+  assert.equal(governed.resolve(RUFLO_CODER_ADAPTER.agent_instance_id).quarantined, true);
+});
+
+test("Ruflo binding fields cannot be overridden or substituted", () => {
+  assert.throws(
+    () => createRufloAdapterRegistration(RUFLO_CODER_ADAPTER, { provider_id: "PROVIDER-HOSTILE" }),
+    /cannot be overridden/
+  );
+
+  const substituted = structuredClone(RUFLO_CODER_ADAPTER);
+  substituted.runtime_provider_plugin_version = "9.9.9";
+  substituted.runtime_provider_plugin_fingerprint = "0".repeat(64);
+  const governed = new RuntimeRegistry({ runtimeProviderResolver: trustedRufloBinding });
+  assert.throws(
+    () => governed.register(substituted),
+    (error) => error instanceof RegistryError && error.code === "DENY_PLUGIN_BINDING_MISMATCH"
+  );
 });

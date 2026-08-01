@@ -100,5 +100,25 @@
     "lifecycle_state": {
       "enum": ["PENDING", "ACTIVE", "DEACTIVATED", "TERMINATED"]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "runtime_provider_plugin_id": {} },
+        "required": ["runtime_provider_plugin_id"]
+      },
+      "then": {
+        "properties": {
+          "runtime_provider_plugin_id": {},
+          "runtime_provider_plugin_version": {},
+          "runtime_provider_plugin_fingerprint": {}
+        },
+        "required": [
+          "runtime_provider_plugin_id",
+          "runtime_provider_plugin_version",
+          "runtime_provider_plugin_fingerprint"
+        ]
+      }
+    }
+  ]
 }
