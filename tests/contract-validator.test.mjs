@@ -29,6 +29,8 @@ const validFixtures = {
   knowledgeClaim: "valid/knowledge-claim.json",
   outcomeReceipt: "valid/outcome-receipt.json",
   skillManifest: "valid/skill-manifest.json",
+  skillPackageDescriptor: "valid/skill-package-descriptor.json",
+  skillGrantRecord: "valid/skill-grant-record.json",
   goal: "valid/goal.json"
 };
 
@@ -53,6 +55,8 @@ const invalidFixtures = {
   knowledgeClaim: "invalid/knowledge-claim-no-evidence.json",
   outcomeReceipt: "invalid/outcome-receipt-bad-status.json",
   skillManifest: "invalid/skill-manifest-bad-status.json",
+  skillPackageDescriptor: "invalid/skill-package-descriptor-declares-scope.json",
+  skillGrantRecord: "invalid/skill-grant-record-bad-status.json",
   goal: "invalid/goal-missing-id.json"
 };
 

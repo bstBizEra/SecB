@@ -1,0 +1,11 @@
+{
+  "skill_id": "SECB-ARCH-014",
+  "version": "0.1.0",
+  "status": "CANDIDATE",
+  "project_scopes": ["prj_secb_local"],
+  "supported_runtimes": ["claude-code"],
+  "max_data_classification": "INTERNAL",
+  "evidence_refs": [],
+  "approval_history": [],
+  "revocation_conditions": ["upstream source drift"]
+}

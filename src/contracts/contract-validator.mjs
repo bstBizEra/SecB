@@ -24,6 +24,10 @@ const schemaPaths = {
   knowledgeClaim: "knowledge-claim.schema.json",
   outcomeReceipt: "outcome-receipt.schema.json",
   skillManifest: "skill-manifest.schema.json",
+  // ADR-0013 trust-tier split. skillManifest is retained until WP-SK-05
+  // migrates the resolver onto the pair; it is not the target shape.
+  skillPackageDescriptor: "skill-package-descriptor.schema.json",
+  skillGrantRecord: "skill-grant-record.schema.json",
   goal: "goal.schema.json"
 };
 

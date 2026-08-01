@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/skill-package-descriptor.schema.json",
+  "title": "SecB Skill Package Descriptor",
+  "description": "The AUTHORED tier of a skill manifest (ADR-0013). Every field here is one a package author legitimately holds. It carries no scope, no status, and no approval history: those are grants, and a grant an author can write is not a grant. See skill-grant-record.schema.json for the granted tier, joined on skill_id + version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_id",
+    "package_name",
+    "display_name",
+    "version",
+    "purpose",
+    "risk_class",
+    "controls"
+  ],
+  "properties": {
+    "skill_id": { "type": "string", "minLength": 1 },
+    "package_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,64}$",
+      "description": "The identity binding key. MUST equal the package directory name. The hub denies DENY_IDENTITY_MISMATCH when a resolved grant does not name the directory it was found in, so this field is filesystem-bound on purpose - display_name exists precisely so a human label cannot be mistaken for an authorization join key."
+    },
+    "display_name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "risk_class": {
+      "enum": ["R0", "R1", "R2", "R3", "R4"],
+      "description": "A process input consumed by the promotion pipeline to select review gates, not by resolution. An author proposes it; review may raise it. Self-downgrade is prohibited by docs/16-security/02-risk-and-mutation-classes.md."
+    },
+    "authority_ceiling_cap": {
+      "enum": ["A0", "A1", "A2", "A3", "A4", "A5"],
+      "description": "A CAP, never a grant. A skill never confers authority. Effective ceiling is min(agent_ceiling, skill_cap), composed in exactly one place. Named _cap rather than authority_ceiling so it cannot be confused with the identically-enumerated field on agent-registration."
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional at descriptor stage, REQUIRED before promotion. Not derivable from a package, and intake must not fabricate it (FR-SKI-004)."
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit_sha"],
+      "description": "licence is optional here and required before promotion, for the same reason as owner.",
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "commit_sha": { "type": "string", "minLength": 1 },
+        "licence": { "type": "string", "minLength": 1 },
+        "content_digest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Reserved for resolution-time content verification (DEF-B1, DEF-C2). Not yet consumed; the control belongs to Phase 5."
+        }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "prohibited_final_authority": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_mutation", "secret_handling"],
+      "description": "The enforceable safety properties. mutation_class is deliberately absent: it duplicated repository_mutation and declared six values while admitting and observing exactly one (ADR-0013).",
+      "properties": {
+        "repository_mutation": { "enum": ["prohibited", "bounded"] },
+        "external_facts": { "enum": ["citation-required", "prohibited", "unrestricted"] },
+        "secret_handling": { "enum": ["prohibited"] },
+        "approval_claims": { "enum": ["prohibited"] }
+      }
+    },
+    "input_schema": { "type": "string", "minLength": 1 },
+    "output_schema": { "type": "string", "minLength": 1 },
+    "required_models": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "required_tools": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "required_mcp_methods": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "DECLARED suites, distinct from executed results. Results live in the grant record's evidence_refs; conflating the two would let a declaration count as evidence.",
+      "properties": {
+        "suite": { "type": "string", "minLength": 1 },
+        "cross_harness": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "known_limitations": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

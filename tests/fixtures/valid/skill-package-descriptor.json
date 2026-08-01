@@ -1,0 +1,16 @@
+{
+  "skill_id": "SECB-ARCH-014",
+  "package_name": "security-threat-modeling",
+  "display_name": "Security and Agentic Threat Modeling",
+  "version": "0.1.0",
+  "purpose": "Performs system and agentic threat modeling across identities, trust boundaries, tools, and human approvals.",
+  "risk_class": "R2",
+  "authority_ceiling_cap": "A2",
+  "controls": {
+    "repository_mutation": "prohibited",
+    "external_facts": "citation-required",
+    "secret_handling": "prohibited",
+    "approval_claims": "prohibited"
+  },
+  "evaluation": { "suite": "evals/security-threat-modeling" }
+}

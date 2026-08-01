@@ -83,7 +83,10 @@ test("supportedContractKinds reports every declared kind, not just compiled ones
   `);
   // Reading the compiled-validator cache here would have reported a set that
   // grew as contracts happened to be validated.
-  assert.equal(out, "21|21");
+  // 23 since ADR-0013 added skillPackageDescriptor and skillGrantRecord. The
+  // literal is deliberate: it catches a kind added by accident, so it is
+  // updated only alongside a contract that meant to be added.
+  assert.equal(out, "23|23");
 });
 
 test("a validated contract still round-trips after lazy compilation", () => {

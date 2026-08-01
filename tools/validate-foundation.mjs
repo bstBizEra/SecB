@@ -78,6 +78,8 @@ const expectedSchemas = [
   "contracts/knowledge-claim.schema.json",
   "contracts/outcome-receipt.schema.json",
   "contracts/skill-manifest.schema.json",
+  "contracts/skill-package-descriptor.schema.json",
+  "contracts/skill-grant-record.schema.json",
   "contracts/capability-record.schema.json",
   "contracts/goal.schema.json",
   "contracts/project-registration-package.schema.json",
@@ -123,6 +125,11 @@ const mandatoryIdentityFields = {
   "contracts/knowledge-claim.schema.json": ["claim_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "truth_status", "evidence_refs", "valid_from", "valid_until"],
   "contracts/outcome-receipt.schema.json": ["outcome_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_ref", "outcome_status", "reversion_required"],
   "contracts/skill-manifest.schema.json": ["skill_id", "version", "status", "owner", "source", "project_scopes", "max_data_classification", "approval_history"],
+  // ADR-0013 trust-tier split. The descriptor pin deliberately contains no
+  // scope or status field: if one is ever added there, this pin fails and the
+  // split has been breached.
+  "contracts/skill-package-descriptor.schema.json": ["skill_id", "package_name", "display_name", "version", "purpose", "risk_class", "controls"],
+  "contracts/skill-grant-record.schema.json": ["skill_id", "version", "status", "project_scopes", "supported_runtimes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions"],
   "contracts/goal.schema.json": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "content_hash"],
   "contracts/project-registration-package.schema.json": ["registration_id", "project_id", "version", "status", "mode"],
   "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "validity"],

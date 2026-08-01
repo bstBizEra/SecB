@@ -1,0 +1,11 @@
+{
+  "skill_id": "SECB-ARCH-014",
+  "package_name": "security-threat-modeling",
+  "display_name": "Security and Agentic Threat Modeling",
+  "version": "0.1.0",
+  "purpose": "A descriptor must not be able to declare its own authorization scope.",
+  "risk_class": "R2",
+  "controls": { "repository_mutation": "prohibited", "secret_handling": "prohibited" },
+  "project_scopes": ["prj_secb_local"],
+  "max_data_classification": "RESTRICTED"
+}
