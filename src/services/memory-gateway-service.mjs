@@ -34,13 +34,34 @@
 // server instant), never stored and never pruned — deny-on-use, consistent with
 // P0-14 temporal semantics.
 
+import { validateContract } from "../contracts/contract-validator.mjs";
+
 const LAYERS = Object.freeze(["session", "work", "project"]);
 // Port classification vocabulary (candidate-source-port kind "memory").
 const CLASSIFICATION_ORDER = Object.freeze(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]);
 const SOD_MODES = Object.freeze(["producer-only", "distinct-approver"]);
 
-const RECORD_KEYS = Object.freeze(["project_id", "work_package_id", "session_id", "actor_id", "classification", "statement"]);
-const REQUIRED_RECORD_KEYS = Object.freeze(["project_id", "work_package_id", "session_id", "actor_id", "classification", "statement"]);
+// `layer` and `admitted_at` are server-owned fields added before contract
+// validation. `supersedes` is the contract's sole optional input field.
+const RECORD_KEYS = Object.freeze([
+  "memory_record_id",
+  "version",
+  "project_id",
+  "work_package_id",
+  "session_id",
+  "actor_id",
+  "source",
+  "statement",
+  "classification",
+  "confidence",
+  "provenance",
+  "valid_from",
+  "valid_until",
+  "retention_policy",
+  "supersedes",
+  "content_hash"
+]);
+const REQUIRED_RECORD_KEYS = Object.freeze(RECORD_KEYS.filter((key) => key !== "supersedes"));
 const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
 const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
@@ -149,7 +170,11 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     if (!isPlainObject(request.record)) return { code: "DENY_MALFORMED_REQUEST", reason: "record must be an object" };
     const unknownRecord = Object.keys(request.record).filter((key) => !RECORD_KEYS.includes(key));
     if (unknownRecord.length > 0) return { code: "DENY_MALFORMED_REQUEST", reason: `Unknown record fields: ${unknownRecord.join(", ")}` };
-    const missing = REQUIRED_RECORD_KEYS.filter((key) => isBlank(request.record[key]));
+    const missing = REQUIRED_RECORD_KEYS.filter((key) =>
+      !Object.prototype.hasOwnProperty.call(request.record, key)
+      || request.record[key] === undefined
+      || (typeof request.record[key] === "string" && request.record[key].trim() === "")
+    );
     if (missing.length > 0) return { code: "DENY_MISSING_FIELDS", reason: `Missing record fields: ${missing.join(", ")}` };
     if (!isPlainObject(request.admission)) return { code: "DENY_MALFORMED_REQUEST", reason: "admission must be an object" };
     const unknownAdmission = Object.keys(request.admission).filter((key) => !ADMISSION_KEYS.includes(key));
@@ -165,7 +190,8 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
 
   // Deny-by-default admission pipeline. Stage order is part of the contract
   // (tested): 1 shape -> 2 clock -> 3 layer -> 4 classification ceiling ->
-  // 5 admission SoD -> 6 audit-first -> 7 store append -> ADMITTED.
+  // 5 complete memoryRecord contract -> 6 admission SoD -> 7 audit-first ->
+  // 8 store append -> ADMITTED.
   function admit(request) {
     const shapeError = validateAdmitShape(request);
     if (shapeError) return deny(shapeError.code, shapeError.reason);
@@ -190,7 +216,38 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       );
     }
 
-    // 5. Admission SoD — kernel primitive reuse, config-only. For the
+    // 5. Build the stored record from the closed caller envelope plus server-owned
+    // fields, then validate the real S2 memoryRecord contract. Contract failure
+    // is contained before SoD, audit, or storage.
+    let admittedRecord;
+    try {
+      admittedRecord = {
+        memory_record_id: request.record.memory_record_id,
+        version: request.record.version,
+        project_id: request.record.project_id,
+        work_package_id: request.record.work_package_id,
+        session_id: request.record.session_id,
+        actor_id: request.record.actor_id,
+        layer: request.layer,
+        source: request.record.source,
+        statement: request.record.statement,
+        classification: request.record.classification,
+        confidence: request.record.confidence,
+        provenance: structuredClone(request.record.provenance),
+        valid_from: request.record.valid_from,
+        valid_until: request.record.valid_until,
+        retention_policy: request.record.retention_policy,
+        admitted_at: instant.iso,
+        ...(request.record.supersedes === undefined ? {} : { supersedes: request.record.supersedes }),
+        content_hash: request.record.content_hash
+      };
+      validateContract("memoryRecord", admittedRecord);
+      admittedRecord = deepFreeze(admittedRecord);
+    } catch {
+      return deny("DENY_MEMORY_RECORD_INVALID", "Memory record contract validation failed");
+    }
+
+    // 6. Admission SoD — kernel primitive reuse, config-only. For the
     // distinct-approver mode (project layer): the memory's producer may not be
     // its sole approver; producer, approver (and reviewer if present) must be
     // pairwise-distinct. Lighter layers are honestly producer-only.
@@ -218,19 +275,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
 
     // Admitted record: the gateway stamps the trusted admitted_at instant and
     // the resolved layer. TTL is NOT stored (computed at read from layer.ttlMs).
-    const admittedRecord = deepFreeze({
-      project_id: request.record.project_id,
-      work_package_id: request.record.work_package_id,
-      session_id: request.record.session_id,
-      actor_id: request.record.actor_id,
-      classification: request.record.classification,
-      statement: request.record.statement,
-      layer: request.layer,
-      admitted_at: instant.iso,
-      admitted_by: request.admission.producer
-    });
-
-    // 6. Audit-first: the admission audit is written BEFORE any store mutation.
+    // 7. Audit-first: the admission audit is written BEFORE any store mutation.
     // A throwing/unavailable audit writer denies with no store side effect.
     try {
       ledgerWriter({
@@ -245,7 +290,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       return deny("DENY_AUDIT_UNAVAILABLE", "Audit ledger writer is unavailable; admission denied before store append");
     }
 
-    // 7. Store append via the INJECTED layer store ONLY. The gateway never
+    // 8. Store append via the INJECTED layer store ONLY. The gateway never
     // reaches into any existing ledger's admission policy.
     let appendResult;
     try {

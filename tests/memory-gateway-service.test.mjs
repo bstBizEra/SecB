@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createMemoryGateway, MemoryGatewayConfigurationError } from "../src/services/memory-gateway-service.mjs";
+import { validateContract } from "../src/contracts/contract-validator.mjs";
 import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");
@@ -64,12 +65,21 @@ function makeGateway({ now = () => FIXED_NOW, ledgerWriter = makeAuditWriter(), 
 
 function sessionRecord(overrides = {}) {
   return {
+    memory_record_id: "mem-1",
+    version: 1,
     project_id: "proj-1",
     work_package_id: "wp-1",
     session_id: "sess-1",
     actor_id: "agent-a",
+    source: "KnowledgeLedger",
     classification: "INTERNAL",
+    confidence: 0.9,
+    provenance: { evidence_refs: ["ev-1"], origin_record_id: "kc-1" },
+    valid_from: "2026-07-20T09:00:00Z",
+    valid_until: "2026-07-20T11:00:00Z",
+    retention_policy: "retain-30-days",
     statement: "user prefers dark mode",
+    content_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     ...overrides
   };
 }
@@ -126,6 +136,7 @@ test("admit ADMITS a well-formed session record and stamps a server-derived inst
   assert.equal(result.admitted_at, FIXED_NOW.toISOString());
   assert.equal(result.record.layer, "session");
   assert.equal(result.record.admitted_at, FIXED_NOW.toISOString());
+  assert.deepEqual(validateContract("memoryRecord", result.record), { kind: "memoryRecord", valid: true });
   assert.ok(Object.isFrozen(result));
   assert.ok(Object.isFrozen(result.record));
   assert.equal(layerStores.session.store.rows.length, 1);
@@ -152,6 +163,43 @@ test("admit denies a non-object / unknown-field / missing-field request", () => 
   assert.equal(gateway.admit({ layer: "session", record: { ...sessionRecord(), rogue: 1 }, admission: { producer: "a" } }).code, "DENY_MALFORMED_REQUEST");
   const missing = gateway.admit({ layer: "session", record: sessionRecord({ statement: "" }), admission: { producer: "a" } });
   assert.equal(missing.code, "DENY_MISSING_FIELDS");
+});
+
+test("admit denies contract-invalid records before audit and store side effects", () => {
+  const cases = [
+    sessionRecord({ confidence: 1.1 }),
+    sessionRecord({ content_hash: "ABC" }),
+    sessionRecord({ provenance: { evidence_refs: [], origin_record_id: "kc-1" } }),
+    sessionRecord({ version: 0 })
+  ];
+
+  for (const record of cases) {
+    const { gateway, layerStores, ledgerWriter } = makeGateway();
+    const result = gateway.admit({ layer: "session", record, admission: { producer: "agent-a" } });
+    assert.equal(result.decision, "DENY");
+    assert.equal(result.code, "DENY_MEMORY_RECORD_INVALID");
+    assert.equal(ledgerWriter.entries.length, 0, "invalid contract must not be audited as an admission");
+    assert.equal(layerStores.session.store.rows.length, 0, "invalid contract must not reach storage");
+  }
+});
+
+test("admit rejects caller-owned layer/admitted_at and stamps trusted values", () => {
+  for (const ownedField of ["layer", "admitted_at"]) {
+    const { gateway, layerStores, ledgerWriter } = makeGateway();
+    const result = gateway.admit({
+      layer: "session",
+      record: sessionRecord({ [ownedField]: ownedField === "layer" ? "project" : "2000-01-01T00:00:00Z" }),
+      admission: { producer: "agent-a" }
+    });
+    assert.equal(result.code, "DENY_MALFORMED_REQUEST");
+    assert.equal(ledgerWriter.entries.length, 0);
+    assert.equal(layerStores.session.store.rows.length, 0);
+  }
+
+  const { gateway } = makeGateway();
+  const admitted = gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  assert.equal(admitted.record.layer, "session");
+  assert.equal(admitted.record.admitted_at, FIXED_NOW.toISOString());
 });
 
 test("admit denies DENY_CLOCK_UNAVAILABLE when the clock throws or returns NaN", () => {
