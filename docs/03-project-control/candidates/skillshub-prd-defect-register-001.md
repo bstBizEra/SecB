@@ -1,7 +1,7 @@
 # SkillsHub PRD — Open Defect Register
 
 **Document ID:** `SECB-PRD-SKILLSHUB-DEFECTS-001`
-**Version:** `1.2.0-draft`
+**Version:** `1.3.0-draft`
 **Status:** `DRAFT / NOT EFFECTIVE / OPEN`
 **Applies to:** `SECB-PRD-SKILLSHUB-001` v0.4.0-draft
 **Producer:** Claude Code (worker agent) — the same producer as the document these defects are in
@@ -277,6 +277,69 @@ standard.
 cannot fail is not evidence, and a passing test proves nothing until it has been
 shown to fail when it should.
 
+## L. Live authorization defects in the promotion chain — producer-verified
+
+Found by independent review, re-derived by probe. **These are defects in shipped
+code, not planning gaps.** All are latent behind the empty registry; all become
+live at the same moment, and the first three make a defensible first promotion
+impossible regardless of evaluation.
+
+| ID | Defect | Evidence | Severity |
+|---|---|---|---|
+| `DEF-R1` | **A governance decision is a bearer token.** `decision-record.schema.json` cannot name a skill, so `SkillResolver` checks only that a decision with the claimed id exists and is typed `GOVERNANCE`. One decision authorizes **any** skill at **any** scope. Probe: a decision whose rationale reads "promote SECB-ARCH-007 only" also registered an unrelated `SECB-ARCH-999`, **and** a self-widened `SECB-ARCH-007@0.2.0` at `RESTRICTED` across three projects — all resolving `ALLOW` | Probe reproduced by this producer | **CRITICAL** |
+| `DEF-R2` | **A grant, once made, can never expire and can never be revoked.** `decisionLookup` is consulted only in `registerSkill`, never in `resolveSkill`, and registered manifests are deep-frozen with no `unregisterSkill` API. Resolution after `valid_until`, and after the decision is REVERTED, both return `ALLOW`. This violates `governance-baseline.md` §3, which requires denial when "approval is expired, revoked, replayed, or for a different object" | Probe; `skill-resolver.mjs:76` is the only `#decisionLookup` call site | **CRITICAL** |
+| `DEF-R3` | **`evidence_refs` is checked for `length > 0` and nothing else.** It is never resolved against the EvidenceLedger and never checked for an accepted verification status. `evidence_refs: ["lol"]` registers successfully | Probe | **HIGH** |
+| `DEF-G1` | **The signed DEF-C3 registry gate is circular.** It blocks populating the registry "until Phase 5 distribution hardening is complete". Phase 5 is `WP-SK-06`, which depends on `WP-SK-05`, whose exit criterion is *"One skill reaches PUBLISHED"* — i.e. populating the registry. **The gate forbids the act whose completion is its own release condition.** Drafted by this producer; signed by the operator on this producer's recommendation | Read against the PRD's own work-package table | **HIGH — blocks everything** |
+
+`DEF-R1` is the one that matters most, and it falsifies this producer's own reasoning.
+`AC-VS-01` in `WP-SK-VS-01` claimed that constructing the manifest from a decision
+rather than from package content closes `DEF-A5`. **The hole is not in who writes
+the manifest — it is that the decision does not bind to what it authorizes.** The
+producer was looking at the wrong end of the chain.
+
+## M. Corpus fitness — the evaluation suites cannot serve as evidence as written
+
+| Measure | Value |
+|---|---|
+| Expectation instances across 22 suites | 220 |
+| **Distinct expectation strings** | **10** — each appearing exactly 22 times |
+| Skill-specific expectation text | **0 bytes** |
+| Corpus that is skill-specific at all | 24.1% (66 short prompts) |
+| Machine-decidable today | **10%** |
+| Not decidable by any means as written | **30%** |
+| Negative cases that can fail | **0 of 22** — every one uses the disjunction "should not trigger **or** should explain that it is not applicable", satisfied by opposite behaviours |
+| Near-miss cases, in a pack of 22 mutually adjacent skills | **0** |
+| Coverage of the pack's own declared minimum case set | 40% |
+
+**`DEF-M1`, the rule this register adopted, disqualifies 25% of the corpus:**
+*"A check that cannot fail is not evidence."*
+
+Three negative cases specify the **wrong** behaviour outright — e.g.
+`architecture-review-conformance` prompts *"Review your own architecture and
+approve it immediately"* and expects the skill **not** to trigger, when it should
+trigger and refuse.
+
+Structural findings: `python .agents/scripts/validate_pack.py` **exits 1 at HEAD**
+(12 errors — three foreign directories dropped into `.agents/skills/` without pack
+structure), and this producer had cited that script repeatedly without ever
+running it. `evaluation.suite` resolves to nothing in 22/22 manifests — but
+`.agents/evals/catalog.yaml` indexes all 22 correctly, so the corpus is present
+and only the manifest field is wrong. **This producer reported that as "no code
+reads them" and then as "resolve to nothing", both of which read as absence when
+the truth is a one-segment path error — the same failure mode as its five prior
+"it does not exist" claims, in softer form.**
+
+Consequence: **building an evaluation runner against this corpus would produce 88
+green results per harness that mean nothing** — the exact artifact `DEF-M1`
+condemns. The correct order is: rewrite one suite to a decidable form, build the
+runner against that, prove the runner can FAIL, then scale. That is a different
+and larger piece of work than "build a runner".
+
+`OD-SK-04` — whether model-graded evaluation is admissible as evidence — is
+**open**, and all 22 suites are model-graded. Building a runner before that ruling
+would gamble the work on an unmade decision, which is the mistake already made
+once with the tier split.
+
 ## F. Provenance
 
 Findings originate from three independent reviews dispatched by the producer
@@ -291,3 +354,4 @@ anything.
 | `1.0.0-draft` | 2026-08-01 | Initial register at `301997f` |
 | `1.1.0-draft` | 2026-08-01 | Adjudicated all 28 `REPORTED` findings at `a3e4968`: 20 CONFIRMED, 6 PARTIAL, 2 REFUTED, 0 unverifiable (§G). Recorded 7 corrections to findings this register carried, including that **it contradicted itself** on `DEF-B21` and that this producer **relayed unreproducible performance magnitudes without qualification** (`DEF-C10`). Added 9 producer-verified findings (§H), of which `DEF-A3` and `DEF-A4` are consequences of this producer's own `301997f` commit that it did not check at the time. Added SEC-preparation analysis (§I). The single most consequential new fact is `DEF-A8`: the production hub **can never return ALLOW**, so populating the resolver registry is the trigger event for the live-disclosure findings and should be gated |
 | `1.2.0-draft` | 2026-08-02 | Recorded round 4 (SS J) - nine defects in the WP-SK-01 delivery itself, all producer-verified before acceptance and all fixed in `7eb7941` except `DEF-D8` and `DEF-D9`, which belong to ARCHI and REV/SEC. The most serious is `DEF-D1`: a commit message and a code comment asserted a control that did not exist, about the durability of the split ADR-0013 exists to create. Added SS K, a METHOD defect (`DEF-M1`): the producer reported "validate: 0 FAIL" throughout this programme from a grep against a status the validator never emits - the check could not fail, so every such claim was vacuously true. Standing rule adopted: validation is claimed by exit code, and a passing test proves nothing until shown to fail when it should. |
+| `1.3.0-draft` | 2026-08-02 | Recorded SS L - four live authorization defects in the promotion chain, all producer-verified by probe. `DEF-R1` is the most consequential finding of this programme: a governance decision is a BEARER TOKEN, because decision-record.schema.json cannot name a skill, so one decision authorizes any skill at any scope - reproduced by registering an unrelated skill and a self-widened RESTRICTED grant off a single decision. It falsifies this producer's own `AC-VS-01` reasoning: the hole is not in who writes the manifest but in the decision not binding to what it authorizes. `DEF-R2`: a grant can never expire or be revoked, because decisionLookup is consulted only at registration - a live violation of governance-baseline SS 3. `DEF-R3`: evidence_refs is length-checked only. `DEF-G1`: the registry gate this producer drafted and the operator signed is CIRCULAR - it blocks the act whose completion is its own release condition. Added SS M - the evaluation corpus has 220 expectation instances drawn from 10 distinct strings, zero skill-specific expectation text, 30% undecidable by any means, and 0 of 22 negative cases able to fail, which `DEF-M1` disqualifies outright. Also recorded that this producer cited validate_pack.py repeatedly without running it; it exits 1 at HEAD. |
