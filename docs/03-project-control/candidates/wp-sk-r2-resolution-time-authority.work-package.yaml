@@ -1,0 +1,218 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_sk_r2_resolution_time_authority_v1_candidate"
+  record_status: "AWAITING_GOV_AUTHORIZATION"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer is also the assigned ENGIN and may not accept its own evidence."
+    - "Producer has been returned by independent review six consecutive rounds, three times for asserting in a governance record that a control had a property the code did not have, and five times for claiming something absent that was present. Every control added here must be shown to FAIL when removed before it is claimed."
+    - "This work package exists because the producer's previous two proposals were built on a misread. It should be checked for the same."
+
+work_package_id: "WP-SK-R2"
+project_id: "prj_secb_local"
+product_id: "SECB-PRD-SKILLSHUB-001"
+module_id: "MOD-SKILL"
+goal_id: "GATE-SK-05"
+title: "Make the governed decision continuously authoritative at resolution"
+
+objective: >-
+  Consult the DecisionLedger at resolution, not only at registration, so that an
+  expired or reverted promotion stops authorizing, and so that evidence
+  references are verified rather than counted.
+
+problem_statement: >-
+  DEF-R2: `decisionLookup` is called only in `registerSkill`. `resolveSkill`
+  reads a deep-frozen clone captured at registration and never revisits the
+  ledger. Probe: resolution after `valid_until`, and after the decision is
+  REVERTED, both return ALLOW. There is no unregister API. A grant, once made,
+  can never expire and can never be revoked.
+
+  `docs/00-governance/governance-baseline.md` section 3 requires denial when an
+  approval "is expired, revoked, replayed, or for a different object". Three of
+  those four are unenforceable today. This is a live violation of the pinned
+  baseline, present in shipped code, not a planning gap.
+
+  DEF-R3: `evidence_refs` is checked for `length > 0` and nothing else. It is
+  never resolved against the EvidenceLedger. `evidence_refs: ["lol"]` registers.
+
+desired_outcome: >-
+  An expired decision, a reverted decision, and an unresolvable evidence
+  reference each deny at the next resolution, in the same process, with no
+  restart - proven by probe, and by removing each control and observing failure.
+
+non_goals:
+  - "Publishing any skill. The registry stays empty and no promotion is minted. This work package does not approach the DEF-A8 gate."
+  - "DEF-R1, the bearer-token defect. A decision cannot name the skill it authorizes because contracts/decision-record.schema.json is closed. That is a contract change and belongs to ARCHI, not here."
+  - "Building an evaluation runner. Per register section M the corpus cannot yield evidence as written, and OD-SK-04 is open."
+  - "The contract tier split, AC-05, AC-08, or any resolver migration onto the descriptor/grant pair."
+  - "Editing .agents/ - PACK.yaml declares mutation_authorized: false. Editing src/mcp/ - concurrent work by another producer."
+  - "Editing contracts/** - this work is deliberately achievable without any contract change."
+
+why_this_is_outside_the_registry_gate: >-
+  SECB-SEC-DECISION-SKILLSHUB-C3-001 blocks POPULATING the resolver registry.
+  This work package populates nothing, publishes nothing, and mints no decision;
+  it changes when an already-registered grant is re-checked. It therefore does
+  not require the gate to be lifted, amended, or waived, and it must not be used
+  as an occasion to do so.
+
+why_this_dissolves_the_deadlock: >-
+  DEF-G1: the signed registry gate blocks population until Phase 5 distribution
+  hardening completes. Phase 5 is WP-SK-06, whose named legs include
+  resolution-time revocation - and WP-SK-06 depends on WP-SK-05, whose exit is
+  one skill reaching PUBLISHED, which is population. The gate forbids the act
+  whose completion is its own release condition.
+
+  This work package delivers WP-SK-06's revocation leg WITHOUT populating
+  anything, which is the only move available that advances the release condition
+  from outside the gate. It does not by itself discharge the gate; it removes the
+  circularity so that SEC and GOV have something other than a paradox to rule on.
+
+risk_class: "R3"
+mutation_class: "M2"
+mutation_rationale: >-
+  M2, isolated non-production mutation. No ledger is written, no registry is
+  populated, no authority is issued, no contract changes. The change is to a
+  fail-closed authorization path, which is why the class is R3 even though the
+  mutation is M2. GOV should set both rather than accept the producer's proposal.
+
+owners:
+  accountable: "Operator (BizEra), acting as GOV"
+  domain: "SEC"
+assignments:
+  - role: "ENGIN"
+    identity: "claude-code-secb-session-2026-08-02"
+  - role: "REV"
+    identity: "UNASSIGNED - must be distinct from ENGIN"
+  - role: "SEC"
+    identity: "UNASSIGNED - required: this changes a fail-closed authorization path"
+independence_constraints:
+  - "ENGIN may not accept its own evidence."
+  - "The sabotage matrix must be re-run independently by QA, not accepted from the producer's transcript."
+
+dependencies: []
+dependency_note: >-
+  Deliberately none. This is the only identified step with no governance
+  precondition: it needs no ruling, no signature on a promotion, no gate lifted,
+  and no open decision answered. That is its principal merit.
+
+baseline:
+  repository_id: "SecB"
+  branch: "feat/secb-ruflo-command-center"
+  commit_sha: "10c739f"
+  condition: "Tracked tree carries one uncommitted change belonging to another producer. Re-pin before starting."
+
+write_contract:
+  declared_paths:
+    - "src/registry/skill-resolver.mjs"
+    - "tests/**"
+    - "MANIFEST.json"
+    - "docs/03-project-control/candidates/**"
+  prohibited_paths:
+    - "contracts/**"
+    - ".agents/**"
+    - "src/mcp/**"
+    - "src/skills/**"
+    - "tools/**"
+    - "dashboard/**"
+    - "docs/00-governance/**"
+    - "docs/adr/**"
+  write_set_note: >-
+    tools/** is prohibited so that no wiring can be bound to a real ledger under
+    this work package - that is the act the registry gate governs, and it is not
+    this. src/skills/** is prohibited so the hub is untouched.
+
+allowed_tools: ["read", "write", "edit", "node", "git", "npm run validate", "node --test"]
+allowed_mcp: []
+allowed_network: []
+allowed_skills: []
+allowed_data: ["repository contents at the declared baseline"]
+
+acceptance_criteria:
+  - id: "AC-R2-01"
+    statement: "resolveSkill consults the decision lookup for every claimed HUMAN_PROMOTION on every call, not once at registration."
+    proof: "A lookup that counts invocations shows one call per resolveSkill per promotion entry. Verified to fail when the call is removed."
+  - id: "AC-R2-02"
+    statement: "A decision past valid_until denies at the next resolveSkill in the same process, with no restart."
+    proof: "Probe: register inside the window (ALLOW), resolve at an instant past valid_until (DENY). Both arms asserted, so the test cannot pass by always denying."
+  - id: "AC-R2-03"
+    statement: "A REVERTED decision denies at the next resolveSkill in the same process, with no restart."
+    proof: "Probe: ALLOW, append REVERSION, DENY. Both arms asserted."
+  - id: "AC-R2-04"
+    statement: "A deny under AC-R2-02 or AC-R2-03 carries a typed code distinct from DENY_UNKNOWN_SKILL, and the code is in the hub's DENY_CODES allow-list so the withheld tally cannot bucket it as DENY_UNRESOLVED."
+    proof: "Assertion on the returned code plus the hub's allow-list."
+  - id: "AC-R2-05"
+    statement: "Every evidence_refs entry is resolved through an injected evidence lookup; an entry that does not resolve denies at registration."
+    proof: "Probe: a real reference registers, evidence_refs ['lol'] is refused. Both arms asserted."
+  - id: "AC-R2-06"
+    statement: "The evidence lookup is REQUIRED, like decisionLookup. A resolver constructed without one throws at construction rather than silently skipping the check."
+    proof: "Constructor test. This is the DEF-M1 lesson: an optional check is an absent check."
+  - id: "AC-R2-07"
+    statement: "The registry remains empty and no production wiring binds a real ledger. AC-10's walk still passes unchanged."
+    proof: "Existing test, unmodified."
+  - id: "AC-R2-08"
+    statement: "Every control added is demonstrated to fail when removed."
+    proof: "Sabotage matrix: remove each control, confirm suite exit 1, restore, confirm exit 0. Run by the producer and independently by QA."
+  - id: "AC-R2-09"
+    statement: "npm run validate exits 0 and the suite exits 0, judged by EXIT CODE."
+    proof: "Producer-run, recorded as evidence not acceptance. A grep for a FAIL status is not evidence - validate-foundation.mjs throws and never emits one (DEF-M1)."
+
+test_plan:
+  - "Positive: a live, in-window, unreverted decision continues to resolve ALLOW. Without this the suite could pass by denying everything."
+  - "Negative: expired; reverted; evidence reference unresolvable; evidence reference resolving but not accepted."
+  - "Regression: the full existing SkillsHub and conformance suites, including V-013 in tests/conformance-stubs.test.mjs, which drives the whole chain and will exercise the new path."
+  - "Sabotage: per AC-R2-08, every control."
+
+review_plan:
+  - "REV: confirm the resolution-time check cannot be bypassed by any path that reaches resolveSkill, and that the frozen registered manifest is not itself trusted for the temporal facts."
+  - "SEC: this changes a fail-closed authorization path. Confirm no failure mode of the lookup produces an ALLOW - a throwing, hanging, or malformed lookup must deny."
+  - "QA: re-run the sabotage matrix independently."
+
+security_plan:
+  - "The central risk is a new denial-of-service surface: if the lookup is slow or throws, every resolution fails. That is the correct direction, but it must be deliberate and tested."
+  - "The second risk is a trusted-instant problem: resolution must derive its instant per call, not capture one at construction. A captured instant makes expiry permanently stale, which is the defect this work package exists to close, re-created."
+  - "Secret scan over changed files before handoff."
+
+evidence_destination: "SecB Evidence Ledger - accepted by the Evidence authority, not by the producer"
+
+human_approval_requirements:
+  - "GOV authorization to begin: NOT GRANTED."
+  - "GOV approval to merge: NOT GRANTED."
+  - "No SEC registry-gate clearance is required, because nothing is populated. If anyone asserts otherwise mid-execution, that is a signal the scope has drifted."
+
+schedule:
+  execution_window_opens: "On GOV authorization"
+  expiry: "Authorization lapses if not started within 30 days."
+budget: "Small by construction. Growth is evidence the scope drifted."
+
+checkpoint_rules:
+  - "Checkpoint after AC-R2-01 through AC-R2-04 and before touching evidence verification - the two halves are independently useful and independently revertible."
+  - "STOP if closing any criterion requires a contract change, a wiring change, or populating the registry. All three are prohibited, and needing one means this work package was mis-scoped."
+rollback_plan: >-
+  A git revert, complete. No ledger entry, no registry state, no contract
+  version, and no persisted artifact is created by this work package, so nothing
+  survives the revert. This rollback plan was checked against the code rather
+  than asserted - the previous work package claimed a revocation mechanism that
+  the schema forbids and the code does not implement.
+recovery_rules:
+  - "No persisted state exists outside git; resume from the last checkpoint."
+integration_rules:
+  - "Rebase onto the branch tip before handoff. Conflicts in src/mcp or tools indicate a scope breach."
+activation_rules:
+  - "None. Nothing is activated. MOD-SKILL remains QUEUED - partial."
+
+learning_obligations:
+  - "Record whether closing DEF-R2 changes what the DEF-C3 registry gate should say, since this delivers part of that gate's release condition from outside it."
+  - "Record whether the resolution-time check materially slows resolution, since that determines whether a cache is needed and a cache would reintroduce staleness."
+
+status: "AWAITING_GOV_AUTHORIZATION"
+version: "1.0.0-candidate"
+signatures:
+  gov_authorization: "PENDING"
+  rev_acceptance: "PENDING"
+  sec_acceptance: "PENDING"
+  qa_acceptance: "PENDING"
+reason_codes:
+  - "Closes DEF-R2, a live violation of governance-baseline section 3"
+  - "Closes DEF-R3"
+  - "Delivers WP-SK-06's revocation leg without populating the registry, dissolving the DEF-G1 circularity"
