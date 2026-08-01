@@ -398,7 +398,7 @@ test("a no-op or malformed store receipt can never produce ALLOW", async () => {
   }
 });
 
-test("duplicate retry re-verifies durable state without creating a second row", async () => {
+test("duplicate retry verifies the pre-existing durable row without append healing", async () => {
   const store = makeStore();
   const ledgerWriter = makeAuditWriter();
   let clock = FIXED_NOW;
@@ -417,7 +417,7 @@ test("duplicate retry re-verifies durable state without creating a second row", 
   assert.equal(retry.admitted_at, first.admitted_at, "top-level retry timestamp must equal the authoritative stored admission timestamp");
   assert.equal(retry.admitted_at, retry.record.admitted_at);
   assert.equal(store.rows.length, 1);
-  assert.equal(store.appendCalls, 2, "replay must re-enter the idempotent store path");
+  assert.equal(store.appendCalls, 1, "replay must not append or upsert before verifying pre-state");
   assert.equal(store.readCalls, 2, "replay must verify durable read-back");
   assert.equal(ledgerWriter.entries.length, auditCount + 2, "replay emits ATTEMPTED and COMMITTED telemetry");
   assert.deepEqual(ledgerWriter.entries.slice(-2).map((entry) => [entry.disposition, entry.replay]), [
@@ -438,9 +438,9 @@ test("cached replay metadata cannot authorize a record deleted after first commi
   const replay = await gateway.admit(request);
 
   assert.equal(replay.decision, "RECONCILIATION_REQUIRED");
-  assert.equal(replay.reason, "STORE_READBACK_MISSING_OR_CONFLICT");
+  assert.equal(replay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
   assert.equal(replay.record_observed, false);
-  assert.equal(store.appendCalls, 2);
+  assert.equal(store.appendCalls, 1);
   assert.ok(store.readCalls >= 3, "failed verification and reconciliation both inspect durable state");
 });
 
@@ -455,9 +455,50 @@ test("cached replay metadata cannot authorize a record tampered after first comm
   const replay = await gateway.admit(request);
 
   assert.equal(replay.decision, "RECONCILIATION_REQUIRED");
-  assert.equal(replay.reason, "STORE_READBACK_MISSING_OR_CONFLICT");
-  assert.equal(store.appendCalls, 2);
+  assert.equal(replay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+  assert.equal(store.appendCalls, 1);
   assert.notEqual(replay.decision, "ALLOW");
+});
+
+test("upsert-style store cannot heal deleted or tampered state during replay", async () => {
+  const rows = [];
+  let appendCalls = 0;
+  const store = {
+    append(record, { idempotency_key }) {
+      appendCalls += 1;
+      rows.splice(0, rows.length, record);
+      return {
+        status: "COMMITTED",
+        idempotency_key,
+        memory_record_id: record.memory_record_id,
+        version: record.version,
+        content_hash: record.content_hash,
+        record_fingerprint: canonicalFingerprint(record),
+        sequence: appendCalls
+      };
+    },
+    read() { return rows.slice(); }
+  };
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
+
+  const deletionGateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  assert.equal((await deletionGateway.admit(request)).decision, "ALLOW");
+  rows.splice(0);
+  const deletedReplay = await deletionGateway.admit(request);
+  assert.equal(deletedReplay.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(deletedReplay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+  assert.equal(appendCalls, 1, "replay never gave the upsert store a chance to recreate the row");
+  assert.equal(rows.length, 0);
+
+  const tamperGateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  assert.equal((await tamperGateway.admit(request)).decision, "ALLOW");
+  rows[0] = { ...rows[0], statement: "tampered before replay" };
+  const tamperedReplay = await tamperGateway.admit(request);
+  assert.equal(tamperedReplay.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(tamperedReplay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+  assert.equal(appendCalls, 2, "only the second gateway's first admission appended");
+  assert.equal(rows[0].statement, "tampered before replay", "replay did not overwrite the evidence of tampering");
 });
 
 test("retry after restart without a durable replay anchor requires reconciliation", async () => {

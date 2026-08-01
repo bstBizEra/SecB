@@ -167,8 +167,8 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     )
   );
   // Per-instance replay metadata. It anchors trusted time/fingerprint only and
-  // is never terminal authority: every replay still audits, performs the
-  // idempotent store operation, and verifies durable read-back.
+  // is never terminal authority: every replay is freshly audited and must
+  // verify the pre-existing durable row without append/upsert healing it.
   const committedAdmissions = new Map();
 
   // Server-derived instant: { ms, iso } or null when the clock is unusable.
@@ -410,6 +410,24 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       });
     }
 
+    if (priorAdmission !== undefined) {
+      const replayRecord = await readStoredRecord(priorAdmission.record_fingerprint);
+      if (replayRecord === null) return reconcile("STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+      if (replayRecord.admitted_at !== priorAdmission.admitted_at) {
+        return reconcile("UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH");
+      }
+      if (!(await writeDisposition("COMMITTED", null, { admitted_at: replayRecord.admitted_at }))) {
+        return reconcile("COMMIT_AUDIT_UNAVAILABLE");
+      }
+      return deepFreeze({
+        decision: "ALLOW",
+        code: "ADMITTED",
+        admitted_at: replayRecord.admitted_at,
+        record: replayRecord,
+        append: priorAdmission.receipt
+      });
+    }
+
     let rawReceipt;
     try {
       rawReceipt = await layer.store.append(admittedRecord, { idempotency_key: idempotencyKey });
@@ -443,10 +461,6 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     } catch {
       return reconcile("STORE_RECEIPT_INVALID");
     }
-    if (priorAdmission !== undefined && receipt.record_fingerprint !== priorAdmission.record_fingerprint) {
-      return reconcile("STORE_REPLAY_FINGERPRINT_CONFLICT");
-    }
-
     const storedRecord = await readStoredRecord(receipt.record_fingerprint);
     if (storedRecord === null) return reconcile("STORE_READBACK_MISSING_OR_CONFLICT");
     if (storedRecord.admitted_at !== admittedRecord.admitted_at) {
@@ -464,7 +478,8 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     committedAdmissions.set(idempotencyKey, deepFreeze({
       admitted_at: storedRecord.admitted_at,
       content_hash: storedRecord.content_hash,
-      record_fingerprint: receipt.record_fingerprint
+      record_fingerprint: receipt.record_fingerprint,
+      receipt
     }));
     return result;
   }
