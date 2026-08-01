@@ -1,7 +1,7 @@
 # SkillsHub PRD — Open Defect Register
 
 **Document ID:** `SECB-PRD-SKILLSHUB-DEFECTS-001`
-**Version:** `1.0.0-draft`
+**Version:** `1.1.0-draft`
 **Status:** `DRAFT / NOT EFFECTIVE / OPEN`
 **Applies to:** `SECB-PRD-SKILLSHUB-001` v0.4.0-draft
 **Producer:** Claude Code (worker agent) — the same producer as the document these defects are in
@@ -62,7 +62,12 @@ reframes `OD-SK-02` — the question may be less "extend the skill contract" tha
 
 ---
 
-## B. Reported by independent review — NOT verified by this producer
+## B. Reported by independent review
+
+> **ADJUDICATED at v1.1.0.** Every finding below has since been independently
+> re-derived. See §G for verdicts. The `REPORTED` markers in this section are
+> retained as the historical record of their status when written; **§G is
+> authoritative.**
 
 Six HIGH, sixteen MEDIUM and seven LOW were reported against v0.3.0. `DEF-A1`
 and `DEF-A2` above are the two that were subsequently producer-verified. The
@@ -157,10 +162,12 @@ extend-only:
 
 ## E. Recommended disposition
 
-1. **REV** — rule on §B. Twenty-five findings are reviewer-reported and
-   producer-unverified; they need someone other than this producer to establish
-   them. Start with `DEF-B1` and `DEF-B2`, which change requirements rather than
-   wording.
+1. **REV** — rule on the **20 CONFIRMED** findings in §G. They are now
+   established as facts about the tree; what REV owns is what follows from them.
+   `DEF-B1` (no digest verification anywhere on the serving path) and `DEF-A5`
+   (the resolver reads its own ceiling from the manifest it was handed) are the
+   two that change requirements rather than wording. The 6 PARTIAL entries in
+   §G.1 need a narrower restatement, not adjudication. The 2 REFUTED are closed.
 2. **ARCHI** — `DEF-A1` materially changes `OD-SK-01`/`OD-SK-09`: the
    convergence problem is one enforced contract against unenforced declarations,
    not two enforced schemas colliding. `DEF-A2` may reframe `OD-SK-02` from
@@ -175,6 +182,58 @@ extend-only:
 
 ---
 
+## G. Adjudication — authoritative status
+
+All 28 `REPORTED` findings in §B and §C were independently re-derived at
+`a3e4968`. **20 CONFIRMED, 6 PARTIAL, 2 REFUTED, 0 unverifiable.** This section
+supersedes the `REPORTED` markers above.
+
+| Verdict | Findings |
+|---|---|
+| **CONFIRMED** | `DEF-B1`, `B3`, `B4`, `B5`, `B6`, `B7`, `B8`, `B9`, `B10`, `B11`, `B14`, `B15`, `B17`, `B22`, `B23`, `B24`, `B27`, `C3`, `C11`, `C12` |
+| **PARTIAL** | `DEF-B2`, `B12`, `B13`, `B25`, `B26`, `C10` |
+| **REFUTED** | `DEF-B16`, `DEF-B21` — both stale; already corrected by the v0.4.0 rework |
+
+### G.1 Corrections to findings this register recorded
+
+| ID | Correction |
+|---|---|
+| `DEF-B21` | **REFUTED, and this register contradicted itself.** §D bullet 4 recorded it as corrected while §B.3 still carried it as `REPORTED`. The artifact built to stop unverified claims propagating carried an unreconciled one of its own |
+| `DEF-B2` | "Neither asserted nor derived, so every resolution denies" is **too strong**. `src/registry/five-layer-registry.mjs` already carries `work_package_id` on session records and requires it at creation. The dimension is unobtainable from the *identity* contract `FR-SKD-003a` designates, but a session-scoped source exists — unwired to the MCP path. The deadlock is also conditional on `OD-SK-02` resolving toward *adding* the dimension |
+| `DEF-B3` | Two corrections. §20 Assumption 3 is **not** flagged "UNVERIFIED and load-bearing" at HEAD — that flag is stale from an earlier revision. And the assumption is answerable: the answer is **yes, no contract change is needed** (`decision_type: GOVERNANCE` plus the manifest's `HUMAN_PROMOTION` enum already bridge). The "collides with `OD-SK-02`" framing was too strong — the decision's `work_package_id` records which work package produced it; `OD-SK-02` concerns distribution scope. Adjacent, not colliding |
+| `DEF-B12` | Conflated *resolved* with *enforced*. The **decision** is correctly ordered first (`GATE-SK-01` requires the ADR that resolves `OD-SK-02`). What follows promotion is *enforcement* of the full scope set. A real sequencing observation, but not a contradiction of `FR-SKM-007` |
+| `DEF-B13` | "Nothing detects or prevents their use" is contradicted by §14, which already pairs the control with doctor-style detection. The accurate residual is narrower: the detection control exists **only** in the threats table, with no `FR-`, no gate, and no work-package exit criterion |
+| `DEF-B25` | "Unsatisfiable" overstates it. `FR-SKE-001`'s "deterministic runner" admits a reading where the runner's orchestration is deterministic while model output is not — which `NFR-SKREL-003` already supports. A wording-convergence item, not a contradiction |
+| `DEF-B26` | **Both halves inaccurate as stated**, but a larger true finding sits underneath — see `DEF-A3` |
+| `DEF-C10` | Mechanism confirmed; **magnitudes not reproducible.** Measured 290 ms / 13.1 MB for 500 packages at realistic sizes, against a reported ~448 ms / ~99 MB. The reported figure implies ~200 KB per `SKILL.md`, roughly 80× the real corpus average of ~2.5 KB. Treat the mechanism as established and the numbers as unrepresentative — **this producer relayed those numbers without qualification and should not have** |
+
+## H. Producer-verified findings added after adjudication
+
+Re-derived from the tree by this producer. Established.
+
+| ID | Finding | Status |
+|---|---|---|
+| `DEF-A3` | **The document's deny-code accounting omits every hub-local code.** §7.1 counts "7 resolution-time plus 3 registration-time" — resolver codes only. `skills-hub-service.mjs` defines **seven hub-local codes**, four of which (`DENY_AMBIGUOUS_IDENTITY`, `DENY_IDENTITY_MISMATCH`, `DENY_UNRESOLVED`, and the `DENY_CODES` allow-list) were added by this producer in `301997f` and appear nowhere in the document | `PRODUCER-VERIFIED` |
+| `DEF-A4` | **The identity binding depends on a constraint only the unenforced schema encodes.** `301997f` requires the resolved manifest's `name` to equal the package directory. The governed contract types `name` as free text (`{"type":"string","minLength":1}`); the pack schema — enforced by nothing — carries `^[a-z0-9-]{1,64}$`, and `validate_pack.py` asserts `name == directory`. A manifest with `name: "Security Threat Modeling"` validates cleanly and then denies forever at `DENY_IDENTITY_MISMATCH`, with no diagnostic linking the two. Introduced by this producer without checking that the contract guaranteed it. Proposed fix: split into a patterned `package_name` (binding key) and a free-text `display_name` | `PRODUCER-VERIFIED` |
+| `DEF-A5` | **The resolver reads its own authorization ceiling from the manifest it was handed.** `project_scopes`, `supported_runtimes` and `max_data_classification` are taken from the registered manifest — unlike `approval_history`, which is checked against the DecisionLedger. Whoever registers a skill sets its own scope. Latent: `registerSkill` has no caller outside its own definition and tests. This makes the trust-tier separation a **precondition of the first promotion**, not a hygiene preference | `PRODUCER-VERIFIED` |
+| `DEF-A6` | **Zero of 22 on-disk manifests validate against the governed contract, failing on a shared field.** All 22 carry lowercase `status: candidate` against an uppercase enum. The four-field required-set intersection recorded earlier is nominal, not real | `PRODUCER-VERIFIED` |
+| `DEF-A7` | **`authority_ceiling` is defined in two contracts over the identical `A0`–`A5` enum with no composition rule written anywhere.** Doctrine implies `min()`, but that is inference. Two same-named fields over one enum with an unwritten join | `PRODUCER-VERIFIED` |
+| `DEF-A8` | **The production hub can never return ALLOW.** Both wirings construct `new SkillResolver({ decisionLookup: () => null })`, which makes every `PUBLISHED` manifest unregisterable and every other status deny at resolution. Nothing calls `registerSkill`. **"Populate the resolver registry" is therefore the trigger event that makes `DEF-C3` and the `OD-SK-11` channels live, and should be a gated action** | `PRODUCER-VERIFIED` |
+| `DEF-A9` | **The hub writes to no audit ledger.** No `eventLedger`, `evidenceLedger` or `invocationLog` write exists in `skills-hub-service.mjs`. Hub-level deny decisions are invisible unless they arrive via MCP, where the audit records only tool name and outcome. Several disclosure recommendations assume a server-side log seam that does not exist | `PRODUCER-VERIFIED` |
+| `DEF-A10` | **A precise, already-accurate detection primitive exists and is checked by nothing.** `.agents/MANIFEST.sha256` verifies **162/162 clean**, and the packages it does not cover are exactly the three with no `manifest.yaml` — a 100%-precise pack-original versus locally-added discriminator. `validate_pack.py` contains zero references to it | `PRODUCER-VERIFIED` |
+| `DEF-A11` | **`install-claude.*` writes to `.claude/skills`, which the hub structurally cannot index.** `indexLocalSkills` only reads `.agents/skills` or the `../ruflo` fallback. Packages installed there are beyond the reach of any hub-side control **even in principle**, so no future fix covers them | `PRODUCER-VERIFIED` |
+
+## I. Security analysis prepared for SEC
+
+Advisory input, not verdicts. Recorded so SEC does not re-derive it.
+
+| Item | Recommendation |
+|---|---|
+| `OD-SK-11` | **Total count only on the caller surface; full typed tally to a server-side log** (which `DEF-A9` shows must first exist). The per-code breakdown is precise for an adversary and imprecise for the operator: first-match-wins resolution makes each count a lower bound on its category, which does not degrade its use as an existence proof but does corrupt its use as a diagnostic. `DENY_REVOKED` is the sharpest channel — a monotone counter that only increments on revocation, yielding a timeline that correlates with incidents. **Reject ceiling-tiering**: it tiers on the axis `DEF-C3` proves inverted, so a PUBLIC-ceiling caller would receive the richest tally. Corpus size remains disclosed; recommended as a documented residual since `.agents/skills/` is checked in |
+| `DEF-C3` | **Confirmed empirically** — PUBLIC ceiling authorizes 4/4 skills, RESTRICTED 1/4, perfectly monotone-inverted. The resolver is **not** wrong; the defect is at the call site, which substitutes the caller's *clearance* for a *requested data class* the caller never supplies. The same `ceiling` variable drives opposite disclosure directions ten lines apart in one `switch`. Consequence: **the hub has no disclosure-side classification gate at all.** Skill content does carry sensitivity independent of the data class it may process — the `SKILL.md` body is served verbatim and can hold architecture, threat models, runbooks. No contract field models this. The house pattern already exists (`classificationDecision` in `report-projections.mjs`, already gating events and evidence reads). Recommended: SEC confirms and blocks registry population pending resolution; the `content_classification` contract change routes to ARCHI + GOV. **If SEC instead rules that skill content carries no independent sensitivity, that ruling must be stated rather than reached by omission** |
+| `DEF-C4` | **Unreachability independently confirmed** — `getSkill` appears in one non-test location, its own definition. The residual leaks *more* per name than the aggregate tally does: a caller establishing that a name exists also learns *why* it is denied, and `DENY_REVOKED` on a named skill is materially more sensitive than a revocation count. **The documented constraint is contradicted by the test suite**: 16 assertions pin the per-name typed contract the comment says to collapse, and when a comment and a test disagree the test wins, because the test is what a change breaks. Recommended: pin the unreachability with a regression test now, and record the collapse as a MUST conditioning any exposure. If SEC's standard rejects latent oracles regardless of reachability, collapse now — that ruling is defensible |
+| `SKILL-DRIFT-15` | **Rule that documentation alone is an insufficient discharge of `FR-SKD-003b`** — the disposition must include at least one control that changes program behaviour. Buildable entirely from primitives already present and verified clean (`DEF-A10`): installers refuse any package not covered by `MANIFEST.sha256` at a matching digest; installers require an explicit development-only acknowledgement and print `effective: false` at run time, so the declaration reaches the point of consumption; `validate_pack.py` actually verifies the digest; a report-only CI detector. Note the fail-closed interlock would block the three locally-added packages — that **forces the governed path rather than blocking the work**. `DEF-A11` must be recorded as a permanent blind spot with a named owner |
+
 ## F. Provenance
 
 Findings originate from three independent reviews dispatched by the producer
@@ -187,3 +246,4 @@ anything.
 | Version | Date | Change |
 |---|---|---|
 | `1.0.0-draft` | 2026-08-01 | Initial register at `301997f` |
+| `1.1.0-draft` | 2026-08-01 | Adjudicated all 28 `REPORTED` findings at `a3e4968`: 20 CONFIRMED, 6 PARTIAL, 2 REFUTED, 0 unverifiable (§G). Recorded 7 corrections to findings this register carried, including that **it contradicted itself** on `DEF-B21` and that this producer **relayed unreproducible performance magnitudes without qualification** (`DEF-C10`). Added 9 producer-verified findings (§H), of which `DEF-A3` and `DEF-A4` are consequences of this producer's own `301997f` commit that it did not check at the time. Added SEC-preparation analysis (§I). The single most consequential new fact is `DEF-A8`: the production hub **can never return ALLOW**, so populating the resolver registry is the trigger event for the live-disclosure findings and should be gated |
