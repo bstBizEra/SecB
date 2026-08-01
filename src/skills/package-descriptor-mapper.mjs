@@ -140,16 +140,37 @@ export function mapPackageToDescriptor({ directoryName, manifestText, skillMdTex
 
   // Loss detection: a manifest section with a descriptor counterpart that did
   // not carry across. Without this, the next lossy edit is silent again.
+  // FIELD-GRANULAR, not section-granular. The previous check only asked whether
+  // the section object existed, so dropping `evaluation.suite`,
+  // `evaluation.cross_harness` or `roles.prohibited_final_authority` on its own
+  // left the suite green with no finding - and the last of those is the exact
+  // field the \Z bug discarded. A section-level check is a regression test for
+  // one bug, not a control against the class.
   const carried = [
-    ["classification", descriptor.risk_class],
-    ["controls", Object.keys(descriptor.controls).length > 0 ? true : null],
-    ["roles", descriptor.roles],
-    ["inputs", descriptor.inputs],
-    ["outputs", descriptor.outputs],
-    ["evaluation", descriptor.evaluation]
+    ["classification", "risk_class", descriptor.risk_class],
+    ["classification", "authority_ceiling", descriptor.authority_ceiling_cap],
+    ["roles", "allowed", descriptor.roles?.allowed],
+    ["roles", "prohibited_final_authority", descriptor.roles?.prohibited_final_authority],
+    ["inputs", "required", descriptor.inputs?.required],
+    ["outputs", "required", descriptor.outputs?.required],
+    ["evaluation", "suite", descriptor.evaluation?.suite],
+    ["evaluation", "cross_harness", descriptor.evaluation?.cross_harness],
+    ...CONTROL_KEYS.map((key) => ["controls", key, descriptor.controls[key]])
   ];
-  for (const [section, mapped] of carried) {
-    if (blocks[section] && !mapped) findings.push(`manifest declares "${section}" but it did not carry into the descriptor`);
+  for (const [section, key, mapped] of carried) {
+    if (blocks[section]?.[key] !== undefined && !mapped) {
+      findings.push(`manifest declares "${section}.${key}" but it did not carry into the descriptor`);
+    }
+  }
+
+  // Descriptor properties with no mapping path at all. The loss guarantee above
+  // covers only what the mapper attempts; these are declared surface a manifest
+  // could populate and the mapper would silently discard, so a manifest that
+  // gains one is reported rather than quietly ignored.
+  for (const unmapped of ["input_schema", "output_schema", "required_models", "required_tools", "required_mcp_methods", "known_limitations"]) {
+    if (unmapped in scalars || unmapped in blocks) {
+      findings.push(`manifest declares "${unmapped}", which this mapper has no path to carry - not yet implemented`);
+    }
   }
 
   return { descriptor, findings };

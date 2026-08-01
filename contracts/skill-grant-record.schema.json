@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://secb.local/contracts/skill-grant-record.schema.json",
   "title": "SecB Skill Grant Record",
-  "description": "The GRANTED tier of a skill manifest (ADR-0013). Every field here is written by the promotion service and by nothing else. No package author supplies any of it, and additionalProperties:false means a descriptor field smuggled in here is rejected rather than ignored. Joined to skill-package-descriptor on skill_id + version. This split exists because DEF-A5 found the resolver reading project_scopes, supported_runtimes and max_data_classification straight out of the caller-supplied manifest as its own authorization ceiling. A PUBLISHED grant is conditionally required to carry evidence and approval history; the schema previously accepted PUBLISHED with both empty.",
+  "description": "The GRANTED tier of a skill manifest (ADR-0013). Every field here is written by the promotion service and by nothing else. No package author supplies any of it, and additionalProperties:false means a descriptor field smuggled in here is rejected rather than ignored. Joined to skill-package-descriptor on skill_id + version. This split exists because DEF-A5 found the resolver reading project_scopes, supported_runtimes and max_data_classification straight out of the caller-supplied manifest as its own authorization ceiling. Both publication stages - PUBLISHED and RESTRICTED_PUBLICATION - are conditionally required to carry evidence and approval history. The schema previously accepted PUBLISHED with both empty, and then gated only PUBLISHED, leaving the restricted stage its own text calls required reachable with zero evidence.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -140,7 +140,10 @@
       "if": {
         "properties": {
           "status": {
-            "const": "PUBLISHED"
+            "enum": [
+              "PUBLISHED",
+              "RESTRICTED_PUBLICATION"
+            ]
           }
         },
         "required": [

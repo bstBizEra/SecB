@@ -93,47 +93,6 @@ const DENY_CODES = new Set([
  * Nested maps and sequences are skipped: an indented key is never promoted to
  * a top-level one.
  */
-function parseTopLevelScalars(text) {
-  const data = Object.create(null);
-  const duplicated = new Set();
-  const lines = text.split(/\r?\n/);
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const rawLine = lines[i];
-    if (rawLine.trim() === "---" && i > 0) break; // document 2 onward is not ours
-    if (rawLine.trim() === "" || rawLine.trimStart().startsWith("#")) continue;
-    if (/^\s/.test(rawLine) || rawLine.startsWith("-")) continue;
-
-    const match = /^([A-Za-z0-9_.-]+):\s*(.*)$/.exec(rawLine);
-    if (!match) continue;
-    const key = match[1];
-    let value = match[2].trim();
-
-    // Consume a quoted scalar to its close so its interior cannot be read as
-    // further keys. An unterminated quote swallows the rest of the document,
-    // which is the fail-closed direction.
-    const quote = value[0] === '"' || value[0] === "'" ? value[0] : null;
-    if (quote && !(value.length > 1 && value.endsWith(quote))) {
-      while (i + 1 < lines.length) {
-        i += 1;
-        value += `\n${lines[i]}`;
-        if (lines[i].trimEnd().endsWith(quote)) break;
-      }
-    }
-
-    if (!quote) value = value.replace(/\s+#.*$/, "").trim();
-    if (value === "") continue; // block opener, not a scalar
-
-    if (key in data) {
-      duplicated.add(key);
-      continue;
-    }
-    data[key] = quote ? value.slice(1, -1) : value.replace(/^["']|["']$/g, "");
-  }
-
-  for (const key of duplicated) delete data[key];
-  return data;
-}
 
 /**
  * Reads a manifest into top-level scalars, nested blocks, and nested sequences,
@@ -153,6 +112,7 @@ export function parseManifestSections(text) {
   const lines = String(text ?? "").split(/\r?\n/);
   let block = null;
   let sequenceKey = null;
+  let nestedIndent = null;
 
   const finish = (raw, start) => {
     let value = raw.trim();
@@ -183,6 +143,7 @@ export function parseManifestSections(text) {
       i = parsed.index;
       if (parsed.value === "") {
         block = match[1];
+        nestedIndent = null;
         if (block in blocks) duplicated.add(block);
         else blocks[block] = Object.create(null);
         continue;
@@ -194,6 +155,27 @@ export function parseManifestSections(text) {
     }
 
     if (!block) continue;
+
+    // DEPTH IS BOUNDED AT TWO. A key indented deeper than the nested level was
+    // previously read as if it sat at the nested level, so
+    // `classification: { metadata: { risk_class: R0 } }` yielded
+    // classification.risk_class - promoting a depth-3 key to depth 2. A reviewer
+    // reading the same file with a real YAML loader sees no risk_class at that
+    // level at all, which is precisely the smuggling this function claims to
+    // close, landing on the risk class and the authority ceiling.
+    //
+    // Anything deeper than two levels POISONS its parent block rather than
+    // being ignored: silently discarding structure the author wrote is how the
+    // \Z bug hid, and this reader's posture is to deny rather than to guess.
+    const indent = raw.length - raw.trimStart().length;
+    // nestedIndent is null until the block's first nested key establishes the
+    // level, so the check applies only once a level exists to compare against.
+    // Sequence items legitimately sit deeper than their key.
+    if (nestedIndent !== null && indent > nestedIndent && !/^\s+-\s+/.test(raw)) {
+      duplicated.add(block);
+      continue;
+    }
+
     const item = /^\s+-\s+(.*)$/.exec(raw);
     if (item && sequenceKey) {
       blocks[block][sequenceKey].push(item[1].trim().replace(/^["']|["']$/g, ""));
@@ -201,9 +183,10 @@ export function parseManifestSections(text) {
     }
     const nested = /^\s+([A-Za-z0-9_.-]+):\s*(.*)$/.exec(raw);
     if (!nested) continue;
+    if (nestedIndent === null) nestedIndent = indent;
     const parsed = finish(nested[2], i);
     i = parsed.index;
-    if (nested[1] in blocks[block]) { duplicated.add(`${block}.${nested[1]}`); continue; }
+    if (nested[1] in blocks[block]) { duplicated.add(`${block} ${nested[1]}`); continue; }
     if (parsed.value === "") {
       sequenceKey = nested[1];
       blocks[block][sequenceKey] = [];
@@ -213,9 +196,12 @@ export function parseManifestSections(text) {
     }
   }
 
+  // NUL is the composite-key delimiter because the key charset admits '.', so a
+  // duplicated dotted key such as `risk_class.x` split on '.' and deleted an
+  // unrelated sibling (`risk_class`) while leaving the duplicate in place.
   for (const key of duplicated) {
-    if (key.includes(".")) {
-      const [outer, inner] = key.split(".");
+    if (key.includes(" ")) {
+      const [outer, inner] = key.split(" ");
       if (blocks[outer]) delete blocks[outer][inner];
     } else {
       delete scalars[key];
@@ -223,6 +209,21 @@ export function parseManifestSections(text) {
     }
   }
   return { scalars, blocks };
+}
+
+/**
+ * Top-level scalars only. A THIN WRAPPER, not a second implementation.
+ *
+ * The previous revision added parseManifestSections alongside this function and
+ * a commit message claimed "both now use parseManifestSections". That was false
+ * - the diff was 90 insertions and 0 deletions, this function was untouched,
+ * and the hub kept reading through it while only the mapper adopted the new one.
+ * The two then demonstrably disagreed on a crafted duplicate dotted key. One
+ * implementation with one caller-facing projection is what "one reader" has to
+ * mean.
+ */
+function parseTopLevelScalars(text) {
+  return parseManifestSections(text).scalars;
 }
 
 function parseFrontmatter(content) {

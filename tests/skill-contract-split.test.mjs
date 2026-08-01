@@ -158,9 +158,25 @@ describe("WP-SK-01 / AC-04 — the corpus maps without fabrication", () => {
     // A lossy mapping always validates, because dropping an optional field is
     // legal. The `\Z` bug voided `evaluation` on 22 of 22 descriptors with the
     // suite green, so validation cannot be the control here.
+    // FIELD-granular. A section-level assertion is a regression test for the one
+    // \Z bug, not a control against the class: dropping evaluation.suite,
+    // evaluation.cross_harness or roles.prohibited_final_authority individually
+    // left the section object present and the suite green - and the last of
+    // those is the exact field the \Z bug discarded.
+    const requiredPaths = [
+      ["evaluation", "suite"],
+      ["evaluation", "cross_harness"],
+      ["roles", "allowed"],
+      ["roles", "prohibited_final_authority"],
+      ["inputs", "required"],
+      ["outputs", "required"]
+    ];
     for (const entry of mapped.filter((m) => m.descriptor)) {
-      for (const section of ["evaluation", "roles", "inputs", "outputs"]) {
-        assert.ok(entry.descriptor[section], `${entry.packageName}: ${section} did not carry into the descriptor`);
+      for (const [section, key] of requiredPaths) {
+        assert.ok(
+          entry.descriptor[section]?.[key],
+          `${entry.packageName}: ${section}.${key} did not carry into the descriptor`
+        );
       }
       assert.equal(Object.keys(entry.descriptor.controls).length, 4, `${entry.packageName}: all four controls must carry`);
       assert.ok(entry.descriptor.authority_ceiling_cap, `${entry.packageName}: authority ceiling must carry`);
@@ -192,6 +208,71 @@ describe("WP-SK-01 / AC-04 — the corpus maps without fabrication", () => {
     for (const entry of mapped.filter((m) => m.descriptor)) {
       assert.equal(entry.descriptor.package_name, entry.packageName);
     }
+  });
+});
+
+describe("WP-SK-01 / fix round 2 — controls that must not be silently deletable", () => {
+  // Round 5 found that the three contract constraints added in the previous fix
+  // round were enforced by the schema and by NOTHING ELSE: deleting the skill_id
+  // pattern, the PUBLISHED allOf, or work_package_id from required each left
+  // validate at exit 0 with the whole suite green. A constraint no test defends
+  // is one edit from gone.
+  const grant = (o = {}) => ({
+    skill_id: "SECB-ARCH-014",
+    version: "0.1.0",
+    status: "CANDIDATE",
+    project_scopes: ["prj_secb_local"],
+    supported_runtimes: ["claude-code"],
+    max_data_classification: "INTERNAL",
+    evidence_refs: [],
+    approval_history: [],
+    revocation_conditions: [],
+    ...o
+  });
+  const approval = {
+    decision_id: "dec_1",
+    decision_type: "HUMAN_PROMOTION",
+    approved_by: "human-gov",
+    approved_at: "2026-08-02T00:00:00Z",
+    work_package_id: "WP-SK-01"
+  };
+
+  it("a PUBLISHED grant must carry evidence and approval history", () => {
+    assert.doesNotThrow(() => validateContract("skillGrantRecord",
+      grant({ status: "PUBLISHED", evidence_refs: ["ev1"], approval_history: [approval] })));
+    assert.throws(() => validateContract("skillGrantRecord",
+      grant({ status: "PUBLISHED", evidence_refs: [], approval_history: [approval] })));
+    assert.throws(() => validateContract("skillGrantRecord",
+      grant({ status: "PUBLISHED", evidence_refs: ["ev1"], approval_history: [] })));
+  });
+
+  it("a RESTRICTED_PUBLICATION grant must carry evidence and approval history", () => {
+    // SECB-SKILL-001 makes restricted publication a publication stage. Gating
+    // only PUBLISHED let the stage the schema itself calls required be reached
+    // with zero evidence.
+    assert.throws(() => validateContract("skillGrantRecord",
+      grant({ status: "RESTRICTED_PUBLICATION", evidence_refs: [], approval_history: [] })));
+    assert.doesNotThrow(() => validateContract("skillGrantRecord",
+      grant({ status: "RESTRICTED_PUBLICATION", evidence_refs: ["ev1"], approval_history: [approval] })));
+  });
+
+  it("every approval entry must bind a work package", () => {
+    const { work_package_id, ...noWp } = approval;
+    assert.throws(() => validateContract("skillGrantRecord",
+      grant({ status: "PUBLISHED", evidence_refs: ["ev1"], approval_history: [noWp] })));
+  });
+
+  it("skill_id charset is constrained on both tiers", () => {
+    for (const bad of ["SECB-A@9.9.9", " ", "a b", "-lead", ".lead"]) {
+      assert.throws(() => validateContract("skillGrantRecord", grant({ skill_id: bad })), `grant accepted "${bad}"`);
+      assert.throws(() => validateContract("skillPackageDescriptor", validDescriptor({ skill_id: bad })), `descriptor accepted "${bad}"`);
+    }
+    assert.doesNotThrow(() => validateContract("skillGrantRecord", grant({ skill_id: "SECB-ARCH-014" })));
+  });
+
+  it("the content digest lives on the granted tier only", () => {
+    assert.equal(DESCRIPTOR.properties.source.properties.content_digest, undefined);
+    assert.ok(GRANT.properties.source_content_digest, "the promotion service records the digest");
   });
 });
 
