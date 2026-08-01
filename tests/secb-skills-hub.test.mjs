@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import { TOOL_CATALOG } from '../src/mcp/tool-catalog.mjs';
 import { SecBSkillsHub } from '../src/skills/skills-hub-service.mjs';
 import { SkillResolver } from '../src/registry/skill-resolver.mjs';
 import { runSecbSkillsCLI } from '../tools/secb-skills.mjs';
@@ -260,6 +261,38 @@ describe('SecBSkillsHub fail-closed authorization', () => {
     for (const q of [null, undefined, 42, {}, []]) {
       assert.equal(hub.searchSkills(q, CONTEXT).ok, true, `query ${JSON.stringify(q)} must not throw`);
     }
+  });
+
+  // DEF-C4. getSkill distinguishes present-but-denied from absent by deny code
+  // alone, so a caller could test any name for existence — the same channel
+  // closed in searchSkills, surviving on the sibling method. It leaks MORE per
+  // name than the aggregate tally does: establishing that a name exists also
+  // reveals why it is denied, and DENY_REVOKED on a named skill is materially
+  // more sensitive than a revocation count.
+  //
+  // It is unreachable today, and this test is what makes that a maintained
+  // invariant rather than a fact someone has to re-derive. The method's own
+  // comment says to collapse the codes before exposing it — but 16 assertions
+  // in this file pin the per-name typed contract, and when a comment and a test
+  // disagree the test wins, because the test is what a change breaks. So the
+  // comment cannot be the control. This is.
+  //
+  // If this test fails, do not delete it. Collapse every getSkill deny to one
+  // opaque code with a constant message and log the typed code server-side,
+  // then exposing it is safe.
+  it('AC-SKILLS-HUB-11: getSkill is not reachable from any caller-facing surface', () => {
+    const server = readFileSync(resolve(process.cwd(), 'src/mcp/secb-mcp-server.mjs'), 'utf8');
+    assert.ok(!/\.getSkill\s*\(/.test(server), 'MCP dispatch must not call hub.getSkill');
+
+    const cli = readFileSync(resolve(process.cwd(), 'tools/secb-skills.mjs'), 'utf8');
+    assert.ok(!/\.getSkill\s*\(/.test(cli), 'the CLI must not call hub.getSkill');
+
+    const skillTools = TOOL_CATALOG.filter((t) => t.name.includes('skill')).map((t) => t.name).sort();
+    assert.deepEqual(
+      skillTools,
+      ['secb_skill_hub_search', 'secb_skill_resolve'],
+      'a new skill tool must be checked against DEF-C4 before it is added'
+    );
   });
 
   it('AC-SKILLS-HUB-07: unknown skill names return a typed not-found deny', () => {

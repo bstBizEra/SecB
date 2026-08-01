@@ -428,6 +428,7 @@
     "docs/03-project-control/candidates/secb-agent-registry-mcp-gateway-prd-001.md",
     "docs/03-project-control/candidates/secb-skillshub-prd-001.md",
     "docs/03-project-control/candidates/skillshub-prd-defect-register-001.md",
+    "docs/03-project-control/candidates/skillshub-def-c3-sec-decision-001.md",
     "docs/03-project-control/candidates/skillshub-prd-rev-request-001.handoff.yaml",
     "docs/adr/0010-canonical-five-layer-registry-persistence.md",
     "docs/adr/0011-single-mcp-invocation-enforcement-pipeline.md",
