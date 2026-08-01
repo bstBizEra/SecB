@@ -93,7 +93,8 @@ Where both packs cover a topic, the operating-model document is the intended suc
 - [Work package contract](03-project-control/work-package-contract.md)
 - [Self-pilot](03-project-control/self-pilot.md)
 - [Agent Registry, MCP Gateway, CLI and Live Operations PRD](03-project-control/candidates/secb-agent-registry-mcp-gateway-prd-001.md) *(DRAFT / NOT EFFECTIVE)*
-- [SkillsHub intake, evaluation, promotion and distribution PRD](03-project-control/candidates/secb-skillshub-prd-001.md) *(DRAFT / NOT EFFECTIVE)*
+- [SkillsHub intake, evaluation, promotion and distribution PRD](03-project-control/candidates/secb-skillshub-prd-001.md) *(DRAFT / NOT EFFECTIVE / DEFECT-REGISTERED — current-state discovery, not a settled requirements candidate)*
+- [SkillsHub PRD open defect register](03-project-control/candidates/skillshub-prd-defect-register-001.md) *(DRAFT / NOT EFFECTIVE / OPEN)*
 - Candidates and effective records: [`03-project-control/`](03-project-control/)
 
 ### 04 — Assurance

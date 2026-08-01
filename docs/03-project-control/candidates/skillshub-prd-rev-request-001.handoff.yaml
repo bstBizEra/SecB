@@ -8,7 +8,7 @@ record_metadata:
   limitations:
     - "Producer may not self-review. This packet requests independent REV and QA per agent-team-and-sod; it is not a self-certification of the work."
     - "The producer authored BOTH the reviewed document and the code it assesses (e0de4f3, e7d14ee). Section 7.4 of the PRD is producer-asserted disposition, not accepted evidence."
-    - "The two reviews already performed were producer-side subagents dispatched by the producer. They found real defects and the document was reworked accordingly, but they are NOT the independent REV/QA/SEC verdict required by decision-rights.md."
+    - "THREE reviews have now been performed, all producer-side subagents dispatched by the producer. Each found substantive false claims, and the producer's own verification passed before each round. They are NOT the independent REV/QA/SEC verdict required by decision-rights.md, and the document has been downgraded rather than reworked a fourth time."
     - "Review scope is FROZEN at the pinned commit. Commits after the pin, including this packet and its manifest registration, are governance records and not review targets."
     - "No Work Package authorized this work. It was produced as advisory research at operator request. The absence of a work-package record is itself a finding for REV disposition."
 handoff:
@@ -20,12 +20,16 @@ handoff:
   project_id: "prj_secb_local"
   work_package_id: null
   objective: >-
-    Independent review of SECB-PRD-SKILLSHUB-001 v0.2.0-draft and of the two
-    SkillsHub code commits it assesses, plus a SEC verdict on the withheld-count
-    disclosure design (OD-SK-11) and disposition of two live authorization
-    findings the document reports but does not fix.
+    Independent review of SECB-PRD-SKILLSHUB-001, now v0.4.0-draft and DOWNGRADED
+    to current-state discovery carrying a known defect register, together with
+    SECB-PRD-SKILLSHUB-DEFECTS-001 and the SkillsHub code commits the document
+    assesses. Specifically sought: adjudication of the 25 reviewer-reported,
+    producer-unverified findings in the register; a SEC verdict on the
+    withheld-count disclosure design (OD-SK-11), the inverted classification leg
+    (DEF-C3) and the getSkill residual (DEF-C4); disposition of SKILL-DRIFT-15;
+    and a GOV decision on whether to authorize the programme at all.
   authorized_scope:
-    - "Branch feat/secb-ruflo-command-center, PINNED at commit 894b720."
+    - "Branch feat/secb-ruflo-command-center. Original pin 894b720; SUPERSEDED - the review target is now the tip carrying v0.4.0-draft plus SECB-PRD-SKILLSHUB-DEFECTS-001. The original freeze pinned a version that three review rounds have since corrected, so reviewing 894b720 would review known-false claims."
     - "Review targets: 894b720 (PRD + registration) and e7d14ee (oracle fix), and e0de4f3 (the prior SkillsHub fail-closed commit that the PRD section 7.4 asserts dispositions about)."
     - "Read-only review. Findings as records. No fixes on the frozen range without a new pinned round."
   work_completed:
@@ -34,11 +38,16 @@ handoff:
     - "Fixed a fail-open authorization gate in the SkillsHub (e0de4f3, jointly with the MCP producer who bound the search tool to a governed caller context)."
     - "Fixed a query-conditioned existence oracle in the withheld-count aggregate (e7d14ee)."
     - "Reworked the PRD to v0.2.0 after two producer-side reviews: 3 retractions, 6 factual corrections, 2 new findings, and 8 authority or gate corrections."
+    - "Withdrew SKILL-DRIFT-14 at v0.3.0 after finding it had been fixed before publication (SKILL-FIX-07)."
+    - "Fixed an identity-spoofing defect in the hub found by a third review (301997f): a package declaring a governed identity was served under it with its own body. Plus parser hardening, tally integrity, and removal of a governed-identity leak in getSkill deny messages."
+    - "Downgraded the PRD to current-state discovery at v0.4.0 and opened SECB-PRD-SKILLSHUB-DEFECTS-001 rather than attempting a fourth producer-directed rework."
   artifacts_created:
     - "docs/03-project-control/candidates/secb-skillshub-prd-001.md"
+    - "docs/03-project-control/candidates/skillshub-prd-defect-register-001.md"
     - "src/skills/skills-hub-service.mjs (modified)"
     - "tests/secb-skills-hub.test.mjs (modified)"
     - "MANIFEST.json, docs/MANIFEST.json, docs/README.md (registration only)"
+    - "CORRECTION: this list previously omitted five files from the e0de4f3 write set, which the producer co-authored with the MCP producer. The full set is src/mcp/secb-mcp-server.mjs, src/mcp/tool-catalog.mjs, src/skills/skills-hub-service.mjs, tests/mcp-server.test.mjs, tests/secb-skills-hub.test.mjs, tests/worktree-mcp-skillshub.test.mjs, tools/secb-skills.mjs. No work package governs this work, so this field is the only write-set record REV has."
   decisions_made:
     - "Fail closed on unknown: the hub allow-lists the resolver's single ALLOW code rather than deny-listing known deny codes. Consequence: zero skills are consumable today, which is the correct governed state and not a regression."
     - "Did not fabricate governed manifest fields to make on-disk packages registrable. owner, source, project_scopes, max_data_classification, evidence_refs and approval_history are promotion-granted, not author-declared."
@@ -105,7 +114,7 @@ handoff:
       status: "open"
   risks:
     - "R3 at activation: skills alter agent behaviour, tool use, and evidence production across every harness. This round reviews an M1 planning artifact and two R2 code changes."
-    - "Two live authorization findings remain open, one of them an authorization bypass by construction."
+    - "SUPERSEDED. One live authorization finding remains open (SKILL-DRIFT-15, ungoverned installers). The bypass-by-construction finding (SKILL-DRIFT-14) was withdrawn - see corrections_after_dispatch. A separate identity-spoofing defect in the hub was found by a later review and fixed in 301997f; its residual is recorded as DEF-C2."
     - "No work package governs this work, so there is no declared write set or approval field to check the delivered changes against."
     - "The PRD proposes restoring three doctrinal gates the producer had previously downgraded. If REV disagrees with the restoration, the requirement set changes materially."
   recommended_next_action: >-
@@ -118,10 +127,13 @@ handoff:
     is authorized by the document. Return verdicts as records; operator merges or
     orders rework.
   confidence: >-
-    medium-high on the current-state discovery after rework and two review
-    rounds; medium on the requirement set, which restores gates the producer had
-    wrongly downgraded and has not been reviewed in its restored form; low on
-    completeness of absence claims, given the v0.1.0 failure mode.
+    LOW, restated at v0.4.0 and deliberately not left at the earlier
+    "medium-high". Three review rounds each found substantive false claims that
+    the producer's own verification had passed, including a mechanical sweep
+    that certified 24 computed facts while the two most consequential asserted
+    claims went uncaught. Treat every state claim not marked PRODUCER-VERIFIED
+    in the defect register as unestablished. The producer is reliable on facts
+    it computes and unreliable on facts it asserts.
   context_delta:
     - "MOD-SKILL tracker status remains QUEUED - partial. This packet does not change it."
     - "Zero skills are consumable through SecB at the pin. This is the governed state produced by e0de4f3, not a regression."
