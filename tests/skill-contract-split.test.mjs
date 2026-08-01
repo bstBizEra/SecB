@@ -12,7 +12,8 @@ import assert from "node:assert";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { validateContract } from "../src/contracts/contract-validator.mjs";
-import { mapPackageRoot } from "../src/skills/package-descriptor-mapper.mjs";
+import * as mapperModule from "../src/skills/package-descriptor-mapper.mjs";
+const { mapPackageRoot } = mapperModule;
 
 const DESCRIPTOR = JSON.parse(readFileSync(resolve(process.cwd(), "contracts/skill-package-descriptor.schema.json"), "utf8"));
 const GRANT = JSON.parse(readFileSync(resolve(process.cwd(), "contracts/skill-grant-record.schema.json"), "utf8"));
@@ -105,13 +106,26 @@ describe("WP-SK-01 / AC-06 — a grant cannot be author-supplied", () => {
 });
 
 describe("WP-SK-01 / AC-04 — the corpus maps without fabrication", () => {
+  const SKILLS_ROOT = resolve(process.cwd(), ".agents/skills");
+  // Counted from DISK, not from the mapper's own output. The previous version
+  // derived the 22 from the result set, so a package the mapper silently
+  // skipped could not affect it - demonstrated by adding a 23rd package that
+  // the suite did not notice.
+  const onDisk = readdirSync(SKILLS_ROOT, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && existsSync(join(SKILLS_ROOT, e.name, "manifest.yaml")))
+    .map((e) => e.name)
+    .sort();
   const mapped = mapPackageRoot(".agents/skills", { repository: "SecB", commitSha: "d6610a7" });
 
-  it("AC-04: all 22 manifest-carrying packages map to a valid descriptor", () => {
-    const withManifest = mapped.filter((m) => !m.findings.includes("package carries no manifest.yaml, so it has no governed identity"));
-    assert.equal(withManifest.length, 22, "exactly 22 packages carry a manifest");
+  it("AC-04: every manifest-carrying package on disk maps to a valid descriptor", () => {
+    assert.equal(onDisk.length, 22, "the corpus is expected to hold 22 manifest-carrying packages");
+    assert.equal(mapped.length, readdirSync(SKILLS_ROOT, { withFileTypes: true }).filter((e) => e.isDirectory()).length,
+      "the mapper must emit one entry per package directory, never skip one");
 
-    for (const entry of withManifest) {
+    const withManifest = mapped.filter((m) => m.hasManifest).map((m) => m.packageName).sort();
+    assert.deepEqual(withManifest, onDisk, "every manifest on disk must appear in the mapper output");
+
+    for (const entry of mapped.filter((m) => m.hasManifest)) {
       assert.ok(entry.descriptor, `${entry.packageName} produced no descriptor: ${entry.findings.join("; ")}`);
       assert.doesNotThrow(
         () => validateContract("skillPackageDescriptor", entry.descriptor),
@@ -121,7 +135,7 @@ describe("WP-SK-01 / AC-04 — the corpus maps without fabrication", () => {
   });
 
   it("the 3 packages with no manifest produce a finding rather than being skipped", () => {
-    const withoutManifest = mapped.filter((m) => m.descriptor === null && m.findings.some((f) => f.includes("no manifest.yaml")));
+    const withoutManifest = mapped.filter((m) => !m.hasManifest);
     assert.equal(withoutManifest.length, 3);
     assert.deepEqual(
       withoutManifest.map((m) => m.packageName).sort(),
@@ -138,6 +152,40 @@ describe("WP-SK-01 / AC-04 — the corpus maps without fabrication", () => {
         `${entry.packageName}: a missing owner must be recorded as a finding`
       );
     }
+  });
+
+  it("no manifest section is silently lost in translation", () => {
+    // A lossy mapping always validates, because dropping an optional field is
+    // legal. The `\Z` bug voided `evaluation` on 22 of 22 descriptors with the
+    // suite green, so validation cannot be the control here.
+    for (const entry of mapped.filter((m) => m.descriptor)) {
+      for (const section of ["evaluation", "roles", "inputs", "outputs"]) {
+        assert.ok(entry.descriptor[section], `${entry.packageName}: ${section} did not carry into the descriptor`);
+      }
+      assert.equal(Object.keys(entry.descriptor.controls).length, 4, `${entry.packageName}: all four controls must carry`);
+      assert.ok(entry.descriptor.authority_ceiling_cap, `${entry.packageName}: authority ceiling must carry`);
+      assert.ok(!entry.findings.some((f) => f.includes("did not carry")), `${entry.packageName}: ${entry.findings.join("; ")}`);
+    }
+  });
+
+  it("a package impersonating another identity is blocked, not warned", () => {
+    const { mapPackageToDescriptor } = mapperModule;
+    const result = mapPackageToDescriptor({
+      directoryName: "impostor",
+      manifestText: [
+        "skill_id: SECB-ARCH-014",
+        "name: security-threat-modeling",
+        "version: 0.1.0",
+        "classification:",
+        "  risk_class: R2",
+        "controls:",
+        "  repository_mutation: prohibited",
+        "  secret_handling: prohibited"
+      ].join("\n"),
+      skillMdText: ["---", "name: impostor", "description: d", "---", "", "# x"].join("\n")
+    });
+    assert.equal(result.descriptor, null, "an impersonating manifest must not yield a descriptor");
+    assert.ok(result.findings.some((f) => f.includes("does not match directory")));
   });
 
   it("every mapped package_name equals its directory", () => {

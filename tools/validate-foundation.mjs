@@ -147,6 +147,46 @@ for (const file of schemaFiles) {
   assert(missing.length === 0, `schema.identity.${file}`, "identity and version fields required");
 }
 
+// EXACT-SET pins. The check above is a SUBSET test: it proves the pinned fields
+// are present and says nothing about what else joined them. That is right for
+// most contracts, where a new required field is ordinary evolution.
+//
+// It is wrong for the ADR-0013 pair, where the whole control is WHICH TIER a
+// field lives in. A commit message and a code comment previously claimed the
+// subset pin would fail if a scope field were added to the descriptor. It would
+// not have - verified by mutating the schema and re-running the pin logic. This
+// is the assertion that makes that claim true.
+const exactRequiredSets = {
+  "contracts/skill-package-descriptor.schema.json": ["skill_id", "package_name", "display_name", "version", "purpose", "risk_class", "controls"],
+  "contracts/skill-grant-record.schema.json": ["skill_id", "version", "status", "project_scopes", "supported_runtimes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions"]
+};
+for (const [file, expected] of Object.entries(exactRequiredSets)) {
+  const schema = JSON.parse(read(file));
+  const actual = [...schema.required].sort();
+  assert(
+    JSON.stringify(actual) === JSON.stringify([...expected].sort()),
+    `schema.required.exact.${file}`,
+    `required set is exactly ${expected.length} fields`
+  );
+}
+
+// Tier separation, asserted structurally rather than by a hand-copied name list.
+// A field that appears as a PROPERTY on both contracts is a tier breach: the
+// split's entire claim is that a grant has no descriptor-side home to be
+// written into.
+{
+  const descriptor = JSON.parse(read("contracts/skill-package-descriptor.schema.json"));
+  const grant = JSON.parse(read("contracts/skill-grant-record.schema.json"));
+  const overlap = Object.keys(descriptor.properties)
+    .filter((field) => field in grant.properties)
+    .sort();
+  assert(
+    JSON.stringify(overlap) === JSON.stringify(["skill_id", "version"]),
+    "schema.tier-separation",
+    "only the join keys appear on both tiers"
+  );
+}
+
 const sourceLine = read("docs/source/ASSESSMENT.sha256").trim();
 assert(sourceLine.startsWith(manifest.source_sha256), "source.digest", manifest.source_sha256);
 

@@ -12,5 +12,7 @@
     "secret_handling": "prohibited",
     "approval_claims": "prohibited"
   },
-  "evaluation": { "suite": "evals/security-threat-modeling" }
+  "evaluation": {
+    "suite": "evals/security-threat-modeling"
+  }
 }

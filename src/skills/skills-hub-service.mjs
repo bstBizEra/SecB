@@ -135,6 +135,96 @@ function parseTopLevelScalars(text) {
   return data;
 }
 
+/**
+ * Reads a manifest into top-level scalars, nested blocks, and nested sequences,
+ * under the SAME hardening as parseTopLevelScalars.
+ *
+ * Exported because a second reader was written for the descriptor mapper with
+ * none of these controls, and the two disagreed on the governed identity of a
+ * crafted manifest: the mapper accepted a duplicate key, a key in document 2,
+ * and a key inside a quoted scalar, each of which this reader refuses. The
+ * mapper's output is the intended promotion input, so two readers with opposite
+ * postures is a confused deputy. There is now one reader.
+ */
+export function parseManifestSections(text) {
+  const scalars = Object.create(null);
+  const blocks = Object.create(null);
+  const duplicated = new Set();
+  const lines = String(text ?? "").split(/\r?\n/);
+  let block = null;
+  let sequenceKey = null;
+
+  const finish = (raw, start) => {
+    let value = raw.trim();
+    const quote = value[0] === '"' || value[0] === "'" ? value[0] : null;
+    let index = start;
+    if (quote && !(value.length > 1 && value.endsWith(quote))) {
+      while (index + 1 < lines.length) {
+        index += 1;
+        value += `\n${lines[index]}`;
+        if (lines[index].trimEnd().endsWith(quote)) break;
+      }
+    }
+    if (!quote) value = value.replace(/\s+#.*$/, "").trim();
+    return { value: quote ? value.slice(1, -1) : value.replace(/^["']|["']$/g, ""), index };
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i];
+    if (raw.trim() === "---" && i > 0) break;
+    if (raw.trim() === "" || raw.trimStart().startsWith("#")) continue;
+
+    if (!/^\s/.test(raw)) {
+      sequenceKey = null;
+      if (raw.startsWith("-")) { block = null; continue; }
+      const match = /^([A-Za-z0-9_.-]+):\s*(.*)$/.exec(raw);
+      if (!match) { block = null; continue; }
+      const parsed = finish(match[2], i);
+      i = parsed.index;
+      if (parsed.value === "") {
+        block = match[1];
+        if (block in blocks) duplicated.add(block);
+        else blocks[block] = Object.create(null);
+        continue;
+      }
+      block = null;
+      if (match[1] in scalars) duplicated.add(match[1]);
+      else scalars[match[1]] = parsed.value;
+      continue;
+    }
+
+    if (!block) continue;
+    const item = /^\s+-\s+(.*)$/.exec(raw);
+    if (item && sequenceKey) {
+      blocks[block][sequenceKey].push(item[1].trim().replace(/^["']|["']$/g, ""));
+      continue;
+    }
+    const nested = /^\s+([A-Za-z0-9_.-]+):\s*(.*)$/.exec(raw);
+    if (!nested) continue;
+    const parsed = finish(nested[2], i);
+    i = parsed.index;
+    if (nested[1] in blocks[block]) { duplicated.add(`${block}.${nested[1]}`); continue; }
+    if (parsed.value === "") {
+      sequenceKey = nested[1];
+      blocks[block][sequenceKey] = [];
+    } else {
+      sequenceKey = null;
+      blocks[block][nested[1]] = parsed.value;
+    }
+  }
+
+  for (const key of duplicated) {
+    if (key.includes(".")) {
+      const [outer, inner] = key.split(".");
+      if (blocks[outer]) delete blocks[outer][inner];
+    } else {
+      delete scalars[key];
+      delete blocks[key];
+    }
+  }
+  return { scalars, blocks };
+}
+
 function parseFrontmatter(content) {
   const lines = content.split(/\r?\n/);
   if (lines[0]?.trim() !== "---") return { data: {}, body: content };
