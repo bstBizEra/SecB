@@ -6,8 +6,8 @@
 // a deny-by-default admission/retrieval pipeline IN FRONT of injected layer
 // stores. It follows the MOD-GOV S3 "unwired facade" precedent
 // (src/control/policy-decision-point.mjs): nothing wires this module, every
-// collaborator is injected, and it holds no state, no I/O, no persistence, and
-// no ledger authority of its own.
+// collaborator is injected, and it holds only a per-instance, non-durable
+// replay anchor: no I/O, persistence, or ledger authority of its own.
 //
 // Scope discipline (S1 charter):
 //   - The gateway NEVER touches an existing store's admission policy. It appends
@@ -166,6 +166,10 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       ])
     )
   );
+  // Per-instance replay anchor. It is not durable authority: after restart an
+  // older store timestamp cannot be accepted without a future durable resolver,
+  // and therefore falls to RECONCILIATION_REQUIRED.
+  const committedAdmissions = new Map();
 
   // Server-derived instant: { ms, iso } or null when the clock is unusable.
   function serverInstant() {
@@ -311,9 +315,16 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       admittedRecord.project_id,
       admittedRecord.layer,
       admittedRecord.memory_record_id,
-      admittedRecord.version,
-      admittedRecord.content_hash
+      admittedRecord.version
     ]);
+
+    const priorAdmission = committedAdmissions.get(idempotencyKey);
+    if (priorAdmission !== undefined) {
+      if (priorAdmission.record.content_hash !== admittedRecord.content_hash) {
+        return deny("DENY_IDEMPOTENCY_CONFLICT", "Memory identity/version was already committed with different content");
+      }
+      return priorAdmission;
+    }
 
     // 7. Audit-first: the admission audit is written BEFORE any store mutation.
     // A throwing/unavailable audit writer denies with no store side effect.
@@ -438,15 +449,20 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
 
     const storedRecord = await readStoredRecord(receipt.record_fingerprint);
     if (storedRecord === null) return reconcile("STORE_READBACK_MISSING_OR_CONFLICT");
+    if (storedRecord.admitted_at !== admittedRecord.admitted_at) {
+      return reconcile("UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH");
+    }
     if (!(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) return reconcile("COMMIT_AUDIT_UNAVAILABLE");
 
-    return deepFreeze({
+    const result = deepFreeze({
       decision: "ALLOW",
       code: "ADMITTED",
-      admitted_at: instant.iso,
+      admitted_at: storedRecord.admitted_at,
       record: storedRecord,
       append: receipt
     });
+    committedAdmissions.set(idempotencyKey, result);
+    return result;
   }
 
   // --- Retrieval shape validation ----------------------------------------

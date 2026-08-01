@@ -395,11 +395,13 @@ test("a no-op or malformed store receipt can never produce ALLOW", async () => {
 
 test("duplicate retry uses the same idempotency key and does not append twice", async () => {
   const store = makeStore();
+  const ledgerWriter = makeAuditWriter();
   let clock = FIXED_NOW;
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
-  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => clock, ledgerWriter: makeAuditWriter() });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => clock, ledgerWriter });
   const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
   const first = await gateway.admit(request);
+  const auditCount = ledgerWriter.entries.length;
   clock = new Date(FIXED_NOW.getTime() + 300_000);
   const retry = await gateway.admit(request);
   assert.equal(first.decision, "ALLOW");
@@ -407,6 +409,30 @@ test("duplicate retry uses the same idempotency key and does not append twice", 
   assert.equal(first.append.idempotency_key, retry.append.idempotency_key);
   assert.equal(first.append.sequence, retry.append.sequence);
   assert.deepEqual(retry.record, first.record, "retry returns the authoritative stored record, including original admitted_at");
+  assert.equal(retry.admitted_at, first.admitted_at, "top-level retry timestamp must equal the authoritative stored admission timestamp");
+  assert.equal(retry.admitted_at, retry.record.admitted_at);
+  assert.equal(store.rows.length, 1);
+  assert.equal(ledgerWriter.entries.length, auditCount, "cached retry has no audit or store side effect");
+});
+
+test("retry after restart without a durable replay anchor requires reconciliation", async () => {
+  const store = makeStore();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
+  const firstGateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  const first = await firstGateway.admit(request);
+  assert.equal(first.decision, "ALLOW");
+
+  const restartedGateway = createMemoryGateway({
+    layerStores,
+    sodRules: kernelSodRules,
+    now: () => new Date(FIXED_NOW.getTime() + 300_000),
+    ledgerWriter: makeAuditWriter()
+  });
+  const replay = await restartedGateway.admit(request);
+
+  assert.equal(replay.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(replay.reason, "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH");
   assert.equal(store.rows.length, 1);
 });
 
@@ -425,6 +451,26 @@ test("same claimed hash with changed payload is denied before audit or store", a
     admission: { producer: "agent-a" }
   });
   assert.equal(conflict.code, "DENY_CONTENT_HASH_MISMATCH");
+  assert.equal(store.rows.length, 1);
+  assert.equal(ledgerWriter.entries.length, auditCount);
+});
+
+test("same identity and version with different valid content is an idempotency conflict", async () => {
+  const store = makeStore();
+  const ledgerWriter = makeAuditWriter();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
+  const first = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  assert.equal(first.decision, "ALLOW");
+  const auditCount = ledgerWriter.entries.length;
+
+  const conflict = await gateway.admit({
+    layer: "session",
+    record: sessionRecord({ statement: "different valid content" }),
+    admission: { producer: "agent-a" }
+  });
+
+  assert.equal(conflict.code, "DENY_IDEMPOTENCY_CONFLICT");
   assert.equal(store.rows.length, 1);
   assert.equal(ledgerWriter.entries.length, auditCount);
 });
@@ -452,6 +498,34 @@ test("tampered full-record read-back cannot produce ALLOW even with a matching r
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.notEqual(result.decision, "ALLOW");
+});
+
+test("store cannot substitute trusted admission time even with a recomputed fingerprint", async () => {
+  const rows = [];
+  const store = {
+    append(record, { idempotency_key }) {
+      const tampered = { ...structuredClone(record), admitted_at: "2099-01-01T00:00:00.000Z" };
+      rows.push(tampered);
+      return {
+        status: "COMMITTED",
+        idempotency_key,
+        memory_record_id: record.memory_record_id,
+        version: record.version,
+        content_hash: record.content_hash,
+        record_fingerprint: canonicalFingerprint(tampered),
+        sequence: 1
+      };
+    },
+    read() { return rows.slice(); }
+  };
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(result.reason, "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH");
   assert.notEqual(result.decision, "ALLOW");
 });
 
