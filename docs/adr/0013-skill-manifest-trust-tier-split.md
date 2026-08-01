@@ -150,6 +150,64 @@ SEC rule (`DEF-B4`).
 `DEF-C2`) remains open; the descriptor carries `source.commit_sha`, which makes
 the eventual control expressible, but the control itself belongs to Phase 5.
 
+## Correction 1 — a rationale in §Rationale is falsified in part
+
+**Raised 2026-08-02 during WP-SK-01 implementation. Accepted as a correction of
+record; requires ARCHI ruling on whether the decision itself still stands.**
+
+§Rationale states, as part of the case for choosing this option over the others:
+
+> *"It is also the only option under which the 22 packages can migrate **now** —
+> every field it asks an author for is a field the author actually holds."*
+
+**That is false for two fields.** `owner` and `source.licence` are not derivable
+from any package: they appear in no `manifest.yaml`, no `SKILL.md`, and no
+`PACK.yaml`. Intake is forbidden from fabricating them (`FR-SKI-004`), and
+filling them with a placeholder would be fabricating with extra steps.
+
+**How the implementation resolved it, and why that needs review.** The producer
+did not fabricate and did not stop. It made both fields optional on the
+descriptor and recorded them as *promotion preconditions* — the same trust-tier
+logic one level deeper, assertable-now versus required-at-promotion. That kept
+`WP-SK-01`'s stop rule intact on the producer's reading, since the rule fires on
+fabrication rather than on absence.
+
+**But the producer amended the contract's field tiering to accommodate a
+falsified rationale in an accepted ADR, rather than routing the correction
+here.** That is the substance of this correction. Two things follow:
+
+1. The *comparative* claim in §Rationale is weakened. Options A and B were
+   rejected partly because they blocked migration behind a promotion pipeline
+   that does not exist. That objection still stands against them, but the chosen
+   option is no longer cleanly free of it — two fields are deferred to promotion
+   here too, just two rather than six.
+2. **The promotion precondition is unenforced.** It exists as prose in a code
+   comment and two schema `description` strings. No schema requires `owner`, no
+   test asserts it, and the grant record does not carry it. A hard requirement
+   was converted into a promise — which is the exact construction this ADR
+   exists to eliminate. `WP-SK-05` must make it machine-checkable before any
+   promotion relies on it.
+
+**ARCHI is asked to rule:** does the decision stand as corrected, or does the
+weakened rationale change the comparison against Option C?
+
+## Correction 2 — two fields shipped beyond the accepted table
+
+`authority_ceiling_cap` and `source.content_digest` do not appear in
+§Decision's field table. The cap is covered by sub-decision 3; the digest was
+not covered anywhere and was added by the producer.
+
+`source.content_digest` was **wrongly placed on the authored tier** and has since
+been moved to the grant record as `source_content_digest`. A digest an author
+declares about its own content, verified at resolution, is self-certifying —
+`DEF-A5`'s shape one level over, inside the fix for `DEF-A5`.
+
+`authority_ceiling_cap` remains author-writable and shipped ahead of the
+`min(agent, skill)` composition that makes it safe, which is deferred to
+`AC-08`. It is inert until composed. **REV and SEC are asked to rule** whether an
+author-writable authority field may ship ahead of its control, given that
+author-supplied authorization input is the entire motivation for this ADR.
+
 ## Status and required review
 
 `ACCEPTED` by the operator acting as ARCHI, on the strength of an independent

@@ -1,7 +1,7 @@
 # SkillsHub PRD — Open Defect Register
 
 **Document ID:** `SECB-PRD-SKILLSHUB-DEFECTS-001`
-**Version:** `1.1.0-draft`
+**Version:** `1.2.0-draft`
 **Status:** `DRAFT / NOT EFFECTIVE / OPEN`
 **Applies to:** `SECB-PRD-SKILLSHUB-001` v0.4.0-draft
 **Producer:** Claude Code (worker agent) — the same producer as the document these defects are in
@@ -234,6 +234,49 @@ Advisory input, not verdicts. Recorded so SEC does not re-derive it.
 | `DEF-C4` | **Unreachability independently confirmed** — `getSkill` appears in one non-test location, its own definition. The residual leaks *more* per name than the aggregate tally does: a caller establishing that a name exists also learns *why* it is denied, and `DENY_REVOKED` on a named skill is materially more sensitive than a revocation count. **The documented constraint is contradicted by the test suite**: 16 assertions pin the per-name typed contract the comment says to collapse, and when a comment and a test disagree the test wins, because the test is what a change breaks. Recommended: pin the unreachability with a regression test now, and record the collapse as a MUST conditioning any exposure. If SEC's standard rejects latent oracles regardless of reachability, collapse now — that ruling is defensible |
 | `SKILL-DRIFT-15` | **Rule that documentation alone is an insufficient discharge of `FR-SKD-003b`** — the disposition must include at least one control that changes program behaviour. Buildable entirely from primitives already present and verified clean (`DEF-A10`): installers refuse any package not covered by `MANIFEST.sha256` at a matching digest; installers require an explicit development-only acknowledgement and print `effective: false` at run time, so the declaration reaches the point of consumption; `validate_pack.py` actually verifies the digest; a report-only CI detector. Note the fail-closed interlock would block the three locally-added packages — that **forces the governed path rather than blocking the work**. `DEF-A11` must be recorded as a permanent blind spot with a named owner |
 
+## J. Round 4 — defects in the WP-SK-01 delivery itself
+
+Two independent reviews returned commit `09585b8`. Every entry below was
+re-derived by the producer before being accepted, and every one is now fixed in
+`7eb7941`. They are recorded because the fix is not the point — the pattern is.
+
+| ID | Defect | Why it matters | Status |
+|---|---|---|---|
+| `DEF-D1` | **A commit message and a code comment asserted a control that did not exist.** Both claimed the `validate-foundation` required-field pin would fail if a scope field were added to the descriptor. The check is a subset test; adding `project_scopes` or `status` to `required` passed it cleanly | A governance record — git history, the durable artifact — asserted the durability of the very split ADR-0013 exists to create. This is the most serious category of error in this programme: not a wrong fact, but a claimed control | `FIXED` — exact-set pin plus structural tier-separation check, verified by mutation (exit 1 with a scope field, exit 0 reverted) |
+| `DEF-D2` | **`\Z` is not a regex anchor in JavaScript.** The mapper's lookahead `(?=^\S|\Z)` made the last top-level block of every manifest unreadable. `evaluation` is last in all 22, so it was dropped from 22 of 22 descriptors — with the suite green | A lossy mapping always validates, because omitting an optional field is legal. Validation can therefore never be the control for loss | `FIXED` — evaluation/roles/inputs/outputs now 22/22; loss is a finding and is pinned by a test |
+| `DEF-D3` | **The mapper never read 9 descriptor-supported fields at all** — `roles`, `inputs`, `outputs`, `input_schema`, `output_schema`, `required_models/tools/mcp_methods`, `known_limitations` | ADR-0013 rejected the "flatten" option partly because it *"silently discards `risk_class`, `roles`, `controls` and `evaluation` — the corpus's only machine-readable safety properties."* The delivered mapper discarded two of those four, including `roles.prohibited_final_authority` | `FIXED` |
+| `DEF-D4` | **AC-04 was vacuous in exactly the way the handoff asked review to check.** The count came from the mapper's own output, and a package with no `SKILL.md` was skipped via `continue`. A reviewer added a 23rd package and the suite stayed green while asserting "exactly 22" | The producer wrote both the acceptance criterion and the test that proved it. Flagging it for review was right; the flag did not make the test correct | `FIXED` — count globbed from disk, one entry per directory, verified by adding a 23rd package (exit 1) |
+| `DEF-D5` | **Two YAML readers with opposite security postures.** The mapper reimplemented the manifest read with none of the four anti-smuggling controls added to the hub in `301997f`. They disagreed on the governed identity of a crafted manifest — the mapper accepted a duplicate key, a key in document 2, and a key inside a quoted scalar | The mapper's output is the intended promotion input. A package presenting one identity to the hub and another to promotion is a confused deputy | `FIXED` — one reader, `parseManifestSections`, exported from the hub |
+| `DEF-D6` | **Four contract constraints asserted in prose while the schema left them open**: `work_package_id` on approvals, `PUBLISHED` with empty evidence *and* empty approvals, `skill_id` accepting `@` (the registry's own key delimiter) and a single space | Writing a structural constraint into a `description` field is the "rule someone must remember" that ADR-0013 exists to eliminate — done inside the contract whose thesis is structure-over-documentation | `FIXED` |
+| `DEF-D7` | **`source.content_digest` was placed on the authored tier.** A digest an author declares about its own content, verified at resolution, is self-certifying | `DEF-A5`'s shape one level over, inside the fix for `DEF-A5`. Also added beyond ADR-0013's accepted field table | `FIXED` — moved to the grant record as `source_content_digest` |
+| `DEF-D8` | **ADR-0013's decisive rationale is falsified in part.** It states *"every field it asks an author for is a field the author actually holds."* False for `owner` and `source.licence` | The correction belongs to ARCHI. The producer resolved it by amending the contract's field tiering rather than routing the correction back | `OPEN — ARCHI` |
+| `DEF-D9` | **An author-writable `authority_ceiling_cap` shipped ahead of the `min()` composition that makes it safe** (`AC-08`, deferred) | The field is inert until composed, but DEF-A5 is the entire motivation for the ADR, so shipping an author-writable authority field before its control needs an explicit ruling | `OPEN — REV/SEC` |
+
+## K. A method defect, recorded because it is worse than any single finding
+
+`DEF-M1`. Throughout this programme the producer reported **"validate: 0 FAIL"**
+from `grep -c '"status": "FAIL"'`.
+
+`tools/validate-foundation.mjs` **never emits a FAIL status** — its `assert()`
+throws. That grep could not have returned non-zero for any failure. **The check
+was incapable of failing**, so every "0 FAIL" was vacuously true and would have
+reported success on a broken validate.
+
+In the same round the producer nearly reported three contract gaps as closed
+when the schema had stopped compiling under Ajv strict mode and every result was
+a compile error rather than a verdict. That was caught only because a case that
+*should* have passed also failed.
+
+**Consequence for this register.** Any producer claim in this programme resting
+on "validate 0 FAIL" was gathered by a check that could not fail. Claims made by
+exit code, by test count, or by direct probe are unaffected. Reviewers should
+treat the two classes differently rather than assuming a uniform evidence
+standard.
+
+**Standing rule adopted:** validation is claimed by exit code. A check that
+cannot fail is not evidence, and a passing test proves nothing until it has been
+shown to fail when it should.
+
 ## F. Provenance
 
 Findings originate from three independent reviews dispatched by the producer
@@ -247,3 +290,4 @@ anything.
 |---|---|---|
 | `1.0.0-draft` | 2026-08-01 | Initial register at `301997f` |
 | `1.1.0-draft` | 2026-08-01 | Adjudicated all 28 `REPORTED` findings at `a3e4968`: 20 CONFIRMED, 6 PARTIAL, 2 REFUTED, 0 unverifiable (§G). Recorded 7 corrections to findings this register carried, including that **it contradicted itself** on `DEF-B21` and that this producer **relayed unreproducible performance magnitudes without qualification** (`DEF-C10`). Added 9 producer-verified findings (§H), of which `DEF-A3` and `DEF-A4` are consequences of this producer's own `301997f` commit that it did not check at the time. Added SEC-preparation analysis (§I). The single most consequential new fact is `DEF-A8`: the production hub **can never return ALLOW**, so populating the resolver registry is the trigger event for the live-disclosure findings and should be gated |
+| `1.2.0-draft` | 2026-08-02 | Recorded round 4 (SS J) - nine defects in the WP-SK-01 delivery itself, all producer-verified before acceptance and all fixed in `7eb7941` except `DEF-D8` and `DEF-D9`, which belong to ARCHI and REV/SEC. The most serious is `DEF-D1`: a commit message and a code comment asserted a control that did not exist, about the durability of the split ADR-0013 exists to create. Added SS K, a METHOD defect (`DEF-M1`): the producer reported "validate: 0 FAIL" throughout this programme from a grep against a status the validator never emits - the check could not fail, so every such claim was vacuously true. Standing rule adopted: validation is claimed by exit code, and a passing test proves nothing until shown to fail when it should. |

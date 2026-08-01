@@ -1,7 +1,7 @@
 schema_version: "1.0"
 record_metadata:
   record_id: "handoff_wp_sk_01_increment_1_rev_request_v1_candidate"
-  record_status: "DRAFT_CANDIDATE"
+  record_status: "SUPERSEDED_BY_REMEDIATION"
   source_template: "docs/templates/handoff-envelope.yaml"
   source: "WP-SK-01 Phase 1 increment 1, 2026-08-01"
   producer_runtime: "Claude Code"
@@ -10,6 +10,27 @@ record_metadata:
     - "The producer may not accept its own evidence. WP-SK-01 records rev_acceptance and qa_acceptance as PENDING."
     - "The producer has been independently found in substantive error three times on this programme, across three review rounds, with its own verification passing before each. Treat every producer claim below as a lead."
     - "Review scope is FROZEN at 09585b8. Later commits, including this packet, are governance records and not review targets."
+
+supersession:
+  superseded_at: "2026-08-02"
+  new_pin: "7eb7941"
+  reason: >-
+    Both reviews of this pinned increment returned it. Findings are recorded as
+    DEF-D1 through DEF-D9 in SECB-PRD-SKILLSHUB-DEFECTS-001 section J, and the
+    method defect as DEF-M1 in section K. Seven are fixed in 7eb7941; DEF-D8 and
+    DEF-D9 are open and belong to ARCHI and REV/SEC respectively.
+  acceptance_status_is_void: >-
+    The acceptance_status block below is superseded wholesale and must not be
+    read as current. AC-04 in particular was recorded as CLAIMED PROVEN by a test
+    a reviewer then demonstrated to be vacuous - it derived its count from the
+    mapper's own output, so a 23rd package went unnoticed. AC-01 through AC-07
+    and AC-10 must be re-judged against 7eb7941, not against this record.
+  what_this_packet_got_right: >-
+    Retained rather than deleted, because the record of what a producer disclosed
+    before being caught is itself evidence. This packet self-reported the
+    write-set question, the "nothing consumes this yet" limitation, and flagged
+    AC-04 for exactly the check that failed. The disclosures were correct; they
+    did not make the underlying work correct.
 
 handoff:
   handoff_id: "HANDOFF-WP-SK-01-INC-1"
