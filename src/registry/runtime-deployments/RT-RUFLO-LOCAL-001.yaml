@@ -4,6 +4,8 @@ runtime_deployment_id: RT-RUFLO-LOCAL-001
 provider_id: PROVIDER-RUFLO
 runtime_product: ruflo
 runtime_provider_plugin_id: runtime-provider-ruflo
+runtime_provider_plugin_version: "0.1.0"
+runtime_provider_plugin_fingerprint: c014d7afbf5f36d97bf7592191f05253059aeb6a314498c960f8a75cbfc55230
 runtime_version: "3.32.9"
 deployment_type: local_sidecar
 

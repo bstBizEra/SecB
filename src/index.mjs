@@ -122,7 +122,9 @@ export {
 } from "./runtime/runtime-provider-plugin-registry.mjs";
 
 export {
-  RUFLO_RUNTIME_PROVIDER_PLUGIN
+  RUFLO_RUNTIME_PROVIDER_PLUGIN,
+  RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
+  RufloRuntimeProviderCandidate
 } from "./runtime/providers/ruflo-runtime-provider-plugin.mjs";
 
 // Ruflo runtime provider integration

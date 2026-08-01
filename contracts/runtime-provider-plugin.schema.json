@@ -40,8 +40,15 @@
       "additionalProperties": false,
       "required": ["module", "export_name"],
       "properties": {
-        "module": { "type": "string", "pattern": "^src/" },
-        "export_name": { "type": "string", "minLength": 1 }
+        "module": {
+          "type": "string",
+          "pattern": "^src/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\\.mjs$",
+          "description": "Normalized repository-relative module path. Dot segments, absolute paths, and encoded separators are not permitted."
+        },
+        "export_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        }
       }
     },
     "capabilities": {

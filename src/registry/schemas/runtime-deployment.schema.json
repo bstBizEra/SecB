@@ -10,6 +10,8 @@
     "provider_id",
     "runtime_product",
     "runtime_provider_plugin_id",
+    "runtime_provider_plugin_version",
+    "runtime_provider_plugin_fingerprint",
     "deployment_type",
     "endpoint",
     "identity",
@@ -37,6 +39,15 @@
       "type": "string",
       "pattern": "^runtime-provider-[a-z0-9]+(?:-[a-z0-9]+)*$",
       "description": "Candidate plugin descriptor identity. This reference does not activate the plugin or grant authority."
+    },
+    "runtime_provider_plugin_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "runtime_provider_plugin_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Canonical SHA-256 fingerprint of the exact plugin descriptor."
     },
     "runtime_version": { "type": "string" },
     "deployment_type": {

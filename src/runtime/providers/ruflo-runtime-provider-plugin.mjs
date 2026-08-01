@@ -1,3 +1,5 @@
+import { canonicalFingerprint } from "../../contracts/canonical-fingerprint.mjs";
+
 /**
  * Ruflo runtime provider plugin descriptor.
  *
@@ -14,8 +16,8 @@ export const RUFLO_RUNTIME_PROVIDER_PLUGIN = Object.freeze({
   display_name: "Ruflo Runtime Provider",
   purpose: "Translate bounded Ruflo swarm execution and telemetry into SecB runtime projections and evidence candidates.",
   implementation: Object.freeze({
-    module: "src/gateway/ruflo-command-bridge.mjs",
-    export_name: "RufloCommandBridge"
+    module: "src/runtime/providers/ruflo-runtime-provider-plugin.mjs",
+    export_name: "RufloRuntimeProviderCandidate"
   }),
   capabilities: Object.freeze({
     deployment_types: Object.freeze(["local_sidecar"]),
@@ -64,3 +66,21 @@ export const RUFLO_RUNTIME_PROVIDER_PLUGIN = Object.freeze({
   ]),
   candidate_status: "CANDIDATE"
 });
+
+export const RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT = canonicalFingerprint(
+  RUFLO_RUNTIME_PROVIDER_PLUGIN
+);
+
+/**
+ * Inert candidate surface. It intentionally provides description only and has
+ * no dispatch, bridge-construction, activation, authority, or ledger API.
+ */
+export class RufloRuntimeProviderCandidate {
+  constructor() {
+    Object.freeze(this);
+  }
+
+  describe() {
+    return structuredClone(RUFLO_RUNTIME_PROVIDER_PLUGIN);
+  }
+}

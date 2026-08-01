@@ -50,7 +50,7 @@ export class RuntimeProviderPluginRegistry {
     this.#now = now;
   }
 
-  registerCandidate(request) {
+  async registerCandidate(request) {
     if (!isPlainObject(request)) deny("DENY_MALFORMED_REQUEST", "Registration request must be an object");
     const unknown = Object.keys(request).filter((key) => !REQUEST_KEYS.includes(key));
     if (unknown.length > 0) deny("DENY_MALFORMED_REQUEST", `Unknown registration fields: ${unknown.join(", ")}`);
@@ -68,15 +68,6 @@ export class RuntimeProviderPluginRegistry {
       deny("DENY_PLUGIN_NOT_CANDIDATE", "Only CANDIDATE descriptors may enter the candidate registry");
     }
 
-    let epoch;
-    try {
-      epoch = Date.prototype.getTime.call(this.#now());
-    } catch {
-      deny("DENY_CLOCK_UNAVAILABLE", "Server time source is unavailable");
-    }
-    if (!Number.isFinite(epoch)) deny("DENY_CLOCK_UNAVAILABLE", "Server time source is unavailable");
-    const registeredAt = new Date(epoch).toISOString();
-
     const descriptor = structuredClone(request.descriptor);
     const fingerprint = canonicalFingerprint(descriptor);
     const key = `${descriptor.plugin_id}@${descriptor.plugin_version}`;
@@ -91,6 +82,15 @@ export class RuntimeProviderPluginRegistry {
       deny("DENY_PLUGIN_VERSION_EXISTS", `Plugin candidate already exists: ${key}`);
     }
 
+    let epoch;
+    try {
+      epoch = Date.prototype.getTime.call(this.#now());
+    } catch {
+      deny("DENY_CLOCK_UNAVAILABLE", "Server time source is unavailable");
+    }
+    if (!Number.isFinite(epoch)) deny("DENY_CLOCK_UNAVAILABLE", "Server time source is unavailable");
+    const registeredAt = new Date(epoch).toISOString();
+
     const record = deepFreeze({
       plugin_id: descriptor.plugin_id,
       plugin_version: descriptor.plugin_version,
@@ -102,7 +102,7 @@ export class RuntimeProviderPluginRegistry {
     });
 
     try {
-      this.#auditWriter({
+      await this.#auditWriter({
         type: "RUNTIME_PROVIDER_PLUGIN_CANDIDATE_REGISTERED",
         plugin_id: record.plugin_id,
         plugin_version: record.plugin_version,

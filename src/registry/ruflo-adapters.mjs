@@ -9,7 +9,10 @@
  * ADR compliance: SECB-AGENTS-AMD-002 (advise-and-proceed, ENGIN role)
  */
 
-import { RUFLO_RUNTIME_PROVIDER_PLUGIN } from "../runtime/providers/ruflo-runtime-provider-plugin.mjs";
+import {
+  RUFLO_RUNTIME_PROVIDER_PLUGIN,
+  RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT
+} from "../runtime/providers/ruflo-runtime-provider-plugin.mjs";
 
 const ADAPTER_DEFAULTS = Object.freeze({
   evaluation_status: "CANDIDATE",
@@ -29,10 +32,12 @@ function adapter(definition) {
  * `npx claude-flow agent spawn`.
  */
 export const RUFLO_SWARM_ADAPTER = adapter({
-  provider_id: "ruvnet",
+  provider_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.provider_id,
   runtime_product_id: "ruflo",
   runtime_provider_plugin_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_id,
-  runtime_deployment_id: "ruflo-local",
+  runtime_provider_plugin_version: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_version,
+  runtime_provider_plugin_fingerprint: RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
+  runtime_deployment_id: "RT-RUFLO-LOCAL-001",
   agent_profile_id: "ruflo-swarm-coordinator",
   agent_instance_id: "inst_ruflo_swarm",
   runtime_version: "3.32.9",
@@ -66,10 +71,12 @@ export const RUFLO_SWARM_ADAPTER = adapter({
  * Governs individual coder worker agents within the Ruflo swarm.
  */
 export const RUFLO_CODER_ADAPTER = adapter({
-  provider_id: "ruvnet",
+  provider_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.provider_id,
   runtime_product_id: "ruflo",
   runtime_provider_plugin_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_id,
-  runtime_deployment_id: "ruflo-local",
+  runtime_provider_plugin_version: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_version,
+  runtime_provider_plugin_fingerprint: RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
+  runtime_deployment_id: "RT-RUFLO-LOCAL-001",
   agent_profile_id: "ruflo-coder",
   agent_instance_id: "inst_ruflo_coder",
   runtime_version: "3.32.9",
@@ -94,10 +101,12 @@ export const RUFLO_CODER_ADAPTER = adapter({
  * between coder (producer) and reviewer (verifier).
  */
 export const RUFLO_REVIEWER_ADAPTER = adapter({
-  provider_id: "ruvnet",
+  provider_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.provider_id,
   runtime_product_id: "ruflo",
   runtime_provider_plugin_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_id,
-  runtime_deployment_id: "ruflo-local",
+  runtime_provider_plugin_version: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_version,
+  runtime_provider_plugin_fingerprint: RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
+  runtime_deployment_id: "RT-RUFLO-LOCAL-001",
   agent_profile_id: "ruflo-reviewer",
   agent_instance_id: "inst_ruflo_reviewer",
   runtime_version: "3.32.9",
