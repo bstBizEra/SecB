@@ -149,6 +149,7 @@ Legacy 0001/0002 each have two files (pre-existing duplication, retained unchang
 - [ADR-0010: Canonical five-layer registry persistence](adr/0010-canonical-five-layer-registry-persistence.md) *(PROPOSED / NOT DECIDED)*
 - [ADR-0011: Single MCP invocation enforcement pipeline](adr/0011-single-mcp-invocation-enforcement-pipeline.md) *(PROPOSED / NOT DECIDED)*
 - [ADR-0012: Authenticated local stdio-to-IPC bridge](adr/0012-authenticated-local-stdio-ipc-bridge.md) *(PROPOSED / NOT DECIDED)*
+- [ADR-0013: Skill manifest convergence by trust tier](adr/0013-skill-manifest-trust-tier-split.md) *(ACCEPTED — DRAFT / NOT EFFECTIVE)*
 
 ## Operating model docs at docs root
 

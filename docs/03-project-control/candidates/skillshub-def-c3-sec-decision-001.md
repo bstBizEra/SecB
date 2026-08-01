@@ -1,7 +1,7 @@
 # SEC Decision Request — Does skill content carry its own sensitivity?
 
 **Document ID:** `SECB-SEC-DECISION-SKILLSHUB-C3-001`
-**Status:** `DRAFT / AWAITING SEC RULING`
+**Status:** `RULED — Ruling B with conditions, 2026-08-01`
 **Decision owner:** SEC (with ARCHI + GOV for any contract change that follows)
 **Prepared by:** Claude Code (worker agent) — prepares the decision, does not make it
 **Prepared at:** 2026-08-01, baseline `16bdc85`
@@ -115,39 +115,81 @@ anyone decided so.
 
 ## What SEC is being asked to sign
 
-- [ ] **Ruling A** — skill content carries independent sensitivity; route the
-      `content_classification` contract change to ARCHI + GOV
-- [ ] **Ruling B** — it does not; record explicitly that the hub has no
-      classification-based disclosure control by decision
-- [ ] **Blocking constraint** (recommended under either ruling): **do not
-      populate the resolver registry until this is resolved.** Population is the
-      trigger event that makes the inversion live.
-- [ ] **Authorize now, independent of the ruling:** correct the
-      `secb_skill_hub_search` description so it stops implying a disclosure
-      semantic the code does not implement. *(Deferred by the preparer precisely
-      because the correct wording depends on this ruling.)*
+- [ ] ~~**Ruling A**~~ — not taken
+- [x] **Ruling B** — skill content does not carry independent sensitivity;
+      recorded explicitly that the hub has no classification-based disclosure
+      control **by decision**
+- [x] **Blocking constraint applied** — the resolver registry is not to be
+      populated until Phase 5 distribution hardening is complete. Population is
+      the trigger event that makes the inversion live (`DEF-A8`).
+- [x] **Description fix authorized** — correct the `secb_skill_hub_search`
+      wording so it stops implying a disclosure semantic the code does not
+      implement.
 
 ```
-Ruling:            ______________________________________
-Decided by:        ______________________________________
-Date:              ______________________________________
-Registry gate:     [ ] applied   [ ] declined
+Ruling:            B - skill content does NOT carry independent sensitivity
+Decided by:        Operator (BizEra), accepting the preparer's revised recommendation
+Date:              2026-08-01
+Registry gate:     [x] applied - do not populate the resolver registry until
+                       Phase 5 distribution hardening is complete
+Description fix:   [x] authorized - correct secb_skill_hub_search wording
 ```
+
+### Conditions attached to Ruling B
+
+1. It is recorded here that the SkillsHub ships with **no classification-based
+   disclosure control, by decision** - not by omission.
+2. The call-site defect is corrected regardless of this ruling: the caller's
+   clearance stops being passed as a requested data class.
+3. **Intake carries the trigger.** A reviewer must affirm at intake that a
+   package's content does not exceed the corpus baseline established by this
+   audit. The first package that exceeds it is the event that reopens this
+   ruling and adds `content_classification`.
+
+### Recorded limitation of this ruling
+
+The operator accepted the recommendation without separately answering whether
+SecB's own architecture methodology constitutes proprietary content. Ruling B
+**assumes it does not.** If that assumption is wrong the ruling should be
+revisited; it is recorded here so the assumption is visible rather than
+buried.
 
 ---
 
-## Preparer's recommendation and its limits
+## Recommendation — REVISED after auditing the corpus
 
-**Recommended: Ruling A**, on the served-body argument at point 5 — the content
-is prose that is handed to the caller, and its sensitivity is simply not the
-same property as the data class the skill may process. Two orthogonal things are
-sharing one field.
+**The preparer originally recommended Ruling A**, on the argument that skill
+bodies are prose handed to the caller whose sensitivity is a different property
+from the data class the skill may process. That recommendation carried a stated
+caveat: it rested on skill bodies actually containing sensitive prose, and the
+preparer had not audited the 22 packages.
 
-**Where the preparer could be wrong:** the argument rests on skill bodies
-actually containing sensitive prose. Across the current 22-package corpus they
-are architecture-methodology documents, and the preparer did not audit all 22
-for sensitive content. If SEC judges the corpus and any plausible future corpus
-to be non-sensitive by nature, Ruling B is the cheaper and honest answer.
+**The audit was then run, and it went against the recommendation.**
+
+Searched across all 22 `SKILL.md` bodies for credentials, internal paths,
+hostnames, incident material and runbooks. Two files matched; **both are false
+positives**:
+
+| File | Match | What it actually is |
+|---|---|---|
+| `deployment-environment-architecture` | "secret references, credential leases" | Prose teaching how to *design* secret handling |
+| `graphify` | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `localhost:11434` | A table of environment-variable *names* a tool reads, and Ollama's public default port |
+
+**Zero of 22 carry sensitive content.** All are architecture methodology. Only 2
+mention SecB at all, 12 times in total, across a 63 KB corpus.
+
+**Revised recommendation: Ruling B with conditions.** The decisive argument is
+one this programme has already made against itself: the register records that
+`mutation_class` should be dropped because it declares six values, admits one,
+and observes one — "an axis with a single observed value is not yet
+load-bearing". A required `content_classification` that is uniformly one value
+across the whole corpus would reproduce that defect exactly: governance surface
+that adds obligation without adding discrimination.
+
+**Where this revised recommendation could still be wrong:** the search used
+patterns the preparer chose. If the operator judges SecB's *architecture
+methodology itself* to be proprietary — a business-value question no pattern
+search reaches — Ruling A is correct and this analysis does not touch it.
 
 **Authority statement.** This document prepares a decision. It makes none,
 approves nothing, and authorizes nothing. Its preparer has been independently
