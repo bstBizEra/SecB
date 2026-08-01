@@ -1,0 +1,164 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_wp_sk_01_increment_1_rev_request_v1_candidate"
+  record_status: "DRAFT_CANDIDATE"
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: "WP-SK-01 Phase 1 increment 1, 2026-08-01"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "The producer wrote the acceptance criteria AND the tests that prove them. That is the specific risk this review exists to check."
+    - "The producer may not accept its own evidence. WP-SK-01 records rev_acceptance and qa_acceptance as PENDING."
+    - "The producer has been independently found in substantive error three times on this programme, across three review rounds, with its own verification passing before each. Treat every producer claim below as a lead."
+    - "Review scope is FROZEN at 09585b8. Later commits, including this packet, are governance records and not review targets."
+
+handoff:
+  handoff_id: "HANDOFF-WP-SK-01-INC-1"
+  sequence: 1
+  source_agent_instance_id: "claude-code-secb-session-2026-08-01"
+  source_session_id: "bfb2c907-d860-4d79-a475-042b1ebdf7ee"
+  destination_role: "REV + QA + SEC (identities distinct from the producer)"
+  project_id: "prj_secb_local"
+  work_package_id: "WP-SK-01"
+  objective: >-
+    Independent review of the first WP-SK-01 increment: the ADR-0013 trust-tier
+    contract split. The central claim to test is that the split is a STRUCTURAL
+    control rather than a documented rule - that a grant can no longer be
+    populated from package content because the descriptor has no property to
+    populate and rejects one if smuggled in.
+
+  authorized_scope:
+    - "Branch feat/secb-ruflo-command-center, PINNED at 09585b8."
+    - "Review targets: 09585b8 (the increment) and d6610a7 (the rulings, ADR-0013, and WP-SK-01 that authorize it)."
+    - "Read-only review. Findings as records. No fixes on the frozen range without a new pinned round."
+
+  work_completed:
+    - "Created contracts/skill-package-descriptor.schema.json (authored tier) and contracts/skill-grant-record.schema.json (granted tier), joined on skill_id + version."
+    - "Registered both kinds in src/contracts/contract-validator.mjs."
+    - "Wrote src/skills/package-descriptor-mapper.mjs mapping pack manifest + SKILL.md frontmatter onto the descriptor."
+    - "Split name into patterned package_name and free-text display_name; removed mutation_class; renamed authority_ceiling to authority_ceiling_cap; added RESTRICTED_PUBLICATION to the grant status enum."
+    - "Added tests/skill-contract-split.test.mjs (13 assertions) and four contract fixtures."
+    - "Updated two pre-existing controls that fired: the required-field pins in tools/validate-foundation.mjs and the contract-kind count literal in tests/mcp-lazy-ajv.test.mjs."
+
+  acceptance_status:
+    - id: "AC-01"
+      claim: "Descriptor is a closed draft 2020-12 object with a non-empty required set"
+      producer_status: "CLAIMED PROVEN"
+    - id: "AC-02"
+      claim: "The two required sets are disjoint apart from skill_id and version"
+      producer_status: "CLAIMED PROVEN"
+    - id: "AC-03"
+      claim: "package_name is patterned; display_name is separate free text"
+      producer_status: "CLAIMED PROVEN"
+    - id: "AC-04"
+      claim: "All 22 manifest-carrying packages map to a valid descriptor"
+      producer_status: "CLAIMED PROVEN"
+      reviewer_attention: "Verify the 22 is derived from the tree and would not pass if the mapper silently dropped packages."
+    - id: "AC-05"
+      claim: "Hub identity binding uses package_name"
+      producer_status: "NOT DELIVERED - deferred to increment 2"
+    - id: "AC-06"
+      claim: "A descriptor carrying a grant field is rejected, not ignored"
+      producer_status: "CLAIMED PROVEN"
+    - id: "AC-07"
+      claim: "mutation_class absent from both contracts"
+      producer_status: "CLAIMED PROVEN"
+    - id: "AC-08"
+      claim: "Resolver composes min(agent, skill) ceiling in exactly one place"
+      producer_status: "NOT DELIVERED - deferred to increment 2"
+    - id: "AC-09"
+      claim: "validate 0 FAIL; suite green"
+      producer_status: "PRODUCER-RUN - 930 tests, 924 pass, 0 fail, 6 pre-existing skips, excluding tests/mcp-hub-launcher.test.mjs. NOT independent acceptance."
+    - id: "AC-10"
+      claim: "Registry remains empty; no non-test caller of registerSkill"
+      producer_status: "CLAIMED PROVEN"
+
+  decisions_made:
+    - "Stopped at an additive state rather than completing the work package. Nothing in src/ consumes the new contracts yet, so behaviour is unchanged and a revert costs nothing. The next increment touches the live authorization path, which is where all three of this session's security findings originated - so if the split is wrong, this is the cheapest moment to learn it."
+    - "Did not modify .agents/ - PACK.yaml declares mutation_authorized: false. The 22 descriptors are computed by a mapper, not written back into the packages."
+    - "Did not modify src/mcp/ - concurrent work by another producer."
+
+  deviation_from_work_package:
+    summary: >-
+      WP-SK-01 anticipated migration by "adding owner, source, purpose". Two of
+      those are not derivable from a package: owner, and source.licence.
+    resolution: >-
+      Neither fabricated nor halted. The descriptor requires what an author can
+      assert at candidate stage; owner and licence become PROMOTION
+      preconditions. The mapper reports both as findings on every package and a
+      test asserts it never populates them.
+    reviewer_must_rule: >-
+      Is this a legitimate reading of the WP stop rule ("if the 22 migrations
+      cannot complete without fabricating a field, STOP and return to ARCHI"),
+      or is it a way around that rule? The producer's reading is that the stop
+      rule fires on FABRICATION, not on ABSENCE. REV should rule explicitly
+      rather than let this stand by silence.
+
+  write_set_conformance:
+    declared_but_untouched: ["src/registry/skill-resolver.mjs", "src/skills/skills-hub-service.mjs", "docs/templates/skill-manifest.yaml"]
+    touched_and_declared:
+      - "contracts/skill-package-descriptor.schema.json"
+      - "contracts/skill-grant-record.schema.json"
+      - "src/contracts/contract-validator.mjs"
+      - "tools/validate-foundation.mjs"
+      - "tests/** (skill-contract-split, contract-validator, mcp-lazy-ajv, four fixtures)"
+      - "MANIFEST.json"
+    touched_not_in_declared_paths:
+      - "src/skills/package-descriptor-mapper.mjs - a NEW file under src/skills/. The declared path list names src/skills/skills-hub-service.mjs specifically rather than src/skills/**, so this is arguably outside the declared write set. Flagged by the producer rather than left for review to find. REV should rule whether this is a breach or a drafting gap in the work package."
+    prohibited_paths_touched: []
+
+  assumptions:
+    - "The split closes DEF-A5 in the FUTURE state, once the resolver is migrated onto the pair. At 09585b8 the resolver still consumes the old skillManifest shape, so nothing is closed at runtime yet. The commit message may read as stronger than this."
+    - "purpose is derivable from SKILL.md frontmatter description for all 22 packages. Producer-verified by the mapper succeeding on all 22; not independently checked."
+
+  evidence_refs:
+    - "npm run validate at 09585b8: 0 FAIL."
+    - "node --test over tests/*.test.mjs excluding mcp-hub-launcher at 09585b8: 930 tests, 924 pass, 0 fail, 6 pre-existing BLOCKED skips."
+    - "node --test tests/skill-contract-split.test.mjs: 13 pass, 0 fail."
+
+  checks_performed:
+    - "Producer-run validate and suite as above."
+    - "Two producer-side subagent reviews dispatched at 09585b8: one testing whether the split closes DEF-A5 and hunting for author-value-to-authorization paths, one adversarially checking whether the acceptance tests pass vacuously. Producer-side; NOT the independent verdict."
+
+  known_limitations:
+    - "tests/mcp-hub-launcher.test.mjs excluded from the suite run: it fails on this host with 'ps: unknown option -- o' under Git Bash and takes over ten minutes to time out. Unrelated to SkillsHub."
+    - "The new contracts are consumed by no runtime path. This increment changes no behaviour, which is deliberate but means no runtime evidence exists for the split."
+    - "docs/12-execution/05-work-package-lifecycle.md carries an uncommitted 28-line deletion in the working tree. Not the producer's change; flagged because WP-SK-01 depends on that document."
+
+  unresolved_findings:
+    - id: "AC-05 / AC-08"
+      finding: "Deferred. The hub still binds identity on a field the new contract renames, and no min() ceiling composition exists. A grant record registered today would meet a hub expecting the old shape."
+      status: "open - increment 2"
+    - id: "DEF-B1 / DEF-C2"
+      finding: "Resolution-time content digest verification remains absent. The descriptor reserves source.content_digest but nothing consumes it."
+      status: "open - Phase 5"
+    - id: "OD-SK-10"
+      finding: "Whether required_tools / required_mcp_methods bound the grants a promotion may issue is carried forward undecided by ADR-0013. FR-SKM-003b in the PRD still asserts the first horn as a MUST and should be softened."
+      status: "open - ARCHI + SEC"
+
+  risks:
+    - "R3 at activation. This increment is M2: no ledger write, no registry population, no authority issued."
+    - "The central claim - that the split is structural rather than documented - is unproven at runtime and rests on schema closure alone."
+    - "15 commits from this session are unreviewed on a branch already 99 commits ahead of main."
+
+  recommended_next_action: >-
+    REV: test the structural claim directly - find any path by which an
+    author-controlled value reaches an authorization decision, and rule on the
+    owner/licence deviation and the package-descriptor-mapper.mjs write-set
+    question. QA: re-run validate and the suite at the pin, and check whether the
+    acceptance tests fail when they should - mutate a fixture and confirm.
+    SEC: the question recorded in WP-SK-01's security_plan - does the split fully
+    close DEF-A5, or does a residual path remain. Do NOT authorize increment 2
+    until the structural claim is ruled on.
+
+  confidence: >-
+    Medium on the mechanical work - contracts, mapper and tests are small and the
+    checks are machine-run. LOW on the central claim, which is exactly the kind of
+    architectural assertion this producer has been wrong about before, and which
+    no runtime evidence supports at this pin.
+
+  context_delta:
+    - "MOD-SKILL remains QUEUED - partial. This increment does not change it."
+    - "Zero skills remain consumable. The registry gate from the DEF-C3 ruling holds."
+    - "Contract kind count moved 21 to 23."
+
+  envelope_sha256: "UNSET_AT_AUTHORING"
