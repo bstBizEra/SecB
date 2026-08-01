@@ -35,6 +35,7 @@
 // P0-14 temporal semantics.
 
 import { validateContract } from "../contracts/contract-validator.mjs";
+import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
 
 const LAYERS = Object.freeze(["session", "work", "project"]);
 // Port classification vocabulary (candidate-source-port kind "memory").
@@ -62,13 +63,32 @@ const RECORD_KEYS = Object.freeze([
   "content_hash"
 ]);
 const REQUIRED_RECORD_KEYS = Object.freeze(RECORD_KEYS.filter((key) => key !== "supersedes"));
-const STORE_RECEIPT_KEYS = Object.freeze(["status", "idempotency_key", "memory_record_id", "version", "content_hash", "sequence"]);
+const STORE_RECEIPT_KEYS = Object.freeze(["status", "idempotency_key", "memory_record_id", "version", "content_hash", "record_fingerprint", "sequence"]);
+const REQUIRED_STORE_RECEIPT_KEYS = Object.freeze(STORE_RECEIPT_KEYS.filter((key) => key !== "sequence"));
 const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
 const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
+
+// Receipt values cross the injected-store trust boundary. Snapshot the closed
+// shape once so accessors/proxies cannot present one value to validation and a
+// different value to the returned receipt.
+function snapshotStoreReceipt(value) {
+  if (!isPlainObject(value)) return null;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return null;
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.some((key) => typeof key !== "string" || !STORE_RECEIPT_KEYS.includes(key))) return null;
+  const own = new Set(ownKeys);
+  if (REQUIRED_STORE_RECEIPT_KEYS.some((key) => !own.has(key))) return null;
+  const snapshot = { __proto__: null };
+  for (const key of STORE_RECEIPT_KEYS) {
+    if (own.has(key)) snapshot[key] = value[key];
+  }
+  return snapshot;
+}
 
 export class MemoryGatewayConfigurationError extends Error {
   constructor(code, message) {
@@ -250,6 +270,10 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         content_hash: request.record.content_hash
       };
       validateContract("memoryRecord", admittedRecord);
+      const { admitted_at, content_hash, ...hashBody } = admittedRecord;
+      if (canonicalFingerprint(hashBody) !== content_hash) {
+        return deny("DENY_CONTENT_HASH_MISMATCH", "Memory record content_hash does not match the canonical record body");
+      }
       admittedRecord = deepFreeze(admittedRecord);
     } catch {
       return deny("DENY_MEMORY_RECORD_INVALID", "Memory record contract validation failed");
@@ -328,40 +352,52 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       idempotency_key: idempotencyKey
     };
 
-    async function writeDisposition(disposition, reason) {
+    async function writeDisposition(disposition, reason, details = {}) {
       try {
-        await ledgerWriter({ ...dispositionBase, disposition, ...(reason ? { reason } : {}) });
+        await ledgerWriter({ ...dispositionBase, disposition, ...(reason ? { reason } : {}), ...details });
         return true;
       } catch {
         return false;
       }
     }
 
-    async function recordObserved() {
+    async function readStoredRecord(expectedFingerprint = null) {
       try {
         const rows = await layer.store.read();
-        return Array.isArray(rows) && rows.some((row) =>
-          isPlainObject(row)
-          && row.project_id === admittedRecord.project_id
-          && row.layer === admittedRecord.layer
-          && row.memory_record_id === admittedRecord.memory_record_id
-          && row.version === admittedRecord.version
-          && row.content_hash === admittedRecord.content_hash
-        );
+        if (!Array.isArray(rows)) return null;
+        for (const row of rows) {
+          if (!isPlainObject(row)) continue;
+          if (
+            row.project_id !== admittedRecord.project_id
+            || row.layer !== admittedRecord.layer
+            || row.memory_record_id !== admittedRecord.memory_record_id
+            || row.version !== admittedRecord.version
+            || row.content_hash !== admittedRecord.content_hash
+          ) continue;
+          const snapshot = structuredClone(row);
+          validateContract("memoryRecord", snapshot);
+          const { admitted_at, content_hash, ...storedHashBody } = snapshot;
+          const { admitted_at: candidateInstant, content_hash: candidateHash, ...candidateHashBody } = admittedRecord;
+          if (canonicalFingerprint(storedHashBody) !== content_hash) continue;
+          if (canonicalFingerprint(storedHashBody) !== canonicalFingerprint(candidateHashBody)) continue;
+          if (expectedFingerprint !== null && canonicalFingerprint(snapshot) !== expectedFingerprint) continue;
+          return deepFreeze(snapshot);
+        }
+        return null;
       } catch {
-        return false;
+        return null;
       }
     }
 
     async function reconcile(reason) {
-      const observed = await recordObserved();
+      const observed = await readStoredRecord();
       const auditRecorded = await writeDisposition("RECONCILIATION_REQUIRED", reason);
       return deepFreeze({
         decision: "RECONCILIATION_REQUIRED",
         code: "ADMISSION_RECONCILIATION_REQUIRED",
         reason,
         idempotency_key: idempotencyKey,
-        record_observed: observed,
+        record_observed: observed !== null,
         audit_recorded: auditRecorded
       });
     }
@@ -375,16 +411,17 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
 
     let receipt;
     try {
-      if (!isPlainObject(rawReceipt)) return reconcile("STORE_RECEIPT_INVALID");
-      const unknown = Object.keys(rawReceipt).filter((key) => !STORE_RECEIPT_KEYS.includes(key));
-      if (unknown.length > 0) return reconcile("STORE_RECEIPT_INVALID");
+      const receiptSnapshot = snapshotStoreReceipt(rawReceipt);
+      if (receiptSnapshot === null) return reconcile("STORE_RECEIPT_INVALID");
       if (
-        rawReceipt.status !== "COMMITTED"
-        || rawReceipt.idempotency_key !== idempotencyKey
-        || rawReceipt.memory_record_id !== admittedRecord.memory_record_id
-        || rawReceipt.version !== admittedRecord.version
-        || rawReceipt.content_hash !== admittedRecord.content_hash
-        || (rawReceipt.sequence !== undefined && !(Number.isSafeInteger(rawReceipt.sequence) && rawReceipt.sequence > 0))
+        receiptSnapshot.status !== "COMMITTED"
+        || receiptSnapshot.idempotency_key !== idempotencyKey
+        || receiptSnapshot.memory_record_id !== admittedRecord.memory_record_id
+        || receiptSnapshot.version !== admittedRecord.version
+        || receiptSnapshot.content_hash !== admittedRecord.content_hash
+        || typeof receiptSnapshot.record_fingerprint !== "string"
+        || !/^[a-f0-9]{64}$/.test(receiptSnapshot.record_fingerprint)
+        || (receiptSnapshot.sequence !== undefined && !(Number.isSafeInteger(receiptSnapshot.sequence) && receiptSnapshot.sequence > 0))
       ) return reconcile("STORE_RECEIPT_INVALID");
       receipt = deepFreeze({
         status: "COMMITTED",
@@ -392,20 +429,22 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         memory_record_id: admittedRecord.memory_record_id,
         version: admittedRecord.version,
         content_hash: admittedRecord.content_hash,
-        ...(rawReceipt.sequence === undefined ? {} : { sequence: rawReceipt.sequence })
+        record_fingerprint: receiptSnapshot.record_fingerprint,
+        ...(receiptSnapshot.sequence === undefined ? {} : { sequence: receiptSnapshot.sequence })
       });
     } catch {
       return reconcile("STORE_RECEIPT_INVALID");
     }
 
-    if (!(await recordObserved())) return reconcile("STORE_READBACK_MISSING");
-    if (!(await writeDisposition("COMMITTED"))) return reconcile("COMMIT_AUDIT_UNAVAILABLE");
+    const storedRecord = await readStoredRecord(receipt.record_fingerprint);
+    if (storedRecord === null) return reconcile("STORE_READBACK_MISSING_OR_CONFLICT");
+    if (!(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) return reconcile("COMMIT_AUDIT_UNAVAILABLE");
 
     return deepFreeze({
       decision: "ALLOW",
       code: "ADMITTED",
       admitted_at: instant.iso,
-      record: admittedRecord,
+      record: storedRecord,
       append: receipt
     });
   }
