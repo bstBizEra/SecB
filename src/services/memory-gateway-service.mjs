@@ -166,9 +166,9 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       ])
     )
   );
-  // Per-instance replay anchor. It is not durable authority: after restart an
-  // older store timestamp cannot be accepted without a future durable resolver,
-  // and therefore falls to RECONCILIATION_REQUIRED.
+  // Per-instance replay metadata. It anchors trusted time/fingerprint only and
+  // is never terminal authority: every replay still audits, performs the
+  // idempotent store operation, and verifies durable read-back.
   const committedAdmissions = new Map();
 
   // Server-derived instant: { ms, iso } or null when the clock is unusable.
@@ -248,6 +248,14 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       );
     }
 
+    const idempotencyKey = JSON.stringify([
+      request.record.project_id,
+      request.layer,
+      request.record.memory_record_id,
+      request.record.version
+    ]);
+    const priorAdmission = committedAdmissions.get(idempotencyKey);
+
     // 5. Build the stored record from the closed caller envelope plus server-owned
     // fields, then validate the real S2 memoryRecord contract. Contract failure
     // is contained before SoD, audit, or storage.
@@ -269,7 +277,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         valid_from: request.record.valid_from,
         valid_until: request.record.valid_until,
         retention_policy: request.record.retention_policy,
-        admitted_at: instant.iso,
+        admitted_at: priorAdmission?.admitted_at ?? instant.iso,
         ...(request.record.supersedes === undefined ? {} : { supersedes: request.record.supersedes }),
         content_hash: request.record.content_hash
       };
@@ -281,6 +289,9 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       admittedRecord = deepFreeze(admittedRecord);
     } catch {
       return deny("DENY_MEMORY_RECORD_INVALID", "Memory record contract validation failed");
+    }
+    if (priorAdmission !== undefined && priorAdmission.content_hash !== admittedRecord.content_hash) {
+      return deny("DENY_IDEMPOTENCY_CONFLICT", "Memory identity/version was already committed with different content");
     }
 
     // 6. Admission SoD — kernel primitive reuse, config-only. For the
@@ -309,23 +320,6 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       }
     }
 
-    // Admitted record: the gateway stamps the trusted admitted_at instant and
-    // the resolved layer. TTL is NOT stored (computed at read from layer.ttlMs).
-    const idempotencyKey = JSON.stringify([
-      admittedRecord.project_id,
-      admittedRecord.layer,
-      admittedRecord.memory_record_id,
-      admittedRecord.version
-    ]);
-
-    const priorAdmission = committedAdmissions.get(idempotencyKey);
-    if (priorAdmission !== undefined) {
-      if (priorAdmission.record.content_hash !== admittedRecord.content_hash) {
-        return deny("DENY_IDEMPOTENCY_CONFLICT", "Memory identity/version was already committed with different content");
-      }
-      return priorAdmission;
-    }
-
     // 7. Audit-first: the admission audit is written BEFORE any store mutation.
     // A throwing/unavailable audit writer denies with no store side effect.
     try {
@@ -340,14 +334,16 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         memory_record_id: admittedRecord.memory_record_id,
         version: admittedRecord.version,
         content_hash: admittedRecord.content_hash,
-        idempotency_key: idempotencyKey
+        idempotency_key: idempotencyKey,
+        replay: priorAdmission !== undefined
       });
     } catch {
       return deny("DENY_AUDIT_UNAVAILABLE", "Audit ledger writer is unavailable; admission denied before store append");
     }
 
     // 8. Store append via the INJECTED layer store ONLY. The idempotency key is
-    // deterministic for the exact version/content tuple. ALLOW requires both a
+    // deterministic for one project/layer/record/version identity; content
+    // changes under that identity are conflicts. ALLOW requires both a
     // closed COMMITTED receipt and a matching read-back; a rejection, malformed
     // receipt, no-op, or lost acknowledgement is honestly reconciliation state.
     const dispositionBase = {
@@ -360,7 +356,8 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       memory_record_id: admittedRecord.memory_record_id,
       version: admittedRecord.version,
       content_hash: admittedRecord.content_hash,
-      idempotency_key: idempotencyKey
+      idempotency_key: idempotencyKey,
+      replay: priorAdmission !== undefined
     };
 
     async function writeDisposition(disposition, reason, details = {}) {
@@ -446,6 +443,9 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     } catch {
       return reconcile("STORE_RECEIPT_INVALID");
     }
+    if (priorAdmission !== undefined && receipt.record_fingerprint !== priorAdmission.record_fingerprint) {
+      return reconcile("STORE_REPLAY_FINGERPRINT_CONFLICT");
+    }
 
     const storedRecord = await readStoredRecord(receipt.record_fingerprint);
     if (storedRecord === null) return reconcile("STORE_READBACK_MISSING_OR_CONFLICT");
@@ -461,7 +461,11 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       record: storedRecord,
       append: receipt
     });
-    committedAdmissions.set(idempotencyKey, result);
+    committedAdmissions.set(idempotencyKey, deepFreeze({
+      admitted_at: storedRecord.admitted_at,
+      content_hash: storedRecord.content_hash,
+      record_fingerprint: receipt.record_fingerprint
+    }));
     return result;
   }
 

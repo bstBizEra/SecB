@@ -31,7 +31,10 @@ function makeStore() {
   const receipts = new Map();
   return {
     rows,
+    appendCalls: 0,
+    readCalls: 0,
     append(record, { idempotency_key } = {}) {
+      this.appendCalls += 1;
       const prior = receipts.get(idempotency_key);
       if (prior) return prior;
       rows.push(record);
@@ -48,6 +51,7 @@ function makeStore() {
       return receipt;
     },
     read() {
+      this.readCalls += 1;
       return rows.slice();
     }
   };
@@ -158,6 +162,7 @@ test("admit ADMITS a well-formed session record and stamps a server-derived inst
   assert.ok(Object.isFrozen(result.record));
   assert.equal(layerStores.session.store.rows.length, 1);
   assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED"]);
+  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.replay), [false, false]);
   assert.equal(result.append.status, "COMMITTED");
 });
 
@@ -393,7 +398,7 @@ test("a no-op or malformed store receipt can never produce ALLOW", async () => {
   }
 });
 
-test("duplicate retry uses the same idempotency key and does not append twice", async () => {
+test("duplicate retry re-verifies durable state without creating a second row", async () => {
   const store = makeStore();
   const ledgerWriter = makeAuditWriter();
   let clock = FIXED_NOW;
@@ -412,7 +417,47 @@ test("duplicate retry uses the same idempotency key and does not append twice", 
   assert.equal(retry.admitted_at, first.admitted_at, "top-level retry timestamp must equal the authoritative stored admission timestamp");
   assert.equal(retry.admitted_at, retry.record.admitted_at);
   assert.equal(store.rows.length, 1);
-  assert.equal(ledgerWriter.entries.length, auditCount, "cached retry has no audit or store side effect");
+  assert.equal(store.appendCalls, 2, "replay must re-enter the idempotent store path");
+  assert.equal(store.readCalls, 2, "replay must verify durable read-back");
+  assert.equal(ledgerWriter.entries.length, auditCount + 2, "replay emits ATTEMPTED and COMMITTED telemetry");
+  assert.deepEqual(ledgerWriter.entries.slice(-2).map((entry) => [entry.disposition, entry.replay]), [
+    ["ATTEMPTED", true],
+    ["COMMITTED", true]
+  ]);
+});
+
+test("cached replay metadata cannot authorize a record deleted after first commit", async () => {
+  const store = makeStore();
+  const ledgerWriter = makeAuditWriter();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
+  const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
+  assert.equal((await gateway.admit(request)).decision, "ALLOW");
+  store.rows.splice(0);
+
+  const replay = await gateway.admit(request);
+
+  assert.equal(replay.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(replay.reason, "STORE_READBACK_MISSING_OR_CONFLICT");
+  assert.equal(replay.record_observed, false);
+  assert.equal(store.appendCalls, 2);
+  assert.ok(store.readCalls >= 3, "failed verification and reconciliation both inspect durable state");
+});
+
+test("cached replay metadata cannot authorize a record tampered after first commit", async () => {
+  const store = makeStore();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
+  assert.equal((await gateway.admit(request)).decision, "ALLOW");
+  store.rows[0] = { ...store.rows[0], statement: "post-commit tamper" };
+
+  const replay = await gateway.admit(request);
+
+  assert.equal(replay.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(replay.reason, "STORE_READBACK_MISSING_OR_CONFLICT");
+  assert.equal(store.appendCalls, 2);
+  assert.notEqual(replay.decision, "ALLOW");
 });
 
 test("retry after restart without a durable replay anchor requires reconciliation", async () => {
