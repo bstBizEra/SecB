@@ -279,7 +279,8 @@ function trustedRufloBinding() {
     descriptor_fingerprint: RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
     provider_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.provider_id,
     runtime_product_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.runtime_product_id,
-    runtime_deployment_id: "RT-RUFLO-LOCAL-001"
+    runtime_deployment_id: "RT-RUFLO-LOCAL-001",
+    operationally_effective: false
   };
 }
 
@@ -313,4 +314,60 @@ test("Ruflo binding fields cannot be overridden or substituted", () => {
     () => governed.register(substituted),
     (error) => error instanceof RegistryError && error.code === "DENY_PLUGIN_BINDING_MISMATCH"
   );
+});
+
+test("plugin binding metadata is all-or-none and known Ruflo identity cannot strip it", () => {
+  const bindingFields = [
+    "runtime_provider_plugin_id",
+    "runtime_provider_plugin_version",
+    "runtime_provider_plugin_fingerprint"
+  ];
+  for (const retained of bindingFields) {
+    const partial = structuredClone(RUFLO_CODER_ADAPTER);
+    for (const field of bindingFields) {
+      if (field !== retained) delete partial[field];
+    }
+    assert.throws(
+      () => validateContract("agentRegistration", partial),
+      (error) => error?.name === "ContractValidationError"
+    );
+  }
+
+  const stripped = structuredClone(RUFLO_CODER_ADAPTER);
+  for (const field of bindingFields) delete stripped[field];
+  assert.deepEqual(validateContract("agentRegistration", stripped), {
+    kind: "agentRegistration",
+    valid: true
+  });
+  assert.throws(
+    () => new RuntimeRegistry().register(stripped),
+    (error) => error instanceof RegistryError && error.code === "DENY_PLUGIN_BINDING_REQUIRED"
+  );
+});
+
+test("candidate plugin cannot become operational and effectiveness is rechecked on resolve", () => {
+  let effective = false;
+  const runtime = new RuntimeRegistry({
+    runtimeProviderResolver: () => ({
+      ...trustedRufloBinding(),
+      operationally_effective: effective
+    })
+  });
+  runtime.register(RUFLO_CODER_ADAPTER);
+  assert.throws(
+    () => runtime.transitionEvaluation(RUFLO_CODER_ADAPTER.agent_instance_id, "APPROVED"),
+    (error) => error instanceof RegistryError && error.code === "DENY_PLUGIN_NOT_EFFECTIVE"
+  );
+
+  effective = true;
+  runtime.transitionEvaluation(RUFLO_CODER_ADAPTER.agent_instance_id, "APPROVED");
+  runtime.transitionLifecycle(RUFLO_CODER_ADAPTER.agent_instance_id, "ACTIVE");
+  assert.equal(runtime.resolve(RUFLO_CODER_ADAPTER.agent_instance_id).resolved, true);
+
+  effective = false;
+  assert.deepEqual(runtime.resolve(RUFLO_CODER_ADAPTER.agent_instance_id), {
+    resolved: false,
+    quarantined: true,
+    reason: "DENY_PLUGIN_NOT_EFFECTIVE"
+  });
 });
