@@ -62,6 +62,7 @@ const RECORD_KEYS = Object.freeze([
   "content_hash"
 ]);
 const REQUIRED_RECORD_KEYS = Object.freeze(RECORD_KEYS.filter((key) => key !== "supersedes"));
+const STORE_RECEIPT_KEYS = Object.freeze(["status", "idempotency_key", "memory_record_id", "version", "content_hash", "sequence"]);
 const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
 const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
@@ -282,6 +283,14 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
 
     // Admitted record: the gateway stamps the trusted admitted_at instant and
     // the resolved layer. TTL is NOT stored (computed at read from layer.ttlMs).
+    const idempotencyKey = JSON.stringify([
+      admittedRecord.project_id,
+      admittedRecord.layer,
+      admittedRecord.memory_record_id,
+      admittedRecord.version,
+      admittedRecord.content_hash
+    ]);
+
     // 7. Audit-first: the admission audit is written BEFORE any store mutation.
     // A throwing/unavailable audit writer denies with no store side effect.
     try {
@@ -292,43 +301,112 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         admitted_at: instant.iso,
         project_id: admittedRecord.project_id,
         actor_id: admittedRecord.actor_id,
-        classification: admittedRecord.classification
+        classification: admittedRecord.classification,
+        memory_record_id: admittedRecord.memory_record_id,
+        version: admittedRecord.version,
+        content_hash: admittedRecord.content_hash,
+        idempotency_key: idempotencyKey
       });
     } catch {
       return deny("DENY_AUDIT_UNAVAILABLE", "Audit ledger writer is unavailable; admission denied before store append");
     }
 
-    // 8. Store append via the INJECTED layer store ONLY. The gateway never
-    // reaches into any existing ledger's admission policy.
-    let appendResult;
-    try {
-      appendResult = await layer.store.append(admittedRecord);
-    } catch {
-      // The admission attempt is already durable. Record a terminal failure so
-      // an attempted admission can never be mistaken for a committed one.
+    // 8. Store append via the INJECTED layer store ONLY. The idempotency key is
+    // deterministic for the exact version/content tuple. ALLOW requires both a
+    // closed COMMITTED receipt and a matching read-back; a rejection, malformed
+    // receipt, no-op, or lost acknowledgement is honestly reconciliation state.
+    const dispositionBase = {
+      type: "MEMORY_ADMISSION_DISPOSITION",
+      layer: request.layer,
+      admitted_at: instant.iso,
+      project_id: admittedRecord.project_id,
+      actor_id: admittedRecord.actor_id,
+      classification: admittedRecord.classification,
+      memory_record_id: admittedRecord.memory_record_id,
+      version: admittedRecord.version,
+      content_hash: admittedRecord.content_hash,
+      idempotency_key: idempotencyKey
+    };
+
+    async function writeDisposition(disposition, reason) {
       try {
-        await ledgerWriter({
-          type: "MEMORY_ADMISSION_DISPOSITION",
-          disposition: "FAILED",
-          reason: "STORE_UNAVAILABLE",
-          layer: request.layer,
-          admitted_at: instant.iso,
-          project_id: admittedRecord.project_id,
-          actor_id: admittedRecord.actor_id,
-          classification: admittedRecord.classification
-        });
+        await ledgerWriter({ ...dispositionBase, disposition, ...(reason ? { reason } : {}) });
+        return true;
       } catch {
-        return deny("DENY_AUDIT_UNAVAILABLE", "Store append failed and its terminal failure disposition could not be audited");
+        return false;
       }
-      return deny("DENY_STORE_UNAVAILABLE", "Layer store append failed");
     }
+
+    async function recordObserved() {
+      try {
+        const rows = await layer.store.read();
+        return Array.isArray(rows) && rows.some((row) =>
+          isPlainObject(row)
+          && row.project_id === admittedRecord.project_id
+          && row.layer === admittedRecord.layer
+          && row.memory_record_id === admittedRecord.memory_record_id
+          && row.version === admittedRecord.version
+          && row.content_hash === admittedRecord.content_hash
+        );
+      } catch {
+        return false;
+      }
+    }
+
+    async function reconcile(reason) {
+      const observed = await recordObserved();
+      const auditRecorded = await writeDisposition("RECONCILIATION_REQUIRED", reason);
+      return deepFreeze({
+        decision: "RECONCILIATION_REQUIRED",
+        code: "ADMISSION_RECONCILIATION_REQUIRED",
+        reason,
+        idempotency_key: idempotencyKey,
+        record_observed: observed,
+        audit_recorded: auditRecorded
+      });
+    }
+
+    let rawReceipt;
+    try {
+      rawReceipt = await layer.store.append(admittedRecord, { idempotency_key: idempotencyKey });
+    } catch {
+      return reconcile("STORE_APPEND_REJECTED");
+    }
+
+    let receipt;
+    try {
+      if (!isPlainObject(rawReceipt)) return reconcile("STORE_RECEIPT_INVALID");
+      const unknown = Object.keys(rawReceipt).filter((key) => !STORE_RECEIPT_KEYS.includes(key));
+      if (unknown.length > 0) return reconcile("STORE_RECEIPT_INVALID");
+      if (
+        rawReceipt.status !== "COMMITTED"
+        || rawReceipt.idempotency_key !== idempotencyKey
+        || rawReceipt.memory_record_id !== admittedRecord.memory_record_id
+        || rawReceipt.version !== admittedRecord.version
+        || rawReceipt.content_hash !== admittedRecord.content_hash
+        || (rawReceipt.sequence !== undefined && !(Number.isSafeInteger(rawReceipt.sequence) && rawReceipt.sequence > 0))
+      ) return reconcile("STORE_RECEIPT_INVALID");
+      receipt = deepFreeze({
+        status: "COMMITTED",
+        idempotency_key: idempotencyKey,
+        memory_record_id: admittedRecord.memory_record_id,
+        version: admittedRecord.version,
+        content_hash: admittedRecord.content_hash,
+        ...(rawReceipt.sequence === undefined ? {} : { sequence: rawReceipt.sequence })
+      });
+    } catch {
+      return reconcile("STORE_RECEIPT_INVALID");
+    }
+
+    if (!(await recordObserved())) return reconcile("STORE_READBACK_MISSING");
+    if (!(await writeDisposition("COMMITTED"))) return reconcile("COMMIT_AUDIT_UNAVAILABLE");
 
     return deepFreeze({
       decision: "ALLOW",
       code: "ADMITTED",
       admitted_at: instant.iso,
       record: admittedRecord,
-      append: appendResult ?? null
+      append: receipt
     });
   }
 

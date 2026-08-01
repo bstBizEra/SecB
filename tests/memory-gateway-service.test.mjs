@@ -27,11 +27,23 @@ const kernelSodRules = { checkPairwiseDistinct };
 
 function makeStore() {
   const rows = [];
+  const receipts = new Map();
   return {
     rows,
-    append(record) {
+    append(record, { idempotency_key } = {}) {
+      const prior = receipts.get(idempotency_key);
+      if (prior) return prior;
       rows.push(record);
-      return { sequence: rows.length };
+      const receipt = {
+        status: "COMMITTED",
+        idempotency_key,
+        memory_record_id: record.memory_record_id,
+        version: record.version,
+        content_hash: record.content_hash,
+        sequence: rows.length
+      };
+      receipts.set(idempotency_key, receipt);
+      return receipt;
     },
     read() {
       return rows.slice();
@@ -140,7 +152,8 @@ test("admit ADMITS a well-formed session record and stamps a server-derived inst
   assert.ok(Object.isFrozen(result));
   assert.ok(Object.isFrozen(result.record));
   assert.equal(layerStores.session.store.rows.length, 1);
-  assert.equal(ledgerWriter.entries.length, 1);
+  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED"]);
+  assert.equal(result.append.status, "COMMITTED");
 });
 
 test("project-layer admission ADMITS when producer and approver are distinct", async () => {
@@ -292,7 +305,7 @@ test("audit-first: the audit entry is written strictly before the store append",
   const store = makeStore();
   const wrappedStore = {
     rows: store.rows,
-    append(record) { order.push("store"); return store.append(record); },
+    append(record, options) { order.push("store"); return store.append(record, options); },
     read: store.read
   };
   const layerStores = layerConfig({ session: { store: wrappedStore, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
@@ -304,42 +317,105 @@ test("audit-first: the audit entry is written strictly before the store append",
   });
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.decision, "ALLOW");
-  assert.deepEqual(order, ["audit", "store"]);
+  assert.deepEqual(order, ["audit", "store", "audit"]);
 });
 
-test("admit denies DENY_STORE_UNAVAILABLE when the store append throws", async () => {
+test("admit marks reconciliation required when the store append throws", async () => {
   const store = { append() { throw new Error("disk full"); }, read() { return []; } };
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const ledgerWriter = makeAuditWriter();
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
-  assert.equal(result.code, "DENY_STORE_UNAVAILABLE");
-  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "FAILED"]);
+  assert.equal(result.code, "ADMISSION_RECONCILIATION_REQUIRED");
+  assert.equal(result.record_observed, false);
+  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "RECONCILIATION_REQUIRED"]);
 });
 
-test("admit awaits an asynchronous store and records a terminal failure disposition", async () => {
+test("admit awaits an asynchronous store and records reconciliation, never a false FAILED", async () => {
   const store = { async append() { throw new Error("async disk full"); }, read() { return []; } };
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const ledgerWriter = makeAuditWriter();
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
-  assert.equal(result.decision, "DENY");
-  assert.equal(result.code, "DENY_STORE_UNAVAILABLE");
-  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "FAILED"]);
+  assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(result.code, "ADMISSION_RECONCILIATION_REQUIRED");
+  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "RECONCILIATION_REQUIRED"]);
 });
 
-test("admit fails closed when the terminal store-failure disposition cannot be audited", async () => {
+test("admit reports reconciliation honestly when its disposition cannot be audited", async () => {
   const entries = [];
   const ledgerWriter = async (entry) => {
     entries.push(entry);
-    if (entry.disposition === "FAILED") throw new Error("failure audit down");
+    if (entry.disposition === "RECONCILIATION_REQUIRED") throw new Error("reconciliation audit down");
   };
   const store = { async append() { throw new Error("disk full"); }, read() { return []; } };
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
-  assert.equal(result.code, "DENY_AUDIT_UNAVAILABLE");
-  assert.deepEqual(entries.map((entry) => entry.disposition), ["ATTEMPTED", "FAILED"]);
+  assert.equal(result.code, "ADMISSION_RECONCILIATION_REQUIRED");
+  assert.equal(result.audit_recorded, false);
+  assert.deepEqual(entries.map((entry) => entry.disposition), ["ATTEMPTED", "RECONCILIATION_REQUIRED"]);
+});
+
+test("mutate-then-reject is reconciliation-required and reports the observed record", async () => {
+  const rows = [];
+  const store = {
+    async append(record) { rows.push(record); throw new Error("ack lost"); },
+    read() { return rows.slice(); }
+  };
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const ledgerWriter = makeAuditWriter();
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(result.record_observed, true);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(ledgerWriter.entries.map((entry) => entry.disposition), ["ATTEMPTED", "RECONCILIATION_REQUIRED"]);
+});
+
+test("a no-op or malformed store receipt can never produce ALLOW", async () => {
+  const stores = [
+    { append() {}, read() { return []; } },
+    { append() { return { status: "COMMITTED" }; }, read() { return []; } },
+    { append(record, { idempotency_key }) { return { status: "COMMITTED", idempotency_key, memory_record_id: record.memory_record_id, version: record.version, content_hash: record.content_hash, rogue: true }; }, read() { return []; } }
+  ];
+  for (const store of stores) {
+    const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+    const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+    const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+    assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+    assert.equal(result.code, "ADMISSION_RECONCILIATION_REQUIRED");
+  }
+});
+
+test("duplicate retry uses the same idempotency key and does not append twice", async () => {
+  const store = makeStore();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
+  const first = await gateway.admit(request);
+  const retry = await gateway.admit(request);
+  assert.equal(first.decision, "ALLOW");
+  assert.equal(retry.decision, "ALLOW");
+  assert.equal(first.append.idempotency_key, retry.append.idempotency_key);
+  assert.equal(first.append.sequence, retry.append.sequence);
+  assert.equal(store.rows.length, 1);
+});
+
+test("a failed terminal COMMITTED audit returns reconciliation-required after verified storage", async () => {
+  const entries = [];
+  const ledgerWriter = async (entry) => {
+    entries.push(entry);
+    if (entry.disposition === "COMMITTED") throw new Error("commit audit down");
+  };
+  const store = makeStore();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+  assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(result.record_observed, true);
+  assert.equal(result.audit_recorded, true);
+  assert.deepEqual(entries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED", "RECONCILIATION_REQUIRED"]);
 });
 
 // --- Retrieval -------------------------------------------------------------
