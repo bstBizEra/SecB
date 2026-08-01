@@ -9,6 +9,7 @@
     "runtime_deployment_id",
     "provider_id",
     "runtime_product",
+    "runtime_provider_plugin_id",
     "deployment_type",
     "endpoint",
     "identity",
@@ -31,6 +32,11 @@
     "runtime_product": {
       "type": "string",
       "description": "Product name e.g. 'ruflo', 'codex', 'claude-code'."
+    },
+    "runtime_provider_plugin_id": {
+      "type": "string",
+      "pattern": "^runtime-provider-[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Candidate plugin descriptor identity. This reference does not activate the plugin or grant authority."
     },
     "runtime_version": { "type": "string" },
     "deployment_type": {

@@ -80,6 +80,7 @@ const expectedSchemas = [
   "contracts/skill-manifest.schema.json",
   "contracts/skill-package-descriptor.schema.json",
   "contracts/skill-grant-record.schema.json",
+  "contracts/runtime-provider-plugin.schema.json",
   "contracts/capability-record.schema.json",
   "contracts/goal.schema.json",
   "contracts/project-registration-package.schema.json",
@@ -130,6 +131,7 @@ const mandatoryIdentityFields = {
   // split has been breached.
   "contracts/skill-package-descriptor.schema.json": ["skill_id", "package_name", "display_name", "version", "purpose", "risk_class", "controls"],
   "contracts/skill-grant-record.schema.json": ["skill_id", "version", "status", "project_scopes", "supported_runtimes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions"],
+  "contracts/runtime-provider-plugin.schema.json": ["plugin_id", "plugin_version", "provider_id", "runtime_product_id", "implementation", "capabilities", "security", "boundaries", "candidate_status"],
   "contracts/goal.schema.json": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "content_hash"],
   "contracts/project-registration-package.schema.json": ["registration_id", "project_id", "version", "status", "mode"],
   "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "validity"],

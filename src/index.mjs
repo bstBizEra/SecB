@@ -115,7 +115,17 @@ export {
   withinCeiling
 } from "./services/non-escalation-comparator.mjs";
 
-// Ruflo Agent Command Center integration
+// Harness-neutral runtime provider plugin candidate registry
+export {
+  RuntimeProviderPluginRegistry,
+  RuntimeProviderPluginRegistryError
+} from "./runtime/runtime-provider-plugin-registry.mjs";
+
+export {
+  RUFLO_RUNTIME_PROVIDER_PLUGIN
+} from "./runtime/providers/ruflo-runtime-provider-plugin.mjs";
+
+// Ruflo runtime provider integration
 export {
   RUFLO_ADAPTERS,
   RUFLO_SWARM_ADAPTER,

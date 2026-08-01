@@ -31,6 +31,7 @@ const validFixtures = {
   skillManifest: "valid/skill-manifest.json",
   skillPackageDescriptor: "valid/skill-package-descriptor.json",
   skillGrantRecord: "valid/skill-grant-record.json",
+  runtimeProviderPlugin: "valid/runtime-provider-plugin.json",
   goal: "valid/goal.json"
 };
 
@@ -57,6 +58,7 @@ const invalidFixtures = {
   skillManifest: "invalid/skill-manifest-bad-status.json",
   skillPackageDescriptor: "invalid/skill-package-descriptor-declares-scope.json",
   skillGrantRecord: "invalid/skill-grant-record-bad-status.json",
+  runtimeProviderPlugin: "invalid/runtime-provider-plugin-declares-authority.json",
   goal: "invalid/goal-missing-id.json"
 };
 

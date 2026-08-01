@@ -28,6 +28,7 @@ const schemaPaths = {
   // migrates the resolver onto the pair; it is not the target shape.
   skillPackageDescriptor: "skill-package-descriptor.schema.json",
   skillGrantRecord: "skill-grant-record.schema.json",
+  runtimeProviderPlugin: "runtime-provider-plugin.schema.json",
   goal: "goal.schema.json"
 };
 

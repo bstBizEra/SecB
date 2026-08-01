@@ -3,6 +3,7 @@ schema_version: "1.0"
 runtime_deployment_id: RT-RUFLO-LOCAL-001
 provider_id: PROVIDER-RUFLO
 runtime_product: ruflo
+runtime_provider_plugin_id: runtime-provider-ruflo
 runtime_version: "3.32.9"
 deployment_type: local_sidecar
 

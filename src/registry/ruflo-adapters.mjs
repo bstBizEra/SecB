@@ -1,5 +1,5 @@
 /**
- * Ruflo Agent Command Center Adapter for SecB
+ * Ruflo Runtime Provider Plugin adapters for SecB
  * 
  * Registers Ruflo's claude-flow swarm system as a governed agent adapter
  * in SecB's RuntimeRegistry. This enables SecB to manage authority, SoD,
@@ -8,6 +8,8 @@
  * Branch: feat/secb-ruflo-command-center
  * ADR compliance: SECB-AGENTS-AMD-002 (advise-and-proceed, ENGIN role)
  */
+
+import { RUFLO_RUNTIME_PROVIDER_PLUGIN } from "../runtime/providers/ruflo-runtime-provider-plugin.mjs";
 
 const ADAPTER_DEFAULTS = Object.freeze({
   evaluation_status: "CANDIDATE",
@@ -29,6 +31,7 @@ function adapter(definition) {
 export const RUFLO_SWARM_ADAPTER = adapter({
   provider_id: "ruvnet",
   runtime_product_id: "ruflo",
+  runtime_provider_plugin_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_id,
   runtime_deployment_id: "ruflo-local",
   agent_profile_id: "ruflo-swarm-coordinator",
   agent_instance_id: "inst_ruflo_swarm",
@@ -65,6 +68,7 @@ export const RUFLO_SWARM_ADAPTER = adapter({
 export const RUFLO_CODER_ADAPTER = adapter({
   provider_id: "ruvnet",
   runtime_product_id: "ruflo",
+  runtime_provider_plugin_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_id,
   runtime_deployment_id: "ruflo-local",
   agent_profile_id: "ruflo-coder",
   agent_instance_id: "inst_ruflo_coder",
@@ -92,6 +96,7 @@ export const RUFLO_CODER_ADAPTER = adapter({
 export const RUFLO_REVIEWER_ADAPTER = adapter({
   provider_id: "ruvnet",
   runtime_product_id: "ruflo",
+  runtime_provider_plugin_id: RUFLO_RUNTIME_PROVIDER_PLUGIN.plugin_id,
   runtime_deployment_id: "ruflo-local",
   agent_profile_id: "ruflo-reviewer",
   agent_instance_id: "inst_ruflo_reviewer",

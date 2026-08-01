@@ -466,6 +466,12 @@
     "tests/fixtures/invalid/local-bridge-installation-proof-expired.json",
     "tests/fixtures/invalid/local-bridge-installation-proof-wrong-key.json",
     "src/bridge/local-bridge-installation-proof.mjs",
-    "tests/local-bridge-phase-contracts.test.mjs"
+    "tests/local-bridge-phase-contracts.test.mjs",
+    "contracts/runtime-provider-plugin.schema.json",
+    "src/runtime/runtime-provider-plugin-registry.mjs",
+    "src/runtime/providers/ruflo-runtime-provider-plugin.mjs",
+    "tests/runtime-provider-plugin.test.mjs",
+    "tests/fixtures/valid/runtime-provider-plugin.json",
+    "tests/fixtures/invalid/runtime-provider-plugin-declares-authority.json"
   ]
 }
