@@ -66,7 +66,12 @@ const DENY_CODES = new Set([
   "DENY_NOT_PUBLISHED",
   "DENY_REVOKED",
   "DENY_PROJECT_SCOPE",
-  "DENY_RUNTIME"
+  "DENY_RUNTIME",
+  // WP-SK-R2 / DEF-R2: the promotion decision is no longer effective - expired
+  // or reverted. Distinct from DENY_REVOKED, which reads a REVOCATION entry
+  // recorded IN the manifest; this one is the ledger disagreeing with a
+  // manifest that still claims to be published.
+  "DENY_PROMOTION_NOT_EFFECTIVE"
 ]);
 
 /**

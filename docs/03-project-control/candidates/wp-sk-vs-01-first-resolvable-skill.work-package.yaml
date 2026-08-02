@@ -1,13 +1,39 @@
 schema_version: "0.1"
 record_metadata:
   record_id: "wp_sk_vs_01_first_resolvable_skill_v1_candidate"
-  record_status: "AWAITING_GOV_AUTHORIZATION"
+  record_status: "WITHDRAWN_BY_PRODUCER"
   source_template: "docs/templates/work-package.yaml"
   producer_runtime: "Claude Code"
   limitations:
     - "The producer of this work package is also its assigned ENGIN. It may not review or accept its own output."
     - "The producer has been returned by independent review five consecutive rounds, twice for asserting in a governance record that a control had a property the code did not have. Acceptance criteria below are written to be machine-checkable, and each must be shown to FAIL when its control is removed before it is claimed."
     - "The producer has four times asserted that something did not exist when it did - most recently DecisionLedger, which exists and is already exercised end-to-end by tests/conformance-stubs.test.mjs. Absence claims in this document should be re-derived, not trusted."
+
+withdrawal:
+  withdrawn_at: "2026-08-02"
+  withdrawn_by: "producer, before authorization - no signature was given"
+  reason: >-
+    Its central acceptance criterion is built on a premise that is false.
+    AC-VS-01 claimed that constructing the governed manifest from a decision
+    rather than from package content closes DEF-A5. DEF-R1 shows the hole is not
+    in who writes the manifest: contracts/decision-record.schema.json cannot name
+    a skill, so SkillResolver checks only that a decision with the claimed id
+    exists and is typed GOVERNANCE. One decision authorizes any skill at any
+    scope - reproduced by registering an unrelated skill and a self-widened
+    RESTRICTED grant off a single decision. The producer was looking at the wrong
+    end of the chain.
+  other_falsified_content:
+    - "AC-VS-01 is also unimplementable as written: a decision record has no field able to carry project_scopes, supported_runtimes or max_data_classification, and contracts/** was prohibited by this work package - so its own STOP checkpoint fires on its own central criterion."
+    - "The rollback plan asserted that appending a REVOCATION reverts the promotion. REVOCATION is not in the DecisionLedger decision_type enum, and resolveSkill did not consult the ledger at all. AC-VS-08 was unsatisfiable at the time of writing. WP-SK-R2 has since made the resolution-time half true; the enum half remains false."
+    - "schedule.expiry lapsed the authorization on any change to the DEF-C3 ruling, while proceeding required amending that ruling - the work package triggered its own lapse clause."
+    - "The premise that it does not depend on the contract tier split is wrong: skill-grant-record.schema.json is the only shape that can express RESTRICTED_PUBLICATION, which the lifecycle requires before general publication."
+  retained_because: >-
+    The record of a proposal that reached a signature request on a false premise
+    is evidence about how this programme fails, and deleting it would remove the
+    only trace. It is marked WITHDRAWN rather than removed.
+  superseded_by: >-
+    Nothing yet. A first-promotion work package needs DEF-R1 closed first, which
+    is a contract change and belongs to ARCHI.
 
 work_package_id: "WP-SK-VS-01"
 project_id: "prj_secb_local"
@@ -210,7 +236,7 @@ learning_obligations:
   - "Record whether the promotion path actually prevented package content from reaching a grant field, or merely relocated the obligation. That is the load-bearing claim, and the producer has been wrong about exactly this class of claim five times."
   - "Record how much of the 12-work-package horizontal plan turned out to be necessary once one skill actually worked."
 
-status: "AWAITING_GOV_AUTHORIZATION"
+status: "WITHDRAWN - DO NOT AUTHORIZE"
 version: "1.0.0-candidate"
 signatures:
   gov_authorization: "PENDING"

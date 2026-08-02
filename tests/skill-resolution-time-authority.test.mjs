@@ -136,6 +136,28 @@ describe("WP-SK-R2 / DEF-R2 — a grant stops authorizing when its decision does
   });
 });
 
+describe("WP-SK-R2 / AC-R2-04 — the new deny code keeps its type through the hub", () => {
+  it("DENY_PROMOTION_NOT_EFFECTIVE is not bucketed as DENY_UNRESOLVED", async () => {
+    const { SecBSkillsHub } = await import("../src/skills/skills-hub-service.mjs");
+    const hub = new SecBSkillsHub({
+      services: { skillResolver: { resolveSkill: () => ({ skill: null, code: "DENY_PROMOTION_NOT_EFFECTIVE" }) } }
+    });
+    const result = hub.searchSkills("", CONTEXT);
+
+    assert.ok(result.withheld_reasons.DENY_PROMOTION_NOT_EFFECTIVE > 0,
+      "an expired or reverted promotion must be distinguishable in the withheld tally");
+    assert.equal(result.withheld_reasons.DENY_UNRESOLVED, undefined,
+      "it must not fall through to the unknown-code bucket");
+
+    // Control: a code the hub genuinely does not know still buckets, so this
+    // test is not passing because the allow-list stopped working.
+    const unknown = new SecBSkillsHub({
+      services: { skillResolver: { resolveSkill: () => ({ skill: null, code: "DENY_MADE_UP" }) } }
+    });
+    assert.ok(unknown.searchSkills("", CONTEXT).withheld_reasons.DENY_UNRESOLVED > 0);
+  });
+});
+
 describe("WP-SK-R2 / DEF-R3 — evidence is resolved, not counted", () => {
   const base = { decisionLookup: () => ({ decision_id: "d1", decision_type: "GOVERNANCE" }), now: () => IN_WINDOW };
 
