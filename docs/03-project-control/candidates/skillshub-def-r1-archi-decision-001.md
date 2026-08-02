@@ -1,8 +1,50 @@
 # ARCHI Decision Request — How does a governance decision bind to what it authorizes?
 
 **Document ID:** `SECB-ARCHI-DECISION-SKILLSHUB-R1-001`
-**Status:** `PREPARED — AWAITING RULING`
+**Status:** `WITHDRAWN — DO NOT RULE` — the question is already answered on `main`
+**Withdrawn at:** 2026-08-02, before any ruling was given. No signature was requested or received.
 **Decision owner:** ARCHI (with GOV for the contract version; SEC consulted, not deciding)
+
+> ## Withdrawal
+>
+> This packet asks ARCHI to decide how a governance decision binds to what it
+> authorizes, and recommends adding a typed `subject` to
+> `contracts/decision-record.schema.json`.
+>
+> **`main` already carries that binding, in a stronger form, and has since before
+> this packet was drafted.** `contracts/skill-promotion.schema.json` on `main`
+> requires:
+>
+> ```
+> skill_candidate_id · skill_version · bound_action · bound_object_version
+> producer_actor_id · independent_review_actor_id · governance_actor_id
+> evidence_refs · risk_class · content_hash
+> ```
+>
+> `skill_candidate_id` and `skill_version` name the authorized object.
+> `bound_action` and `bound_object_version` name the authorized act and the exact
+> version it is bound to — which is the property `DEF-R1` says is missing. The
+> three actor fields make separation of duties structural rather than
+> procedural, which this packet's Option A does not attempt. `content_hash`
+> reaches `DEF-B1`, which this register still carries as open.
+>
+> This packet was prepared against `feat/secb-ruflo-command-center`, which is 296
+> commits behind `main` and does not contain `MOD-SKILL` S1 or S2. Every "does not
+> exist" claim in it is scoped to that branch, and the producer did not state that
+> scope. See `DEF-A13` and §O of the defect register.
+>
+> **Retained, not deleted.** The analysis of why the narrowing option
+> (`project_id` / `work_package_id`) is security theatre remains correct and
+> remains useful: it catches exactly one case, a manifest scoped to a project set
+> excluding its own authorizing decision, which no attacker constructs. That
+> reasoning applies to any future proposal of the same shape.
+>
+> **What is NOT withdrawn.** Item 8 of this packet — `OutcomeLedger.appendOutcome`
+> at `src/ledger/temporal-ledgers.mjs:176`, which compares a decision id against
+> the caller's own claim and never compares `project_id` or `work_package_id`
+> though both contracts require them — is **not** addressed by `MOD-SKILL`. It is
+> not skill-scoped. It is carried as `DEF-R4` in the defect register and needs a
+> separate disposition.
 **Prepared by:** Claude Code (worker agent) — prepares the decision, does not make it
 **Prepared at:** 2026-08-02, baseline `dcbabc4`; **re-verified at `b7d7f41`**
 **Baseline moved during preparation.** Two commits landed while this packet was being

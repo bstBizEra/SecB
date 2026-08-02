@@ -6,10 +6,76 @@
 |---|---|
 | Document ID | `SECB-PRD-SKILLSHUB-001` |
 | Version | `0.4.0-draft` |
-| Status | `DRAFT / NOT EFFECTIVE / DEFECT-REGISTERED` |
+| Status | `SUPERSEDED BY MOD-SKILL S1/S2 ON main — DO NOT IMPLEMENT` |
+| Superseded at | 2026-08-02. Sections 7 (discovery) and 11 (requirements) are retained as a record; §15's work-package roadmap `WP-SK-01` → `WP-SK-06` is **withdrawn and must not be authorized**. See the closure note directly below. |
 | Standing | **Current-state discovery carrying a known defect register — NOT a settled requirements candidate.** Downgraded from a requirements candidate after a third independent review. §11's requirements are producer proposals with 25 unadjudicated findings against them; §7's discovery is the more reliable half, and even it carries two producer-verified false claims. Read with [`SECB-PRD-SKILLSHUB-DEFECTS-001`](skillshub-prd-defect-register-001.md) open beside it |
 | Product | SecB SkillsHub (`MOD-SKILL`) |
 | Product owner | Unassigned — operator to appoint |
+
+## Closure note — 2026-08-02
+
+**This programme is stopped. Do not authorize `WP-SK-01` through `WP-SK-06`.**
+
+`main` already carries `MOD-SKILL` S1 and S2, and has since before this document
+reached v0.4.0:
+
+| On `main` | What this PRD planned to build |
+|---|---|
+| `src/registry/skill-candidate-registry.mjs`, `contracts/skill-candidate.schema.json` | `WP-SK-02` intake |
+| `src/ledger/skill-promotion-ledger.mjs`, `contracts/skill-promotion.schema.json` | `WP-SK-05` promotion service |
+| `src/ledger/skill-revocation-ledger.mjs` | `WP-SK-06` revocation |
+
+The promotion contract on `main` requires `skill_candidate_id`, `skill_version`,
+`bound_action`, `bound_object_version`, `producer_actor_id`,
+`independent_review_actor_id`, `governance_actor_id`, `evidence_refs`,
+`risk_class` and `content_hash`. It binds a decision to the exact object and
+version it authorizes, and makes separation of duties structural rather than
+procedural. That is `DEF-R1` closed, and closed better than the fix this
+programme was preparing to propose.
+
+The intake contract requires `immutable_version`, `integrity`, `tool_inventory`,
+`filesystem_boundary`, `network_boundary`, `credential_handle`,
+`harness_compatibility`, `intake_evidence_refs` and `withdrawal` — a strictly
+larger surface than `WP-SK-02` specified.
+
+### Why this was not caught earlier
+
+`feat/secb-ruflo-command-center` forks 296 commits behind `main`. Every
+"does not exist" statement in §7 and in the defect register is scoped to that
+branch, and **the producer did not state that scope.** The claims were true of
+the tree in front of it and false of the programme. This is the same class of
+error the register was created to catch, made about the register's own baseline
+rather than about a citation, and it went uncaught through six review rounds
+because every round re-derived facts from the same stale tree.
+
+Recorded as `DEF-A13` (branch integrity) and §O of
+[`SECB-PRD-SKILLSHUB-DEFECTS-001`](skillshub-prd-defect-register-001.md).
+
+### What survives
+
+Three things on this branch are real, are **not** on `main`, and should be
+carried across rather than discarded:
+
+1. **`WP-SK-R2`** — resolution-time re-validation of promotion decisions and
+   evidence resolution (`DEF-R2`, `DEF-R3`). `main`'s `skill-resolver.mjs` has
+   neither `#promotionsEffective` nor an `evidenceLookup`, so on `main` a grant
+   once issued still cannot expire and cannot be revoked at resolution time.
+   This is a live defect there.
+2. **`DEF-M2`** — the foundation validator could not fail on a contract property
+   change. `main` carries the same subset-pin blindness.
+3. **`src/skills/skills-hub-service.mjs`** — `main` has no `src/skills/` and no
+   discovery surface at all. Carrying it across is a judgement call, not an
+   obvious win: it closed fail-open authorization, an existence oracle and
+   identity spoofing, but it still leaks corpus size through
+   `withheld_reasons`, and it was designed against the roadmap being stopped
+   here.
+
+### What is retained and why
+
+Nothing in this document is deleted. §7's discovery, §11's requirements, the
+defect register and the withdrawn decision packets are kept as the record of a
+programme that ran six review rounds against a stale baseline. That record is
+the evidence for how it happened, and deleting it would remove the evidence.
 | Architecture owner | Unassigned — operator to appoint |
 | Producer | Claude Code research session (worker agent, no approval authority) |
 | Produced at | 2026-08-01 |

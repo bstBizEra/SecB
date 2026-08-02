@@ -1,8 +1,41 @@
 # ARCHI Decision Request — Does DEF-R1 precede or follow the ADR-0013 tier split?
 
 **Document ID:** `SECB-ARCHI-DECISION-SKILLSHUB-R1-SEQ-002`
-**Status:** `PREPARED — AWAITING RULING`
+**Status:** `WITHDRAWN — DO NOT RULE` — the ordering it asks about no longer exists
+**Withdrawn at:** 2026-08-02, before any ruling was given. No signature was requested or received.
 **Decision owner:** ARCHI
+
+> ## Withdrawal
+>
+> This packet asks whether `DEF-R1` precedes or follows the ADR-0013 trust-tier
+> split. Both terms of that question are gone.
+>
+> `DEF-R1` is closed on `main` by `contracts/skill-promotion.schema.json`, whose
+> `bound_action` and `bound_object_version` fields bind a promotion decision to
+> the exact object and version it authorizes. The ADR-0013 tier split
+> (`skill-package-descriptor` / `skill-grant-record`) exists only on
+> `feat/secb-ruflo-command-center` and is superseded by `MOD-SKILL` S1's
+> `contracts/skill-candidate.schema.json`, which carries a strictly larger intake
+> surface — `immutable_version`, `integrity`, `tool_inventory`,
+> `filesystem_boundary`, `network_boundary`, `credential_handle`,
+> `harness_compatibility`, `withdrawal`.
+>
+> There is no ordering left to rule on between two things where one is already
+> done and the other is superseded.
+>
+> **What survives, and it is the part worth keeping.** The register's own claim
+> that the tier split is "a precondition of the first promotion" was falsified by
+> this producer at §N.3, before `main` was consulted. That correction stands on
+> its own reasoning and is unaffected by the withdrawal: a service-written grant
+> record still has no authoritative source for its values unless the authorizing
+> decision names them. `main` reached the same conclusion independently and
+> implemented it. That agreement is the strongest evidence the correction was
+> right.
+>
+> **Retained, not deleted**, on the same ground as `WP-SK-VS-01`: the record of a
+> question asked at length about work that was already finished elsewhere is
+> evidence about how this programme failed, and deleting it would remove the
+> evidence.
 **Prepared by:** Claude Code (worker agent) — prepares the decision, does not make it
 **Prepared at:** 2026-08-02, baseline `dcbabc4`; **re-verified at `b7d7f41`**
 **Depends on:** `SECB-ARCHI-DECISION-SKILLSHUB-R1-001` (which binding mechanism). This

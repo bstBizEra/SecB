@@ -1,8 +1,8 @@
 # SkillsHub PRD — Open Defect Register
 
 **Document ID:** `SECB-PRD-SKILLSHUB-DEFECTS-001`
-**Version:** `1.5.0-draft`
-**Status:** `DRAFT / NOT EFFECTIVE / OPEN`
+**Version:** `1.6.0-draft`
+**Status:** `CLOSED — programme superseded; see SS O`
 **Applies to:** `SECB-PRD-SKILLSHUB-001` v0.4.0-draft
 **Producer:** Claude Code (worker agent) — the same producer as the document these defects are in
 **Produced at:** 2026-08-01
@@ -469,6 +469,65 @@ producer made or relayed.
 Both belong to the `DEF-D1` / `DEF-M1` family: a claim about a control, believed
 because it was written down, never checked against whether the control runs.
 
+## O. Closure — the register's own baseline was stale
+
+**2026-08-02. The SkillsHub programme is stopped.** `SECB-PRD-SKILLSHUB-001` is
+`SUPERSEDED BY MOD-SKILL S1/S2`; `WP-SK-01` through `WP-SK-06` are withdrawn and
+must not be authorized.
+
+`main` carries `MOD-SKILL` S1 and S2 and did so throughout this register's life.
+Verified at `main`:
+
+| File on `main` | Closes |
+|---|---|
+| `contracts/skill-promotion.schema.json` | `DEF-R1` — requires `skill_candidate_id`, `skill_version`, `bound_action`, `bound_object_version`, plus `producer_actor_id` / `independent_review_actor_id` / `governance_actor_id` and `content_hash`. The decision names the object, the act and the exact version; separation of duties is structural, not procedural |
+| `contracts/skill-candidate.schema.json` | The `WP-SK-02` intake surface, strictly larger — `immutable_version`, `integrity`, `tool_inventory`, `filesystem_boundary`, `network_boundary`, `credential_handle`, `harness_compatibility`, `withdrawal` |
+| `src/ledger/skill-promotion-ledger.mjs`, `src/ledger/skill-revocation-ledger.mjs`, `src/registry/skill-candidate-registry.mjs` | The `WP-SK-05` / `WP-SK-06` services |
+
+### The defect in this register
+
+This register exists to stop unverified claims propagating. It carried one
+throughout: **every "does not exist" finding in it is scoped to
+`feat/secb-ruflo-command-center`, which forks 296 commits behind `main`, and
+that scope is stated nowhere.**
+
+`DEF-A13` recorded the branch as missing 51 lines of `AGENTS.md`. That was the
+visible edge of a 296-commit, 406-file, 51,491-line gap containing the module
+this programme was designing. The producer found the 51 lines and did not ask
+the next question.
+
+The failure is not that a fact was wrong. Each fact was true of the tree in
+front of it. The failure is that **six review rounds re-derived facts from the
+same stale tree**, so independent verification could not catch it — every
+reviewer was given the same baseline, and re-deriving a fact from a stale
+baseline reproduces the staleness with a verification stamp on it. This is
+`DEF-M1`'s rule at one level up: a check that cannot fail is not evidence, and
+six checks that share a blind spot are one check.
+
+**Standing rule, offered for adoption:** before a programme derives requirements
+from what does not exist, it establishes its baseline against the default branch
+and records the distance. A "does not exist" claim carries the ref it was
+verified against, or it is not a claim.
+
+### Disposition of open findings
+
+| Finding | Disposition |
+|---|---|
+| `DEF-R1`, `DEF-A5` sequencing | **Closed on `main`.** Decision packets `SECB-ARCHI-DECISION-SKILLSHUB-R1-001` and `-SEQ-002` withdrawn before any ruling; no signature was requested or received |
+| `DEF-R2`, `DEF-R3` | **Fixed on this branch at `44285f8`; still OPEN on `main`.** `main`'s `skill-resolver.mjs` has neither `#promotionsEffective` nor an `evidenceLookup`, so a grant once issued there cannot expire and cannot be revoked at resolution time. Carry across |
+| `DEF-M2` | **Fixed on this branch at `249c798`; `main` carries the same subset-pin blindness.** Carry across |
+| `DEF-R4` (`appendOutcome`) | **OPEN on both.** Not skill-scoped, not addressed by `MOD-SKILL`. Needs its own disposition |
+| `DEF-G1` (circular registry gate) | **OPEN.** The gate the operator signed is still circular and still standing. Stopping the programme does not retire it — it must be superseded or retired explicitly. Packet retained and still awaiting SEC+GOV |
+| `DEF-C3` condition 2 | **Branch-only.** `dataClassification: ceiling` does not appear in `main`'s `secb-mcp-server.mjs`. The producer reported this as an undischarged programme condition; it is a defect of this branch |
+| `DEF-M3` (`fails CI`) | **OPEN on both.** There is no CI in this repository |
+| `DEF-B1` (content digest at serve time) | **Substantially addressed on `main`** by `content_hash` on the promotion contract. Re-assess against `main` before treating as open |
+| Doctrine effectiveness | **OPEN and independent of `MOD-SKILL`.** Packet retained and still awaiting GOV |
+| Everything else in §A–§N | **Re-derive against `main` before treating any of it as current.** None of it has been checked against a tree containing `MOD-SKILL` |
+
+The last row is the honest one. This register should not be read as a list of
+open defects in SecB. It is a list of observations about a stale branch, of
+which a known subset survives.
+
 ## F. Provenance
 
 Findings originate from three independent reviews dispatched by the producer
@@ -486,3 +545,4 @@ anything.
 | `1.3.0-draft` | 2026-08-02 | Recorded SS L - four live authorization defects in the promotion chain, all producer-verified by probe. `DEF-R1` is the most consequential finding of this programme: a governance decision is a BEARER TOKEN, because decision-record.schema.json cannot name a skill, so one decision authorizes any skill at any scope - reproduced by registering an unrelated skill and a self-widened RESTRICTED grant off a single decision. It falsifies this producer's own `AC-VS-01` reasoning: the hole is not in who writes the manifest but in the decision not binding to what it authorizes. `DEF-R2`: a grant can never expire or be revoked, because decisionLookup is consulted only at registration - a live violation of governance-baseline SS 3. `DEF-R3`: evidence_refs is length-checked only. `DEF-G1`: the registry gate this producer drafted and the operator signed is CIRCULAR - it blocks the act whose completion is its own release condition. Added SS M - the evaluation corpus has 220 expectation instances drawn from 10 distinct strings, zero skill-specific expectation text, 30% undecidable by any means, and 0 of 22 negative cases able to fail, which `DEF-M1` disqualifies outright. Also recorded that this producer cited validate_pack.py repeatedly without running it; it exits 1 at HEAD. |
 | `1.4.0-draft` | 2026-08-02 | Recorded SS N at `dcbabc4`. **Amended `DEF-R1`** (extend-only, the v1.3.0 entry is unchanged): the unbound surface also covers `supported_runtimes` and `max_data_classification`, so one decision authorizes any skill at any version, project set, runtime and data class - and `DEF-R1` is therefore a DECISION-RECORD defect, not a skill defect, so no fix confined to the skill contracts reaches it. Added four producer-verified findings. `DEF-R4`: the identical unbound shape exists at `temporal-ledgers.mjs:176` in `appendOutcome`, where both contracts REQUIRE project_id and work_package_id and nothing compares them, so an outcome receipt in one project can attach a forced reversion obligation to another project's decision - tracked separately because it is not skill-scoped. `DEF-M2`: a METHOD defect in the `DEF-M1` family - `npm run validate` cannot see a contract property change, because the pin at `validate-foundation.mjs:125` is a required-field SUBSET test with no property-count assertion and the exact-set pin added for `DEF-D1` covers one file only; adding `subject` to decision-record as optional AND as required both left validate at exit 0, and only the contract-validator suite returned exit 1. Any ADDITION to a governed contract passes validate unconditionally. `DEF-A12`: `docs/README.md:98` still labels the DEF-C3 SEC decision AWAITING SEC RULING while the record reads RULED with an operator signature - the index and the record disagree about whether a ruling exists. `DEF-A13`: this branch forks before `859468a`, which is on main and not an ancestor of HEAD (51 insertions absent from AGENTS.md), including the clauses that every skill is CANDIDATE / NOT EFFECTIVE at M0 and that making any skill EFFECTIVE is a separate operator/SEC-GOV act - **the SkillsHub programme has been reasoning about skill effectiveness on a branch missing the effective clause that governs it.** Corrected two of this register's own claims (SS N.3): `DEF-A5`'s "the tier split is a precondition of the first promotion" is FALSIFIED - the subject binding is, and the tier split without it leaves a service-written grant record with no authoritative source for its values; and `DEF-A8`'s premise is FALSE for the OD-SK-11 withheld-tally channel, which is live today with the signed registry gate in force (probed: 25 withheld = 3 DENY_UNGOVERNED_PACKAGE + 22 DENY_UNKNOWN_SKILL, query- and classification-invariant), because the hub indexes from disk and the MCP path builds a fresh hub per call. Corroborated `DEF-G1` (the one non-circular reading dies on `WP-SK-05`'s own scope line, which names resolver registration as its deliverable) and recorded that condition 2 of the signed DEF-C3 ruling is UNDISCHARGED at HEAD. `DEF-M2` is CLOSED at `249c798` (SS N.5) with a sabotage matrix whose "before" column was measured at `249c798~1` rather than assumed; every other finding in SS N is open. Closing it does not retroactively verify any claim this programme made on the strength of `validate` passing beforehand. |
 | `1.5.0-draft` | 2026-08-02 | Recorded SS N.6 - two corrections surfaced by an independent preparer checking this producer's claims before writing them into a record for signature. `DEF-R2` was left marked CRITICAL with evidence that stopped being true at `44285f8`, a remediation this producer performed and then did not record. `DEF-M3`: `risk-registry.mjs:36` asserts that doc-parity drift "fails CI" and there is no CI in this repository - no .github/, no other pipeline config; the five readDoc parity tests are real and fail under npm test when run, but no pipeline enforces them, and this producer relayed "five CI-enforced doc-parity tests" without checking. Both are DEF-D1 recurrences: a claim about a control, believed because it was written down. |
+| `1.6.0-draft` | 2026-08-02 | **SS O - closure.** The SkillsHub programme is stopped and the PRD is SUPERSEDED BY MOD-SKILL S1/S2. `main` carries skill-candidate-registry, skill-promotion-ledger and skill-revocation-ledger, and `contracts/skill-promotion.schema.json` binds a promotion to `skill_candidate_id`, `skill_version`, `bound_action` and `bound_object_version` with a producer/review/governance actor triple - DEF-R1 closed, and closed better than the fix this programme was preparing to propose. THE DEFECT IN THIS REGISTER: every "does not exist" finding it carries is scoped to a branch 296 commits behind `main`, and that scope is stated nowhere. DEF-A13 found 51 missing lines of AGENTS.md and the producer did not ask what else was missing - the answer was 406 files including the module this programme was designing. Six review rounds could not catch it because all six re-derived facts from the same stale tree: re-deriving a fact from a stale baseline reproduces the staleness with a verification stamp on it. Standing rule offered: a "does not exist" claim carries the ref it was verified against, or it is not a claim. Decision packets R1-001 and R1-SEQ-002 WITHDRAWN before any ruling. DEF-R2/R3 (fixed here at 44285f8) and DEF-M2 (fixed here at 249c798) are still OPEN on `main` and should be carried across. DEF-G1, DEF-R4, DEF-M3 and the doctrine question remain open. Everything else must be re-derived against `main` before being treated as current. |
