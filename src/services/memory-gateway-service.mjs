@@ -7,7 +7,10 @@
 // stores. It follows the MOD-GOV S3 "unwired facade" precedent
 // (src/control/policy-decision-point.mjs): nothing wires this module, every
 // collaborator is injected, and it holds only a per-instance, non-durable
-// replay anchor: no I/O, persistence, or ledger authority of its own.
+// replay anchor: no I/O, persistence, or ledger authority of its own. The
+// injected store must provide `withReadLease(selector, callback)`: while the
+// callback is pending, the selected row cannot be deleted, replaced, or
+// mutated. This gives the admission decision one explicit linearization point.
 //
 // Scope discipline (S1 charter):
 //   - The gateway NEVER touches an existing store's admission policy. It appends
@@ -120,8 +123,17 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       throw new MemoryGatewayConfigurationError("INVALID_LAYER", `Unknown memory layer configured: ${name}`);
     }
     const cfg = layerStores[name];
-    if (!isPlainObject(cfg) || !isPlainObject(cfg.store) || typeof cfg.store.append !== "function" || typeof cfg.store.read !== "function") {
-      throw new MemoryGatewayConfigurationError("INVALID_LAYER_STORE", `Layer ${name} requires a store with append() and read() functions`);
+    if (
+      !isPlainObject(cfg)
+      || !isPlainObject(cfg.store)
+      || typeof cfg.store.append !== "function"
+      || typeof cfg.store.read !== "function"
+      || typeof cfg.store.withReadLease !== "function"
+    ) {
+      throw new MemoryGatewayConfigurationError(
+        "INVALID_LAYER_STORE",
+        `Layer ${name} requires append(), read(), and withReadLease() functions`
+      );
     }
     const adm = cfg.admission;
     if (!isPlainObject(adm)) {
@@ -148,15 +160,19 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
   }
 
   // Snapshot of the layer configuration: later mutation of the caller's options
-  // object cannot alter admission behavior. The admission metadata is frozen;
-  // the injected store reference is deliberately left untouched (freezing it
-  // would freeze the store's own internal state — wrap-not-modify).
+  // object cannot alter admission behavior. Store methods are bound once into
+  // a frozen port facade; the underlying store object remains mutable so its
+  // internal state can advance without permitting method-replacement TOCTOU.
   const layers = Object.freeze(
     Object.fromEntries(
       Object.entries(layerStores).map(([name, cfg]) => [
         name,
         Object.freeze({
-          store: cfg.store,
+          store: Object.freeze({
+            append: cfg.store.append.bind(cfg.store),
+            read: cfg.store.read.bind(cfg.store),
+            withReadLease: cfg.store.withReadLease.bind(cfg.store)
+          }),
           admission: Object.freeze({
             classificationCeiling: cfg.admission.classificationCeiling,
             ttlMs: cfg.admission.ttlMs,
@@ -168,7 +184,8 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
   );
   // Per-instance replay metadata. It anchors trusted time/fingerprint only and
   // is never terminal authority: every replay is freshly audited and must
-  // verify the pre-existing durable row without append/upsert healing it.
+  // verify the pre-existing durable row without append/upsert healing it. The
+  // store-held read lease spans verification and terminal COMMITTED audit.
   const committedAdmissions = new Map();
 
   // Server-derived instant: { ms, iso } or null when the clock is unusable.
@@ -216,7 +233,8 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
   // Deny-by-default admission pipeline. Stage order is part of the contract
   // (tested): 1 shape -> 2 clock -> 3 layer -> 4 classification ceiling ->
   // 5 complete memoryRecord contract -> 6 admission SoD -> 7 audit-first ->
-  // 8 store append -> ADMITTED.
+  // 8 store append (first admission only) -> 9 leased durable verification +
+  // terminal audit -> ADMITTED.
   async function admit(request) {
     const shapeError = validateAdmitShape(request);
     if (shapeError) return deny(shapeError.code, shapeError.reason);
@@ -369,27 +387,36 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       }
     }
 
+    function snapshotStoredRecord(row, expectedFingerprint = null) {
+      try {
+        if (!isPlainObject(row)) return null;
+        if (
+          row.project_id !== admittedRecord.project_id
+          || row.layer !== admittedRecord.layer
+          || row.memory_record_id !== admittedRecord.memory_record_id
+          || row.version !== admittedRecord.version
+          || row.content_hash !== admittedRecord.content_hash
+        ) return null;
+        const snapshot = structuredClone(row);
+        validateContract("memoryRecord", snapshot);
+        const { admitted_at, content_hash, ...storedHashBody } = snapshot;
+        const { admitted_at: candidateInstant, content_hash: candidateHash, ...candidateHashBody } = admittedRecord;
+        if (canonicalFingerprint(storedHashBody) !== content_hash) return null;
+        if (canonicalFingerprint(storedHashBody) !== canonicalFingerprint(candidateHashBody)) return null;
+        if (expectedFingerprint !== null && canonicalFingerprint(snapshot) !== expectedFingerprint) return null;
+        return deepFreeze(snapshot);
+      } catch {
+        return null;
+      }
+    }
+
     async function readStoredRecord(expectedFingerprint = null) {
       try {
         const rows = await layer.store.read();
         if (!Array.isArray(rows)) return null;
         for (const row of rows) {
-          if (!isPlainObject(row)) continue;
-          if (
-            row.project_id !== admittedRecord.project_id
-            || row.layer !== admittedRecord.layer
-            || row.memory_record_id !== admittedRecord.memory_record_id
-            || row.version !== admittedRecord.version
-            || row.content_hash !== admittedRecord.content_hash
-          ) continue;
-          const snapshot = structuredClone(row);
-          validateContract("memoryRecord", snapshot);
-          const { admitted_at, content_hash, ...storedHashBody } = snapshot;
-          const { admitted_at: candidateInstant, content_hash: candidateHash, ...candidateHashBody } = admittedRecord;
-          if (canonicalFingerprint(storedHashBody) !== content_hash) continue;
-          if (canonicalFingerprint(storedHashBody) !== canonicalFingerprint(candidateHashBody)) continue;
-          if (expectedFingerprint !== null && canonicalFingerprint(snapshot) !== expectedFingerprint) continue;
-          return deepFreeze(snapshot);
+          const snapshot = snapshotStoredRecord(row, expectedFingerprint);
+          if (snapshot !== null) return snapshot;
         }
         return null;
       } catch {
@@ -410,22 +437,59 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       });
     }
 
-    if (priorAdmission !== undefined) {
-      const replayRecord = await readStoredRecord(priorAdmission.record_fingerprint);
-      if (replayRecord === null) return reconcile("STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
-      if (replayRecord.admitted_at !== priorAdmission.admitted_at) {
-        return reconcile("UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH");
-      }
-      if (!(await writeDisposition("COMMITTED", null, { admitted_at: replayRecord.admitted_at }))) {
-        return reconcile("COMMIT_AUDIT_UNAVAILABLE");
-      }
-      return deepFreeze({
-        decision: "ALLOW",
-        code: "ADMITTED",
-        admitted_at: replayRecord.admitted_at,
-        record: replayRecord,
-        append: priorAdmission.receipt
+    async function decideUnderReadLease(expectedFingerprint, appendReceipt) {
+      const selector = deepFreeze({
+        project_id: admittedRecord.project_id,
+        layer: admittedRecord.layer,
+        memory_record_id: admittedRecord.memory_record_id,
+        version: admittedRecord.version,
+        content_hash: admittedRecord.content_hash,
+        record_fingerprint: expectedFingerprint
       });
+      let callbackCalls = 0;
+      let completion;
+      try {
+        const returned = await layer.store.withReadLease(selector, async (row) => {
+          callbackCalls += 1;
+          if (callbackCalls !== 1) throw new Error("read lease callback invoked more than once");
+          const storedRecord = snapshotStoredRecord(row, expectedFingerprint);
+          if (storedRecord === null) {
+            completion = deepFreeze({ ok: false, reason: "STORE_LEASE_RECORD_MISSING_OR_CONFLICT" });
+            return completion;
+          }
+          if (storedRecord.admitted_at !== admittedRecord.admitted_at) {
+            completion = deepFreeze({ ok: false, reason: "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH" });
+            return completion;
+          }
+          if (!(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) {
+            completion = deepFreeze({ ok: false, reason: "COMMIT_AUDIT_UNAVAILABLE" });
+            return completion;
+          }
+          completion = deepFreeze({
+            ok: true,
+            result: {
+              decision: "ALLOW",
+              code: "ADMITTED",
+              admitted_at: storedRecord.admitted_at,
+              record: storedRecord,
+              append: appendReceipt
+            }
+          });
+          return completion;
+        });
+        if (callbackCalls !== 1 || returned !== completion) {
+          return { ok: false, reason: "STORE_READ_LEASE_PROTOCOL_INVALID" };
+        }
+        return completion;
+      } catch {
+        return { ok: false, reason: "STORE_READ_LEASE_UNAVAILABLE" };
+      }
+    }
+
+    if (priorAdmission !== undefined) {
+      const replayDecision = await decideUnderReadLease(priorAdmission.record_fingerprint, priorAdmission.receipt);
+      if (replayDecision.ok !== true) return reconcile(replayDecision.reason);
+      return replayDecision.result;
     }
 
     let rawReceipt;
@@ -461,20 +525,10 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
     } catch {
       return reconcile("STORE_RECEIPT_INVALID");
     }
-    const storedRecord = await readStoredRecord(receipt.record_fingerprint);
-    if (storedRecord === null) return reconcile("STORE_READBACK_MISSING_OR_CONFLICT");
-    if (storedRecord.admitted_at !== admittedRecord.admitted_at) {
-      return reconcile("UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH");
-    }
-    if (!(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) return reconcile("COMMIT_AUDIT_UNAVAILABLE");
-
-    const result = deepFreeze({
-      decision: "ALLOW",
-      code: "ADMITTED",
-      admitted_at: storedRecord.admitted_at,
-      record: storedRecord,
-      append: receipt
-    });
+    const firstDecision = await decideUnderReadLease(receipt.record_fingerprint, receipt);
+    if (firstDecision.ok !== true) return reconcile(firstDecision.reason);
+    const result = firstDecision.result;
+    const storedRecord = result.record;
     committedAdmissions.set(idempotencyKey, deepFreeze({
       admitted_at: storedRecord.admitted_at,
       content_hash: storedRecord.content_hash,

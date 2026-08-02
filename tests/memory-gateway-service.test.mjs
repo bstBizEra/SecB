@@ -2,7 +2,8 @@
 //
 // Scope: fail-closed construction; the deny-by-default admission pipeline
 // (shape -> clock -> layer -> classification ceiling -> admission SoD ->
-// audit-first -> store append); scoped retrieval with cross-project denial,
+// audit-first -> store append -> leased verification+terminal audit); scoped
+// retrieval with cross-project denial,
 // honest TTL-expiry filtering, and frozen data_untrusted outputs. Plus a GUARD
 // test proving temporal-ledgers.mjs and sod-rules.mjs are byte-identical to
 // main (wrap-not-modify: the gateway can only narrow, never widen).
@@ -26,10 +27,33 @@ const FIXED_NOW = new Date("2026-07-20T10:00:00Z");
 // Kernel SoD primitive, reused config-only (no wrapper behavior added).
 const kernelSodRules = { checkPairwiseDistinct };
 
+function withTestReadLease(store) {
+  const read = store.read.bind(store);
+  Object.defineProperty(store, "withReadLease", {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: async (selector, callback) => {
+      const rows = await read();
+      const row = Array.isArray(rows)
+        ? rows.find((candidate) =>
+          candidate?.project_id === selector.project_id
+          && candidate?.layer === selector.layer
+          && candidate?.memory_record_id === selector.memory_record_id
+          && candidate?.version === selector.version
+          && candidate?.content_hash === selector.content_hash
+        )
+        : undefined;
+      return callback(row ?? null);
+    }
+  });
+  return store;
+}
+
 function makeStore() {
   const rows = [];
   const receipts = new Map();
-  return {
+  return withTestReadLease({
     rows,
     appendCalls: 0,
     readCalls: 0,
@@ -54,7 +78,7 @@ function makeStore() {
       this.readCalls += 1;
       return rows.slice();
     }
-  };
+  });
 }
 
 function makeAuditWriter() {
@@ -120,6 +144,10 @@ test("construction is fail-closed on every missing or malformed collaborator", (
     hasCode("INVALID_LAYER_STORE")
   );
   assert.throws(
+    () => createMemoryGateway({ layerStores: { session: { store: { append() {}, read() { return []; } }, admission: { classificationCeiling: "PUBLIC", ttlMs: 1, sod: "producer-only" } } }, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {} }),
+    hasCode("INVALID_LAYER_STORE")
+  );
+  assert.throws(
     () => createMemoryGateway({ layerStores: { session: { store: makeStore(), admission: { classificationCeiling: "NOPE", ttlMs: 1, sod: "producer-only" } } }, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {} }),
     hasCode("INVALID_ADMISSION_CONFIG")
   );
@@ -145,6 +173,20 @@ test("the gateway surface is frozen and exposes only admit and retrieve", () => 
   const { gateway } = makeGateway();
   assert.ok(Object.isFrozen(gateway));
   assert.deepEqual(Object.keys(gateway).sort(), ["admit", "retrieve"]);
+});
+
+test("store port methods are snapshotted against post-construction replacement", async () => {
+  const store = makeStore();
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  store.append = () => { throw new Error("replacement append must not be used"); };
+  store.read = () => { throw new Error("replacement read must not be used"); };
+  store.withReadLease = async () => ({ forged: true });
+
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.decision, "ALLOW");
+  assert.equal(store.rows.length, 1);
 });
 
 // --- Admission happy path --------------------------------------------------
@@ -313,11 +355,11 @@ test("admit awaits an asynchronous audit and denies a rejected audit before stor
 test("audit-first: the audit entry is written strictly before the store append", async () => {
   const order = [];
   const store = makeStore();
-  const wrappedStore = {
+  const wrappedStore = withTestReadLease({
     rows: store.rows,
     append(record, options) { order.push("store"); return store.append(record, options); },
     read: store.read
-  };
+  });
   const layerStores = layerConfig({ session: { store: wrappedStore, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const gateway = createMemoryGateway({
     layerStores,
@@ -331,7 +373,7 @@ test("audit-first: the audit entry is written strictly before the store append",
 });
 
 test("admit marks reconciliation required when the store append throws", async () => {
-  const store = { append() { throw new Error("disk full"); }, read() { return []; } };
+  const store = withTestReadLease({ append() { throw new Error("disk full"); }, read() { return []; } });
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const ledgerWriter = makeAuditWriter();
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
@@ -342,7 +384,7 @@ test("admit marks reconciliation required when the store append throws", async (
 });
 
 test("admit awaits an asynchronous store and records reconciliation, never a false FAILED", async () => {
-  const store = { async append() { throw new Error("async disk full"); }, read() { return []; } };
+  const store = withTestReadLease({ async append() { throw new Error("async disk full"); }, read() { return []; } });
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const ledgerWriter = makeAuditWriter();
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
@@ -358,7 +400,7 @@ test("admit reports reconciliation honestly when its disposition cannot be audit
     entries.push(entry);
     if (entry.disposition === "RECONCILIATION_REQUIRED") throw new Error("reconciliation audit down");
   };
-  const store = { async append() { throw new Error("disk full"); }, read() { return []; } };
+  const store = withTestReadLease({ async append() { throw new Error("disk full"); }, read() { return []; } });
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
@@ -369,10 +411,10 @@ test("admit reports reconciliation honestly when its disposition cannot be audit
 
 test("mutate-then-reject is reconciliation-required and reports the observed record", async () => {
   const rows = [];
-  const store = {
+  const store = withTestReadLease({
     async append(record) { rows.push(record); throw new Error("ack lost"); },
     read() { return rows.slice(); }
-  };
+  });
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const ledgerWriter = makeAuditWriter();
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter });
@@ -388,7 +430,7 @@ test("a no-op or malformed store receipt can never produce ALLOW", async () => {
     { append() {}, read() { return []; } },
     { append() { return { status: "COMMITTED" }; }, read() { return []; } },
     { append(record, { idempotency_key }) { return { status: "COMMITTED", idempotency_key, memory_record_id: record.memory_record_id, version: record.version, content_hash: record.content_hash, rogue: true }; }, read() { return []; } }
-  ];
+  ].map(withTestReadLease);
   for (const store of stores) {
     const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
     const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
@@ -438,7 +480,7 @@ test("cached replay metadata cannot authorize a record deleted after first commi
   const replay = await gateway.admit(request);
 
   assert.equal(replay.decision, "RECONCILIATION_REQUIRED");
-  assert.equal(replay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+  assert.equal(replay.reason, "STORE_LEASE_RECORD_MISSING_OR_CONFLICT");
   assert.equal(replay.record_observed, false);
   assert.equal(store.appendCalls, 1);
   assert.ok(store.readCalls >= 3, "failed verification and reconciliation both inspect durable state");
@@ -455,7 +497,7 @@ test("cached replay metadata cannot authorize a record tampered after first comm
   const replay = await gateway.admit(request);
 
   assert.equal(replay.decision, "RECONCILIATION_REQUIRED");
-  assert.equal(replay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+  assert.equal(replay.reason, "STORE_LEASE_RECORD_MISSING_OR_CONFLICT");
   assert.equal(store.appendCalls, 1);
   assert.notEqual(replay.decision, "ALLOW");
 });
@@ -463,7 +505,7 @@ test("cached replay metadata cannot authorize a record tampered after first comm
 test("upsert-style store cannot heal deleted or tampered state during replay", async () => {
   const rows = [];
   let appendCalls = 0;
-  const store = {
+  const store = withTestReadLease({
     append(record, { idempotency_key }) {
       appendCalls += 1;
       rows.splice(0, rows.length, record);
@@ -478,7 +520,7 @@ test("upsert-style store cannot heal deleted or tampered state during replay", a
       };
     },
     read() { return rows.slice(); }
-  };
+  });
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
 
@@ -487,7 +529,7 @@ test("upsert-style store cannot heal deleted or tampered state during replay", a
   rows.splice(0);
   const deletedReplay = await deletionGateway.admit(request);
   assert.equal(deletedReplay.decision, "RECONCILIATION_REQUIRED");
-  assert.equal(deletedReplay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+  assert.equal(deletedReplay.reason, "STORE_LEASE_RECORD_MISSING_OR_CONFLICT");
   assert.equal(appendCalls, 1, "replay never gave the upsert store a chance to recreate the row");
   assert.equal(rows.length, 0);
 
@@ -496,9 +538,129 @@ test("upsert-style store cannot heal deleted or tampered state during replay", a
   rows[0] = { ...rows[0], statement: "tampered before replay" };
   const tamperedReplay = await tamperGateway.admit(request);
   assert.equal(tamperedReplay.decision, "RECONCILIATION_REQUIRED");
-  assert.equal(tamperedReplay.reason, "STORE_REPLAY_PRESTATE_MISSING_OR_CONFLICT");
+  assert.equal(tamperedReplay.reason, "STORE_LEASE_RECORD_MISSING_OR_CONFLICT");
   assert.equal(appendCalls, 2, "only the second gateway's first admission appended");
   assert.equal(rows[0].statement, "tampered before replay", "replay did not overwrite the evidence of tampering");
+});
+
+test("read lease blocks concurrent delete and tamper through terminal audit", async () => {
+  const rows = [];
+  const receipts = new Map();
+  let leaseHeld = false;
+  let blockedDeletes = 0;
+  let blockedTampers = 0;
+  const store = {
+    append(record, { idempotency_key }) {
+      const prior = receipts.get(idempotency_key);
+      if (prior) return prior;
+      rows.push(record);
+      const receipt = {
+        status: "COMMITTED",
+        idempotency_key,
+        memory_record_id: record.memory_record_id,
+        version: record.version,
+        content_hash: record.content_hash,
+        record_fingerprint: canonicalFingerprint(record),
+        sequence: rows.length
+      };
+      receipts.set(idempotency_key, receipt);
+      return receipt;
+    },
+    read() { return rows.slice(); },
+    async withReadLease(selector, callback) {
+      assert.equal(leaseHeld, false, "test store permits only one lease owner");
+      assert.ok(Object.isFrozen(selector));
+      leaseHeld = true;
+      try {
+        const row = rows.find((candidate) =>
+          candidate.project_id === selector.project_id
+          && candidate.layer === selector.layer
+          && candidate.memory_record_id === selector.memory_record_id
+          && candidate.version === selector.version
+          && candidate.content_hash === selector.content_hash
+        );
+        return await callback(row ?? null);
+      } finally {
+        leaseHeld = false;
+      }
+    },
+    tryDelete() {
+      if (leaseHeld) { blockedDeletes += 1; return false; }
+      rows.splice(0);
+      return true;
+    },
+    tryTamper() {
+      if (leaseHeld) { blockedTampers += 1; return false; }
+      if (rows[0]) rows[0] = { ...rows[0], statement: "concurrent tamper" };
+      return true;
+    }
+  };
+  const ledgerWriter = makeAuditWriter();
+  const baseWriter = ledgerWriter.bind(null);
+  const racingWriter = async (entry) => {
+    baseWriter(entry);
+    if (entry.disposition === "COMMITTED") {
+      assert.equal(store.tryDelete(), false, "delete must be denied while terminal audit is inside the lease");
+      assert.equal(store.tryTamper(), false, "tamper must be denied while terminal audit is inside the lease");
+      await Promise.resolve();
+      assert.equal(leaseHeld, true, "lease remains held across an asynchronous audit boundary");
+    }
+  };
+  racingWriter.entries = ledgerWriter.entries;
+  const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: racingWriter });
+  const request = { layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } };
+
+  const first = await gateway.admit(request);
+  const replay = await gateway.admit(request);
+
+  assert.equal(first.decision, "ALLOW");
+  assert.equal(replay.decision, "ALLOW");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].statement, "user prefers dark mode");
+  assert.equal(blockedDeletes, 2);
+  assert.equal(blockedTampers, 2);
+});
+
+test("read-lease failure or forged callback handoff can never produce ALLOW", async () => {
+  const cases = [
+    {
+      reason: "STORE_READ_LEASE_UNAVAILABLE",
+      withReadLease: async () => { throw new Error("lease backend down"); }
+    },
+    {
+      reason: "STORE_READ_LEASE_PROTOCOL_INVALID",
+      withReadLease: async () => undefined
+    },
+    {
+      reason: "STORE_READ_LEASE_PROTOCOL_INVALID",
+      withReadLease: async (selector, callback, rows) => ({ ...(await callback(rows[0])) })
+    },
+    {
+      reason: "STORE_READ_LEASE_UNAVAILABLE",
+      withReadLease: async (selector, callback, rows) => {
+        await callback(rows[0]);
+        throw new Error("lease release crashed");
+      }
+    },
+    {
+      reason: "STORE_READ_LEASE_UNAVAILABLE",
+      withReadLease: async (selector, callback, rows) => {
+        const first = await callback(rows[0]);
+        await callback(rows[0]);
+        return first;
+      }
+    }
+  ];
+  for (const testCase of cases) {
+    const base = makeStore();
+    base.withReadLease = async (selector, callback) => testCase.withReadLease(selector, callback, base.rows);
+    const layerStores = layerConfig({ session: { store: base, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
+    const result = await createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() })
+      .admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+    assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+    assert.equal(result.reason, testCase.reason);
+  }
 });
 
 test("retry after restart without a durable replay anchor requires reconciliation", async () => {
@@ -563,7 +725,7 @@ test("same identity and version with different valid content is an idempotency c
 
 test("tampered full-record read-back cannot produce ALLOW even with a matching receipt tuple", async () => {
   const rows = [];
-  const store = {
+  const store = withTestReadLease({
     append(record, { idempotency_key }) {
       const tampered = structuredClone(record);
       tampered.statement = "TAMPERED";
@@ -579,7 +741,7 @@ test("tampered full-record read-back cannot produce ALLOW even with a matching r
       };
     },
     read() { return rows.slice(); }
-  };
+  });
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
@@ -589,7 +751,7 @@ test("tampered full-record read-back cannot produce ALLOW even with a matching r
 
 test("store cannot substitute trusted admission time even with a recomputed fingerprint", async () => {
   const rows = [];
-  const store = {
+  const store = withTestReadLease({
     append(record, { idempotency_key }) {
       const tampered = { ...structuredClone(record), admitted_at: "2099-01-01T00:00:00.000Z" };
       rows.push(tampered);
@@ -604,7 +766,7 @@ test("store cannot substitute trusted admission time even with a recomputed fing
       };
     },
     read() { return rows.slice(); }
-  };
+  });
   const layerStores = layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
 
@@ -618,7 +780,7 @@ test("store cannot substitute trusted admission time even with a recomputed fing
 test("store receipt fields are snapshotted once and hostile receipts are contained", async () => {
   const store = makeStore();
   let sequenceReads = 0;
-  const wrappedStore = {
+  const wrappedStore = withTestReadLease({
     rows: store.rows,
     append(record, options) {
       const receipt = store.append(record, options);
@@ -628,7 +790,7 @@ test("store receipt fields are snapshotted once and hostile receipts are contain
       };
     },
     read: store.read
-  };
+  });
   const layerStores = layerConfig({ session: { store: wrappedStore, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
   const allowed = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
@@ -636,14 +798,14 @@ test("store receipt fields are snapshotted once and hostile receipts are contain
   assert.equal(allowed.append.sequence, 1);
   assert.equal(sequenceReads, 1);
 
-  const throwingStore = {
+  const throwingStore = withTestReadLease({
     append(record, { idempotency_key }) {
       return new Proxy({ status: "COMMITTED", idempotency_key, memory_record_id: record.memory_record_id, version: record.version, content_hash: record.content_hash, record_fingerprint: canonicalFingerprint(record) }, {
         ownKeys() { throw new Error("hostile receipt"); }
       });
     },
     read() { return []; }
-  };
+  });
   const hostileLayers = layerConfig({ session: { store: throwingStore, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } });
   const hostileGateway = createMemoryGateway({ layerStores: hostileLayers, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
   const contained = await hostileGateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
