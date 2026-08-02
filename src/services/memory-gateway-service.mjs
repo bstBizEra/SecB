@@ -68,6 +68,7 @@ const RECORD_KEYS = Object.freeze([
 const REQUIRED_RECORD_KEYS = Object.freeze(RECORD_KEYS.filter((key) => key !== "supersedes"));
 const STORE_RECEIPT_KEYS = Object.freeze(["status", "idempotency_key", "memory_record_id", "version", "content_hash", "record_fingerprint", "created", "sequence"]);
 const REQUIRED_STORE_RECEIPT_KEYS = Object.freeze(STORE_RECEIPT_KEYS.filter((key) => key !== "sequence"));
+const REPLAY_ANCHOR_KEYS = Object.freeze(["status", "idempotency_key", "project_id", "layer", "memory_record_id", "version", "content_hash", "admitted_at"]);
 const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
 const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
@@ -113,7 +114,7 @@ function classificationRank(value) {
   return CLASSIFICATION_ORDER.indexOf(value);
 }
 
-export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter } = {}) {
+export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, replayResolver } = {}) {
   // --- Fail-closed construction ------------------------------------------
   let layerNames;
   try {
@@ -206,6 +207,9 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
   }
   if (typeof ledgerWriter !== "function") {
     throw new MemoryGatewayConfigurationError("INVALID_LEDGER_WRITER", "createMemoryGateway requires a ledgerWriter function (audit-first admission)");
+  }
+  if (replayResolver !== undefined && typeof replayResolver !== "function") {
+    throw new MemoryGatewayConfigurationError("INVALID_REPLAY_RESOLVER", "replayResolver must be a function when durable replay is enabled");
   }
 
   // Snapshot of the layer configuration: later mutation of the caller's options
@@ -481,6 +485,43 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       });
       let callbackCalls = 0;
       let completion;
+      let replayAnchor = null;
+      if (appendReceipt.created === false) {
+        if (typeof replayResolver !== "function") {
+          return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
+        }
+        try {
+          const rawAnchor = await replayResolver({
+            idempotency_key: idempotencyKey,
+            project_id: admittedRecord.project_id,
+            layer: admittedRecord.layer,
+            memory_record_id: admittedRecord.memory_record_id,
+            version: admittedRecord.version,
+            content_hash: admittedRecord.content_hash
+          });
+          if (!isPlainObject(rawAnchor) || Reflect.ownKeys(rawAnchor).some((key) => typeof key !== "string" || !REPLAY_ANCHOR_KEYS.includes(key))) {
+            return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
+          }
+          const missing = REPLAY_ANCHOR_KEYS.filter((key) => !Object.prototype.hasOwnProperty.call(rawAnchor, key));
+          if (missing.length > 0) return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
+          replayAnchor = Object.fromEntries(REPLAY_ANCHOR_KEYS.map((key) => [key, rawAnchor[key]]));
+          const admittedMs = Date.parse(replayAnchor.admitted_at);
+          if (
+            replayAnchor.status !== "COMMITTED"
+            || replayAnchor.idempotency_key !== idempotencyKey
+            || replayAnchor.project_id !== admittedRecord.project_id
+            || replayAnchor.layer !== admittedRecord.layer
+            || replayAnchor.memory_record_id !== admittedRecord.memory_record_id
+            || replayAnchor.version !== admittedRecord.version
+            || replayAnchor.content_hash !== admittedRecord.content_hash
+            || !Number.isFinite(admittedMs)
+            || new Date(admittedMs).toISOString() !== replayAnchor.admitted_at
+          ) return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
+          replayAnchor = deepFreeze(replayAnchor);
+        } catch {
+          return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
+        }
+      }
       try {
         const returned = await layer.store.withReadLease(selector, async (row) => {
           callbackCalls += 1;
@@ -490,7 +531,10 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
             completion = deepFreeze({ ok: false, reason: "STORE_LEASE_RECORD_MISSING_OR_CONFLICT" });
             return completion;
           }
-          if (storedRecord.admitted_at !== admittedRecord.admitted_at && appendReceipt.created !== false) {
+          if (
+            (appendReceipt.created === false && storedRecord.admitted_at !== replayAnchor.admitted_at)
+            || (appendReceipt.created !== false && storedRecord.admitted_at !== admittedRecord.admitted_at)
+          ) {
             completion = deepFreeze({ ok: false, reason: "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH" });
             return completion;
           }

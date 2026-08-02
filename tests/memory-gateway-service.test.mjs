@@ -168,6 +168,10 @@ test("construction is fail-closed on every missing or malformed collaborator", (
     () => createMemoryGateway({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: null }),
     hasCode("INVALID_LEDGER_WRITER")
   );
+  assert.throws(
+    () => createMemoryGateway({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {}, replayResolver: {} }),
+    hasCode("INVALID_REPLAY_RESOLVER")
+  );
 });
 
 test("the gateway surface is frozen and exposes only admit and retrieve", () => {
@@ -939,6 +943,38 @@ test("store cannot substitute trusted admission time even with a recomputed fing
   assert.equal(result.decision, "RECONCILIATION_REQUIRED");
   assert.equal(result.reason, "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH");
   assert.notEqual(result.decision, "ALLOW");
+});
+
+test("created false cannot waive trusted time without an independent committed replay anchor", async () => {
+  const rows = [];
+  const store = withTestReadLease({
+    append(record, { idempotency_key }) {
+      const substituted = { ...structuredClone(record), admitted_at: "2099-01-01T00:00:00.000Z" };
+      rows.push(substituted);
+      return {
+        status: "COMMITTED",
+        idempotency_key,
+        memory_record_id: record.memory_record_id,
+        version: record.version,
+        content_hash: record.content_hash,
+        record_fingerprint: canonicalFingerprint(substituted),
+        created: false,
+        sequence: 1
+      };
+    },
+    read() { return rows.slice(); }
+  });
+  const gateway = createMemoryGateway({
+    layerStores: layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } }),
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter()
+  });
+
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(result.reason, "DURABLE_REPLAY_UNVERIFIED");
 });
 
 test("store receipt fields are snapshotted once and hostile receipts are contained", async () => {
