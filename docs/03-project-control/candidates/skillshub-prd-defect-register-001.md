@@ -1,7 +1,7 @@
 # SkillsHub PRD — Open Defect Register
 
 **Document ID:** `SECB-PRD-SKILLSHUB-DEFECTS-001`
-**Version:** `1.3.0-draft`
+**Version:** `1.4.0-draft`
 **Status:** `DRAFT / NOT EFFECTIVE / OPEN`
 **Applies to:** `SECB-PRD-SKILLSHUB-001` v0.4.0-draft
 **Producer:** Claude Code (worker agent) — the same producer as the document these defects are in
@@ -340,6 +340,121 @@ and larger piece of work than "build a runner".
 would gamble the work on an unmade decision, which is the mistake already made
 once with the tier split.
 
+## N. Round 5 — findings verified at `dcbabc4`
+
+Re-derived by this producer at `dcbabc4` unless the evidence column says
+otherwise. **Nothing in this section is closed, mitigated or resolved except
+`DEF-M2`, closed at `249c798` and recorded with its sabotage matrix in §N.5.**
+Where a
+claim rests on reading code rather than on running it, the evidence column says
+so, per the `DEF-M1` standing rule.
+
+### N.1 Amendment to `DEF-R1` — the unbound surface, and the same shape outside skills
+
+`DEF-R1` as recorded at v1.3.0 stands unchanged. Three things it did not say.
+
+**(a) The unbound surface is wider than skill identity and project scope.**
+`src/registry/skill-resolver.mjs` reads `project_scopes` (`:207`),
+`supported_runtimes` (`:210`) and `max_data_classification` (`:213`) from the
+registered manifest. `contracts/decision-record.schema.json` carries no property
+naming any of them — its complete property set is `decision_id`, `version`,
+`project_id`, `work_package_id`, `session_id`, `actor_id`, `decision_type`,
+`outcome`, `rationale`, `authority_ref`, `evidence_refs`, `decided_at`,
+`valid_from`, `valid_until`, `reverts`. A promotion decision therefore
+authorizes **any skill, at any version, across any project set, on any runtime,
+at any data class.** `DEF-R1`'s probe exercised the identity, version and
+project axes; the runtime and data-class axes are read from the same unbound
+manifest by two of the same three lines.
+
+**(b) `DEF-R1` is therefore a decision-record defect, not a skill defect.** The
+missing binding is on the authorizing record, not on the authorized object. Any
+fix confined to the skill contracts leaves the decision unable to name what it
+authorizes. This is the same conclusion `DEF-R1` reached about `AC-VS-01` —
+recorded here as a property of the defect rather than as a correction to one
+work package.
+
+**(c) The identical shape exists outside the skills path** — see `DEF-R4` below.
+It is tracked separately because it is not skill-scoped, and fixing the skill
+contracts alone leaves it open.
+
+### N.2 New findings — producer-verified
+
+| ID | Finding | Evidence | Status |
+|---|---|---|---|
+| `DEF-R4` | **`OutcomeLedger.appendOutcome` binds a decision by existence and id-echo only.** `src/ledger/temporal-ledgers.mjs:176` compares `decisionId !== outcome.decision_ref` — the ledger's answer against the caller's own claim, which is the `DEF-R1` shape one subsystem over. `contracts/outcome-receipt.schema.json:7` and `contracts/decision-record.schema.json:7` **both require** `project_id` and `work_package_id`; a repository grep for any comparison of those fields between the two returns nothing — the only `project_id` reference in the ledger module is `temporal-ledgers.mjs:43`, `projectId: payload.project_id`, inside entry construction. Because `:179`–`:185` force `reversion_required === true` for `outcome_status: "INVALIDATED"`, an outcome receipt naming project A can attach a reversion obligation to a decision belonging to project B. The fields to check are present and required on both sides; nothing checks them. Latent in the same way as §L: `appendOutcome` has no non-test caller. Already carried as item 8 of `skillshub-def-r1-archi-decision-001.md` (`:124`), which is `PREPARED — AWAITING RULING`; it had no entry in this register | Code read at `dcbabc4` plus a repository grep. **Not probe-executed** — the cross-project injection is a structural consequence of the two verified reads, not a reproduced run | `PRODUCER-VERIFIED — CRITICAL` |
+| `DEF-M2` | **`npm run validate` cannot see a contract property change.** `tools/validate-foundation.mjs` pins `contracts/decision-record.schema.json` at `:125` to a nine-field identity list, and the check at `:146` is `mandatoryIdentityFields[file].filter((field) => !schema.required.includes(field))` — a **subset** test with no property-count and no exact-set assertion. The exact-set pin added for `DEF-D1` (`:159`–`:169`) covered two files at `dcbabc4`, `contracts/skill-package-descriptor.schema.json` and `contracts/skill-grant-record.schema.json` — leaving 26 of the 28 governed contracts on the subset pin alone. *(This corrects "exactly one file" as first drafted in this entry; verified against `249c798~1`.)* Sabotage-verified by the reviewer who reported it: adding a `subject` property to `decision-record.schema.json` as optional left `validate` at exit 0; making it `required` **also** left `validate` at exit 0; only `node --test tests/contract-validator.test.mjs` returned exit 1, and restoring the file returned exit 0. Stated plainly: **any addition to a governed contract passes `validate` unconditionally.** The subset pin still catches *removal* of a pinned identity field, so the blindness is one-directional. This is `DEF-M1`'s rule — a check that cannot fail is not evidence — applying to the validator this programme has leaned on throughout | Sabotage sequence run by the reporting reviewer, claimed by exit code. Mechanism independently verified here by reading `:125`, `:146` and `:159`–`:169` | `CLOSED at 249c798` — see §N.5 |
+| `DEF-A12` | **The documentation index and the record disagree about whether a ruling exists.** `docs/README.md:98` labels the DEF-C3 SEC decision `*(DRAFT / AWAITING SEC RULING)*`, while `skillshub-def-c3-sec-decision-001.md:4` reads `**Status:** RULED — Ruling B with conditions, 2026-08-01` and `:131` carries `Decided by: Operator (BizEra)`. A reader arriving through the index is told no ruling has been made; a reader arriving at the document is told one has, with three conditions attached | `docs/README.md:98` against `skillshub-def-c3-sec-decision-001.md:4` and `:131` | `PRODUCER-VERIFIED` |
+| `DEF-A13` | **This branch forks before the clause that governs skill effectiveness.** `859468a` (`[GOV] Register Skills Pack v0.1 in the root AGENTS.md skills registry`) is on `main` and is **not** an ancestor of `HEAD` (`git merge-base --is-ancestor 859468a HEAD` exits 1). `git diff --numstat HEAD main -- AGENTS.md` reports **51 insertions, 0 deletions**. The absent text is effective on `main` and directly governs skill effectiveness: *"every skill is **CANDIDATE / NOT EFFECTIVE**, mutation-class **M0**"*, and *"Making any skill EFFECTIVE (adoption/publication) is a separate operator/SEC-GOV act — committing the pack did not adopt it"*. Consequence: **the SkillsHub programme has been reasoning about skill promotion and effectiveness on a branch that does not contain the effectiveness clause governing it.** Every finding in this register about what promotion means was derived against an `AGENTS.md` missing that clause | `git merge-base --is-ancestor` exit code and `git diff --numstat` at `dcbabc4` | `PRODUCER-VERIFIED` |
+
+### N.3 Corrections to claims this register made
+
+Same purpose as §G.1: this register exists to stop unverified claims
+propagating, including its own.
+
+| ID | Correction |
+|---|---|
+| `DEF-A5` | **The sequencing claim is falsified.** `DEF-A5` closes with *"This makes the trust-tier separation a **precondition of the first promotion**, not a hygiene preference."* It is not. The two orderings are not symmetric. A **subject-bound decision** — a decision record that names what it authorizes — binds `DEF-R1`'s authorization against the **current** `contracts/skill-manifest.schema.json`, with no tier split in place; the resolver's three scope reads (`skill-resolver.mjs:207`, `:210`, `:213`) then have an authorizing source to be checked against. The tier split **without** subject binding does not do the reverse: `contracts/skill-grant-record.schema.json` requires `project_scopes`, `supported_runtimes` and `max_data_classification`, and binds them to a decision only through `approval_history[].decision_id` — a reference to a record whose property set (see §N.1(a)) cannot name a skill, a project scope, a runtime or a data class. A service-written grant record therefore still has **no authoritative source for its values**. The precondition of the first promotion is the subject binding, not the tier split. *(The falsifying direction is verified by schema and resolver reading; that a subject-bound decision would be sufficient is reasoning from those reads, not a probe.)* |
+| `DEF-A8` | **The premise is false for the `OD-SK-11` withheld-tally channel.** `DEF-A8` states that populating the resolver registry *"is therefore the trigger event that makes `DEF-C3` and the `OD-SK-11` channels live, and should be a gated action"*. For the withheld tally it is not. `src/skills/skills-hub-service.mjs:329` indexes from disk (`indexLocalSkills(skillsDir = ".agents/skills")`), independently of the resolver registry, and `src/mcp/secb-mcp-server.mjs:549` constructs a **fresh disk-scanning hub on every call** (`s.skillsHub ?? new SecBSkillsHub({ services: s })`) because `services.skillsHub` is never assigned by the wiring — a repository grep finds it set in exactly one place, `tests/mcp-server.test.mjs:217`. Probed in-process against a production-shaped resolver (`new SkillResolver({ decisionLookup: () => null })`, as at `tools/secb-mcp-server-wiring.mjs:210`): **25 withheld = 3 `DENY_UNGOVERNED_PACKAGE` + 22 `DENY_UNKNOWN_SKILL`**, identical across 4 query shapes × 4 data classifications, exit 0. **The channel is live today, with the signed registry gate in force. The gate protects it not at all.** `DEF-A8`'s core claim — that the hub can never return ALLOW — is unaffected; what is corrected is the inference that the gate therefore holds the disclosure channels shut |
+
+### N.4 Corroboration of open findings
+
+| ID | Corroboration |
+|---|---|
+| `DEF-G1` | **Circularity confirmed, and the one non-circular reading dies on the work package's own scope line.** The reading that would save the gate is that "populate the resolver registry" is something other than `WP-SK-05`'s deliverable. `secb-skillshub-prd-001.md:868` names `WP-SK-05` as *"Promotion service — evidence binding, separation of duties, decision minting, **resolver registration**"*, with exit criterion *"One skill reaches `PUBLISHED`"*; `:869` makes `WP-SK-06` (Phase 5 distribution hardening, the gate's release condition) depend on `WP-SK-05`. Resolver registration is named as the deliverable of the work package the gate's release condition depends on. `DEF-G1` stands as recorded |
+| `DEF-C3` | **Condition 2 of the signed ruling is undischarged at `dcbabc4`.** The ruling attaches three conditions (`skillshub-def-c3-sec-decision-001.md:141`–`:143`), the second being *"The call-site defect is corrected regardless of this ruling: the caller's clearance stops being passed as a requested data class."* At `HEAD`, `dataClassification: ceiling` remains at `src/mcp/secb-mcp-server.mjs:517` and `:553`. **The correction belongs to a file this producer does not own and is recorded here, not scheduled.** *(Note a line-number discrepancy in the report received: `:518` was cited; `grep -n` at `dcbabc4` returns `:517` and `:553`.)* |
+
+### N.5 `DEF-M2` — closed at `249c798`
+
+The one finding in §N that is closed. It is recorded here rather than left
+implicit because the rest of §N is open and the distinction has to be legible.
+
+`tools/validate-foundation.mjs` now carries exact-set pins on **both** the
+required set and the property-name set of all 28 governed contracts, plus two
+coverage assertions holding each map's key set equal to the schema allowlist, so
+a newly admitted contract cannot arrive unpinned. The subset pin is retained,
+not replaced: it names the identity fields a contract may never lose, which is a
+narrower and more legible claim than the exact sets.
+
+Both dimensions are pinned because neither implies the other. Every governed
+contract is `additionalProperties: false`, so its property-name set **is** its
+wire surface, and a new optional property admits a payload the contract
+previously rejected. Promoting an existing optional to required changes
+`required` and leaves `properties` identical; demoting required to optional is
+the same move in reverse, and is the one that silently widens what the system
+accepts.
+
+Sabotage matrix, re-run by the producer independently of the implementer and
+claimed by exit code per `DEF-M1`:
+
+| Mutation | `validate` before `249c798` | after |
+|---|---|---|
+| baseline (and full test suite) | 0 | 0 |
+| `decision-record` gains an optional `subject` property | 0 | **1** |
+| `subject` promoted into `required` | 0 | **1** |
+| `goal` loses `provenance` from `required` | 0 | **1** |
+| `decision-record` loses `outcome` from `required` | 0 | **1** |
+| restore | 0 | 0, `contracts/` clean |
+
+The "before" column was measured at `249c798~1`, not assumed. Neither
+`goal.provenance` nor `decision-record.outcome` appears in the subset pin, which
+is why their removal passed — consistent with §N.2's finding that the subset pin
+catches removal only of a field it names.
+
+A control copy with the new assertions removed passes every mutation the fixed
+validator rejects, so the new assertions are demonstrably the thing doing the
+work rather than something else in the file happening to catch it.
+
+**Standing consequence for concurrent work.** Editing any governed contract now
+fails `validate` until the one-line allowlist entry here is updated
+deliberately. That cost is the control: a contract change that does not touch
+this file is a contract change nobody pinned.
+
+**What this does not close.** `DEF-M2` was a defect in the instrument, not in
+what the instrument was pointed at. Every claim made in this programme on the
+strength of `validate` passing before `249c798` was made with a check that could
+not see contract additions, and those claims are not retroactively verified by
+this fix.
+
 ## F. Provenance
 
 Findings originate from three independent reviews dispatched by the producer
@@ -355,3 +470,4 @@ anything.
 | `1.1.0-draft` | 2026-08-01 | Adjudicated all 28 `REPORTED` findings at `a3e4968`: 20 CONFIRMED, 6 PARTIAL, 2 REFUTED, 0 unverifiable (§G). Recorded 7 corrections to findings this register carried, including that **it contradicted itself** on `DEF-B21` and that this producer **relayed unreproducible performance magnitudes without qualification** (`DEF-C10`). Added 9 producer-verified findings (§H), of which `DEF-A3` and `DEF-A4` are consequences of this producer's own `301997f` commit that it did not check at the time. Added SEC-preparation analysis (§I). The single most consequential new fact is `DEF-A8`: the production hub **can never return ALLOW**, so populating the resolver registry is the trigger event for the live-disclosure findings and should be gated |
 | `1.2.0-draft` | 2026-08-02 | Recorded round 4 (SS J) - nine defects in the WP-SK-01 delivery itself, all producer-verified before acceptance and all fixed in `7eb7941` except `DEF-D8` and `DEF-D9`, which belong to ARCHI and REV/SEC. The most serious is `DEF-D1`: a commit message and a code comment asserted a control that did not exist, about the durability of the split ADR-0013 exists to create. Added SS K, a METHOD defect (`DEF-M1`): the producer reported "validate: 0 FAIL" throughout this programme from a grep against a status the validator never emits - the check could not fail, so every such claim was vacuously true. Standing rule adopted: validation is claimed by exit code, and a passing test proves nothing until shown to fail when it should. |
 | `1.3.0-draft` | 2026-08-02 | Recorded SS L - four live authorization defects in the promotion chain, all producer-verified by probe. `DEF-R1` is the most consequential finding of this programme: a governance decision is a BEARER TOKEN, because decision-record.schema.json cannot name a skill, so one decision authorizes any skill at any scope - reproduced by registering an unrelated skill and a self-widened RESTRICTED grant off a single decision. It falsifies this producer's own `AC-VS-01` reasoning: the hole is not in who writes the manifest but in the decision not binding to what it authorizes. `DEF-R2`: a grant can never expire or be revoked, because decisionLookup is consulted only at registration - a live violation of governance-baseline SS 3. `DEF-R3`: evidence_refs is length-checked only. `DEF-G1`: the registry gate this producer drafted and the operator signed is CIRCULAR - it blocks the act whose completion is its own release condition. Added SS M - the evaluation corpus has 220 expectation instances drawn from 10 distinct strings, zero skill-specific expectation text, 30% undecidable by any means, and 0 of 22 negative cases able to fail, which `DEF-M1` disqualifies outright. Also recorded that this producer cited validate_pack.py repeatedly without running it; it exits 1 at HEAD. |
+| `1.4.0-draft` | 2026-08-02 | Recorded SS N at `dcbabc4`. **Amended `DEF-R1`** (extend-only, the v1.3.0 entry is unchanged): the unbound surface also covers `supported_runtimes` and `max_data_classification`, so one decision authorizes any skill at any version, project set, runtime and data class - and `DEF-R1` is therefore a DECISION-RECORD defect, not a skill defect, so no fix confined to the skill contracts reaches it. Added four producer-verified findings. `DEF-R4`: the identical unbound shape exists at `temporal-ledgers.mjs:176` in `appendOutcome`, where both contracts REQUIRE project_id and work_package_id and nothing compares them, so an outcome receipt in one project can attach a forced reversion obligation to another project's decision - tracked separately because it is not skill-scoped. `DEF-M2`: a METHOD defect in the `DEF-M1` family - `npm run validate` cannot see a contract property change, because the pin at `validate-foundation.mjs:125` is a required-field SUBSET test with no property-count assertion and the exact-set pin added for `DEF-D1` covers one file only; adding `subject` to decision-record as optional AND as required both left validate at exit 0, and only the contract-validator suite returned exit 1. Any ADDITION to a governed contract passes validate unconditionally. `DEF-A12`: `docs/README.md:98` still labels the DEF-C3 SEC decision AWAITING SEC RULING while the record reads RULED with an operator signature - the index and the record disagree about whether a ruling exists. `DEF-A13`: this branch forks before `859468a`, which is on main and not an ancestor of HEAD (51 insertions absent from AGENTS.md), including the clauses that every skill is CANDIDATE / NOT EFFECTIVE at M0 and that making any skill EFFECTIVE is a separate operator/SEC-GOV act - **the SkillsHub programme has been reasoning about skill effectiveness on a branch missing the effective clause that governs it.** Corrected two of this register's own claims (SS N.3): `DEF-A5`'s "the tier split is a precondition of the first promotion" is FALSIFIED - the subject binding is, and the tier split without it leaves a service-written grant record with no authoritative source for its values; and `DEF-A8`'s premise is FALSE for the OD-SK-11 withheld-tally channel, which is live today with the signed registry gate in force (probed: 25 withheld = 3 DENY_UNGOVERNED_PACKAGE + 22 DENY_UNKNOWN_SKILL, query- and classification-invariant), because the hub indexes from disk and the MCP path builds a fresh hub per call. Corroborated `DEF-G1` (the one non-circular reading dies on `WP-SK-05`'s own scope line, which names resolver registration as its deliverable) and recorded that condition 2 of the signed DEF-C3 ruling is UNDISCHARGED at HEAD. `DEF-M2` is CLOSED at `249c798` (SS N.5) with a sabotage matrix whose "before" column was measured at `249c798~1` rather than assumed; every other finding in SS N is open. Closing it does not retroactively verify any claim this programme made on the strength of `validate` passing beforehand. |
