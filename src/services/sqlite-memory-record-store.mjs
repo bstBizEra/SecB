@@ -11,6 +11,7 @@ const OUTBOX_EVENT_KEYS = Object.freeze([
   "memory_record_id", "version", "content_hash", "admitted_at", "actor_id", "classification"
 ]);
 const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
+const MAX_SCOPED_READ_LIMIT = 1_000;
 const CURRENT_SCHEMA_VERSION = 2;
 const OUTBOX_V1_COLUMNS = Object.freeze([
   "outbox_id", "idempotency_key", "event_fingerprint", "event_json",
@@ -60,6 +61,17 @@ const CREATE_OUTBOX_V2_SQL = `
     ),
     FOREIGN KEY (idempotency_key) REFERENCES memory_admission_receipts(idempotency_key) ON DELETE RESTRICT
   );
+`;
+
+const CREATE_OPERATIONAL_INDEXES_SQL = `
+  CREATE INDEX IF NOT EXISTS memory_records_scope_sequence_idx
+    ON memory_records(project_id, layer, sequence);
+  CREATE INDEX IF NOT EXISTS memory_outbox_delivery_status_idx
+    ON memory_audit_outbox(delivery_status);
+  CREATE INDEX IF NOT EXISTS memory_outbox_claim_expiry_idx
+    ON memory_audit_outbox(delivery_status, claim_expires_at);
+  CREATE UNIQUE INDEX IF NOT EXISTS memory_outbox_claim_token_idx
+    ON memory_audit_outbox(claim_token) WHERE claim_token IS NOT NULL;
 `;
 
 export class SqliteMemoryStoreError extends Error {
@@ -279,6 +291,14 @@ function validateAllOutboxRows(database) {
   for (const row of rows) decodeOutboxRow(row);
 }
 
+function ensureOperationalIndexes(database) {
+  try {
+    database.exec(CREATE_OPERATIONAL_INDEXES_SQL);
+  } catch (cause) {
+    throw new SqliteMemoryStoreError("SCHEMA_INDEX_FAILED", "SQLite memory operational indexes could not be established", { cause });
+  }
+}
+
 function initializeSchema(database) {
   const version = Number(database.prepare("PRAGMA user_version").get().user_version);
   if (!Number.isSafeInteger(version) || version < 0 || version > CURRENT_SCHEMA_VERSION) {
@@ -292,6 +312,7 @@ function initializeSchema(database) {
     if (version !== 0) throw new SqliteMemoryStoreError("SCHEMA_INTEGRITY_VIOLATION", "Versioned database is missing the memory schema");
     database.exec(`BEGIN IMMEDIATE; ${CREATE_CORE_SCHEMA_SQL} ${CREATE_OUTBOX_V2_SQL} PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}; COMMIT;`);
     validateV2OutboxDefinition(database);
+    ensureOperationalIndexes(database);
     return;
   }
   if (!hasRecords || !hasReceipts) {
@@ -304,6 +325,7 @@ function initializeSchema(database) {
     }
     database.exec(`BEGIN IMMEDIATE; ${CREATE_OUTBOX_V2_SQL} PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}; COMMIT;`);
     validateV2OutboxDefinition(database);
+    ensureOperationalIndexes(database);
     return;
   }
 
@@ -315,6 +337,7 @@ function initializeSchema(database) {
     validateV2OutboxDefinition(database);
     validateAllOutboxRows(database);
     if (version === 0) database.exec(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
+    ensureOperationalIndexes(database);
     return;
   }
   if (!sameColumns(columns, OUTBOX_V1_COLUMNS) || (version !== 0 && version !== 1)) {
@@ -350,6 +373,7 @@ function initializeSchema(database) {
   }
   validateAllOutboxRows(database);
   validateV2OutboxDefinition(database);
+  ensureOperationalIndexes(database);
 }
 
 export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_000 } = {}) {
@@ -423,6 +447,14 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
            content_hash, record_fingerprint, record_json
       FROM memory_records
      ORDER BY sequence
+  `);
+  const readScopedPage = database.prepare(`
+    SELECT sequence, project_id, layer, memory_record_id, record_version,
+           content_hash, record_fingerprint, record_json
+      FROM memory_records
+     WHERE project_id = ? AND layer = ? AND sequence > ?
+     ORDER BY sequence
+     LIMIT ?
   `);
   const selectOutboxById = database.prepare(`
     SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
@@ -676,6 +708,48 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
     }
   }
 
+  function readScoped(options = {}) {
+    assertOpen();
+    let projectId;
+    let layer;
+    let limit;
+    let cursor;
+    try {
+      if (!isPlainObject(options)) throw new Error("options is not a plain object");
+      const optionKeys = Reflect.ownKeys(options);
+      if (optionKeys.some((key) => typeof key !== "string" || !["project_id", "layer", "limit", "cursor"].includes(key))) {
+        throw new Error("unknown scoped read option");
+      }
+      projectId = options.project_id;
+      layer = options.layer;
+      limit = options.limit ?? 100;
+      cursor = options.cursor ?? null;
+    } catch (cause) {
+      throw new SqliteMemoryStoreError("INVALID_SCOPED_READ", "scoped read options could not be snapshotted safely", { cause });
+    }
+    if (
+      typeof projectId !== "string" || projectId.trim() === ""
+      || typeof layer !== "string" || layer.trim() === ""
+      || !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_SCOPED_READ_LIMIT
+      || (cursor !== null && (typeof cursor !== "string" || !/^[1-9]\d*$/.test(cursor) || !Number.isSafeInteger(Number(cursor))))
+    ) {
+      throw new SqliteMemoryStoreError("INVALID_SCOPED_READ", "project_id, layer, limit, or cursor is malformed");
+    }
+    try {
+      const rows = readScopedPage.all(projectId, layer, cursor === null ? 0 : Number(cursor), limit + 1);
+      const hasMore = rows.length > limit;
+      const pageRows = hasMore ? rows.slice(0, limit) : rows;
+      const records = pageRows.map(decodeStoredRow);
+      return Object.freeze({
+        records: Object.freeze(records),
+        next_cursor: hasMore ? String(pageRows.at(-1).sequence) : null
+      });
+    } catch (cause) {
+      if (cause instanceof SqliteMemoryStoreError) throw cause;
+      throw new SqliteMemoryStoreError("SCOPED_READ_FAILED", "scoped memory records could not be read", { cause });
+    }
+  }
+
   function readOutbox({ status = "PENDING", limit = 100 } = {}) {
     assertOpen();
     if (status !== "PENDING") {
@@ -685,7 +759,6 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
       throw new SqliteMemoryStoreError("INVALID_OUTBOX_QUERY", "outbox limit must be an integer from 1 through 1000");
     }
     try {
-      validateAllOutboxRows(database);
       return selectPendingOutbox.all(limit).map(decodeOutboxRow);
     } catch (cause) {
       if (cause instanceof SqliteMemoryStoreError) throw cause;
@@ -698,7 +771,6 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
       assertOpen();
       try {
         database.exec("BEGIN IMMEDIATE");
-        validateAllOutboxRows(database);
         requeueExpiredOutboxClaims.run(claimedAt);
         const pending = selectPendingOutbox.all(limit).map(decodeOutboxRow);
         const claimed = [];
@@ -726,6 +798,12 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
         throw new SqliteMemoryStoreError("OUTBOX_CLAIM_FAILED", "outbox delivery claims could not be acquired", { cause });
       }
     });
+  }
+
+  function verifyOutboxIntegrity() {
+    assertOpen();
+    validateAllOutboxRows(database);
+    return Object.freeze({ verified: true });
   }
 
   function settleOutboxClaim(claimed, deliveredAt = null) {
@@ -920,5 +998,5 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
     closed = true;
   }
 
-  return Object.freeze({ append, appendWithOutbox, read, readOutbox, dispatchOutbox, withReadLease, close });
+  return Object.freeze({ append, appendWithOutbox, read, readScoped, readOutbox, verifyOutboxIntegrity, dispatchOutbox, withReadLease, close });
 }

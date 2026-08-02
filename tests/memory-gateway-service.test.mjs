@@ -1187,6 +1187,86 @@ test("retrieve returns layer+project scoped records, frozen and marked data_untr
   assert.equal(result.records[0].record.statement, "fact one");
   assert.ok(Object.isFrozen(result.records[0]));
   assert.ok(Object.isFrozen(result));
+  assert.equal(result.next_cursor, null);
+});
+
+test("retrieve uses the bounded scoped-read port and carries an opaque cursor", () => {
+  const store = makeStore();
+  store.read = () => { throw new Error("unbounded read must not be called"); };
+  let scopedQuery;
+  store.readScoped = (query) => {
+    scopedQuery = structuredClone(query);
+    return {
+      records: [sessionRecord({ memory_record_id: "mem-page-1", statement: "page one" })].map((record) => ({
+        ...record,
+        layer: "session",
+        admitted_at: FIXED_NOW.toISOString()
+      })),
+      next_cursor: "41"
+    };
+  };
+  const gateway = createMemoryGateway({
+    layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } },
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter()
+  });
+
+  const result = gateway.retrieve({
+    layer: "session",
+    project_id: "proj-1",
+    scope_project_id: "proj-1",
+    limit: 25,
+    cursor: "17"
+  });
+  assert.equal(result.decision, "ALLOW");
+  assert.equal(result.records.length, 1);
+  assert.equal(result.next_cursor, "41");
+  assert.deepEqual(scopedQuery, { project_id: "proj-1", layer: "session", limit: 25, cursor: "17" });
+});
+
+test("retrieve defaults to 100, caps at 1000, and denies malformed cursors", () => {
+  const store = makeStore();
+  const limits = [];
+  store.readScoped = (query) => {
+    limits.push(query.limit);
+    return { records: [], next_cursor: null };
+  };
+  const gateway = createMemoryGateway({
+    layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } },
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter()
+  });
+  const base = { layer: "session", project_id: "proj-1", scope_project_id: "proj-1" };
+  assert.equal(gateway.retrieve(base).decision, "ALLOW");
+  assert.equal(gateway.retrieve({ ...base, limit: 1000 }).decision, "ALLOW");
+  assert.deepEqual(limits, [100, 1000]);
+  for (const query of [
+    { ...base, limit: 0 },
+    { ...base, limit: 1001 },
+    { ...base, cursor: "0" },
+    { ...base, cursor: "not-a-cursor" }
+  ]) assert.equal(gateway.retrieve(query).code, "DENY_MALFORMED_REQUEST");
+});
+
+test("retrieve contains malformed or hostile scoped pages as store-unavailable denial", () => {
+  const base = { layer: "session", project_id: "proj-1", scope_project_id: "proj-1" };
+  for (const readScoped of [
+    () => ({ records: [], next_cursor: "0" }),
+    () => ({ records: new Array(101).fill({}), next_cursor: null }),
+    () => ({ records: [{ get project_id() { throw new Error("hostile row"); } }], next_cursor: null })
+  ]) {
+    const store = makeStore();
+    store.readScoped = readScoped;
+    const gateway = createMemoryGateway({
+      layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } },
+      sodRules: kernelSodRules,
+      now: () => FIXED_NOW,
+      ledgerWriter: makeAuditWriter()
+    });
+    assert.equal(gateway.retrieve(base).code, "DENY_STORE_UNAVAILABLE");
+  }
 });
 
 test("retrieve denies DENY_CROSS_PROJECT when the requested project differs from the caller scope", async () => {

@@ -277,6 +277,47 @@ test("SQLite store atomically persists one idempotent identity across restart", 
   restarted.close();
 });
 
+test("scoped reads are bounded, project-and-layer isolated, and cursor paginated", async (t) => {
+  const databasePath = databasePathFor(t);
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  for (let index = 1; index <= 5; index += 1) {
+    const record = storedRecord({
+      memory_record_id: `mem-scoped-${index}`,
+      project_id: index === 3 ? "proj-other" : "proj-1",
+      statement: `scoped record ${index}`
+    });
+    await store.append(record, { idempotency_key: `scoped-${index}` });
+  }
+
+  const first = store.readScoped({ project_id: "proj-1", layer: "session", limit: 2 });
+  assert.deepEqual(first.records.map((record) => record.memory_record_id), ["mem-scoped-1", "mem-scoped-2"]);
+  assert.match(first.next_cursor, /^[1-9]\d*$/);
+  assert.ok(Object.isFrozen(first));
+  assert.ok(Object.isFrozen(first.records));
+
+  const second = store.readScoped({ project_id: "proj-1", layer: "session", limit: 2, cursor: first.next_cursor });
+  assert.deepEqual(second.records.map((record) => record.memory_record_id), ["mem-scoped-4", "mem-scoped-5"]);
+  assert.equal(second.next_cursor, null);
+  assert.throws(
+    () => store.readScoped({ project_id: "proj-1", layer: "session", limit: 1001 }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "INVALID_SCOPED_READ"
+  );
+  assert.throws(
+    () => store.readScoped({ project_id: "proj-1", layer: "session", cursor: "0" }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "INVALID_SCOPED_READ"
+  );
+  const raw = new DatabaseSync(databasePath);
+  const indexes = new Set(raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all().map((row) => row.name));
+  for (const name of [
+    "memory_records_scope_sequence_idx",
+    "memory_outbox_delivery_status_idx",
+    "memory_outbox_claim_expiry_idx",
+    "memory_outbox_claim_token_idx"
+  ]) assert.ok(indexes.has(name), `missing operational index ${name}`);
+  raw.close();
+  store.close();
+});
+
 test("atomic append-with-outbox commits the record, receipt, and terminal event together", async (t) => {
   const databasePath = databasePathFor(t);
   const record = storedRecord({ memory_record_id: "mem-outbox-1" });
@@ -479,7 +520,7 @@ test("outbox integrity verification rejects contradictory delivery state", async
   assert.throws(() => store.readOutbox(), (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION");
   raw.prepare("UPDATE memory_audit_outbox SET delivery_status = 'DELIVERED', delivery_attempts = 0, delivered_at = 'garbage'").run();
   assert.throws(
-    () => store.readOutbox(),
+    () => store.verifyOutboxIntegrity(),
     (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
   );
   await assert.rejects(
@@ -488,6 +529,37 @@ test("outbox integrity verification rejects contradictory delivery state", async
   );
   raw.close();
   store.close();
+});
+
+test("outbox hot dispatch validates claimed rows while explicit sweep detects unrelated corruption", async (t) => {
+  const databasePath = databasePathFor(t);
+  const firstRecord = storedRecord({ memory_record_id: "mem-outbox-sweep-1" });
+  const secondRecord = storedRecord({ memory_record_id: "mem-outbox-sweep-2" });
+  const firstEvent = outboxEntry(firstRecord, "admit-outbox-sweep-1");
+  const secondEvent = outboxEntry(secondRecord, "admit-outbox-sweep-2");
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.appendWithOutbox(firstRecord, { idempotency_key: firstEvent.idempotency_key, outbox_entry: firstEvent });
+  const firstDelivery = await store.dispatchOutbox(() => true, { limit: 1, timeoutMs: 100, claimTtlMs: 1_000, now: () => FIXED_NOW });
+  assert.equal(firstDelivery[0].delivery, "DELIVERED");
+  await store.appendWithOutbox(secondRecord, { idempotency_key: secondEvent.idempotency_key, outbox_entry: secondEvent });
+
+  const raw = new DatabaseSync(databasePath);
+  raw.prepare("UPDATE memory_audit_outbox SET event_json = ? WHERE outbox_id = ?")
+    .run(JSON.stringify({ ...firstEvent, admitted_at: "2099-01-01T00:00:00.000Z" }), firstEvent.outbox_id);
+  raw.close();
+
+  const secondDelivery = await store.dispatchOutbox(() => true, { limit: 1, timeoutMs: 100, claimTtlMs: 1_000, now: () => FIXED_NOW });
+  assert.equal(secondDelivery[0].outbox_id, secondEvent.outbox_id);
+  assert.equal(secondDelivery[0].delivery, "DELIVERED");
+  assert.throws(
+    () => store.verifyOutboxIntegrity(),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
+  );
+  store.close();
+  assert.throws(
+    () => createSqliteMemoryRecordStore({ databasePath }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
+  );
 });
 
 test("SQLite read lease holds a writer fence through an asynchronous callback", async (t) => {

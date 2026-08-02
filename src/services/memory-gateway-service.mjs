@@ -78,9 +78,13 @@ const OUTBOX_EVENT_KEYS = Object.freeze([
 ]);
 const DEFAULT_DEPENDENCY_TIMEOUTS = Object.freeze({ audit_ms: 250, replay_ms: 250 });
 const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
+const DEFAULT_RETRIEVE_LIMIT = 100;
+const MAX_RETRIEVE_LIMIT = 1_000;
 const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
-const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
+const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id", "limit", "cursor"]);
+const REQUIRED_RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
+const SCOPED_PAGE_KEYS = Object.freeze(["records", "next_cursor"]);
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -101,6 +105,23 @@ function snapshotStoreReceipt(value) {
     if (own.has(key)) snapshot[key] = value[key];
   }
   return snapshot;
+}
+
+function snapshotScopedPage(value) {
+  if (!isPlainObject(value)) return null;
+  try {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return null;
+    const ownKeys = Reflect.ownKeys(value);
+    if (ownKeys.some((key) => typeof key !== "string" || !SCOPED_PAGE_KEYS.includes(key))) return null;
+    if (SCOPED_PAGE_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(value, key))) return null;
+    const records = value.records;
+    const nextCursor = value.next_cursor;
+    if (!Array.isArray(records) || (nextCursor !== null && (typeof nextCursor !== "string" || !/^[1-9]\d*$/.test(nextCursor)))) return null;
+    return { records, next_cursor: nextCursor };
+  } catch {
+    return null;
+  }
 }
 
 export class MemoryGatewayConfigurationError extends Error {
@@ -211,6 +232,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     let append;
     let appendWithOutbox;
     let read;
+    let readScoped;
     let withReadLease;
     let admission;
     let admissionIsPlain;
@@ -225,6 +247,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       append = store?.append;
       appendWithOutbox = store?.appendWithOutbox;
       read = store?.read;
+      readScoped = store?.readScoped;
       withReadLease = store?.withReadLease;
       admission = cfg?.admission;
       admissionIsPlain = isPlainObject(admission);
@@ -239,6 +262,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       || !storeIsPlain
       || typeof append !== "function"
       || (appendWithOutbox !== undefined && typeof appendWithOutbox !== "function")
+      || (readScoped !== undefined && typeof readScoped !== "function")
       || typeof read !== "function"
       || typeof withReadLease !== "function"
     ) {
@@ -264,6 +288,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
         append: Function.prototype.bind.call(append, store),
         ...(appendWithOutbox === undefined ? {} : { appendWithOutbox: Function.prototype.bind.call(appendWithOutbox, store) }),
         read: Function.prototype.bind.call(read, store),
+        ...(readScoped === undefined ? {} : { readScoped: Function.prototype.bind.call(readScoped, store) }),
         withReadLease: Function.prototype.bind.call(withReadLease, store)
       }),
       admission: Object.freeze({ classificationCeiling, ttlMs, sod })
@@ -766,8 +791,12 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     if (!isPlainObject(query)) return { code: "DENY_MALFORMED_REQUEST", reason: "Retrieval query must be an object" };
     const unknown = Object.keys(query).filter((key) => !RETRIEVE_KEYS.includes(key));
     if (unknown.length > 0) return { code: "DENY_MALFORMED_REQUEST", reason: `Unknown query fields: ${unknown.join(", ")}` };
-    const missing = RETRIEVE_KEYS.filter((key) => isBlank(query[key]));
+    const missing = REQUIRED_RETRIEVE_KEYS.filter((key) => isBlank(query[key]));
     if (missing.length > 0) return { code: "DENY_MISSING_FIELDS", reason: `Missing query fields: ${missing.join(", ")}` };
+    if (
+      (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > MAX_RETRIEVE_LIMIT))
+      || (query.cursor !== undefined && (typeof query.cursor !== "string" || !/^[1-9]\d*$/.test(query.cursor) || !Number.isSafeInteger(Number(query.cursor))))
+    ) return { code: "DENY_MALFORMED_REQUEST", reason: "Retrieval limit or cursor is malformed" };
     return null;
   }
 
@@ -790,31 +819,56 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       return deny("DENY_CROSS_PROJECT", `Cross-project retrieval denied: scope ${query.scope_project_id} may not read project ${query.project_id}`);
     }
 
+    const limit = query.limit ?? DEFAULT_RETRIEVE_LIMIT;
+    const cursor = query.cursor ?? null;
     let rows;
+    let nextCursor = null;
     try {
-      rows = layer.store.read();
+      if (typeof layer.store.readScoped === "function") {
+        const page = snapshotScopedPage(layer.store.readScoped({
+          project_id: query.project_id,
+          layer: query.layer,
+          limit,
+          cursor
+        }));
+        if (page === null || page.records.length > limit) throw new Error("invalid scoped page");
+        rows = page.records;
+        nextCursor = page.next_cursor;
+      } else {
+        const allRows = layer.store.read();
+        if (!Array.isArray(allRows)) throw new Error("legacy store read did not return a list");
+        const offset = cursor === null ? 0 : Number(cursor);
+        const scopedRows = allRows.filter((row) => isPlainObject(row) && row.project_id === query.project_id && row.layer === query.layer);
+        rows = scopedRows.slice(offset, offset + limit);
+        nextCursor = offset + limit < scopedRows.length ? String(offset + limit) : null;
+      }
     } catch {
       return deny("DENY_STORE_UNAVAILABLE", "Layer store read failed");
     }
     if (!Array.isArray(rows)) return deny("DENY_STORE_UNAVAILABLE", "Layer store read did not return a list");
 
     const records = [];
-    for (const row of rows) {
-      if (!isPlainObject(row)) continue;
-      if (row.project_id !== query.project_id) continue; // project scoping
-      if (row.layer !== query.layer) continue; // layer scoping
-      const admittedMs = Date.parse(row.admitted_at);
-      if (!Number.isFinite(admittedMs)) continue; // unresolvable instant -> excluded
-      // TTL honesty: expired-by-computation records are filtered, never returned.
-      if (instant.ms >= admittedMs + layer.admission.ttlMs) continue;
-      records.push(deepFreeze({ data_untrusted: true, record: structuredClone(row) }));
+    try {
+      for (const row of rows) {
+        if (!isPlainObject(row)) continue;
+        if (row.project_id !== query.project_id) continue; // project scoping
+        if (row.layer !== query.layer) continue; // layer scoping
+        const admittedMs = Date.parse(row.admitted_at);
+        if (!Number.isFinite(admittedMs)) continue; // unresolvable instant -> excluded
+        // TTL honesty: expired-by-computation records are filtered, never returned.
+        if (instant.ms >= admittedMs + layer.admission.ttlMs) continue;
+        records.push(deepFreeze({ data_untrusted: true, record: structuredClone(row) }));
+      }
+    } catch {
+      return deny("DENY_STORE_UNAVAILABLE", "Layer store returned an unreadable scoped page");
     }
 
     return deepFreeze({
       decision: "ALLOW",
       code: "RETRIEVED",
       retrieved_at: instant.iso,
-      records: Object.freeze(records)
+      records: Object.freeze(records),
+      next_cursor: nextCursor
     });
   }
 
