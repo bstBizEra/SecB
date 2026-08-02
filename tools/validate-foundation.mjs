@@ -148,18 +148,126 @@ for (const file of schemaFiles) {
 }
 
 // EXACT-SET pins. The check above is a SUBSET test: it proves the pinned fields
-// are present and says nothing about what else joined them. That is right for
-// most contracts, where a new required field is ordinary evolution.
+// are present and says nothing about what else joined them. It is retained
+// deliberately - it names the identity and version fields a contract may never
+// lose, which is a narrower and more legible claim than the sets below - but it
+// is not a gate on contract shape, and was never able to be one.
 //
-// It is wrong for the ADR-0013 pair, where the whole control is WHICH TIER a
-// field lives in. A commit message and a code comment previously claimed the
-// subset pin would fail if a scope field were added to the descriptor. It would
-// not have - verified by mutating the schema and re-running the pin logic. This
-// is the assertion that makes that claim true.
+// It was first shown wrong for the ADR-0013 pair, where the whole control is
+// WHICH TIER a field lives in. A commit message and a code comment previously
+// claimed the subset pin would fail if a scope field were added to the
+// descriptor. It would not have - verified by mutating the schema and re-running
+// the pin logic. The same blindness applies to every other contract here.
+//
+// The exact-set idiom is now applied to EVERY governed contract, not just the
+// ADR-0013 pair, and in TWO dimensions. The reasoning, in order:
+//
+// 1. Why exact, not subset: the subset pin above is satisfied by any superset,
+//    so it cannot see a contract gain, lose, or promote a field. Verified by
+//    mutation - adding `subject` to decision-record, and then pushing it into
+//    that schema's `required`, both left `npm run validate` at exit 0. Only the
+//    per-contract unit test caught it. A gate that a contract change can walk
+//    past is not a gate on contract change.
+// 2. Why the PROPERTY set and not only the required set: every governed
+//    contract is `additionalProperties: false`, so its property-name set IS its
+//    wire surface. A new OPTIONAL property is already a contract change - it
+//    admits a payload the contract previously rejected - and a required-only
+//    pin is blind to it.
+// 3. Why BOTH sets and not just properties: neither implies the other.
+//    Promoting an existing optional property to required (decision-record's
+//    `reverts`, the grant record's `granted_at`) changes the required set and
+//    leaves the property set identical. Dropping a required field to optional
+//    is the same move in reverse, and it is the one that silently widens what
+//    the system will accept. Two pins, two failure modes.
+// 4. Why all 28 and not decision-record alone: none of these contracts is
+//    open, so for none of them is a field change an internal detail. Pinning
+//    only the contract that happened to be probed would leave 27 with the same
+//    defect. This adds no false-failure surface - the inputs are static files
+//    in-tree, so a failure requires an actual edit to a governed contract, and
+//    that edit updating a one-line allowlist here is the same convention that
+//    already governs MANIFEST.json and expectedSchemas above. The maintenance
+//    cost is one line per deliberate contract change; the message names the
+//    file and the expected size.
+//
+// Both maps are recorded from the schema files themselves, then held by
+// coverage assertions so a newly allowlisted contract cannot arrive unpinned.
 const exactRequiredSets = {
+  "contracts/agent-enrollment-request.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_profile_id", "runtime_version", "deployment_location", "public_key_fingerprint", "idempotency_key"],
+  "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_profile_id", "agent_instance_id", "runtime_version", "deployment_location", "owner", "permitted_roles", "authority_ceiling", "max_data_classification", "evaluation_status", "lifecycle_state"],
+  "contracts/local-bridge-endpoint.schema.json": ["schema_version", "locator_id", "service_instance_id", "authority_domain_id", "transport", "owner_scope", "endpoint_name", "service_key_id", "service_public_key_fingerprint", "bridge_protocol_version", "issued_at", "expires_at"],
+  "contracts/local-bridge-frame.schema.json": ["schema_version", "frame_id", "connection_id", "session_id", "request_id", "message_type", "sequence", "trace_id", "protocol_version", "declared_payload_bytes"],
+  "contracts/local-bridge-handshake-transcript.schema.json": ["schema_version", "handshake_id", "purpose", "harness_installation_id", "runtime_deployment_id", "service_instance_id", "authority_domain_id", "locator_id", "installation_key_id", "service_key_id", "endpoint_binding_id", "client_nonce", "service_nonce", "client_supported_protocol_versions", "service_supported_protocol_versions", "selected_protocol_version", "requested_at", "expires_at"],
+  "contracts/local-bridge-installation-proof.schema.json": ["schema_version", "proof_id", "purpose", "handshake_id", "harness_installation_id", "runtime_deployment_id", "installation_key_id", "service_instance_id", "service_key_id", "authority_domain_id", "locator_id", "endpoint_binding_id", "client_nonce", "service_nonce", "selected_protocol_version", "proof_profile_id", "proof_material_class", "proof_value", "issued_at", "expires_at"],
+  "contracts/local-bridge-session.schema.json": ["schema_version", "session_id", "handshake_id", "proof_id", "harness_installation_id", "runtime_deployment_id", "service_instance_id", "authority_domain_id", "protocol_version", "authority_source", "proof_verification_status", "replay_commit_status", "authorization_reference", "lifecycle_state", "issued_at", "expires_at"],
+  "contracts/local-bridge-denial.schema.json": ["schema_version", "denial_id", "phase", "public_code", "retryable", "trace_id", "occurred_at"],
+  "contracts/local-bridge-lifecycle.schema.json": ["schema_version", "lifecycle_event_id", "subject_type", "subject_id", "from_state", "to_state", "decision_status", "authority_reference", "occurred_at"],
+  "contracts/context-receipt.schema.json": ["receipt_id", "version", "project_id", "objective_id", "work_package_id", "session_id", "assigned_role", "authority_scope", "baseline_version", "acceptance_criteria", "allowed_tools", "allowed_skills", "evidence_obligations", "freshness_timestamp", "source_references", "content_hash"],
+  "contracts/event-envelope.schema.json": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "event_type", "occurred_at", "observed_fact", "source", "idempotency_key", "classification", "content_hash"],
+  "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "evidence_type", "source", "observed_at", "procedure", "result", "exit_status", "limitations", "content_hash", "verification_status", "classification", "retention_policy"],
+  "contracts/handoff-envelope.schema.json": ["handoff_id", "version", "project_id", "work_package_id", "source_session_id", "destination_role", "objective", "authorized_scope", "work_completed", "artifacts", "assumptions", "evidence_refs", "checks", "limitations", "unresolved_findings", "risks", "recommended_next_action", "context_delta", "content_hash"],
+  "contracts/project-contract.schema.json": ["project_id", "version", "profile_id", "status", "owners", "repositories", "risk_class", "evidence_destination", "valid_from", "valid_until", "approvals"],
+  "contracts/work-package.schema.json": ["work_package_id", "version", "project_id", "objective", "risk_class", "status", "baseline", "scope", "non_scope", "acceptance_criteria", "roles", "allowed_paths", "prohibited_paths", "evidence_obligations", "valid_until"],
+  "contracts/decision-record.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_type", "outcome", "rationale", "authority_ref", "evidence_refs", "decided_at", "valid_from", "valid_until"],
+  "contracts/knowledge-claim.schema.json": ["claim_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "statement", "derivation", "truth_status", "evidence_refs", "claimed_at", "valid_from", "valid_until", "retention_policy"],
+  "contracts/outcome-receipt.schema.json": ["outcome_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_ref", "knowledge_refs", "skill_refs", "outcome_status", "details", "evidence_refs", "observed_at", "reversion_required"],
+  "contracts/skill-manifest.schema.json": ["skill_id", "version", "name", "status", "owner", "source", "purpose", "supported_runtimes", "project_scopes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions"],
   "contracts/skill-package-descriptor.schema.json": ["skill_id", "package_name", "display_name", "version", "purpose", "risk_class", "controls"],
-  "contracts/skill-grant-record.schema.json": ["skill_id", "version", "status", "project_scopes", "supported_runtimes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions"]
+  "contracts/skill-grant-record.schema.json": ["skill_id", "version", "status", "project_scopes", "supported_runtimes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions"],
+  "contracts/runtime-provider-plugin.schema.json": ["schema_version", "plugin_id", "plugin_version", "provider_id", "runtime_product_id", "display_name", "purpose", "implementation", "capabilities", "security", "boundaries", "ui", "evidence_obligations", "candidate_status"],
+  "contracts/capability-record.schema.json": ["capability_id", "version", "adapter_id", "tool", "access", "status", "source_identity", "immutable_version", "integrity", "tool_inventory", "filesystem_boundary", "network_boundary", "credential_handle", "intake_evidence_refs", "approvals", "revocation"],
+  "contracts/goal.schema.json": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "provenance", "content_hash"],
+  "contracts/project-registration-package.schema.json": ["project_id", "registration_id", "version", "status", "mode", "repository_mutation_authorized", "identity", "proposed_changes", "prohibited_actions", "created_at"],
+  "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "scope", "team_policy", "runtime_policy", "context", "workspace", "evidence", "validity"],
+  "contracts/system-settings.schema.json": ["schema_version", "environment", "governance", "ports", "swarm", "security", "knowledge", "ledgers"],
+  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "wsl_distro", "upstreams"]
 };
+// Property-name sets. Where a contract carries optional properties they are
+// listed here and NOT in the required map above; that difference is itself the
+// pinned fact. decision-record's only optional is `reverts` - an optional
+// `subject` appearing is exactly what this map rejects.
+const exactPropertySets = {
+  "contracts/agent-enrollment-request.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "agent_profile_id", "runtime_version", "deployment_location", "public_key_fingerprint", "idempotency_key"],
+  "contracts/agent-registration.schema.json": ["provider_id", "runtime_product_id", "runtime_deployment_id", "runtime_provider_plugin_id", "runtime_provider_plugin_version", "runtime_provider_plugin_fingerprint", "agent_profile_id", "agent_instance_id", "runtime_version", "deployment_location", "owner", "permitted_roles", "authority_ceiling", "approved_models", "approved_tools", "approved_mcp_methods", "approved_skills", "repository_scopes", "project_scopes", "environment_scopes", "max_data_classification", "delegation_rights", "evidence_obligations", "workload_identity_ref", "evaluation_status", "lifecycle_state"],
+  "contracts/local-bridge-endpoint.schema.json": ["schema_version", "locator_id", "service_instance_id", "authority_domain_id", "transport", "owner_scope", "endpoint_name", "service_key_id", "service_public_key_fingerprint", "bridge_protocol_version", "issued_at", "expires_at"],
+  "contracts/local-bridge-frame.schema.json": ["schema_version", "frame_id", "connection_id", "session_id", "request_id", "message_type", "sequence", "trace_id", "protocol_version", "declared_payload_bytes"],
+  "contracts/local-bridge-handshake-transcript.schema.json": ["schema_version", "handshake_id", "purpose", "harness_installation_id", "runtime_deployment_id", "service_instance_id", "authority_domain_id", "locator_id", "installation_key_id", "service_key_id", "endpoint_binding_id", "client_nonce", "service_nonce", "client_supported_protocol_versions", "service_supported_protocol_versions", "selected_protocol_version", "requested_at", "expires_at"],
+  "contracts/local-bridge-installation-proof.schema.json": ["schema_version", "proof_id", "purpose", "handshake_id", "harness_installation_id", "runtime_deployment_id", "installation_key_id", "service_instance_id", "service_key_id", "authority_domain_id", "locator_id", "endpoint_binding_id", "client_nonce", "service_nonce", "selected_protocol_version", "proof_profile_id", "proof_material_class", "proof_value", "issued_at", "expires_at"],
+  "contracts/local-bridge-session.schema.json": ["schema_version", "session_id", "handshake_id", "proof_id", "harness_installation_id", "runtime_deployment_id", "service_instance_id", "authority_domain_id", "protocol_version", "authority_source", "proof_verification_status", "replay_commit_status", "authorization_reference", "lifecycle_state", "issued_at", "expires_at"],
+  "contracts/local-bridge-denial.schema.json": ["schema_version", "denial_id", "phase", "public_code", "retryable", "trace_id", "occurred_at"],
+  "contracts/local-bridge-lifecycle.schema.json": ["schema_version", "lifecycle_event_id", "subject_type", "subject_id", "from_state", "to_state", "decision_status", "authority_reference", "occurred_at"],
+  "contracts/context-receipt.schema.json": ["receipt_id", "version", "project_id", "objective_id", "work_package_id", "session_id", "assigned_role", "authority_scope", "baseline_version", "acceptance_criteria", "allowed_tools", "allowed_skills", "evidence_obligations", "freshness_timestamp", "source_references", "content_hash"],
+  "contracts/event-envelope.schema.json": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "event_type", "occurred_at", "observed_fact", "source", "idempotency_key", "classification", "content_hash"],
+  "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "evidence_type", "source", "observed_at", "procedure", "result", "exit_status", "limitations", "content_hash", "verification_status", "classification", "retention_policy"],
+  "contracts/handoff-envelope.schema.json": ["handoff_id", "version", "project_id", "work_package_id", "source_session_id", "destination_role", "objective", "authorized_scope", "work_completed", "artifacts", "assumptions", "evidence_refs", "checks", "limitations", "unresolved_findings", "risks", "recommended_next_action", "context_delta", "content_hash"],
+  "contracts/project-contract.schema.json": ["project_id", "version", "profile_id", "status", "owners", "repositories", "risk_class", "evidence_destination", "valid_from", "valid_until", "approvals"],
+  "contracts/work-package.schema.json": ["work_package_id", "version", "project_id", "objective", "risk_class", "status", "baseline", "scope", "non_scope", "acceptance_criteria", "roles", "allowed_paths", "prohibited_paths", "evidence_obligations", "valid_until"],
+  "contracts/decision-record.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_type", "outcome", "rationale", "authority_ref", "evidence_refs", "decided_at", "valid_from", "valid_until", "reverts"],
+  "contracts/knowledge-claim.schema.json": ["claim_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "statement", "derivation", "truth_status", "evidence_refs", "claimed_at", "valid_from", "valid_until", "retention_policy"],
+  "contracts/outcome-receipt.schema.json": ["outcome_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_ref", "knowledge_refs", "skill_refs", "outcome_status", "details", "evidence_refs", "observed_at", "reversion_required"],
+  "contracts/skill-manifest.schema.json": ["skill_id", "version", "name", "status", "owner", "source", "purpose", "supported_runtimes", "project_scopes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions"],
+  "contracts/skill-package-descriptor.schema.json": ["skill_id", "package_name", "display_name", "version", "purpose", "risk_class", "authority_ceiling_cap", "owner", "source", "roles", "inputs", "outputs", "controls", "input_schema", "output_schema", "required_models", "required_tools", "required_mcp_methods", "evaluation", "known_limitations"],
+  "contracts/skill-grant-record.schema.json": ["skill_id", "version", "status", "project_scopes", "supported_runtimes", "max_data_classification", "evidence_refs", "approval_history", "revocation_conditions", "granted_at", "source_content_digest"],
+  "contracts/runtime-provider-plugin.schema.json": ["schema_version", "plugin_id", "plugin_version", "provider_id", "runtime_product_id", "display_name", "purpose", "implementation", "capabilities", "security", "boundaries", "ui", "evidence_obligations", "candidate_status"],
+  "contracts/capability-record.schema.json": ["capability_id", "version", "adapter_id", "tool", "access", "status", "source_identity", "immutable_version", "integrity", "tool_inventory", "filesystem_boundary", "network_boundary", "credential_handle", "intake_evidence_refs", "approvals", "revocation"],
+  "contracts/goal.schema.json": ["goal_id", "version", "project_id", "level", "title", "status", "parent_goal_id", "provenance", "content_hash"],
+  "contracts/project-registration-package.schema.json": ["project_id", "registration_id", "version", "status", "mode", "repository_mutation_authorized", "identity", "proposed_changes", "prohibited_actions", "created_at"],
+  "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "scope", "team_policy", "runtime_policy", "context", "workspace", "evidence", "validity"],
+  "contracts/system-settings.schema.json": ["schema_version", "environment", "governance", "ports", "swarm", "security", "knowledge", "ledgers"],
+  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "description", "wsl_distro", "upstreams"]
+};
+// A pin nobody is required to write is a pin that quietly stops covering
+// things. Both maps must cover the governed contract set exactly.
+const pinnedContractSet = JSON.stringify([...schemaFiles].sort());
+assert(
+  JSON.stringify(Object.keys(exactRequiredSets).sort()) === pinnedContractSet,
+  "schema.required.exact.coverage",
+  `${schemaFiles.length} governed contracts carry an exact required-set pin`
+);
+assert(
+  JSON.stringify(Object.keys(exactPropertySets).sort()) === pinnedContractSet,
+  "schema.properties.exact.coverage",
+  `${schemaFiles.length} governed contracts carry an exact property-set pin`
+);
 for (const [file, expected] of Object.entries(exactRequiredSets)) {
   const schema = JSON.parse(read(file));
   const actual = [...schema.required].sort();
@@ -167,6 +275,15 @@ for (const [file, expected] of Object.entries(exactRequiredSets)) {
     JSON.stringify(actual) === JSON.stringify([...expected].sort()),
     `schema.required.exact.${file}`,
     `required set is exactly ${expected.length} fields`
+  );
+}
+for (const [file, expected] of Object.entries(exactPropertySets)) {
+  const schema = JSON.parse(read(file));
+  const actual = Object.keys(schema.properties ?? {}).sort();
+  assert(
+    JSON.stringify(actual) === JSON.stringify([...expected].sort()),
+    `schema.properties.exact.${file}`,
+    `property set is exactly ${expected.length} names`
   );
 }
 
