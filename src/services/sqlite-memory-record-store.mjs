@@ -359,6 +359,22 @@ function validateOperationalIndexes(database) {
   }
 }
 
+export function resolveUniqueScopedCursorAnchor(candidates, memoryRecordIdHash) {
+  if (!Array.isArray(candidates) || typeof memoryRecordIdHash !== "string" || !/^[a-f0-9]{64}$/.test(memoryRecordIdHash)) return null;
+  try {
+    const matches = candidates.filter((candidate) =>
+      isPlainObject(candidate)
+      && typeof candidate.memory_record_id === "string"
+      && canonicalFingerprint({ memory_record_id: candidate.memory_record_id }) === memoryRecordIdHash
+    );
+    if (matches.length !== 1) return null;
+    const sequence = Number(matches[0].sequence);
+    return Number.isSafeInteger(sequence) && sequence > 0 ? sequence : null;
+  } catch {
+    return null;
+  }
+}
+
 function ensureOperationalIndexes(database) {
   validateUniqueClaimTokens(database, "SCHEMA_INTEGRITY_VIOLATION");
   try {
@@ -828,11 +844,12 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
           layer,
           snapshot.version,
           snapshot.content_hash
-        ).filter((candidate) => canonicalFingerprint({ memory_record_id: candidate.memory_record_id }) === snapshot.memory_record_id_hash);
-        if (anchors.length !== 1 || !Number.isSafeInteger(Number(anchors[0].sequence)) || Number(anchors[0].sequence) < 1) {
+        );
+        const anchorSequence = resolveUniqueScopedCursorAnchor(anchors, snapshot.memory_record_id_hash);
+        if (anchorSequence === null) {
           throw new SqliteMemoryStoreError("INVALID_SCOPED_READ", "cursor anchor is unavailable in this scope");
         }
-        afterSequence = Number(anchors[0].sequence);
+        afterSequence = anchorSequence;
       }
       const rows = readScopedPage.all(projectId, layer, afterSequence, limit + 1);
       const hasMore = rows.length > limit;

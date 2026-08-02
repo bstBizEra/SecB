@@ -10,7 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
 import { createMemoryGateway as createMemoryGatewayImpl } from "../src/services/memory-gateway-service.mjs";
-import { createSqliteMemoryRecordStore, SqliteMemoryStoreError } from "../src/services/sqlite-memory-record-store.mjs";
+import { createSqliteMemoryRecordStore, resolveUniqueScopedCursorAnchor, SqliteMemoryStoreError } from "../src/services/sqlite-memory-record-store.mjs";
 
 const execFileAsync = promisify(execFile);
 const FIXED_NOW = new Date("2026-07-20T10:00:00Z");
@@ -329,6 +329,16 @@ test("scoped reads are bounded, project-and-layer isolated, and cursor paginated
   ]) assert.ok(indexes.has(name), `missing operational index ${name}`);
   raw.close();
   store.close();
+});
+
+test("scoped cursor anchor resolution rejects missing and ambiguous identity digests", () => {
+  const memoryRecordIdHash = canonicalFingerprint({ memory_record_id: "mem-anchor" });
+  assert.equal(resolveUniqueScopedCursorAnchor([], memoryRecordIdHash), null);
+  assert.equal(resolveUniqueScopedCursorAnchor([
+    { memory_record_id: "mem-anchor", sequence: 7 },
+    { memory_record_id: "mem-anchor", sequence: 8 }
+  ], memoryRecordIdHash), null);
+  assert.equal(resolveUniqueScopedCursorAnchor([{ memory_record_id: "mem-anchor", sequence: 7 }], memoryRecordIdHash), 7);
 });
 
 test("gateway cursor pagination survives restart without cross-project gaps or leakage", async (t) => {

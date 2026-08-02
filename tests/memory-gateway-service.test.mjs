@@ -1376,9 +1376,9 @@ test("retrieve cursor is integrity-bound, scope-bound, and rejects non-progressi
     admitted_at: FIXED_NOW.toISOString()
   };
   const store = makeStore();
-  let repeatAnchor = false;
-  store.readScoped = (query) => query.after === null || repeatAnchor
-    ? { records: [firstRecord], has_more: true }
+  let repeatTerminalAnchor = false;
+  store.readScoped = (query) => query.after === null || repeatTerminalAnchor
+    ? { records: [firstRecord], has_more: !repeatTerminalAnchor }
     : { records: [], has_more: false };
   const cursorMacKey = Buffer.alloc(32, 0x41);
   const gateway = createMemoryGateway({
@@ -1405,7 +1405,7 @@ test("retrieve cursor is integrity-bound, scope-bound, and rejects non-progressi
   assert.equal(gateway.retrieve({ ...base, project_id: "proj-2", scope_project_id: "proj-2", cursor: first.next_cursor }).code, "DENY_MALFORMED_REQUEST");
   assert.equal(gateway.retrieve({ ...base, cursor: "A".repeat(2049) }).code, "DENY_MALFORMED_REQUEST");
 
-  repeatAnchor = true;
+  repeatTerminalAnchor = true;
   assert.equal(gateway.retrieve({ ...base, cursor: first.next_cursor }).code, "DENY_STORE_UNAVAILABLE");
 });
 
@@ -1493,6 +1493,27 @@ test("legacy retrieval also snapshots a value-varying row once", () => {
   assert.equal(result.decision, "ALLOW");
   assert.equal(result.records[0].record.project_id, "proj-1");
   assert.equal(projectReads, 1);
+});
+
+test("legacy retrieval rejects an ambiguous duplicate cursor anchor", () => {
+  const duplicate = {
+    ...sessionRecord({ memory_record_id: "mem-legacy-duplicate", statement: "duplicate anchor" }),
+    layer: "session",
+    admitted_at: FIXED_NOW.toISOString()
+  };
+  const store = makeStore();
+  store.rows.push(duplicate, structuredClone(duplicate));
+  const gateway = createMemoryGateway({
+    layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } },
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter()
+  });
+  const query = { layer: "session", project_id: "proj-1", scope_project_id: "proj-1", limit: 1 };
+  const first = gateway.retrieve(query);
+  assert.equal(first.decision, "ALLOW");
+  assert.notEqual(first.next_cursor, null);
+  assert.equal(gateway.retrieve({ ...query, cursor: first.next_cursor }).code, "DENY_STORE_UNAVAILABLE");
 });
 
 test("retrieve denies DENY_CROSS_PROJECT when the requested project differs from the caller scope", async () => {

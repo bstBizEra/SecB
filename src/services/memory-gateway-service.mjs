@@ -153,6 +153,14 @@ function cursorAnchor(row) {
   };
 }
 
+function sameCursorAnchor(row, after) {
+  const anchor = cursorAnchor(row);
+  return anchor !== null
+    && anchor.memory_record_id_hash === after.memory_record_id_hash
+    && anchor.version === after.version
+    && anchor.content_hash === after.content_hash;
+}
+
 function cursorMac(key, payload) {
   return createHmac("sha256", key).update(JSON.stringify(payload), "utf8").digest("hex");
 }
@@ -964,15 +972,12 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
         const scopedRows = allRows.filter((row) => isPlainObject(row) && row.project_id === query.project_id && row.layer === query.layer);
         let offset = 0;
         if (after !== null) {
-          const anchor = scopedRows.findIndex((row) => {
-            const anchor = cursorAnchor(row);
-            return anchor !== null
-              && anchor.memory_record_id_hash === after.memory_record_id_hash
-              && anchor.version === after.version
-              && anchor.content_hash === after.content_hash;
+          const anchors = [];
+          scopedRows.forEach((row, index) => {
+            if (sameCursorAnchor(row, after)) anchors.push(index);
           });
-          if (anchor === -1) throw new Error("legacy cursor anchor is unavailable");
-          offset = anchor + 1;
+          if (anchors.length !== 1) throw new Error("legacy cursor anchor is unavailable or ambiguous");
+          offset = anchors[0] + 1;
         }
         rows = scopedRows.slice(offset, offset + limit);
         hasMore = offset + limit < scopedRows.length;
@@ -981,6 +986,9 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       return deny("DENY_STORE_UNAVAILABLE", "Layer store read failed");
     }
     if (!Array.isArray(rows)) return deny("DENY_STORE_UNAVAILABLE", "Layer store read did not return a list");
+    if (after !== null && rows.some((row) => sameCursorAnchor(row, after))) {
+      return deny("DENY_STORE_UNAVAILABLE", "Layer store repeated the supplied cursor anchor");
+    }
 
     let nextCursor = null;
     if (hasMore) {
