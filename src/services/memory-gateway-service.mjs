@@ -84,7 +84,9 @@ const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
 const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id", "limit", "cursor"]);
 const REQUIRED_RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
-const SCOPED_PAGE_KEYS = Object.freeze(["records", "next_cursor"]);
+const SCOPED_PAGE_KEYS = Object.freeze(["records", "has_more"]);
+const RETRIEVE_CURSOR_KEYS = Object.freeze(["v", "project_id", "layer", "memory_record_id", "version", "content_hash", "checksum"]);
+const MAX_RETRIEVE_CURSOR_LENGTH = 2_048;
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -115,10 +117,65 @@ function snapshotScopedPage(value) {
     const ownKeys = Reflect.ownKeys(value);
     if (ownKeys.some((key) => typeof key !== "string" || !SCOPED_PAGE_KEYS.includes(key))) return null;
     if (SCOPED_PAGE_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(value, key))) return null;
-    const records = value.records;
-    const nextCursor = value.next_cursor;
-    if (!Array.isArray(records) || (nextCursor !== null && (typeof nextCursor !== "string" || !/^[1-9]\d*$/.test(nextCursor)))) return null;
-    return { records, next_cursor: nextCursor };
+    const records = structuredClone(value.records);
+    const hasMore = value.has_more;
+    if (!Array.isArray(records) || typeof hasMore !== "boolean") return null;
+    return { records, has_more: hasMore };
+  } catch {
+    return null;
+  }
+}
+
+function cursorIdentity(row) {
+  if (!isPlainObject(row)) return null;
+  const identity = {
+    memory_record_id: row.memory_record_id,
+    version: row.version,
+    content_hash: row.content_hash
+  };
+  if (
+    typeof identity.memory_record_id !== "string" || identity.memory_record_id.trim() === ""
+    || !Number.isSafeInteger(identity.version) || identity.version < 1
+    || typeof identity.content_hash !== "string" || !/^[a-f0-9]{64}$/.test(identity.content_hash)
+  ) return null;
+  return identity;
+}
+
+function encodeRetrieveCursor(projectId, layer, row) {
+  const identity = cursorIdentity(row);
+  if (identity === null) return null;
+  const payload = { v: 1, project_id: projectId, layer, ...identity };
+  const envelope = { ...payload, checksum: canonicalFingerprint(payload) };
+  return Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+}
+
+function decodeRetrieveCursor(token, projectId, layer) {
+  try {
+    if (
+      typeof token !== "string" || token.length < 1 || token.length > MAX_RETRIEVE_CURSOR_LENGTH
+      || !/^[A-Za-z0-9_-]+$/.test(token)
+    ) return null;
+    const decoded = Buffer.from(token, "base64url");
+    if (decoded.toString("base64url") !== token) return null;
+    const envelope = JSON.parse(decoded.toString("utf8"));
+    if (!isPlainObject(envelope)) return null;
+    const keys = Reflect.ownKeys(envelope);
+    if (
+      keys.length !== RETRIEVE_CURSOR_KEYS.length
+      || keys.some((key) => typeof key !== "string" || !RETRIEVE_CURSOR_KEYS.includes(key))
+      || RETRIEVE_CURSOR_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(envelope, key))
+    ) return null;
+    const { checksum, ...payload } = envelope;
+    const identity = cursorIdentity(payload);
+    if (
+      payload.v !== 1
+      || payload.project_id !== projectId
+      || payload.layer !== layer
+      || typeof checksum !== "string"
+      || checksum !== canonicalFingerprint(payload)
+      || identity === null
+    ) return null;
+    return Object.freeze(identity);
   } catch {
     return null;
   }
@@ -795,7 +852,10 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     if (missing.length > 0) return { code: "DENY_MISSING_FIELDS", reason: `Missing query fields: ${missing.join(", ")}` };
     if (
       (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > MAX_RETRIEVE_LIMIT))
-      || (query.cursor !== undefined && (typeof query.cursor !== "string" || !/^[1-9]\d*$/.test(query.cursor) || !Number.isSafeInteger(Number(query.cursor))))
+      || (query.cursor !== undefined && (
+        typeof query.cursor !== "string" || query.cursor.length < 1 || query.cursor.length > MAX_RETRIEVE_CURSOR_LENGTH
+        || !/^[A-Za-z0-9_-]+$/.test(query.cursor)
+      ))
     ) return { code: "DENY_MALFORMED_REQUEST", reason: "Retrieval limit or cursor is malformed" };
     return null;
   }
@@ -821,40 +881,76 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
 
     const limit = query.limit ?? DEFAULT_RETRIEVE_LIMIT;
     const cursor = query.cursor ?? null;
+    const after = cursor === null ? null : decodeRetrieveCursor(cursor, query.project_id, query.layer);
+    if (cursor !== null && after === null) return deny("DENY_MALFORMED_REQUEST", "Retrieval cursor is invalid for this scope");
     let rows;
-    let nextCursor = null;
+    let hasMore;
+    let usedScopedPort = false;
     try {
       if (typeof layer.store.readScoped === "function") {
+        usedScopedPort = true;
         const page = snapshotScopedPage(layer.store.readScoped({
           project_id: query.project_id,
           layer: query.layer,
           limit,
-          cursor
+          after
         }));
-        if (page === null || page.records.length > limit) throw new Error("invalid scoped page");
+        if (
+          page === null
+          || page.records.length > limit
+          || (page.has_more && page.records.length !== limit)
+        ) throw new Error("invalid scoped page");
         rows = page.records;
-        nextCursor = page.next_cursor;
+        hasMore = page.has_more;
       } else {
-        const allRows = layer.store.read();
+        const allRows = structuredClone(layer.store.read());
         if (!Array.isArray(allRows)) throw new Error("legacy store read did not return a list");
-        const offset = cursor === null ? 0 : Number(cursor);
         const scopedRows = allRows.filter((row) => isPlainObject(row) && row.project_id === query.project_id && row.layer === query.layer);
+        let offset = 0;
+        if (after !== null) {
+          const anchor = scopedRows.findIndex((row) => {
+            const identity = cursorIdentity(row);
+            return identity !== null
+              && identity.memory_record_id === after.memory_record_id
+              && identity.version === after.version
+              && identity.content_hash === after.content_hash;
+          });
+          if (anchor === -1) throw new Error("legacy cursor anchor is unavailable");
+          offset = anchor + 1;
+        }
         rows = scopedRows.slice(offset, offset + limit);
-        nextCursor = offset + limit < scopedRows.length ? String(offset + limit) : null;
+        hasMore = offset + limit < scopedRows.length;
       }
     } catch {
       return deny("DENY_STORE_UNAVAILABLE", "Layer store read failed");
     }
     if (!Array.isArray(rows)) return deny("DENY_STORE_UNAVAILABLE", "Layer store read did not return a list");
 
+    let nextCursor = null;
+    if (hasMore) {
+      if (rows.length !== limit) return deny("DENY_STORE_UNAVAILABLE", "Layer store returned a non-progressing scoped page");
+      nextCursor = encodeRetrieveCursor(query.project_id, query.layer, rows.at(-1));
+      if (nextCursor === null || nextCursor === cursor) {
+        return deny("DENY_STORE_UNAVAILABLE", "Layer store returned an invalid or non-progressing scoped page");
+      }
+    }
+
     const records = [];
     try {
       for (const row of rows) {
-        if (!isPlainObject(row)) continue;
-        if (row.project_id !== query.project_id) continue; // project scoping
-        if (row.layer !== query.layer) continue; // layer scoping
+        if (!isPlainObject(row)) {
+          if (usedScopedPort) throw new Error("scoped row is malformed");
+          continue;
+        }
+        if (row.project_id !== query.project_id || row.layer !== query.layer) {
+          if (usedScopedPort) throw new Error("scoped row contamination");
+          continue;
+        }
         const admittedMs = Date.parse(row.admitted_at);
-        if (!Number.isFinite(admittedMs)) continue; // unresolvable instant -> excluded
+        if (!Number.isFinite(admittedMs)) {
+          if (usedScopedPort) throw new Error("scoped row instant is invalid");
+          continue;
+        }
         // TTL honesty: expired-by-computation records are filtered, never returned.
         if (instant.ms >= admittedMs + layer.admission.ttlMs) continue;
         records.push(deepFreeze({ data_untrusted: true, record: structuredClone(row) }));

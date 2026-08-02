@@ -291,19 +291,25 @@ test("scoped reads are bounded, project-and-layer isolated, and cursor paginated
 
   const first = store.readScoped({ project_id: "proj-1", layer: "session", limit: 2 });
   assert.deepEqual(first.records.map((record) => record.memory_record_id), ["mem-scoped-1", "mem-scoped-2"]);
-  assert.match(first.next_cursor, /^[1-9]\d*$/);
+  assert.equal(first.has_more, true);
   assert.ok(Object.isFrozen(first));
   assert.ok(Object.isFrozen(first.records));
 
-  const second = store.readScoped({ project_id: "proj-1", layer: "session", limit: 2, cursor: first.next_cursor });
+  const anchor = first.records.at(-1);
+  const second = store.readScoped({
+    project_id: "proj-1",
+    layer: "session",
+    limit: 2,
+    after: { memory_record_id: anchor.memory_record_id, version: anchor.version, content_hash: anchor.content_hash }
+  });
   assert.deepEqual(second.records.map((record) => record.memory_record_id), ["mem-scoped-4", "mem-scoped-5"]);
-  assert.equal(second.next_cursor, null);
+  assert.equal(second.has_more, false);
   assert.throws(
     () => store.readScoped({ project_id: "proj-1", layer: "session", limit: 1001 }),
     (error) => error instanceof SqliteMemoryStoreError && error.code === "INVALID_SCOPED_READ"
   );
   assert.throws(
-    () => store.readScoped({ project_id: "proj-1", layer: "session", cursor: "0" }),
+    () => store.readScoped({ project_id: "proj-1", layer: "session", after: {} }),
     (error) => error instanceof SqliteMemoryStoreError && error.code === "INVALID_SCOPED_READ"
   );
   const raw = new DatabaseSync(databasePath);
@@ -316,6 +322,74 @@ test("scoped reads are bounded, project-and-layer isolated, and cursor paginated
   ]) assert.ok(indexes.has(name), `missing operational index ${name}`);
   raw.close();
   store.close();
+});
+
+test("gateway cursor pagination survives restart without cross-project gaps or leakage", async (t) => {
+  const databasePath = databasePathFor(t);
+  const expected = [];
+  let store = createSqliteMemoryRecordStore({ databasePath });
+  for (let index = 1; index <= 12; index += 1) {
+    const projectId = index % 3 === 0 ? "proj-noise" : "proj-page";
+    const record = storedRecord({
+      memory_record_id: `mem-page-restart-${index}`,
+      project_id: projectId,
+      statement: `restart page record ${index}`
+    });
+    await store.append(record, { idempotency_key: `page-restart-${index}` });
+    if (projectId === "proj-page") expected.push(record.memory_record_id);
+  }
+  const gatewayFor = (currentStore) => createMemoryGateway({
+    layerStores: {
+      session: { store: currentStore, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } }
+    },
+    sodRules: { checkPairwiseDistinct },
+    now: () => FIXED_NOW,
+    ledgerWriter: () => ({ audited: true })
+  });
+  const query = { layer: "session", project_id: "proj-page", scope_project_id: "proj-page", limit: 2 };
+  const first = gatewayFor(store).retrieve(query);
+  assert.equal(first.decision, "ALLOW");
+  assert.equal(first.records.length, 2);
+  const cursorEnvelope = JSON.parse(Buffer.from(first.next_cursor, "base64url").toString("utf8"));
+  assert.equal(cursorEnvelope.project_id, "proj-page");
+  assert.equal(Object.prototype.hasOwnProperty.call(cursorEnvelope, "sequence"), false);
+  const observed = first.records.map((entry) => entry.record.memory_record_id);
+  let cursor = first.next_cursor;
+  store.close();
+
+  store = createSqliteMemoryRecordStore({ databasePath });
+  const restartedGateway = gatewayFor(store);
+  while (cursor !== null) {
+    const page = restartedGateway.retrieve({ ...query, cursor });
+    assert.equal(page.decision, "ALLOW");
+    observed.push(...page.records.map((entry) => entry.record.memory_record_id));
+    cursor = page.next_cursor;
+  }
+  assert.deepEqual(observed, expected);
+  assert.equal(new Set(observed).size, expected.length);
+  store.close();
+});
+
+test("startup rejects same-name substitutions for every operational index", (t) => {
+  const substitutions = [
+    ["memory_records_scope_sequence_idx", "CREATE INDEX memory_records_scope_sequence_idx ON memory_records(sequence)"],
+    ["memory_outbox_delivery_status_idx", "CREATE INDEX memory_outbox_delivery_status_idx ON memory_audit_outbox(outbox_id)"],
+    ["memory_outbox_claim_expiry_idx", "CREATE INDEX memory_outbox_claim_expiry_idx ON memory_audit_outbox(delivery_status)"],
+    ["memory_outbox_claim_token_idx", "CREATE INDEX memory_outbox_claim_token_idx ON memory_audit_outbox(claim_token)"]
+  ];
+  for (const [name, replacement] of substitutions) {
+    const databasePath = databasePathFor(t);
+    createSqliteMemoryRecordStore({ databasePath }).close();
+    const raw = new DatabaseSync(databasePath);
+    raw.exec(`DROP INDEX ${name}; ${replacement}`);
+    raw.close();
+    assert.throws(
+      () => createSqliteMemoryRecordStore({ databasePath }),
+      (error) => error instanceof SqliteMemoryStoreError
+        && error.code === "SCHEMA_INTEGRITY_VIOLATION"
+        && error.message.includes(name)
+    );
+  }
 });
 
 test("atomic append-with-outbox commits the record, receipt, and terminal event together", async (t) => {
@@ -529,6 +603,39 @@ test("outbox integrity verification rejects contradictory delivery state", async
   );
   raw.close();
   store.close();
+});
+
+test("explicit and startup integrity checks reject duplicate non-null claim tokens", async (t) => {
+  const databasePath = databasePathFor(t);
+  const firstRecord = storedRecord({ memory_record_id: "mem-duplicate-claim-1" });
+  const secondRecord = storedRecord({ memory_record_id: "mem-duplicate-claim-2" });
+  const firstEvent = outboxEntry(firstRecord, "admit-duplicate-claim-1");
+  const secondEvent = outboxEntry(secondRecord, "admit-duplicate-claim-2");
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.appendWithOutbox(firstRecord, { idempotency_key: firstEvent.idempotency_key, outbox_entry: firstEvent });
+  await store.appendWithOutbox(secondRecord, { idempotency_key: secondEvent.idempotency_key, outbox_entry: secondEvent });
+
+  const raw = new DatabaseSync(databasePath);
+  raw.exec(`
+    DROP INDEX memory_outbox_claim_token_idx;
+    CREATE INDEX memory_outbox_claim_token_idx ON memory_audit_outbox(claim_token);
+  `);
+  raw.prepare(`
+    UPDATE memory_audit_outbox
+       SET delivery_status = 'IN_FLIGHT', delivery_attempts = 1,
+           claim_token = 'duplicate-claim-token', claimed_at = ?, claim_expires_at = ?
+  `).run(FIXED_NOW.toISOString(), new Date(FIXED_NOW.getTime() + 60_000).toISOString());
+  raw.close();
+
+  assert.throws(
+    () => store.verifyOutboxIntegrity(),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
+  );
+  store.close();
+  assert.throws(
+    () => createSqliteMemoryRecordStore({ databasePath }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "SCHEMA_INTEGRITY_VIOLATION"
+  );
 });
 
 test("outbox hot dispatch validates claimed rows while explicit sweep detects unrelated corruption", async (t) => {
