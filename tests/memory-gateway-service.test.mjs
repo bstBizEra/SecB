@@ -189,6 +189,64 @@ test("store port methods are snapshotted against post-construction replacement",
   assert.equal(store.rows.length, 1);
 });
 
+test("store and port accessors are each read exactly once during construction", async () => {
+  const store = makeStore();
+  const originals = {
+    append: store.append.bind(store),
+    read: store.read.bind(store),
+    withReadLease: store.withReadLease.bind(store)
+  };
+  const reads = { store: 0, append: 0, read: 0, withReadLease: 0 };
+  for (const method of ["append", "read", "withReadLease"]) {
+    Object.defineProperty(store, method, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        reads[method] += 1;
+        if (reads[method] > 1) throw new Error(`${method} accessor was read more than once`);
+        return originals[method];
+      }
+    });
+  }
+  const config = { admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } };
+  Object.defineProperty(config, "store", {
+    enumerable: true,
+    get() {
+      reads.store += 1;
+      if (reads.store > 1) throw new Error("store accessor was read more than once");
+      return store;
+    }
+  });
+
+  const gateway = createMemoryGateway({
+    layerStores: { session: config },
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter()
+  });
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.decision, "ALLOW");
+  assert.deepEqual(reads, { store: 1, append: 1, read: 1, withReadLease: 1 });
+});
+
+test("throwing store accessors fail as controlled configuration errors", () => {
+  const hasInvalidStoreCode = (error) => error instanceof MemoryGatewayConfigurationError && error.code === "INVALID_LAYER_STORE";
+  for (const accessor of ["store", "append", "read", "withReadLease"]) {
+    const store = makeStore();
+    const config = { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } };
+    Object.defineProperty(accessor === "store" ? config : store, accessor, {
+      enumerable: true,
+      configurable: true,
+      get() { throw new Error(`hostile ${accessor} accessor`); }
+    });
+    assert.throws(
+      () => createMemoryGateway({ layerStores: { session: config }, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() }),
+      hasInvalidStoreCode
+    );
+  }
+});
+
 // --- Admission happy path --------------------------------------------------
 
 test("admit ADMITS a well-formed session record and stamps a server-derived instant", async () => {

@@ -118,23 +118,41 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
   if (!isPlainObject(layerStores) || Object.keys(layerStores).length === 0) {
     throw new MemoryGatewayConfigurationError("INVALID_LAYER_STORES", "createMemoryGateway requires a non-empty layerStores map");
   }
+  const storePorts = new Map();
   for (const name of Object.keys(layerStores)) {
     if (!LAYERS.includes(name)) {
       throw new MemoryGatewayConfigurationError("INVALID_LAYER", `Unknown memory layer configured: ${name}`);
     }
     const cfg = layerStores[name];
+    let store;
+    let append;
+    let read;
+    let withReadLease;
+    try {
+      store = cfg?.store;
+      append = store?.append;
+      read = store?.read;
+      withReadLease = store?.withReadLease;
+    } catch {
+      throw new MemoryGatewayConfigurationError("INVALID_LAYER_STORE", `Layer ${name} store methods could not be inspected`);
+    }
     if (
       !isPlainObject(cfg)
-      || !isPlainObject(cfg.store)
-      || typeof cfg.store.append !== "function"
-      || typeof cfg.store.read !== "function"
-      || typeof cfg.store.withReadLease !== "function"
+      || !isPlainObject(store)
+      || typeof append !== "function"
+      || typeof read !== "function"
+      || typeof withReadLease !== "function"
     ) {
       throw new MemoryGatewayConfigurationError(
         "INVALID_LAYER_STORE",
         `Layer ${name} requires append(), read(), and withReadLease() functions`
       );
     }
+    storePorts.set(name, Object.freeze({
+      append: append.bind(store),
+      read: read.bind(store),
+      withReadLease: withReadLease.bind(store)
+    }));
     const adm = cfg.admission;
     if (!isPlainObject(adm)) {
       throw new MemoryGatewayConfigurationError("INVALID_ADMISSION_CONFIG", `Layer ${name} requires an admission config`);
@@ -168,11 +186,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       Object.entries(layerStores).map(([name, cfg]) => [
         name,
         Object.freeze({
-          store: Object.freeze({
-            append: cfg.store.append.bind(cfg.store),
-            read: cfg.store.read.bind(cfg.store),
-            withReadLease: cfg.store.withReadLease.bind(cfg.store)
-          }),
+          store: storePorts.get(name),
           admission: Object.freeze({
             classificationCeiling: cfg.admission.classificationCeiling,
             ttlMs: cfg.admission.ttlMs,
