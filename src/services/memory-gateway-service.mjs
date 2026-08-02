@@ -314,17 +314,18 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
   // object cannot alter admission behavior. Store methods are bound once into
   // a frozen port facade; the underlying store object remains mutable so its
   // internal state can advance without permitting method-replacement TOCTOU.
-  // appendWithOutbox is optional; when present, its atomic receipt is required
-  // and the gateway never duplicates COMMITTED through the external writer.
+  // appendWithOutbox is optional; when present, its atomic receipt is required.
+  // It never waives the independent COMMITTED writer: an injected store receipt
+  // alone is not proof that terminal evidence is actually durable.
   const layers = Object.freeze(
     Object.fromEntries(configuredLayers)
   );
   // Per-instance replay metadata. It anchors trusted time/fingerprint only and
   // is never terminal authority: every replay is freshly audited and must
   // verify the pre-existing durable row without append/upsert healing it. The
-  // store-held read lease spans verification and, on the legacy port, terminal
-  // COMMITTED audit. The atomic port durably records COMMITTED before the lease
-  // and the lease verifies that exact persisted record before ALLOW.
+  // store-held read lease spans verification and terminal COMMITTED audit. The
+  // atomic port additionally records a durable delivery outbox before the lease;
+  // this closes the crash gap without trusting its receipt as sole audit proof.
   const committedAdmissions = new Map();
 
   // Server-derived instant: { ms, iso } or null when the clock is unusable.
@@ -576,7 +577,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       });
     }
 
-    async function decideUnderReadLease(expectedFingerprint, appendReceipt, terminalAuditPersisted = false) {
+    async function decideUnderReadLease(expectedFingerprint, appendReceipt) {
       const selector = deepFreeze({
         project_id: admittedRecord.project_id,
         layer: admittedRecord.layer,
@@ -642,7 +643,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
             completion = deepFreeze({ ok: false, reason: "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH" });
             return completion;
           }
-          if (!terminalAuditPersisted && !(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) {
+          if (!(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) {
             completion = deepFreeze({ ok: false, reason: "COMMIT_AUDIT_UNAVAILABLE" });
             return completion;
           }
@@ -668,17 +669,12 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     }
 
     if (priorAdmission !== undefined) {
-      const replayDecision = await decideUnderReadLease(
-        priorAdmission.record_fingerprint,
-        priorAdmission.receipt,
-        priorAdmission.terminal_audit_persisted === true
-      );
+      const replayDecision = await decideUnderReadLease(priorAdmission.record_fingerprint, priorAdmission.receipt);
       if (replayDecision.ok !== true) return reconcile(replayDecision.reason);
       return replayDecision.result;
     }
 
     let rawReceipt;
-    let terminalAuditPersisted = false;
     try {
       if (typeof layer.store.appendWithOutbox === "function") {
         const rawAtomicResult = await layer.store.appendWithOutbox(admittedRecord, {
@@ -716,7 +712,6 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
           || event.classification !== admittedRecord.classification
         ) return reconcile("STORE_ATOMIC_OUTBOX_RECEIPT_INVALID");
         rawReceipt = atomicResult.receipt;
-        terminalAuditPersisted = true;
       } else {
         rawReceipt = await layer.store.append(admittedRecord, { idempotency_key: idempotencyKey });
       }
@@ -752,7 +747,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     } catch {
       return reconcile("STORE_RECEIPT_INVALID");
     }
-    const firstDecision = await decideUnderReadLease(receipt.record_fingerprint, receipt, terminalAuditPersisted);
+    const firstDecision = await decideUnderReadLease(receipt.record_fingerprint, receipt);
     if (firstDecision.ok !== true) return reconcile(firstDecision.reason);
     const result = firstDecision.result;
     const storedRecord = result.record;
@@ -760,8 +755,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       admitted_at: storedRecord.admitted_at,
       content_hash: storedRecord.content_hash,
       record_fingerprint: receipt.record_fingerprint,
-      receipt,
-      terminal_audit_persisted: terminalAuditPersisted
+      receipt
     }));
     return result;
   }

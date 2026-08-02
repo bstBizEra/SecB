@@ -146,6 +146,7 @@ function decodeStoredRow(row) {
 function decodeOutboxRow(row) {
   try {
     const event = snapshotOutboxEntry(JSON.parse(row.event_json));
+    const deliveredMs = typeof row.delivered_at === "string" ? Date.parse(row.delivered_at) : NaN;
     if (
       event.outbox_id !== row.outbox_id
       || event.idempotency_key !== row.idempotency_key
@@ -153,7 +154,12 @@ function decodeOutboxRow(row) {
       || !["PENDING", "DELIVERED"].includes(row.delivery_status)
       || !Number.isSafeInteger(row.delivery_attempts)
       || row.delivery_attempts < 0
-      || (row.delivery_status === "DELIVERED" && typeof row.delivered_at !== "string")
+      || (row.delivery_status === "PENDING" && row.delivered_at !== null)
+      || (row.delivery_status === "DELIVERED" && (
+        row.delivery_attempts < 1
+        || !Number.isFinite(deliveredMs)
+        || new Date(deliveredMs).toISOString() !== row.delivered_at
+      ))
     ) throw new Error("outbox columns and payload differ");
     return Object.freeze({
       outbox_id: row.outbox_id,
@@ -222,8 +228,12 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
         event_fingerprint TEXT NOT NULL,
         event_json TEXT NOT NULL,
         delivery_status TEXT NOT NULL CHECK (delivery_status IN ('PENDING', 'DELIVERED')),
-        delivery_attempts INTEGER NOT NULL DEFAULT 0,
+        delivery_attempts INTEGER NOT NULL DEFAULT 0 CHECK (delivery_attempts >= 0),
         delivered_at TEXT,
+        CHECK (
+          (delivery_status = 'PENDING' AND delivered_at IS NULL)
+          OR (delivery_status = 'DELIVERED' AND delivery_attempts >= 1 AND delivered_at IS NOT NULL)
+        ),
         FOREIGN KEY (idempotency_key) REFERENCES memory_admission_receipts(idempotency_key) ON DELETE RESTRICT
       );
     `);
@@ -552,7 +562,10 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
     const results = [];
     for (const item of pending) {
       const outcome = await boundedCall(() => deliver(item.event), timeoutMs);
-      if (outcome.status === "ok") {
+      // At-least-once contract: only an explicit `true` acknowledges delivery.
+      // A receiver MUST durably deduplicate by outbox_id because timeout/crash
+      // boundaries can cause the same event to be presented again.
+      if (outcome.status === "ok" && outcome.value === true) {
         let deliveredAt;
         try {
           const epochMs = Date.prototype.getTime.call(now());

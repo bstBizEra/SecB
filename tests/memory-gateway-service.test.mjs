@@ -1105,6 +1105,42 @@ test("a failed terminal COMMITTED audit returns reconciliation-required after ve
   assert.deepEqual(entries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED", "RECONCILIATION_REQUIRED"]);
 });
 
+test("a forged atomic-outbox receipt cannot waive the independent terminal audit", async () => {
+  const store = makeStore();
+  store.appendWithOutbox = function appendWithOutbox(record, options) {
+    const receipt = this.append(record, options);
+    const event = options.outbox_entry_factory(record, receipt);
+    return {
+      receipt,
+      outbox: {
+        outbox_id: event.outbox_id,
+        event_fingerprint: canonicalFingerprint(event),
+        delivery_status: "PENDING",
+        delivery_attempts: 0,
+        delivered_at: null,
+        event
+      }
+    };
+  };
+  const entries = [];
+  const gateway = createMemoryGateway({
+    layerStores: layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } }),
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter(entry) {
+      entries.push(entry);
+      if (entry.disposition === "COMMITTED") throw new Error("independent terminal audit unavailable");
+      return { audited: true };
+    }
+  });
+
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(result.reason, "COMMIT_AUDIT_UNAVAILABLE");
+  assert.deepEqual(entries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED", "RECONCILIATION_REQUIRED"]);
+});
+
 test("a non-settling terminal audit times out and releases the store lease", async () => {
   let leaseHeld = false;
   const base = makeStore();

@@ -207,7 +207,9 @@ test("outbox delivery is bounded, retryable, and marked delivered only after suc
   assert.equal(store.readOutbox()[0].delivery_attempts, 1);
 
   const delivered = [];
-  const success = await store.dispatchOutbox((entry) => { delivered.push(entry); }, { timeoutMs: 100, now: () => FIXED_NOW });
+  const falseAck = await store.dispatchOutbox(() => false, { timeoutMs: 100, now: () => FIXED_NOW });
+  assert.equal(falseAck[0].delivery, "FAILED_PENDING");
+  const success = await store.dispatchOutbox((entry) => { delivered.push(entry); return true; }, { timeoutMs: 100, now: () => FIXED_NOW });
   assert.equal(success[0].delivery, "DELIVERED");
   assert.deepEqual(delivered, [event]);
   assert.deepEqual(store.readOutbox(), []);
@@ -228,6 +230,26 @@ test("outbox integrity verification rejects raw payload tampering", async (t) =>
     () => store.readOutbox(),
     (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
   );
+  store.close();
+});
+
+test("outbox integrity verification rejects contradictory delivery state", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-state" });
+  const event = outboxEntry(record, "admit-outbox-state");
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event });
+  const raw = new DatabaseSync(databasePath);
+  assert.throws(() => raw.prepare("UPDATE memory_audit_outbox SET delivered_at = ?").run(FIXED_NOW.toISOString()), /constraint/i);
+  raw.exec("PRAGMA ignore_check_constraints = ON");
+  raw.prepare("UPDATE memory_audit_outbox SET delivered_at = ?").run(FIXED_NOW.toISOString());
+  assert.throws(() => store.readOutbox(), (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION");
+  raw.prepare("UPDATE memory_audit_outbox SET delivery_status = 'DELIVERED', delivery_attempts = 0, delivered_at = 'garbage'").run();
+  await assert.rejects(
+    store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
+  );
+  raw.close();
   store.close();
 });
 
@@ -371,6 +393,7 @@ test("parallel gateway first admissions with different clocks verify one durable
     let result = await gateway.admit(${JSON.stringify(request)});
     await store.dispatchOutbox((entry) => {
       appendAnchor.run(entry.idempotency_key, entry.project_id, entry.layer, entry.memory_record_id, entry.version, entry.content_hash, entry.admitted_at);
+      return true;
     });
     if (result.decision !== "ALLOW") result = await gateway.admit(${JSON.stringify(request)});
     store.close();
@@ -419,7 +442,7 @@ test("same-instance concurrent admissions converge through one bounded reconcili
   assert.equal(store.read().length, 1);
   assert.equal(auditEntries.filter((entry) => entry.disposition === "ATTEMPTED").length, 3);
   assert.equal(auditEntries.filter((entry) => entry.disposition === "RECONCILIATION_REQUIRED").length, 1);
-  assert.equal(auditEntries.filter((entry) => entry.disposition === "COMMITTED").length, 0);
+  assert.equal(auditEntries.filter((entry) => entry.disposition === "COMMITTED").length, 2);
   assert.equal(store.readOutbox().length, 1);
   store.close();
 });
@@ -451,7 +474,7 @@ test("Memory gateway admits and replays through the durable adapter without dupl
   assert.equal(replay.decision, "ALLOW");
   assert.deepEqual(replay.record, first.record);
   assert.equal(store.read().length, 1);
-  assert.deepEqual(auditEntries.map((entry) => entry.disposition), ["ATTEMPTED", "ATTEMPTED"]);
+  assert.deepEqual(auditEntries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED", "ATTEMPTED", "COMMITTED"]);
   assert.equal(store.readOutbox().length, 1);
   store.close();
 });
@@ -471,7 +494,7 @@ test("gateway restart at a later clock replays the durable admission instant", a
   });
   const firstStore = createSqliteMemoryRecordStore({ databasePath });
   const first = await createGateway(firstStore, FIXED_NOW).admit(structuredClone(request));
-  await firstStore.dispatchOutbox(replayLedger.writer);
+  await firstStore.dispatchOutbox((entry) => { replayLedger.writer(entry); return true; });
   firstStore.close();
 
   const restartedStore = createSqliteMemoryRecordStore({ databasePath });
