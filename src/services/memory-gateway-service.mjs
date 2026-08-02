@@ -66,7 +66,7 @@ const RECORD_KEYS = Object.freeze([
   "content_hash"
 ]);
 const REQUIRED_RECORD_KEYS = Object.freeze(RECORD_KEYS.filter((key) => key !== "supersedes"));
-const STORE_RECEIPT_KEYS = Object.freeze(["status", "idempotency_key", "memory_record_id", "version", "content_hash", "record_fingerprint", "sequence"]);
+const STORE_RECEIPT_KEYS = Object.freeze(["status", "idempotency_key", "memory_record_id", "version", "content_hash", "record_fingerprint", "created", "sequence"]);
 const REQUIRED_STORE_RECEIPT_KEYS = Object.freeze(STORE_RECEIPT_KEYS.filter((key) => key !== "sequence"));
 const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
@@ -115,30 +115,52 @@ function classificationRank(value) {
 
 export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter } = {}) {
   // --- Fail-closed construction ------------------------------------------
-  if (!isPlainObject(layerStores) || Object.keys(layerStores).length === 0) {
+  let layerNames;
+  try {
+    if (!isPlainObject(layerStores)) throw new Error("not a plain object");
+    layerNames = Reflect.ownKeys(layerStores);
+    if (layerNames.length === 0 || layerNames.some((name) => typeof name !== "string")) {
+      throw new Error("empty or symbol-keyed layer map");
+    }
+  } catch {
     throw new MemoryGatewayConfigurationError("INVALID_LAYER_STORES", "createMemoryGateway requires a non-empty layerStores map");
   }
-  const storePorts = new Map();
-  for (const name of Object.keys(layerStores)) {
+  const configuredLayers = [];
+  for (const name of layerNames) {
     if (!LAYERS.includes(name)) {
       throw new MemoryGatewayConfigurationError("INVALID_LAYER", `Unknown memory layer configured: ${name}`);
     }
-    const cfg = layerStores[name];
+    let cfg;
+    let cfgIsPlain;
     let store;
+    let storeIsPlain;
     let append;
     let read;
     let withReadLease;
+    let admission;
+    let admissionIsPlain;
+    let classificationCeiling;
+    let ttlMs;
+    let sod;
     try {
+      cfg = layerStores[name];
+      cfgIsPlain = isPlainObject(cfg);
       store = cfg?.store;
+      storeIsPlain = isPlainObject(store);
       append = store?.append;
       read = store?.read;
       withReadLease = store?.withReadLease;
+      admission = cfg?.admission;
+      admissionIsPlain = isPlainObject(admission);
+      classificationCeiling = admission?.classificationCeiling;
+      ttlMs = admission?.ttlMs;
+      sod = admission?.sod;
     } catch {
-      throw new MemoryGatewayConfigurationError("INVALID_LAYER_STORE", `Layer ${name} store methods could not be inspected`);
+      throw new MemoryGatewayConfigurationError("INVALID_LAYER_CONFIG", `Layer ${name} configuration could not be snapshotted safely`);
     }
     if (
-      !isPlainObject(cfg)
-      || !isPlainObject(store)
+      !cfgIsPlain
+      || !storeIsPlain
       || typeof append !== "function"
       || typeof read !== "function"
       || typeof withReadLease !== "function"
@@ -148,28 +170,37 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         `Layer ${name} requires append(), read(), and withReadLease() functions`
       );
     }
-    storePorts.set(name, Object.freeze({
-      append: append.bind(store),
-      read: read.bind(store),
-      withReadLease: withReadLease.bind(store)
-    }));
-    const adm = cfg.admission;
-    if (!isPlainObject(adm)) {
+    if (!admissionIsPlain) {
       throw new MemoryGatewayConfigurationError("INVALID_ADMISSION_CONFIG", `Layer ${name} requires an admission config`);
     }
-    if (!CLASSIFICATION_ORDER.includes(adm.classificationCeiling)) {
+    if (!CLASSIFICATION_ORDER.includes(classificationCeiling)) {
       throw new MemoryGatewayConfigurationError("INVALID_ADMISSION_CONFIG", `Layer ${name} admission.classificationCeiling must be one of ${CLASSIFICATION_ORDER.join(", ")}`);
     }
-    if (!Number.isInteger(adm.ttlMs) || adm.ttlMs <= 0) {
+    if (!Number.isInteger(ttlMs) || ttlMs <= 0) {
       throw new MemoryGatewayConfigurationError("INVALID_ADMISSION_CONFIG", `Layer ${name} admission.ttlMs must be a positive integer (TTL semantics as data)`);
     }
-    if (!SOD_MODES.includes(adm.sod)) {
+    if (!SOD_MODES.includes(sod)) {
       throw new MemoryGatewayConfigurationError("INVALID_ADMISSION_CONFIG", `Layer ${name} admission.sod must be one of ${SOD_MODES.join(", ")}`);
     }
+    configuredLayers.push([name, Object.freeze({
+      store: Object.freeze({
+        append: Function.prototype.bind.call(append, store),
+        read: Function.prototype.bind.call(read, store),
+        withReadLease: Function.prototype.bind.call(withReadLease, store)
+      }),
+      admission: Object.freeze({ classificationCeiling, ttlMs, sod })
+    })]);
   }
-  if (!isPlainObject(sodRules) || typeof sodRules.checkPairwiseDistinct !== "function") {
+  let checkPairwiseDistinct;
+  try {
+    checkPairwiseDistinct = sodRules?.checkPairwiseDistinct;
+  } catch {
+    throw new MemoryGatewayConfigurationError("INVALID_SOD_RULES", "sodRules.checkPairwiseDistinct could not be inspected");
+  }
+  if (!isPlainObject(sodRules) || typeof checkPairwiseDistinct !== "function") {
     throw new MemoryGatewayConfigurationError("INVALID_SOD_RULES", "sodRules must expose a checkPairwiseDistinct function (kernel primitive reuse)");
   }
+  const checkAdmissionSod = Function.prototype.bind.call(checkPairwiseDistinct, sodRules);
   if (typeof now !== "function") {
     throw new MemoryGatewayConfigurationError("INVALID_CLOCK", "createMemoryGateway requires a now() clock function (server-derived instants)");
   }
@@ -182,19 +213,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
   // a frozen port facade; the underlying store object remains mutable so its
   // internal state can advance without permitting method-replacement TOCTOU.
   const layers = Object.freeze(
-    Object.fromEntries(
-      Object.entries(layerStores).map(([name, cfg]) => [
-        name,
-        Object.freeze({
-          store: storePorts.get(name),
-          admission: Object.freeze({
-            classificationCeiling: cfg.admission.classificationCeiling,
-            ttlMs: cfg.admission.ttlMs,
-            sod: cfg.admission.sod
-          })
-        })
-      ])
-    )
+    Object.fromEntries(configuredLayers)
   );
   // Per-instance replay metadata. It anchors trusted time/fingerprint only and
   // is never terminal authority: every replay is freshly audited and must
@@ -343,7 +362,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
       }
       let sodResult;
       try {
-        sodResult = sodRules.checkPairwiseDistinct(actors, { code: "DENY_ADMISSION_SOD" });
+        sodResult = checkAdmissionSod(actors, { code: "DENY_ADMISSION_SOD" });
       } catch {
         return deny("DENY_ADMISSION_SOD", "Admission separation-of-duties check failed");
       }
@@ -471,7 +490,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
             completion = deepFreeze({ ok: false, reason: "STORE_LEASE_RECORD_MISSING_OR_CONFLICT" });
             return completion;
           }
-          if (storedRecord.admitted_at !== admittedRecord.admitted_at) {
+          if (storedRecord.admitted_at !== admittedRecord.admitted_at && appendReceipt.created !== false) {
             completion = deepFreeze({ ok: false, reason: "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH" });
             return completion;
           }
@@ -525,6 +544,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         || receiptSnapshot.content_hash !== admittedRecord.content_hash
         || typeof receiptSnapshot.record_fingerprint !== "string"
         || !/^[a-f0-9]{64}$/.test(receiptSnapshot.record_fingerprint)
+        || typeof receiptSnapshot.created !== "boolean"
         || (receiptSnapshot.sequence !== undefined && !(Number.isSafeInteger(receiptSnapshot.sequence) && receiptSnapshot.sequence > 0))
       ) return reconcile("STORE_RECEIPT_INVALID");
       receipt = deepFreeze({
@@ -534,6 +554,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter }
         version: admittedRecord.version,
         content_hash: admittedRecord.content_hash,
         record_fingerprint: receiptSnapshot.record_fingerprint,
+        created: receiptSnapshot.created,
         ...(receiptSnapshot.sequence === undefined ? {} : { sequence: receiptSnapshot.sequence })
       });
     } catch {

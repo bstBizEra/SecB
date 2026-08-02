@@ -56,22 +56,45 @@ function storedRecord(overrides = {}) {
   };
 }
 
-test("SQLite store atomically persists one idempotent identity across restart", (t) => {
+function withoutCreated(receipt) {
+  const { created, ...stable } = receipt;
+  return stable;
+}
+
+test("optional adapter fails with a controlled code when node:sqlite is disabled", async () => {
+  const probe = `
+    import { createSqliteMemoryRecordStore } from ${JSON.stringify(STORE_MODULE_URL)};
+    try {
+      createSqliteMemoryRecordStore({ databasePath: ":memory:" });
+      process.stdout.write("UNEXPECTED_AVAILABLE");
+    } catch (error) {
+      process.stdout.write(error.code ?? "NO_CODE");
+    }
+  `;
+  const { stdout } = await execFileAsync(process.execPath, ["--no-warnings", "--no-experimental-sqlite", "--input-type=module", "--eval", probe]);
+  assert.equal(stdout, "SQLITE_UNAVAILABLE");
+});
+
+test("SQLite store atomically persists one idempotent identity across restart", async (t) => {
   const databasePath = databasePathFor(t);
   const record = storedRecord();
   const store = createSqliteMemoryRecordStore({ databasePath });
 
-  const first = store.append(record, { idempotency_key: "admit-1" });
-  const replay = store.append(structuredClone(record), { idempotency_key: "admit-1" });
-  assert.deepEqual(replay, first);
+  const first = await store.append(record, { idempotency_key: "admit-1" });
+  const replay = await store.append(structuredClone(record), { idempotency_key: "admit-1" });
+  assert.equal(first.created, true);
+  assert.equal(replay.created, false);
+  assert.deepEqual(withoutCreated(replay), withoutCreated(first));
   assert.equal(store.read().length, 1);
   store.close();
 
   const restarted = createSqliteMemoryRecordStore({ databasePath });
   assert.deepEqual(restarted.read(), [record]);
-  assert.deepEqual(restarted.append(record, { idempotency_key: "admit-1" }), first);
-  assert.throws(
-    () => restarted.append({ ...record, statement: "conflict" }, { idempotency_key: "admit-1" }),
+  const restartedReplay = await restarted.append(record, { idempotency_key: "admit-1" });
+  assert.equal(restartedReplay.created, false);
+  assert.deepEqual(withoutCreated(restartedReplay), withoutCreated(first));
+  await assert.rejects(
+    restarted.append({ ...record, statement: "conflict" }, { idempotency_key: "admit-1" }),
     (error) => error instanceof SqliteMemoryStoreError && error.code === "IDEMPOTENCY_CONFLICT"
   );
   restarted.close();
@@ -81,7 +104,7 @@ test("SQLite read lease holds a writer fence through an asynchronous callback", 
   const databasePath = databasePathFor(t);
   const record = storedRecord();
   const store = createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs: 0 });
-  const receipt = store.append(record, { idempotency_key: "admit-1" });
+  const receipt = await store.append(record, { idempotency_key: "admit-1" });
   const selector = {
     project_id: record.project_id,
     layer: record.layer,
@@ -110,11 +133,27 @@ test("SQLite read lease holds a writer fence through an asynchronous callback", 
   store.close();
 });
 
-test("an uncommitted process crash rolls back without deleting the durable record", (t) => {
+test("read rejects raw JSON tampering before returning poisoned memory", async (t) => {
   const databasePath = databasePathFor(t);
   const record = storedRecord();
   const store = createSqliteMemoryRecordStore({ databasePath });
-  store.append(record, { idempotency_key: "admit-1" });
+  await store.append(record, { idempotency_key: "admit-1" });
+  const attacker = new DatabaseSync(databasePath);
+  attacker.prepare("UPDATE memory_records SET record_json = ?").run(JSON.stringify({ ...record, statement: "poisoned" }));
+  attacker.close();
+
+  assert.throws(
+    () => store.read(),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "INTEGRITY_VIOLATION"
+  );
+  store.close();
+});
+
+test("an uncommitted process crash rolls back without deleting the durable record", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord();
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.append(record, { idempotency_key: "admit-1" });
   store.close();
 
   const crashScript = `
@@ -140,7 +179,7 @@ test("parallel first appends converge on one durable row and one receipt", async
   const appendScript = `
     import { createSqliteMemoryRecordStore } from ${JSON.stringify(STORE_MODULE_URL)};
     const store = createSqliteMemoryRecordStore({ databasePath: ${JSON.stringify(databasePath)}, busyTimeoutMs: 10000 });
-    const receipt = store.append(${JSON.stringify(record)}, { idempotency_key: "admit-parallel" });
+    const receipt = await store.append(${JSON.stringify(record)}, { idempotency_key: "admit-parallel" });
     store.close();
     process.stdout.write(JSON.stringify(receipt));
   `;
@@ -149,25 +188,27 @@ test("parallel first appends converge on one durable row and one receipt", async
     execFileAsync(process.execPath, ["--no-warnings", "--input-type=module", "--eval", appendScript]),
     execFileAsync(process.execPath, ["--no-warnings", "--input-type=module", "--eval", appendScript])
   ]);
-  assert.deepEqual(JSON.parse(left.stdout), JSON.parse(right.stdout));
+  const receipts = [JSON.parse(left.stdout), JSON.parse(right.stdout)];
+  assert.deepEqual(receipts.map(({ created }) => created).sort(), [false, true]);
+  assert.deepEqual(withoutCreated(receipts[0]), withoutCreated(receipts[1]));
 
   const store = createSqliteMemoryRecordStore({ databasePath });
   assert.deepEqual(store.read(), [record]);
   store.close();
 });
 
-test("parallel gateway first admissions both verify one durable identity", async (t) => {
+test("parallel gateway first admissions with different clocks verify one durable identity", async (t) => {
   const databasePath = databasePathFor(t);
   createSqliteMemoryRecordStore({ databasePath }).close();
   const request = { layer: "session", record: gatewayRecord(), admission: { producer: "agent-a" } };
-  const admissionScript = `
+  const admissionScript = (instant) => `
     import { createMemoryGateway } from ${JSON.stringify(GATEWAY_MODULE_URL)};
     import { createSqliteMemoryRecordStore } from ${JSON.stringify(STORE_MODULE_URL)};
     const store = createSqliteMemoryRecordStore({ databasePath: ${JSON.stringify(databasePath)}, busyTimeoutMs: 10000 });
     const gateway = createMemoryGateway({
       layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60000, sod: "producer-only" } } },
       sodRules: { checkPairwiseDistinct: () => ({ ok: true }) },
-      now: () => new Date(${JSON.stringify(FIXED_NOW.toISOString())}),
+      now: () => new Date(${JSON.stringify(instant)}),
       ledgerWriter: () => ({ audited: true })
     });
     const result = await gateway.admit(${JSON.stringify(request)});
@@ -176,13 +217,49 @@ test("parallel gateway first admissions both verify one durable identity", async
   `;
 
   const [left, right] = await Promise.all([
-    execFileAsync(process.execPath, ["--no-warnings", "--input-type=module", "--eval", admissionScript]),
-    execFileAsync(process.execPath, ["--no-warnings", "--input-type=module", "--eval", admissionScript])
+    execFileAsync(process.execPath, ["--no-warnings", "--input-type=module", "--eval", admissionScript(FIXED_NOW.toISOString())]),
+    execFileAsync(process.execPath, ["--no-warnings", "--input-type=module", "--eval", admissionScript(new Date(FIXED_NOW.getTime() + 1).toISOString())])
   ]);
   assert.deepEqual(JSON.parse(left.stdout), { decision: "ALLOW", code: "ADMITTED" });
   assert.deepEqual(JSON.parse(right.stdout), { decision: "ALLOW", code: "ADMITTED" });
 
   const store = createSqliteMemoryRecordStore({ databasePath });
+  assert.equal(store.read().length, 1);
+  store.close();
+});
+
+test("same-instance concurrent admissions serialize instead of producing false reconciliation", async (t) => {
+  const databasePath = databasePathFor(t);
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  let releaseFirstCommit;
+  let signalFirstCommit;
+  const firstCommitEntered = new Promise((resolve) => { signalFirstCommit = resolve; });
+  const firstCommitRelease = new Promise((resolve) => { releaseFirstCommit = resolve; });
+  let committedCalls = 0;
+  const gateway = createMemoryGateway({
+    layerStores: {
+      session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } }
+    },
+    sodRules: { checkPairwiseDistinct },
+    now: () => FIXED_NOW,
+    async ledgerWriter(entry) {
+      if (entry.disposition === "COMMITTED" && ++committedCalls === 1) {
+        signalFirstCommit();
+        await firstCommitRelease;
+      }
+      return { audited: true };
+    }
+  });
+  const request = { layer: "session", record: gatewayRecord(), admission: { producer: "agent-a" } };
+
+  const firstPending = gateway.admit(structuredClone(request));
+  await firstCommitEntered;
+  const secondPending = gateway.admit(structuredClone(request));
+  releaseFirstCommit();
+  const [first, second] = await Promise.all([firstPending, secondPending]);
+
+  assert.equal(first.decision, "ALLOW");
+  assert.equal(second.decision, "ALLOW");
   assert.equal(store.read().length, 1);
   store.close();
 });
@@ -216,4 +293,30 @@ test("Memory gateway admits and replays through the durable adapter without dupl
   assert.equal(store.read().length, 1);
   assert.deepEqual(auditEntries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED", "ATTEMPTED", "COMMITTED"]);
   store.close();
+});
+
+test("gateway restart at a later clock replays the durable admission instant", async (t) => {
+  const databasePath = databasePathFor(t);
+  const request = { layer: "session", record: gatewayRecord(), admission: { producer: "agent-a" } };
+  const createGateway = (store, instant) => createMemoryGateway({
+    layerStores: {
+      session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } }
+    },
+    sodRules: { checkPairwiseDistinct },
+    now: () => instant,
+    ledgerWriter: () => ({ audited: true })
+  });
+  const firstStore = createSqliteMemoryRecordStore({ databasePath });
+  const first = await createGateway(firstStore, FIXED_NOW).admit(structuredClone(request));
+  firstStore.close();
+
+  const restartedStore = createSqliteMemoryRecordStore({ databasePath });
+  const replay = await createGateway(restartedStore, new Date(FIXED_NOW.getTime() + 300_000)).admit(structuredClone(request));
+
+  assert.equal(first.decision, "ALLOW");
+  assert.equal(replay.decision, "ALLOW");
+  assert.equal(replay.admitted_at, first.admitted_at);
+  assert.equal(replay.append.created, false);
+  assert.equal(restartedStore.read().length, 1);
+  restartedStore.close();
 });

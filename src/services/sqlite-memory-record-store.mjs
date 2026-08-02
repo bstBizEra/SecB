@@ -1,6 +1,10 @@
-import { DatabaseSync } from "node:sqlite";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createRequire } from "node:module";
 
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
+import { validateContract } from "../contracts/contract-validator.mjs";
+
+const require = createRequire(import.meta.url);
 
 export class SqliteMemoryStoreError extends Error {
   constructor(code, message, options = {}) {
@@ -12,8 +16,12 @@ export class SqliteMemoryStoreError extends Error {
 
 function isPlainObject(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  } catch {
+    return false;
+  }
 }
 
 function rollbackQuietly(database) {
@@ -49,7 +57,7 @@ function snapshotRecord(record) {
   return snapshot;
 }
 
-function receiptFromRow(row) {
+function receiptFromRow(row, created) {
   return Object.freeze({
     status: "COMMITTED",
     idempotency_key: row.idempotency_key,
@@ -57,8 +65,29 @@ function receiptFromRow(row) {
     version: row.record_version,
     content_hash: row.content_hash,
     record_fingerprint: row.record_fingerprint,
+    created,
     sequence: Number(row.sequence)
   });
+}
+
+function decodeStoredRow(row) {
+  try {
+    const record = JSON.parse(row.record_json);
+    validateContract("memoryRecord", record);
+    if (
+      record.project_id !== row.project_id
+      || record.layer !== row.layer
+      || record.memory_record_id !== row.memory_record_id
+      || record.version !== row.record_version
+      || record.content_hash !== row.content_hash
+      || canonicalFingerprint(record) !== row.record_fingerprint
+    ) {
+      throw new Error("stored columns and record payload differ");
+    }
+    return record;
+  } catch (cause) {
+    throw new SqliteMemoryStoreError("INTEGRITY_VIOLATION", "stored memory record failed integrity verification", { cause });
+  }
 }
 
 export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_000 } = {}) {
@@ -67,6 +96,18 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
   }
   if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 0 || busyTimeoutMs > 60_000) {
     throw new SqliteMemoryStoreError("INVALID_BUSY_TIMEOUT", "busyTimeoutMs must be an integer from 0 through 60000");
+  }
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = require("node:sqlite"));
+    if (typeof DatabaseSync !== "function") throw new Error("DatabaseSync is unavailable");
+  } catch (cause) {
+    throw new SqliteMemoryStoreError(
+      "SQLITE_UNAVAILABLE",
+      "node:sqlite is unavailable; this optional adapter requires an enabled Node.js SQLite runtime",
+      { cause }
+    );
   }
 
   let database;
@@ -104,7 +145,7 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
 
   const selectReceipt = database.prepare(`
     SELECT r.sequence, r.project_id, r.layer, r.memory_record_id, r.record_version, r.content_hash,
-           a.idempotency_key, a.record_fingerprint
+           r.record_json, a.idempotency_key, a.record_fingerprint
       FROM memory_admission_receipts AS a
       JOIN memory_records AS r ON r.sequence = a.sequence
      WHERE a.idempotency_key = ?
@@ -132,41 +173,55 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
     INSERT INTO memory_admission_receipts (idempotency_key, sequence, record_fingerprint)
     VALUES (?, ?, ?)
   `);
-  const readAll = database.prepare("SELECT record_json FROM memory_records ORDER BY sequence");
+  const readAll = database.prepare(`
+    SELECT sequence, project_id, layer, memory_record_id, record_version,
+           content_hash, record_fingerprint, record_json
+      FROM memory_records
+     ORDER BY sequence
+  `);
 
   let closed = false;
   let leaseActive = false;
+  let pendingOperations = 0;
+  let operationTail = Promise.resolve();
+  const leaseContext = new AsyncLocalStorage();
+  const leaseToken = Object.freeze({ store: databasePath });
 
   function assertOpen() {
     if (closed) throw new SqliteMemoryStoreError("STORE_CLOSED", "SQLite memory store is closed");
   }
 
-  function append(record, { idempotency_key: idempotencyKey } = {}) {
-    assertOpen();
-    if (leaseActive) throw new SqliteMemoryStoreError("LEASE_REENTRANCY_DENIED", "append is denied while this store holds a read lease");
-    if (typeof idempotencyKey !== "string" || idempotencyKey === "") {
-      throw new SqliteMemoryStoreError("INVALID_IDEMPOTENCY_KEY", "idempotency_key must be a non-empty string");
-    }
-    const snapshot = snapshotRecord(record);
-    const fingerprint = canonicalFingerprint(snapshot);
-    const recordJson = JSON.stringify(snapshot);
+  function enqueue(operation) {
+    pendingOperations += 1;
+    const result = operationTail.then(operation, operation);
+    operationTail = result.then(
+      () => { pendingOperations -= 1; },
+      () => { pendingOperations -= 1; }
+    );
+    return result;
+  }
 
-    database.exec("BEGIN IMMEDIATE");
+  function appendAtomic(snapshot, idempotencyKey, fingerprint, recordJson) {
+    assertOpen();
     try {
+      database.exec("BEGIN IMMEDIATE");
       const prior = selectReceipt.get(idempotencyKey);
       if (prior !== undefined) {
+        const priorRecord = decodeStoredRow(prior);
+        const { admitted_at: priorAdmittedAt, ...priorStableBody } = priorRecord;
+        const { admitted_at: proposedAdmittedAt, ...proposedStableBody } = snapshot;
         if (
           prior.project_id !== snapshot.project_id
           || prior.layer !== snapshot.layer
           || prior.memory_record_id !== snapshot.memory_record_id
           || prior.record_version !== snapshot.version
           || prior.content_hash !== snapshot.content_hash
-          || prior.record_fingerprint !== fingerprint
+          || canonicalFingerprint(priorStableBody) !== canonicalFingerprint(proposedStableBody)
         ) {
           throw new SqliteMemoryStoreError("IDEMPOTENCY_CONFLICT", "idempotency key is already bound to different record content");
         }
         database.exec("COMMIT");
-        return receiptFromRow(prior);
+        return receiptFromRow(prior, false);
       }
 
       const occupied = selectIdentity.get(snapshot.project_id, snapshot.layer, snapshot.memory_record_id, snapshot.version);
@@ -193,6 +248,7 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
         version: snapshot.version,
         content_hash: snapshot.content_hash,
         record_fingerprint: fingerprint,
+        created: true,
         sequence
       });
     } catch (cause) {
@@ -202,39 +258,41 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
     }
   }
 
+  function append(record, options = {}) {
+    assertOpen();
+    if (leaseContext.getStore() === leaseToken) {
+      throw new SqliteMemoryStoreError("LEASE_REENTRANCY_DENIED", "append is denied from inside this store's read-lease callback");
+    }
+    let idempotencyKey;
+    try {
+      idempotencyKey = options?.idempotency_key;
+    } catch (cause) {
+      throw new SqliteMemoryStoreError("INVALID_IDEMPOTENCY_KEY", "idempotency_key could not be inspected", { cause });
+    }
+    if (typeof idempotencyKey !== "string" || idempotencyKey === "") {
+      throw new SqliteMemoryStoreError("INVALID_IDEMPOTENCY_KEY", "idempotency_key must be a non-empty string");
+    }
+    const snapshot = snapshotRecord(record);
+    const fingerprint = canonicalFingerprint(snapshot);
+    const recordJson = JSON.stringify(snapshot);
+    return enqueue(() => appendAtomic(snapshot, idempotencyKey, fingerprint, recordJson));
+  }
+
   function read() {
     assertOpen();
     try {
-      return readAll.all().map(({ record_json: recordJson }) => JSON.parse(recordJson));
+      return readAll.all().map(decodeStoredRow);
     } catch (cause) {
+      if (cause instanceof SqliteMemoryStoreError) throw cause;
       throw new SqliteMemoryStoreError("READ_FAILED", "memory records could not be read", { cause });
     }
   }
 
-  async function withReadLease(selector, callback) {
+  async function withReadLeaseAtomic(leaseSelector, callback) {
     assertOpen();
-    if (leaseActive) throw new SqliteMemoryStoreError("LEASE_REENTRANCY_DENIED", "nested read leases are denied");
-    if (!isPlainObject(selector) || typeof callback !== "function") {
-      throw new SqliteMemoryStoreError("INVALID_LEASE_REQUEST", "selector and callback are required");
-    }
-    const fields = ["project_id", "layer", "memory_record_id", "version", "content_hash", "record_fingerprint"];
-    let leaseSelector;
     try {
-      leaseSelector = Object.fromEntries(fields.map((field) => [field, selector[field]]));
-    } catch (cause) {
-      throw new SqliteMemoryStoreError("INVALID_LEASE_REQUEST", "selector could not be inspected", { cause });
-    }
-    if (
-      fields.some((field) => leaseSelector[field] === undefined)
-      || !Number.isSafeInteger(leaseSelector.version)
-      || fields.filter((field) => field !== "version").some((field) => typeof leaseSelector[field] !== "string")
-    ) {
-      throw new SqliteMemoryStoreError("INVALID_LEASE_REQUEST", "selector identity is incomplete or malformed");
-    }
-
-    database.exec("BEGIN IMMEDIATE");
-    leaseActive = true;
-    try {
+      database.exec("BEGIN IMMEDIATE");
+      leaseActive = true;
       const args = [
         leaseSelector.project_id,
         leaseSelector.layer,
@@ -244,8 +302,8 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
         leaseSelector.record_fingerprint
       ];
       const before = selectLeased.get(...args);
-      const row = before === undefined ? null : JSON.parse(before.record_json);
-      const callbackResult = await callback(row);
+      const row = before === undefined ? null : decodeStoredRow(before);
+      const callbackResult = await leaseContext.run(leaseToken, () => callback(row));
       const after = selectLeased.get(...args);
       if (
         (before === undefined) !== (after === undefined)
@@ -268,9 +326,34 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
     }
   }
 
+  function withReadLease(selector, callback) {
+    assertOpen();
+    if (leaseContext.getStore() === leaseToken) {
+      throw new SqliteMemoryStoreError("LEASE_REENTRANCY_DENIED", "nested read leases are denied");
+    }
+    if (!isPlainObject(selector) || typeof callback !== "function") {
+      throw new SqliteMemoryStoreError("INVALID_LEASE_REQUEST", "selector and callback are required");
+    }
+    const fields = ["project_id", "layer", "memory_record_id", "version", "content_hash", "record_fingerprint"];
+    let leaseSelector;
+    try {
+      leaseSelector = Object.fromEntries(fields.map((field) => [field, selector[field]]));
+    } catch (cause) {
+      throw new SqliteMemoryStoreError("INVALID_LEASE_REQUEST", "selector could not be inspected", { cause });
+    }
+    if (
+      fields.some((field) => leaseSelector[field] === undefined)
+      || !Number.isSafeInteger(leaseSelector.version)
+      || fields.filter((field) => field !== "version").some((field) => typeof leaseSelector[field] !== "string")
+    ) {
+      throw new SqliteMemoryStoreError("INVALID_LEASE_REQUEST", "selector identity is incomplete or malformed");
+    }
+    return enqueue(() => withReadLeaseAtomic(leaseSelector, callback));
+  }
+
   function close() {
     if (closed) return;
-    if (leaseActive) throw new SqliteMemoryStoreError("LEASE_ACTIVE", "store cannot close while a read lease is active");
+    if (leaseActive || pendingOperations > 0) throw new SqliteMemoryStoreError("LEASE_ACTIVE", "store cannot close while operations are active or queued");
     database.close();
     closed = true;
   }

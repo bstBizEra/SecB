@@ -69,6 +69,7 @@ function makeStore() {
         version: record.version,
         content_hash: record.content_hash,
         record_fingerprint: canonicalFingerprint(record),
+        created: true,
         sequence: rows.length
       };
       receipts.set(idempotency_key, receipt);
@@ -231,7 +232,7 @@ test("store and port accessors are each read exactly once during construction", 
 });
 
 test("throwing store accessors fail as controlled configuration errors", () => {
-  const hasInvalidStoreCode = (error) => error instanceof MemoryGatewayConfigurationError && error.code === "INVALID_LAYER_STORE";
+  const hasControlledLayerCode = (error) => error instanceof MemoryGatewayConfigurationError && ["INVALID_LAYER_CONFIG", "INVALID_LAYER_STORE"].includes(error.code);
   for (const accessor of ["store", "append", "read", "withReadLease"]) {
     const store = makeStore();
     const config = { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } };
@@ -242,9 +243,110 @@ test("throwing store accessors fail as controlled configuration errors", () => {
     });
     assert.throws(
       () => createMemoryGateway({ layerStores: { session: config }, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() }),
-      hasInvalidStoreCode
+      hasControlledLayerCode
     );
   }
+});
+
+test("the complete layer and admission policy graph is snapshotted exactly once", async () => {
+  const store = makeStore();
+  const reads = { layer: 0, admission: 0, classificationCeiling: 0, ttlMs: 0, sod: 0 };
+  const admission = {};
+  const firstValues = { classificationCeiling: "PUBLIC", ttlMs: 60_000, sod: "producer-only" };
+  const weakerValues = { classificationCeiling: "RESTRICTED", ttlMs: 600_000, sod: "producer-only" };
+  for (const field of Object.keys(firstValues)) {
+    Object.defineProperty(admission, field, {
+      enumerable: true,
+      get() {
+        reads[field] += 1;
+        return reads[field] === 1 ? firstValues[field] : weakerValues[field];
+      }
+    });
+  }
+  const config = { store };
+  Object.defineProperty(config, "admission", {
+    enumerable: true,
+    get() {
+      reads.admission += 1;
+      if (reads.admission > 1) throw new Error("admission accessor reread");
+      return admission;
+    }
+  });
+  const layerStores = {};
+  Object.defineProperty(layerStores, "session", {
+    enumerable: true,
+    get() {
+      reads.layer += 1;
+      if (reads.layer > 1) {
+        return { store, admission: weakerValues };
+      }
+      return config;
+    }
+  });
+
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  const result = await gateway.admit({
+    layer: "session",
+    record: sessionRecord({ classification: "RESTRICTED" }),
+    admission: { producer: "agent-a" }
+  });
+
+  assert.equal(result.code, "DENY_CLASSIFICATION_CEILING");
+  assert.deepEqual(reads, { layer: 1, admission: 1, classificationCeiling: 1, ttlMs: 1, sod: 1 });
+  assert.equal(store.rows.length, 0);
+});
+
+test("hostile layer-map and admission accessors fail closed without policy bypass", () => {
+  const options = { sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() };
+  const symbolLayers = { session: layerConfig().session, [Symbol("hidden")]: layerConfig().project };
+  assert.throws(
+    () => createMemoryGateway({ ...options, layerStores: symbolLayers }),
+    (error) => error instanceof MemoryGatewayConfigurationError && error.code === "INVALID_LAYER_STORES"
+  );
+  const hostileMap = new Proxy({}, { ownKeys() { throw new Error("ownKeys trap"); } });
+  assert.throws(
+    () => createMemoryGateway({ ...options, layerStores: hostileMap }),
+    (error) => error instanceof MemoryGatewayConfigurationError && error.code === "INVALID_LAYER_STORES"
+  );
+  for (const field of ["admission", "classificationCeiling", "ttlMs", "sod"]) {
+    const store = makeStore();
+    const admission = { classificationCeiling: "PUBLIC", ttlMs: 60_000, sod: "producer-only" };
+    const config = { store, admission };
+    Object.defineProperty(field === "admission" ? config : admission, field, {
+      enumerable: true,
+      configurable: true,
+      get() { throw new Error(`hostile ${field} accessor`); }
+    });
+    assert.throws(
+      () => createMemoryGateway({ ...options, layerStores: { session: config } }),
+      (error) => error instanceof MemoryGatewayConfigurationError && error.code === "INVALID_LAYER_CONFIG"
+    );
+  }
+});
+
+test("the SoD collaborator method is captured once against later replacement", async () => {
+  let methodReads = 0;
+  const sodRules = {};
+  Object.defineProperty(sodRules, "checkPairwiseDistinct", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      methodReads += 1;
+      if (methodReads > 1) throw new Error("SoD method accessor reread");
+      return () => ({ ok: false, code: "DENY_ADMISSION_SOD", message: "captured policy denial" });
+    }
+  });
+  const gateway = createMemoryGateway({ layerStores: layerConfig(), sodRules, now: () => FIXED_NOW, ledgerWriter: makeAuditWriter() });
+  Object.defineProperty(sodRules, "checkPairwiseDistinct", { configurable: true, value: () => ({ ok: true }) });
+
+  const result = await gateway.admit({
+    layer: "project",
+    record: sessionRecord({ classification: "RESTRICTED" }, "project"),
+    admission: { producer: "agent-a", approver: "agent-b" }
+  });
+
+  assert.equal(result.code, "DENY_ADMISSION_SOD");
+  assert.equal(methodReads, 1);
 });
 
 // --- Admission happy path --------------------------------------------------
@@ -574,6 +676,7 @@ test("upsert-style store cannot heal deleted or tampered state during replay", a
         version: record.version,
         content_hash: record.content_hash,
         record_fingerprint: canonicalFingerprint(record),
+        created: true,
         sequence: appendCalls
       };
     },
@@ -619,6 +722,7 @@ test("read lease blocks concurrent delete and tamper through terminal audit", as
         version: record.version,
         content_hash: record.content_hash,
         record_fingerprint: canonicalFingerprint(record),
+        created: true,
         sequence: rows.length
       };
       receipts.set(idempotency_key, receipt);
@@ -795,6 +899,7 @@ test("tampered full-record read-back cannot produce ALLOW even with a matching r
         version: record.version,
         content_hash: record.content_hash,
         record_fingerprint: canonicalFingerprint(tampered),
+        created: true,
         sequence: 1
       };
     },
@@ -820,6 +925,7 @@ test("store cannot substitute trusted admission time even with a recomputed fing
         version: record.version,
         content_hash: record.content_hash,
         record_fingerprint: canonicalFingerprint(tampered),
+        created: true,
         sequence: 1
       };
     },
