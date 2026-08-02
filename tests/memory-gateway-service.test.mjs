@@ -101,8 +101,8 @@ function layerConfig(overrides = {}) {
   };
 }
 
-function makeGateway({ now = () => FIXED_NOW, ledgerWriter = makeAuditWriter(), layerStores = layerConfig() } = {}) {
-  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now, ledgerWriter });
+function makeGateway({ now = () => FIXED_NOW, ledgerWriter = makeAuditWriter(), layerStores = layerConfig(), replayResolver, timeouts } = {}) {
+  const gateway = createMemoryGateway({ layerStores, sodRules: kernelSodRules, now, ledgerWriter, replayResolver, timeouts });
   return { gateway, layerStores, ledgerWriter };
 }
 
@@ -171,6 +171,29 @@ test("construction is fail-closed on every missing or malformed collaborator", (
   assert.throws(
     () => createMemoryGateway({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {}, replayResolver: {} }),
     hasCode("INVALID_REPLAY_RESOLVER")
+  );
+  for (const timeouts of [null, { audit_ms: 0 }, { replay_ms: 2_147_483_648 }, { rogue: 1 }]) {
+    assert.throws(
+      () => createMemoryGateway({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {}, timeouts }),
+      hasCode("INVALID_TIMEOUTS")
+    );
+  }
+  const reads = { audit: 0, replay: 0 };
+  const timeoutSnapshot = {
+    get audit_ms() { reads.audit += 1; return 25; },
+    get replay_ms() { reads.replay += 1; return 30; }
+  };
+  createMemoryGateway({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {}, timeouts: timeoutSnapshot });
+  assert.deepEqual(reads, { audit: 1, replay: 1 });
+  assert.throws(
+    () => createMemoryGateway({
+      layerStores: layerConfig(),
+      sodRules: kernelSodRules,
+      now: () => FIXED_NOW,
+      ledgerWriter: () => {},
+      timeouts: { get audit_ms() { throw new Error("hostile timeout"); } }
+    }),
+    hasCode("INVALID_TIMEOUTS")
   );
 });
 
@@ -514,6 +537,24 @@ test("admit awaits an asynchronous audit and denies a rejected audit before stor
   const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
   assert.equal(result.code, "DENY_AUDIT_UNAVAILABLE");
   assert.equal(store.rows.length, 0, "rejected audit Promise must prevent storage");
+});
+
+test("a non-settling attempted audit times out before any store mutation", async () => {
+  const store = makeStore();
+  const gateway = createMemoryGateway({
+    layerStores: layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } }),
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: () => new Promise(() => {}),
+    timeouts: { audit_ms: 20, replay_ms: 20 }
+  });
+  const startedAt = Date.now();
+
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.code, "DENY_AUDIT_UNAVAILABLE");
+  assert.ok(Date.now() - startedAt < 500, "audit timeout must return promptly");
+  assert.equal(store.rows.length, 0);
 });
 
 test("audit-first: the audit entry is written strictly before the store append", async () => {
@@ -977,6 +1018,42 @@ test("created false cannot waive trusted time without an independent committed r
   assert.equal(result.reason, "DURABLE_REPLAY_UNVERIFIED");
 });
 
+test("a non-settling replay resolver is bounded before the store lease", async () => {
+  const rows = [];
+  let leaseCalls = 0;
+  const store = withTestReadLease({
+    append(record, { idempotency_key }) {
+      rows.push(record);
+      return {
+        status: "COMMITTED",
+        idempotency_key,
+        memory_record_id: record.memory_record_id,
+        version: record.version,
+        content_hash: record.content_hash,
+        record_fingerprint: canonicalFingerprint(record),
+        created: false,
+        sequence: 1
+      };
+    },
+    read() { return rows.slice(); }
+  });
+  const originalLease = store.withReadLease.bind(store);
+  store.withReadLease = async (...args) => { leaseCalls += 1; return originalLease(...args); };
+  const gateway = createMemoryGateway({
+    layerStores: layerConfig({ session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } }),
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter(),
+    replayResolver: () => new Promise(() => {}),
+    timeouts: { audit_ms: 20, replay_ms: 20 }
+  });
+
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.reason, "DURABLE_REPLAY_UNVERIFIED");
+  assert.equal(leaseCalls, 0, "resolver timeout occurs before acquiring a store lease");
+});
+
 test("store receipt fields are snapshotted once and hostile receipts are contained", async () => {
   const store = makeStore();
   let sequenceReads = 0;
@@ -1026,6 +1103,31 @@ test("a failed terminal COMMITTED audit returns reconciliation-required after ve
   assert.equal(result.record_observed, true);
   assert.equal(result.audit_recorded, true);
   assert.deepEqual(entries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED", "RECONCILIATION_REQUIRED"]);
+});
+
+test("a non-settling terminal audit times out and releases the store lease", async () => {
+  let leaseHeld = false;
+  const base = makeStore();
+  const originalLease = base.withReadLease.bind(base);
+  base.withReadLease = async (selector, callback) => {
+    leaseHeld = true;
+    try { return await originalLease(selector, callback); } finally { leaseHeld = false; }
+  };
+  const gateway = createMemoryGateway({
+    layerStores: layerConfig({ session: { store: base, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } }),
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: (entry) => entry.disposition === "COMMITTED" ? new Promise(() => {}) : undefined,
+    timeouts: { audit_ms: 20, replay_ms: 20 }
+  });
+  const startedAt = Date.now();
+
+  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
+
+  assert.equal(result.decision, "RECONCILIATION_REQUIRED");
+  assert.equal(result.reason, "COMMIT_AUDIT_UNAVAILABLE");
+  assert.ok(Date.now() - startedAt < 500, "terminal audit timeout must return promptly");
+  assert.equal(leaseHeld, false);
 });
 
 // --- Retrieval -------------------------------------------------------------

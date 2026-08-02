@@ -10,7 +10,8 @@
 // replay anchor: no I/O, persistence, or ledger authority of its own. The
 // injected store must provide `withReadLease(selector, callback)`: while the
 // callback is pending, the selected row cannot be deleted, replaced, or
-// mutated. This gives the admission decision one explicit linearization point.
+// mutated. Stores may additionally expose appendWithOutbox() so the durable
+// row, receipt, and terminal disposition are committed in one transaction.
 //
 // Scope discipline (S1 charter):
 //   - The gateway NEVER touches an existing store's admission policy. It appends
@@ -69,6 +70,14 @@ const REQUIRED_RECORD_KEYS = Object.freeze(RECORD_KEYS.filter((key) => key !== "
 const STORE_RECEIPT_KEYS = Object.freeze(["status", "idempotency_key", "memory_record_id", "version", "content_hash", "record_fingerprint", "created", "sequence"]);
 const REQUIRED_STORE_RECEIPT_KEYS = Object.freeze(STORE_RECEIPT_KEYS.filter((key) => key !== "sequence"));
 const REPLAY_ANCHOR_KEYS = Object.freeze(["status", "idempotency_key", "project_id", "layer", "memory_record_id", "version", "content_hash", "admitted_at"]);
+const ATOMIC_APPEND_RESULT_KEYS = Object.freeze(["receipt", "outbox"]);
+const OUTBOX_RECORD_KEYS = Object.freeze(["outbox_id", "event_fingerprint", "delivery_status", "delivery_attempts", "delivered_at", "event"]);
+const OUTBOX_EVENT_KEYS = Object.freeze([
+  "outbox_id", "type", "disposition", "idempotency_key", "project_id", "layer",
+  "memory_record_id", "version", "content_hash", "admitted_at", "actor_id", "classification"
+]);
+const DEFAULT_DEPENDENCY_TIMEOUTS = Object.freeze({ audit_ms: 250, replay_ms: 250 });
+const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
 const ADMIT_KEYS = Object.freeze(["layer", "record", "admission"]);
 const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
 const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
@@ -114,7 +123,70 @@ function classificationRank(value) {
   return CLASSIFICATION_ORDER.indexOf(value);
 }
 
-export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, replayResolver } = {}) {
+function snapshotAtomicAppendResult(value) {
+  try {
+    if (!isPlainObject(value)) return null;
+    const resultKeys = Reflect.ownKeys(value);
+    if (
+      resultKeys.some((key) => typeof key !== "string" || !ATOMIC_APPEND_RESULT_KEYS.includes(key))
+      || ATOMIC_APPEND_RESULT_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(value, key))
+    ) return null;
+    const rawReceipt = value.receipt;
+    const rawOutbox = value.outbox;
+    if (!isPlainObject(rawOutbox)) return null;
+    const outboxKeys = Reflect.ownKeys(rawOutbox);
+    if (
+      outboxKeys.some((key) => typeof key !== "string" || !OUTBOX_RECORD_KEYS.includes(key))
+      || OUTBOX_RECORD_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(rawOutbox, key))
+    ) return null;
+    const rawEvent = rawOutbox.event;
+    if (!isPlainObject(rawEvent)) return null;
+    const eventKeys = Reflect.ownKeys(rawEvent);
+    if (
+      eventKeys.some((key) => typeof key !== "string" || !OUTBOX_EVENT_KEYS.includes(key))
+      || OUTBOX_EVENT_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(rawEvent, key))
+    ) return null;
+    const receipt = snapshotStoreReceipt(rawReceipt);
+    if (receipt === null) return null;
+    const event = Object.fromEntries(OUTBOX_EVENT_KEYS.map((key) => [key, rawEvent[key]]));
+    const outbox = Object.fromEntries(OUTBOX_RECORD_KEYS.filter((key) => key !== "event").map((key) => [key, rawOutbox[key]]));
+    if (
+      outbox.outbox_id !== event.outbox_id
+      || outbox.event_fingerprint !== canonicalFingerprint(event)
+      || !["PENDING", "DELIVERED"].includes(outbox.delivery_status)
+      || !Number.isSafeInteger(outbox.delivery_attempts)
+      || outbox.delivery_attempts < 0
+      || (outbox.delivery_status === "PENDING" && outbox.delivered_at !== null)
+      || (outbox.delivery_status === "DELIVERED" && (
+        outbox.delivery_attempts < 1
+        || typeof outbox.delivered_at !== "string"
+        || !Number.isFinite(Date.parse(outbox.delivered_at))
+        || new Date(Date.parse(outbox.delivered_at)).toISOString() !== outbox.delivered_at
+      ))
+    ) return null;
+    const { outbox_id: claimedId, ...eventBody } = event;
+    if (canonicalFingerprint(eventBody) !== claimedId) return null;
+    return { receipt, outbox: { ...outbox, event } };
+  } catch {
+    return null;
+  }
+}
+
+async function boundedCall(operation, timeoutMs) {
+  let timer;
+  const operationPromise = Promise.resolve().then(operation).then(
+    (value) => ({ status: "ok", value }),
+    () => ({ status: "error" })
+  );
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ status: "timeout" }), timeoutMs);
+  });
+  const outcome = await Promise.race([operationPromise, timeoutPromise]);
+  clearTimeout(timer);
+  return outcome;
+}
+
+export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, replayResolver, timeouts } = {}) {
   // --- Fail-closed construction ------------------------------------------
   let layerNames;
   try {
@@ -136,6 +208,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     let store;
     let storeIsPlain;
     let append;
+    let appendWithOutbox;
     let read;
     let withReadLease;
     let admission;
@@ -149,6 +222,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       store = cfg?.store;
       storeIsPlain = isPlainObject(store);
       append = store?.append;
+      appendWithOutbox = store?.appendWithOutbox;
       read = store?.read;
       withReadLease = store?.withReadLease;
       admission = cfg?.admission;
@@ -163,6 +237,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       !cfgIsPlain
       || !storeIsPlain
       || typeof append !== "function"
+      || (appendWithOutbox !== undefined && typeof appendWithOutbox !== "function")
       || typeof read !== "function"
       || typeof withReadLease !== "function"
     ) {
@@ -186,6 +261,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     configuredLayers.push([name, Object.freeze({
       store: Object.freeze({
         append: Function.prototype.bind.call(append, store),
+        ...(appendWithOutbox === undefined ? {} : { appendWithOutbox: Function.prototype.bind.call(appendWithOutbox, store) }),
         read: Function.prototype.bind.call(read, store),
         withReadLease: Function.prototype.bind.call(withReadLease, store)
       }),
@@ -211,18 +287,44 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
   if (replayResolver !== undefined && typeof replayResolver !== "function") {
     throw new MemoryGatewayConfigurationError("INVALID_REPLAY_RESOLVER", "replayResolver must be a function when durable replay is enabled");
   }
+  let auditTimeoutMs;
+  let replayTimeoutMs;
+  try {
+    if (timeouts !== undefined && !isPlainObject(timeouts)) throw new Error("timeouts is not an object");
+    if (timeouts !== undefined && Reflect.ownKeys(timeouts).some((key) => typeof key !== "string" || !["audit_ms", "replay_ms"].includes(key))) {
+      throw new Error("timeouts contains unknown fields");
+    }
+    auditTimeoutMs = timeouts?.audit_ms ?? DEFAULT_DEPENDENCY_TIMEOUTS.audit_ms;
+    replayTimeoutMs = timeouts?.replay_ms ?? DEFAULT_DEPENDENCY_TIMEOUTS.replay_ms;
+  } catch {
+    throw new MemoryGatewayConfigurationError("INVALID_TIMEOUTS", "timeouts could not be snapshotted safely");
+  }
+  if (
+    !Number.isSafeInteger(auditTimeoutMs)
+    || auditTimeoutMs <= 0
+    || auditTimeoutMs > MAX_NODE_TIMEOUT_MS
+    || !Number.isSafeInteger(replayTimeoutMs)
+    || replayTimeoutMs <= 0
+    || replayTimeoutMs > MAX_NODE_TIMEOUT_MS
+  ) {
+    throw new MemoryGatewayConfigurationError("INVALID_TIMEOUTS", "audit_ms and replay_ms must be positive safe integers within the Node.js timer range");
+  }
 
   // Snapshot of the layer configuration: later mutation of the caller's options
   // object cannot alter admission behavior. Store methods are bound once into
   // a frozen port facade; the underlying store object remains mutable so its
   // internal state can advance without permitting method-replacement TOCTOU.
+  // appendWithOutbox is optional; when present, its atomic receipt is required
+  // and the gateway never duplicates COMMITTED through the external writer.
   const layers = Object.freeze(
     Object.fromEntries(configuredLayers)
   );
   // Per-instance replay metadata. It anchors trusted time/fingerprint only and
   // is never terminal authority: every replay is freshly audited and must
   // verify the pre-existing durable row without append/upsert healing it. The
-  // store-held read lease spans verification and terminal COMMITTED audit.
+  // store-held read lease spans verification and, on the legacy port, terminal
+  // COMMITTED audit. The atomic port durably records COMMITTED before the lease
+  // and the lease verifies that exact persisted record before ALLOW.
   const committedAdmissions = new Map();
 
   // Server-derived instant: { ms, iso } or null when the clock is unusable.
@@ -270,8 +372,9 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
   // Deny-by-default admission pipeline. Stage order is part of the contract
   // (tested): 1 shape -> 2 clock -> 3 layer -> 4 classification ceiling ->
   // 5 complete memoryRecord contract -> 6 admission SoD -> 7 audit-first ->
-  // 8 store append (first admission only) -> 9 leased durable verification +
-  // terminal audit -> ADMITTED.
+  // 8 store append (first admission only, atomically with terminal outbox when
+  // supported) -> 9 leased durable verification + legacy terminal audit ->
+  // ADMITTED.
   async function admit(request) {
     const shapeError = validateAdmitShape(request);
     if (shapeError) return deny(shapeError.code, shapeError.reason);
@@ -377,8 +480,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
 
     // 7. Audit-first: the admission audit is written BEFORE any store mutation.
     // A throwing/unavailable audit writer denies with no store side effect.
-    try {
-      await ledgerWriter({
+    const attemptedAudit = await boundedCall(() => ledgerWriter({
         type: "MEMORY_ADMISSION_AUDIT",
         disposition: "ATTEMPTED",
         layer: request.layer,
@@ -391,15 +493,16 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
         content_hash: admittedRecord.content_hash,
         idempotency_key: idempotencyKey,
         replay: priorAdmission !== undefined
-      });
-    } catch {
+      }), auditTimeoutMs);
+    if (attemptedAudit.status !== "ok") {
       return deny("DENY_AUDIT_UNAVAILABLE", "Audit ledger writer is unavailable; admission denied before store append");
     }
 
     // 8. Store append via the INJECTED layer store ONLY. The idempotency key is
     // deterministic for one project/layer/record/version identity; content
     // changes under that identity are conflicts. ALLOW requires both a
-    // closed COMMITTED receipt and a matching read-back; a rejection, malformed
+    // closed COMMITTED receipt, a valid atomic outbox receipt when supported,
+    // and a matching read-back; a rejection, malformed
     // receipt, no-op, or lost acknowledgement is honestly reconciliation state.
     const dispositionBase = {
       type: "MEMORY_ADMISSION_DISPOSITION",
@@ -416,12 +519,11 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     };
 
     async function writeDisposition(disposition, reason, details = {}) {
-      try {
-        await ledgerWriter({ ...dispositionBase, disposition, ...(reason ? { reason } : {}), ...details });
-        return true;
-      } catch {
-        return false;
-      }
+      const outcome = await boundedCall(
+        () => ledgerWriter({ ...dispositionBase, disposition, ...(reason ? { reason } : {}), ...details }),
+        auditTimeoutMs
+      );
+      return outcome.status === "ok";
     }
 
     function snapshotStoredRecord(row, expectedFingerprint = null) {
@@ -474,7 +576,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       });
     }
 
-    async function decideUnderReadLease(expectedFingerprint, appendReceipt) {
+    async function decideUnderReadLease(expectedFingerprint, appendReceipt, terminalAuditPersisted = false) {
       const selector = deepFreeze({
         project_id: admittedRecord.project_id,
         layer: admittedRecord.layer,
@@ -491,14 +593,16 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
           return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
         }
         try {
-          const rawAnchor = await replayResolver({
+          const anchorOutcome = await boundedCall(() => replayResolver({
             idempotency_key: idempotencyKey,
             project_id: admittedRecord.project_id,
             layer: admittedRecord.layer,
             memory_record_id: admittedRecord.memory_record_id,
             version: admittedRecord.version,
             content_hash: admittedRecord.content_hash
-          });
+          }), replayTimeoutMs);
+          if (anchorOutcome.status !== "ok") return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
+          const rawAnchor = anchorOutcome.value;
           if (!isPlainObject(rawAnchor) || Reflect.ownKeys(rawAnchor).some((key) => typeof key !== "string" || !REPLAY_ANCHOR_KEYS.includes(key))) {
             return { ok: false, reason: "DURABLE_REPLAY_UNVERIFIED" };
           }
@@ -538,7 +642,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
             completion = deepFreeze({ ok: false, reason: "UNVERIFIED_REPLAY_OR_TRUSTED_TIME_MISMATCH" });
             return completion;
           }
-          if (!(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) {
+          if (!terminalAuditPersisted && !(await writeDisposition("COMMITTED", null, { admitted_at: storedRecord.admitted_at }))) {
             completion = deepFreeze({ ok: false, reason: "COMMIT_AUDIT_UNAVAILABLE" });
             return completion;
           }
@@ -564,14 +668,58 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     }
 
     if (priorAdmission !== undefined) {
-      const replayDecision = await decideUnderReadLease(priorAdmission.record_fingerprint, priorAdmission.receipt);
+      const replayDecision = await decideUnderReadLease(
+        priorAdmission.record_fingerprint,
+        priorAdmission.receipt,
+        priorAdmission.terminal_audit_persisted === true
+      );
       if (replayDecision.ok !== true) return reconcile(replayDecision.reason);
       return replayDecision.result;
     }
 
     let rawReceipt;
+    let terminalAuditPersisted = false;
     try {
-      rawReceipt = await layer.store.append(admittedRecord, { idempotency_key: idempotencyKey });
+      if (typeof layer.store.appendWithOutbox === "function") {
+        const rawAtomicResult = await layer.store.appendWithOutbox(admittedRecord, {
+          idempotency_key: idempotencyKey,
+          outbox_entry_factory(persistedRecord) {
+            const eventBody = {
+              type: "MEMORY_ADMISSION_DISPOSITION",
+              disposition: "COMMITTED",
+              idempotency_key: idempotencyKey,
+              project_id: persistedRecord.project_id,
+              layer: persistedRecord.layer,
+              memory_record_id: persistedRecord.memory_record_id,
+              version: persistedRecord.version,
+              content_hash: persistedRecord.content_hash,
+              admitted_at: persistedRecord.admitted_at,
+              actor_id: persistedRecord.actor_id,
+              classification: persistedRecord.classification
+            };
+            return { outbox_id: canonicalFingerprint(eventBody), ...eventBody };
+          }
+        });
+        const atomicResult = snapshotAtomicAppendResult(rawAtomicResult);
+        const event = atomicResult?.outbox.event;
+        if (
+          atomicResult === null
+          || event.type !== "MEMORY_ADMISSION_DISPOSITION"
+          || event.disposition !== "COMMITTED"
+          || event.idempotency_key !== idempotencyKey
+          || event.project_id !== admittedRecord.project_id
+          || event.layer !== admittedRecord.layer
+          || event.memory_record_id !== admittedRecord.memory_record_id
+          || event.version !== admittedRecord.version
+          || event.content_hash !== admittedRecord.content_hash
+          || event.actor_id !== admittedRecord.actor_id
+          || event.classification !== admittedRecord.classification
+        ) return reconcile("STORE_ATOMIC_OUTBOX_RECEIPT_INVALID");
+        rawReceipt = atomicResult.receipt;
+        terminalAuditPersisted = true;
+      } else {
+        rawReceipt = await layer.store.append(admittedRecord, { idempotency_key: idempotencyKey });
+      }
     } catch {
       return reconcile("STORE_APPEND_REJECTED");
     }
@@ -604,7 +752,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     } catch {
       return reconcile("STORE_RECEIPT_INVALID");
     }
-    const firstDecision = await decideUnderReadLease(receipt.record_fingerprint, receipt);
+    const firstDecision = await decideUnderReadLease(receipt.record_fingerprint, receipt, terminalAuditPersisted);
     if (firstDecision.ok !== true) return reconcile(firstDecision.reason);
     const result = firstDecision.result;
     const storedRecord = result.record;
@@ -612,7 +760,8 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
       admitted_at: storedRecord.admitted_at,
       content_hash: storedRecord.content_hash,
       record_fingerprint: receipt.record_fingerprint,
-      receipt
+      receipt,
+      terminal_audit_persisted: terminalAuditPersisted
     }));
     return result;
   }

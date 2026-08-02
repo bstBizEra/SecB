@@ -56,6 +56,24 @@ function storedRecord(overrides = {}) {
   };
 }
 
+function outboxEntry(record, idempotencyKey = "admit-outbox-1", overrides = {}) {
+  const body = {
+    type: "MEMORY_ADMISSION_DISPOSITION",
+    disposition: "COMMITTED",
+    idempotency_key: idempotencyKey,
+    project_id: record.project_id,
+    layer: record.layer,
+    memory_record_id: record.memory_record_id,
+    version: record.version,
+    content_hash: record.content_hash,
+    admitted_at: record.admitted_at,
+    actor_id: record.actor_id,
+    classification: record.classification,
+    ...overrides
+  };
+  return { outbox_id: canonicalFingerprint(body), ...body };
+}
+
 function withoutCreated(receipt) {
   const { created, ...stable } = receipt;
   return stable;
@@ -122,6 +140,95 @@ test("SQLite store atomically persists one idempotent identity across restart", 
     (error) => error instanceof SqliteMemoryStoreError && error.code === "IDEMPOTENCY_CONFLICT"
   );
   restarted.close();
+});
+
+test("atomic append-with-outbox commits the record, receipt, and terminal event together", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-1" });
+  const idempotencyKey = "admit-outbox-1";
+  const event = outboxEntry(record, idempotencyKey);
+  const store = createSqliteMemoryRecordStore({ databasePath });
+
+  let factoryCalls = 0;
+  const first = await store.appendWithOutbox(record, {
+    idempotency_key: idempotencyKey,
+    outbox_entry_factory(persisted, receipt) {
+      factoryCalls += 1;
+      assert.deepEqual(persisted, record);
+      assert.equal(receipt.created, true);
+      return event;
+    }
+  });
+  assert.equal(factoryCalls, 1);
+  assert.equal(first.receipt.created, true);
+  assert.equal(first.outbox.delivery_status, "PENDING");
+  assert.deepEqual(first.outbox.event, event);
+  assert.deepEqual(store.read(), [record]);
+  assert.equal(store.readOutbox().length, 1);
+
+  const replay = await store.appendWithOutbox(structuredClone(record), { idempotency_key: idempotencyKey, outbox_entry: structuredClone(event) });
+  assert.equal(replay.receipt.created, false);
+  assert.equal(store.read().length, 1);
+  assert.equal(store.readOutbox().length, 1);
+  store.close();
+
+  const restarted = createSqliteMemoryRecordStore({ databasePath });
+  assert.deepEqual(restarted.read(), [record]);
+  assert.deepEqual(restarted.readOutbox()[0].event, event);
+  restarted.close();
+});
+
+test("outbox binding failure rolls back a newly inserted memory record", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-rollback" });
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  const mismatched = outboxEntry(record, "admit-outbox-rollback", { admitted_at: "2099-01-01T00:00:00.000Z" });
+
+  await assert.rejects(
+    store.appendWithOutbox(record, { idempotency_key: "admit-outbox-rollback", outbox_entry: mismatched }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_BINDING_MISMATCH"
+  );
+  assert.deepEqual(store.read(), []);
+  assert.deepEqual(store.readOutbox(), []);
+  store.close();
+});
+
+test("outbox delivery is bounded, retryable, and marked delivered only after success", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-delivery" });
+  const event = outboxEntry(record, "admit-outbox-delivery");
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event });
+
+  const startedAt = Date.now();
+  const timedOut = await store.dispatchOutbox(() => new Promise(() => {}), { timeoutMs: 20, now: () => FIXED_NOW });
+  assert.equal(timedOut[0].delivery, "TIMEOUT_PENDING");
+  assert.ok(Date.now() - startedAt < 500, "dispatch timeout must release the caller promptly");
+  assert.equal(store.readOutbox()[0].delivery_attempts, 1);
+
+  const delivered = [];
+  const success = await store.dispatchOutbox((entry) => { delivered.push(entry); }, { timeoutMs: 100, now: () => FIXED_NOW });
+  assert.equal(success[0].delivery, "DELIVERED");
+  assert.deepEqual(delivered, [event]);
+  assert.deepEqual(store.readOutbox(), []);
+  store.close();
+});
+
+test("outbox integrity verification rejects raw payload tampering", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-integrity" });
+  const event = outboxEntry(record, "admit-outbox-integrity");
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event });
+  const raw = new DatabaseSync(databasePath);
+  raw.prepare("UPDATE memory_audit_outbox SET event_json = ?").run(JSON.stringify({ ...event, admitted_at: "2099-01-01T00:00:00.000Z" }));
+  raw.close();
+
+  assert.throws(
+    () => store.readOutbox(),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
+  );
+  store.close();
 });
 
 test("SQLite read lease holds a writer fence through an asynchronous callback", async (t) => {
@@ -261,7 +368,11 @@ test("parallel gateway first admissions with different clocks verify one durable
         return row === undefined ? null : { status: "COMMITTED", idempotency_key: row.idempotency_key, project_id: row.project_id, layer: row.layer, memory_record_id: row.memory_record_id, version: row.record_version, content_hash: row.content_hash, admitted_at: row.admitted_at };
       }
     });
-    const result = await gateway.admit(${JSON.stringify(request)});
+    let result = await gateway.admit(${JSON.stringify(request)});
+    await store.dispatchOutbox((entry) => {
+      appendAnchor.run(entry.idempotency_key, entry.project_id, entry.layer, entry.memory_record_id, entry.version, entry.content_hash, entry.admitted_at);
+    });
+    if (result.decision !== "ALLOW") result = await gateway.admit(${JSON.stringify(request)});
     store.close();
     audit.close();
     process.stdout.write(JSON.stringify({ decision: result.decision, code: result.code }));
@@ -279,14 +390,10 @@ test("parallel gateway first admissions with different clocks verify one durable
   store.close();
 });
 
-test("same-instance concurrent admissions serialize instead of producing false reconciliation", async (t) => {
+test("same-instance concurrent admissions converge through one bounded reconciliation retry", async (t) => {
   const databasePath = databasePathFor(t);
   const store = createSqliteMemoryRecordStore({ databasePath });
-  let releaseFirstCommit;
-  let signalFirstCommit;
-  const firstCommitEntered = new Promise((resolve) => { signalFirstCommit = resolve; });
-  const firstCommitRelease = new Promise((resolve) => { releaseFirstCommit = resolve; });
-  let committedCalls = 0;
+  const auditEntries = [];
   const replayLedger = makeReplayLedger();
   const gateway = createMemoryGateway({
     layerStores: {
@@ -295,25 +402,25 @@ test("same-instance concurrent admissions serialize instead of producing false r
     sodRules: { checkPairwiseDistinct },
     now: () => FIXED_NOW,
     replayResolver: replayLedger.resolver,
-    async ledgerWriter(entry) {
-      if (entry.disposition === "COMMITTED" && ++committedCalls === 1) {
-        signalFirstCommit();
-        await firstCommitRelease;
-      }
+    ledgerWriter(entry) {
+      auditEntries.push(entry);
       return replayLedger.writer(entry);
     }
   });
   const request = { layer: "session", record: gatewayRecord(), admission: { producer: "agent-a" } };
 
   const firstPending = gateway.admit(structuredClone(request));
-  await firstCommitEntered;
   const secondPending = gateway.admit(structuredClone(request));
-  releaseFirstCommit();
   const [first, second] = await Promise.all([firstPending, secondPending]);
 
-  assert.equal(first.decision, "ALLOW");
-  assert.equal(second.decision, "ALLOW");
+  assert.deepEqual([first.decision, second.decision].sort(), ["ALLOW", "RECONCILIATION_REQUIRED"]);
+  const retry = await gateway.admit(structuredClone(request));
+  assert.equal(retry.decision, "ALLOW");
   assert.equal(store.read().length, 1);
+  assert.equal(auditEntries.filter((entry) => entry.disposition === "ATTEMPTED").length, 3);
+  assert.equal(auditEntries.filter((entry) => entry.disposition === "RECONCILIATION_REQUIRED").length, 1);
+  assert.equal(auditEntries.filter((entry) => entry.disposition === "COMMITTED").length, 0);
+  assert.equal(store.readOutbox().length, 1);
   store.close();
 });
 
@@ -344,7 +451,8 @@ test("Memory gateway admits and replays through the durable adapter without dupl
   assert.equal(replay.decision, "ALLOW");
   assert.deepEqual(replay.record, first.record);
   assert.equal(store.read().length, 1);
-  assert.deepEqual(auditEntries.map((entry) => entry.disposition), ["ATTEMPTED", "COMMITTED", "ATTEMPTED", "COMMITTED"]);
+  assert.deepEqual(auditEntries.map((entry) => entry.disposition), ["ATTEMPTED", "ATTEMPTED"]);
+  assert.equal(store.readOutbox().length, 1);
   store.close();
 });
 
@@ -363,6 +471,7 @@ test("gateway restart at a later clock replays the durable admission instant", a
   });
   const firstStore = createSqliteMemoryRecordStore({ databasePath });
   const first = await createGateway(firstStore, FIXED_NOW).admit(structuredClone(request));
+  await firstStore.dispatchOutbox(replayLedger.writer);
   firstStore.close();
 
   const restartedStore = createSqliteMemoryRecordStore({ databasePath });
