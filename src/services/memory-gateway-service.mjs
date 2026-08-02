@@ -153,10 +153,11 @@ function snapshotAtomicAppendResult(value) {
     if (
       outbox.outbox_id !== event.outbox_id
       || outbox.event_fingerprint !== canonicalFingerprint(event)
-      || !["PENDING", "DELIVERED"].includes(outbox.delivery_status)
+      || !["PENDING", "IN_FLIGHT", "DELIVERED"].includes(outbox.delivery_status)
       || !Number.isSafeInteger(outbox.delivery_attempts)
       || outbox.delivery_attempts < 0
       || (outbox.delivery_status === "PENDING" && outbox.delivered_at !== null)
+      || (outbox.delivery_status === "IN_FLIGHT" && (outbox.delivery_attempts < 1 || outbox.delivered_at !== null))
       || (outbox.delivery_status === "DELIVERED" && (
         outbox.delivery_attempts < 1
         || typeof outbox.delivered_at !== "string"

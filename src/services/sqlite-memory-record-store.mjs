@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
@@ -10,6 +11,56 @@ const OUTBOX_EVENT_KEYS = Object.freeze([
   "memory_record_id", "version", "content_hash", "admitted_at", "actor_id", "classification"
 ]);
 const MAX_NODE_TIMEOUT_MS = 2_147_483_647;
+const CURRENT_SCHEMA_VERSION = 2;
+const OUTBOX_V1_COLUMNS = Object.freeze([
+  "outbox_id", "idempotency_key", "event_fingerprint", "event_json",
+  "delivery_status", "delivery_attempts", "delivered_at"
+]);
+const OUTBOX_V2_COLUMNS = Object.freeze([
+  ...OUTBOX_V1_COLUMNS, "claim_token", "claimed_at", "claim_expires_at"
+]);
+
+const CREATE_CORE_SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS memory_records (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL,
+    layer TEXT NOT NULL,
+    memory_record_id TEXT NOT NULL,
+    record_version INTEGER NOT NULL,
+    content_hash TEXT NOT NULL,
+    record_fingerprint TEXT NOT NULL,
+    record_json TEXT NOT NULL,
+    UNIQUE (project_id, layer, memory_record_id, record_version)
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_admission_receipts (
+    idempotency_key TEXT PRIMARY KEY,
+    sequence INTEGER NOT NULL UNIQUE,
+    record_fingerprint TEXT NOT NULL,
+    FOREIGN KEY (sequence) REFERENCES memory_records(sequence) ON DELETE RESTRICT
+  );
+`;
+
+const CREATE_OUTBOX_V2_SQL = `
+  CREATE TABLE memory_audit_outbox (
+    outbox_id TEXT PRIMARY KEY,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    event_fingerprint TEXT NOT NULL,
+    event_json TEXT NOT NULL,
+    delivery_status TEXT NOT NULL CHECK (delivery_status IN ('PENDING', 'IN_FLIGHT', 'DELIVERED')),
+    delivery_attempts INTEGER NOT NULL DEFAULT 0 CHECK (delivery_attempts >= 0),
+    delivered_at TEXT,
+    claim_token TEXT,
+    claimed_at TEXT,
+    claim_expires_at TEXT,
+    CHECK (
+      (delivery_status = 'PENDING' AND delivered_at IS NULL AND claim_token IS NULL AND claimed_at IS NULL AND claim_expires_at IS NULL)
+      OR (delivery_status = 'IN_FLIGHT' AND delivered_at IS NULL AND claim_token IS NOT NULL AND claimed_at IS NOT NULL AND claim_expires_at IS NOT NULL AND delivery_attempts >= 1)
+      OR (delivery_status = 'DELIVERED' AND delivery_attempts >= 1 AND delivered_at IS NOT NULL AND claim_token IS NULL AND claimed_at IS NULL AND claim_expires_at IS NULL)
+    ),
+    FOREIGN KEY (idempotency_key) REFERENCES memory_admission_receipts(idempotency_key) ON DELETE RESTRICT
+  );
+`;
 
 export class SqliteMemoryStoreError extends Error {
   constructor(code, message, options = {}) {
@@ -147,18 +198,39 @@ function decodeOutboxRow(row) {
   try {
     const event = snapshotOutboxEntry(JSON.parse(row.event_json));
     const deliveredMs = typeof row.delivered_at === "string" ? Date.parse(row.delivered_at) : NaN;
+    const claimedMs = typeof row.claimed_at === "string" ? Date.parse(row.claimed_at) : NaN;
+    const claimExpiresMs = typeof row.claim_expires_at === "string" ? Date.parse(row.claim_expires_at) : NaN;
     if (
       event.outbox_id !== row.outbox_id
       || event.idempotency_key !== row.idempotency_key
       || canonicalFingerprint(event) !== row.event_fingerprint
-      || !["PENDING", "DELIVERED"].includes(row.delivery_status)
+      || !["PENDING", "IN_FLIGHT", "DELIVERED"].includes(row.delivery_status)
       || !Number.isSafeInteger(row.delivery_attempts)
       || row.delivery_attempts < 0
-      || (row.delivery_status === "PENDING" && row.delivered_at !== null)
+      || (row.delivery_status === "PENDING" && (
+        row.delivered_at !== null
+        || row.claim_token !== null
+        || row.claimed_at !== null
+        || row.claim_expires_at !== null
+      ))
+      || (row.delivery_status === "IN_FLIGHT" && (
+        row.delivered_at !== null
+        || row.delivery_attempts < 1
+        || typeof row.claim_token !== "string"
+        || row.claim_token === ""
+        || !Number.isFinite(claimedMs)
+        || new Date(claimedMs).toISOString() !== row.claimed_at
+        || !Number.isFinite(claimExpiresMs)
+        || new Date(claimExpiresMs).toISOString() !== row.claim_expires_at
+        || claimExpiresMs <= claimedMs
+      ))
       || (row.delivery_status === "DELIVERED" && (
         row.delivery_attempts < 1
         || !Number.isFinite(deliveredMs)
         || new Date(deliveredMs).toISOString() !== row.delivered_at
+        || row.claim_token !== null
+        || row.claimed_at !== null
+        || row.claim_expires_at !== null
       ))
     ) throw new Error("outbox columns and payload differ");
     return Object.freeze({
@@ -172,6 +244,112 @@ function decodeOutboxRow(row) {
   } catch (cause) {
     throw new SqliteMemoryStoreError("OUTBOX_INTEGRITY_VIOLATION", "stored outbox event failed integrity verification", { cause });
   }
+}
+
+function tableExists(database, tableName) {
+  return database.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName) !== undefined;
+}
+
+function tableColumns(database, tableName) {
+  return database.prepare(`PRAGMA table_info(${tableName})`).all().map((column) => column.name);
+}
+
+function sameColumns(actual, expected) {
+  return actual.length === expected.length && actual.every((column, index) => column === expected[index]);
+}
+
+function normalizedSchemaSql(sql) {
+  return typeof sql === "string" ? sql.replace(/[\s;]+/g, " ").trim().toLowerCase() : "";
+}
+
+function validateV2OutboxDefinition(database) {
+  const row = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_audit_outbox'").get();
+  if (normalizedSchemaSql(row?.sql) !== normalizedSchemaSql(CREATE_OUTBOX_V2_SQL)) {
+    throw new SqliteMemoryStoreError("SCHEMA_INTEGRITY_VIOLATION", "Memory audit outbox definition does not match schema v2");
+  }
+}
+
+function validateAllOutboxRows(database) {
+  const rows = database.prepare(`
+    SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
+           delivery_status, delivery_attempts, delivered_at,
+           claim_token, claimed_at, claim_expires_at
+      FROM memory_audit_outbox
+  `).all();
+  for (const row of rows) decodeOutboxRow(row);
+}
+
+function initializeSchema(database) {
+  const version = Number(database.prepare("PRAGMA user_version").get().user_version);
+  if (!Number.isSafeInteger(version) || version < 0 || version > CURRENT_SCHEMA_VERSION) {
+    throw new SqliteMemoryStoreError("UNSUPPORTED_SCHEMA_VERSION", `Unsupported SQLite memory schema version: ${version}`);
+  }
+  const hasRecords = tableExists(database, "memory_records");
+  const hasReceipts = tableExists(database, "memory_admission_receipts");
+  const hasOutbox = tableExists(database, "memory_audit_outbox");
+
+  if (!hasRecords && !hasReceipts && !hasOutbox) {
+    if (version !== 0) throw new SqliteMemoryStoreError("SCHEMA_INTEGRITY_VIOLATION", "Versioned database is missing the memory schema");
+    database.exec(`BEGIN IMMEDIATE; ${CREATE_CORE_SCHEMA_SQL} ${CREATE_OUTBOX_V2_SQL} PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}; COMMIT;`);
+    validateV2OutboxDefinition(database);
+    return;
+  }
+  if (!hasRecords || !hasReceipts) {
+    throw new SqliteMemoryStoreError("SCHEMA_INTEGRITY_VIOLATION", "Memory schema is only partially present");
+  }
+
+  if (!hasOutbox) {
+    if (version !== 0 && version !== 1) {
+      throw new SqliteMemoryStoreError("SCHEMA_INTEGRITY_VIOLATION", "Current schema version is missing its audit outbox");
+    }
+    database.exec(`BEGIN IMMEDIATE; ${CREATE_OUTBOX_V2_SQL} PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}; COMMIT;`);
+    validateV2OutboxDefinition(database);
+    return;
+  }
+
+  const columns = tableColumns(database, "memory_audit_outbox");
+  if (sameColumns(columns, OUTBOX_V2_COLUMNS)) {
+    if (version !== 0 && version !== CURRENT_SCHEMA_VERSION) {
+      throw new SqliteMemoryStoreError("SCHEMA_INTEGRITY_VIOLATION", "Outbox schema and declared version disagree");
+    }
+    validateV2OutboxDefinition(database);
+    validateAllOutboxRows(database);
+    if (version === 0) database.exec(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
+    return;
+  }
+  if (!sameColumns(columns, OUTBOX_V1_COLUMNS) || (version !== 0 && version !== 1)) {
+    throw new SqliteMemoryStoreError("SCHEMA_INTEGRITY_VIOLATION", "Unknown memory audit outbox schema");
+  }
+
+  const legacyRows = database.prepare(`
+    SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
+           delivery_status, delivery_attempts, delivered_at,
+           NULL AS claim_token, NULL AS claimed_at, NULL AS claim_expires_at
+      FROM memory_audit_outbox
+  `).all();
+  for (const row of legacyRows) decodeOutboxRow(row);
+  try {
+    database.exec(`
+      BEGIN IMMEDIATE;
+      ALTER TABLE memory_audit_outbox RENAME TO memory_audit_outbox_v1;
+      ${CREATE_OUTBOX_V2_SQL}
+      INSERT INTO memory_audit_outbox (
+        outbox_id, idempotency_key, event_fingerprint, event_json,
+        delivery_status, delivery_attempts, delivered_at
+      )
+      SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
+             delivery_status, delivery_attempts, delivered_at
+        FROM memory_audit_outbox_v1;
+      DROP TABLE memory_audit_outbox_v1;
+      PRAGMA user_version = ${CURRENT_SCHEMA_VERSION};
+      COMMIT;
+    `);
+  } catch (cause) {
+    rollbackQuietly(database);
+    throw new SqliteMemoryStoreError("SCHEMA_MIGRATION_FAILED", "SQLite memory schema migration failed", { cause });
+  }
+  validateAllOutboxRows(database);
+  validateV2OutboxDefinition(database);
 }
 
 export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_000 } = {}) {
@@ -202,43 +380,11 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
       PRAGMA busy_timeout = ${busyTimeoutMs};
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = FULL;
-
-      CREATE TABLE IF NOT EXISTS memory_records (
-        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id TEXT NOT NULL,
-        layer TEXT NOT NULL,
-        memory_record_id TEXT NOT NULL,
-        record_version INTEGER NOT NULL,
-        content_hash TEXT NOT NULL,
-        record_fingerprint TEXT NOT NULL,
-        record_json TEXT NOT NULL,
-        UNIQUE (project_id, layer, memory_record_id, record_version)
-      );
-
-      CREATE TABLE IF NOT EXISTS memory_admission_receipts (
-        idempotency_key TEXT PRIMARY KEY,
-        sequence INTEGER NOT NULL UNIQUE,
-        record_fingerprint TEXT NOT NULL,
-        FOREIGN KEY (sequence) REFERENCES memory_records(sequence) ON DELETE RESTRICT
-      );
-
-      CREATE TABLE IF NOT EXISTS memory_audit_outbox (
-        outbox_id TEXT PRIMARY KEY,
-        idempotency_key TEXT NOT NULL UNIQUE,
-        event_fingerprint TEXT NOT NULL,
-        event_json TEXT NOT NULL,
-        delivery_status TEXT NOT NULL CHECK (delivery_status IN ('PENDING', 'DELIVERED')),
-        delivery_attempts INTEGER NOT NULL DEFAULT 0 CHECK (delivery_attempts >= 0),
-        delivered_at TEXT,
-        CHECK (
-          (delivery_status = 'PENDING' AND delivered_at IS NULL)
-          OR (delivery_status = 'DELIVERED' AND delivery_attempts >= 1 AND delivered_at IS NOT NULL)
-        ),
-        FOREIGN KEY (idempotency_key) REFERENCES memory_admission_receipts(idempotency_key) ON DELETE RESTRICT
-      );
     `);
+    initializeSchema(database);
   } catch (cause) {
     try { database?.close(); } catch { /* construction already failed */ }
+    if (cause instanceof SqliteMemoryStoreError) throw cause;
     throw new SqliteMemoryStoreError("DATABASE_OPEN_FAILED", "SQLite memory store could not be opened", { cause });
   }
 
@@ -280,13 +426,15 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
   `);
   const selectOutboxById = database.prepare(`
     SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
-           delivery_status, delivery_attempts, delivered_at
+           delivery_status, delivery_attempts, delivered_at,
+           claim_token, claimed_at, claim_expires_at
       FROM memory_audit_outbox
      WHERE outbox_id = ?
   `);
   const selectOutboxByIdempotency = database.prepare(`
     SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
-           delivery_status, delivery_attempts, delivered_at
+           delivery_status, delivery_attempts, delivered_at,
+           claim_token, claimed_at, claim_expires_at
       FROM memory_audit_outbox
      WHERE idempotency_key = ?
   `);
@@ -297,25 +445,48 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
   `);
   const selectPendingOutbox = database.prepare(`
     SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
-           delivery_status, delivery_attempts, delivered_at
+           delivery_status, delivery_attempts, delivered_at,
+           claim_token, claimed_at, claim_expires_at
       FROM memory_audit_outbox
      WHERE delivery_status = 'PENDING'
      ORDER BY rowid
      LIMIT ?
   `);
-  const markOutboxDeliveredStatement = database.prepare(`
+  const requeueExpiredOutboxClaims = database.prepare(`
     UPDATE memory_audit_outbox
-       SET delivery_status = 'DELIVERED', delivery_attempts = delivery_attempts + 1, delivered_at = ?
+       SET delivery_status = 'PENDING', claim_token = NULL, claimed_at = NULL, claim_expires_at = NULL
+     WHERE delivery_status = 'IN_FLIGHT' AND claim_expires_at <= ?
+  `);
+  const claimOutboxStatement = database.prepare(`
+    UPDATE memory_audit_outbox
+       SET delivery_status = 'IN_FLIGHT', delivery_attempts = delivery_attempts + 1,
+           claim_token = ?, claimed_at = ?, claim_expires_at = ?
      WHERE outbox_id = ? AND event_fingerprint = ? AND delivery_status = 'PENDING'
   `);
-  const incrementOutboxAttempt = database.prepare(`
+  const selectClaimedOutbox = database.prepare(`
+    SELECT outbox_id, idempotency_key, event_fingerprint, event_json,
+           delivery_status, delivery_attempts, delivered_at,
+           claim_token, claimed_at, claim_expires_at
+      FROM memory_audit_outbox
+     WHERE claim_token = ? AND delivery_status = 'IN_FLIGHT'
+  `);
+  const markOutboxDeliveredStatement = database.prepare(`
     UPDATE memory_audit_outbox
-       SET delivery_attempts = delivery_attempts + 1
-     WHERE outbox_id = ? AND event_fingerprint = ? AND delivery_status = 'PENDING'
+       SET delivery_status = 'DELIVERED', delivered_at = ?,
+           claim_token = NULL, claimed_at = NULL, claim_expires_at = NULL
+     WHERE outbox_id = ? AND event_fingerprint = ?
+       AND delivery_status = 'IN_FLIGHT' AND claim_token = ?
+  `);
+  const releaseOutboxClaimStatement = database.prepare(`
+    UPDATE memory_audit_outbox
+       SET delivery_status = 'PENDING', claim_token = NULL, claimed_at = NULL, claim_expires_at = NULL
+     WHERE outbox_id = ? AND event_fingerprint = ?
+       AND delivery_status = 'IN_FLIGHT' AND claim_token = ?
   `);
 
   let closed = false;
   let leaseActive = false;
+  let activeDispatches = 0;
   let pendingOperations = 0;
   let operationTail = Promise.resolve();
   const leaseContext = new AsyncLocalStorage();
@@ -514,6 +685,7 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
       throw new SqliteMemoryStoreError("INVALID_OUTBOX_QUERY", "outbox limit must be an integer from 1 through 1000");
     }
     try {
+      validateAllOutboxRows(database);
       return selectPendingOutbox.all(limit).map(decodeOutboxRow);
     } catch (cause) {
       if (cause instanceof SqliteMemoryStoreError) throw cause;
@@ -521,72 +693,159 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
     }
   }
 
-  function recordOutboxAttempt(outboxId, eventFingerprint, deliveredAt = null) {
+  function claimOutboxBatch(limit, claimedAt, claimExpiresAt) {
     return enqueue(() => {
       assertOpen();
       try {
         database.exec("BEGIN IMMEDIATE");
-        const before = selectOutboxById.get(outboxId);
-        if (before === undefined || before.event_fingerprint !== eventFingerprint) {
-          throw new SqliteMemoryStoreError("OUTBOX_RECEIPT_MISMATCH", "outbox delivery receipt does not match a pending event");
+        validateAllOutboxRows(database);
+        requeueExpiredOutboxClaims.run(claimedAt);
+        const pending = selectPendingOutbox.all(limit).map(decodeOutboxRow);
+        const claimed = [];
+        for (const item of pending) {
+          const claimToken = randomUUID();
+          const update = claimOutboxStatement.run(
+            claimToken,
+            claimedAt,
+            claimExpiresAt,
+            item.outbox_id,
+            item.event_fingerprint
+          );
+          if (Number(update.changes) !== 1) {
+            throw new SqliteMemoryStoreError("OUTBOX_CLAIM_CONFLICT", "pending outbox event could not be claimed atomically");
+          }
+          const row = selectClaimedOutbox.get(claimToken);
+          const record = decodeOutboxRow(row);
+          claimed.push(Object.freeze({ claim_token: claimToken, record }));
         }
-        if (before.delivery_status === "DELIVERED") {
+        database.exec("COMMIT");
+        return Object.freeze(claimed);
+      } catch (cause) {
+        rollbackQuietly(database);
+        if (cause instanceof SqliteMemoryStoreError) throw cause;
+        throw new SqliteMemoryStoreError("OUTBOX_CLAIM_FAILED", "outbox delivery claims could not be acquired", { cause });
+      }
+    });
+  }
+
+  function settleOutboxClaim(claimed, deliveredAt = null) {
+    return enqueue(() => {
+      assertOpen();
+      try {
+        database.exec("BEGIN IMMEDIATE");
+        const before = selectOutboxById.get(claimed.record.outbox_id);
+        if (before !== undefined) decodeOutboxRow(before);
+        if (
+          before === undefined
+          || before.event_fingerprint !== claimed.record.event_fingerprint
+          || before.delivery_status !== "IN_FLIGHT"
+          || before.claim_token !== claimed.claim_token
+        ) {
           database.exec("COMMIT");
-          return decodeOutboxRow(before);
+          return null;
         }
-        if (deliveredAt === null) {
-          incrementOutboxAttempt.run(outboxId, eventFingerprint);
-        } else {
-          markOutboxDeliveredStatement.run(deliveredAt, outboxId, eventFingerprint);
+        const update = deliveredAt === null
+          ? releaseOutboxClaimStatement.run(claimed.record.outbox_id, claimed.record.event_fingerprint, claimed.claim_token)
+          : markOutboxDeliveredStatement.run(deliveredAt, claimed.record.outbox_id, claimed.record.event_fingerprint, claimed.claim_token);
+        if (Number(update.changes) !== 1) {
+          throw new SqliteMemoryStoreError("OUTBOX_CLAIM_CONFLICT", "outbox claim changed before settlement");
         }
-        const after = decodeOutboxRow(selectOutboxById.get(outboxId));
+        const after = decodeOutboxRow(selectOutboxById.get(claimed.record.outbox_id));
         database.exec("COMMIT");
         return after;
       } catch (cause) {
         rollbackQuietly(database);
         if (cause instanceof SqliteMemoryStoreError) throw cause;
-        throw new SqliteMemoryStoreError("OUTBOX_UPDATE_FAILED", "outbox delivery state could not be updated", { cause });
+        throw new SqliteMemoryStoreError("OUTBOX_UPDATE_FAILED", "outbox delivery claim could not be settled", { cause });
       }
     });
   }
 
-  async function dispatchOutbox(deliver, { timeoutMs = 250, limit = 100, now = () => new Date() } = {}) {
+  async function dispatchOutbox(deliver, options = {}) {
     assertOpen();
-    if (typeof deliver !== "function" || typeof now !== "function") {
-      throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "deliver and now functions are required");
-    }
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_NODE_TIMEOUT_MS) {
-      throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "timeoutMs must be within the Node.js timer range");
-    }
-    const pending = readOutbox({ status: "PENDING", limit });
-    const results = [];
-    for (const item of pending) {
-      const outcome = await boundedCall(() => deliver(item.event), timeoutMs);
-      // At-least-once contract: only an explicit `true` acknowledges delivery.
-      // A receiver MUST durably deduplicate by outbox_id because timeout/crash
-      // boundaries can cause the same event to be presented again.
-      if (outcome.status === "ok" && outcome.value === true) {
-        let deliveredAt;
-        try {
-          const epochMs = Date.prototype.getTime.call(now());
-          if (!Number.isFinite(epochMs)) throw new Error("invalid delivery clock");
-          deliveredAt = new Date(epochMs).toISOString();
-        } catch (cause) {
-          await recordOutboxAttempt(item.outbox_id, item.event_fingerprint);
-          throw new SqliteMemoryStoreError("OUTBOX_CLOCK_UNAVAILABLE", "outbox delivery clock is unavailable", { cause });
+    activeDispatches += 1;
+    try {
+      let timeoutMs;
+      let claimTtlMs;
+      let limit;
+      let now;
+      try {
+        if (!isPlainObject(options)) throw new Error("options is not a plain object");
+        const optionKeys = Reflect.ownKeys(options);
+        if (optionKeys.some((key) => typeof key !== "string" || !["timeoutMs", "claimTtlMs", "limit", "now"].includes(key))) {
+          throw new Error("unknown dispatch option");
         }
-        const updated = await recordOutboxAttempt(item.outbox_id, item.event_fingerprint, deliveredAt);
-        results.push(Object.freeze({ outbox_id: item.outbox_id, delivery: "DELIVERED", record: updated }));
-      } else {
-        const updated = await recordOutboxAttempt(item.outbox_id, item.event_fingerprint);
-        results.push(Object.freeze({
-          outbox_id: item.outbox_id,
-          delivery: outcome.status === "timeout" ? "TIMEOUT_PENDING" : "FAILED_PENDING",
-          record: updated
-        }));
+        timeoutMs = options.timeoutMs ?? 250;
+        claimTtlMs = options.claimTtlMs;
+        limit = options.limit ?? 100;
+        now = options.now ?? (() => new Date());
+      } catch (cause) {
+        throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "outbox dispatch options could not be snapshotted safely", { cause });
       }
+      if (typeof deliver !== "function" || typeof now !== "function") {
+        throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "deliver and now functions are required");
+      }
+      if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs >= MAX_NODE_TIMEOUT_MS) {
+        throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "timeoutMs must be within the Node.js timer range");
+      }
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000) {
+        throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "limit must be an integer from 1 through 1000");
+      }
+      const minimumClaimTtlMs = timeoutMs * limit;
+      if (!Number.isSafeInteger(minimumClaimTtlMs) || minimumClaimTtlMs >= MAX_NODE_TIMEOUT_MS) {
+        throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "timeoutMs multiplied by limit exceeds the claim lease range");
+      }
+      claimTtlMs ??= Math.min(MAX_NODE_TIMEOUT_MS, minimumClaimTtlMs * 2 + 1);
+      if (!Number.isSafeInteger(claimTtlMs) || claimTtlMs <= minimumClaimTtlMs || claimTtlMs > MAX_NODE_TIMEOUT_MS) {
+        throw new SqliteMemoryStoreError("INVALID_OUTBOX_DISPATCH", "claimTtlMs must exceed timeoutMs multiplied by limit and fit the timer range");
+      }
+      let claimedMs;
+      let claimedAt;
+      let claimExpiresAt;
+      try {
+        claimedMs = Date.prototype.getTime.call(now());
+        if (!Number.isFinite(claimedMs) || claimedMs + claimTtlMs > 8_640_000_000_000_000) throw new Error("invalid claim clock");
+        claimedAt = new Date(claimedMs).toISOString();
+        claimExpiresAt = new Date(claimedMs + claimTtlMs).toISOString();
+      } catch (cause) {
+        throw new SqliteMemoryStoreError("OUTBOX_CLOCK_UNAVAILABLE", "outbox claim clock is unavailable", { cause });
+      }
+      const claimed = await claimOutboxBatch(limit, claimedAt, claimExpiresAt);
+      const results = [];
+      for (const item of claimed) {
+        const outcome = await boundedCall(() => deliver(item.record.event), timeoutMs);
+        // At-least-once contract: only an explicit `true` acknowledges delivery.
+        // A receiver MUST durably deduplicate by outbox_id because timeout/crash
+        // boundaries can cause the same event to be presented again.
+        if (outcome.status === "ok" && outcome.value === true) {
+          let deliveredAt;
+          try {
+            const epochMs = Date.prototype.getTime.call(now());
+            if (!Number.isFinite(epochMs)) throw new Error("invalid delivery clock");
+            deliveredAt = new Date(epochMs).toISOString();
+          } catch (cause) {
+            await settleOutboxClaim(item);
+            throw new SqliteMemoryStoreError("OUTBOX_CLOCK_UNAVAILABLE", "outbox delivery clock is unavailable", { cause });
+          }
+          const updated = await settleOutboxClaim(item, deliveredAt);
+          results.push(Object.freeze({
+            outbox_id: item.record.outbox_id,
+            delivery: updated === null ? "CLAIM_LOST" : "DELIVERED",
+            ...(updated === null ? {} : { record: updated })
+          }));
+        } else {
+          const updated = await settleOutboxClaim(item);
+          results.push(Object.freeze({
+            outbox_id: item.record.outbox_id,
+            delivery: updated === null ? "CLAIM_LOST" : (outcome.status === "timeout" ? "TIMEOUT_PENDING" : "FAILED_PENDING"),
+            ...(updated === null ? {} : { record: updated })
+          }));
+        }
+      }
+      return Object.freeze(results);
+    } finally {
+      activeDispatches -= 1;
     }
-    return Object.freeze(results);
   }
 
   async function withReadLeaseAtomic(leaseSelector, callback) {
@@ -654,7 +913,9 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
 
   function close() {
     if (closed) return;
-    if (leaseActive || pendingOperations > 0) throw new SqliteMemoryStoreError("LEASE_ACTIVE", "store cannot close while operations are active or queued");
+    if (leaseActive || activeDispatches > 0 || pendingOperations > 0) {
+      throw new SqliteMemoryStoreError("LEASE_ACTIVE", "store cannot close while leases, dispatches, or operations are active or queued");
+    }
     database.close();
     closed = true;
   }

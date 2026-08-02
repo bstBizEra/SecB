@@ -103,6 +103,60 @@ function makeReplayLedger() {
   };
 }
 
+function seedLegacyOutboxDatabase(databasePath, { contradictory = false } = {}) {
+  const record = storedRecord({ memory_record_id: contradictory ? "mem-legacy-invalid" : "mem-legacy" });
+  const idempotencyKey = contradictory ? "admit-legacy-invalid" : "admit-legacy";
+  const event = outboxEntry(record, idempotencyKey);
+  const raw = new DatabaseSync(databasePath);
+  raw.exec(`
+    PRAGMA foreign_keys = ON;
+    CREATE TABLE memory_records (
+      sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL,
+      layer TEXT NOT NULL,
+      memory_record_id TEXT NOT NULL,
+      record_version INTEGER NOT NULL,
+      content_hash TEXT NOT NULL,
+      record_fingerprint TEXT NOT NULL,
+      record_json TEXT NOT NULL,
+      UNIQUE (project_id, layer, memory_record_id, record_version)
+    );
+    CREATE TABLE memory_admission_receipts (
+      idempotency_key TEXT PRIMARY KEY,
+      sequence INTEGER NOT NULL UNIQUE,
+      record_fingerprint TEXT NOT NULL,
+      FOREIGN KEY (sequence) REFERENCES memory_records(sequence) ON DELETE RESTRICT
+    );
+    CREATE TABLE memory_audit_outbox (
+      outbox_id TEXT PRIMARY KEY,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      event_fingerprint TEXT NOT NULL,
+      event_json TEXT NOT NULL,
+      delivery_status TEXT NOT NULL,
+      delivery_attempts INTEGER NOT NULL DEFAULT 0,
+      delivered_at TEXT,
+      FOREIGN KEY (idempotency_key) REFERENCES memory_admission_receipts(idempotency_key) ON DELETE RESTRICT
+    );
+  `);
+  const fingerprint = canonicalFingerprint(record);
+  raw.prepare(`
+    INSERT INTO memory_records (
+      project_id, layer, memory_record_id, record_version, content_hash,
+      record_fingerprint, record_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(record.project_id, record.layer, record.memory_record_id, record.version, record.content_hash, fingerprint, JSON.stringify(record));
+  raw.prepare("INSERT INTO memory_admission_receipts (idempotency_key, sequence, record_fingerprint) VALUES (?, 1, ?)")
+    .run(idempotencyKey, fingerprint);
+  raw.prepare(`
+    INSERT INTO memory_audit_outbox (
+      outbox_id, idempotency_key, event_fingerprint, event_json,
+      delivery_status, delivery_attempts, delivered_at
+    ) VALUES (?, ?, ?, ?, 'PENDING', 0, ?)
+  `).run(event.outbox_id, idempotencyKey, canonicalFingerprint(event), JSON.stringify(event), contradictory ? FIXED_NOW.toISOString() : null);
+  raw.close();
+  return { record, event, idempotencyKey };
+}
+
 test("optional adapter fails with a controlled code when node:sqlite is disabled", async () => {
   const probe = `
     import { createSqliteMemoryRecordStore } from ${JSON.stringify(STORE_MODULE_URL)};
@@ -115,6 +169,87 @@ test("optional adapter fails with a controlled code when node:sqlite is disabled
   `;
   const { stdout } = await execFileAsync(process.execPath, ["--no-warnings", "--no-experimental-sqlite", "--input-type=module", "--eval", probe]);
   assert.equal(stdout, "SQLITE_UNAVAILABLE");
+});
+
+test("legacy unversioned outbox migrates transactionally to schema v2 without data loss", async (t) => {
+  const databasePath = databasePathFor(t);
+  const { record, event, idempotencyKey } = seedLegacyOutboxDatabase(databasePath);
+
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  assert.deepEqual(store.read(), [record]);
+  assert.deepEqual(store.readOutbox()[0].event, event);
+  const replay = await store.appendWithOutbox(record, { idempotency_key: idempotencyKey, outbox_entry: event });
+  assert.equal(replay.receipt.created, false);
+  store.close();
+
+  const raw = new DatabaseSync(databasePath);
+  assert.equal(raw.prepare("PRAGMA user_version").get().user_version, 2);
+  assert.deepEqual(
+    raw.prepare("PRAGMA table_info(memory_audit_outbox)").all().map((column) => column.name),
+    ["outbox_id", "idempotency_key", "event_fingerprint", "event_json", "delivery_status", "delivery_attempts", "delivered_at", "claim_token", "claimed_at", "claim_expires_at"]
+  );
+  assert.equal(raw.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'memory_audit_outbox_v1'").get(), undefined);
+  assert.equal(raw.prepare("SELECT COUNT(*) AS count FROM memory_audit_outbox").get().count, 1);
+  raw.close();
+});
+
+test("pre-outbox memory database gains schema v2 without changing existing records", (t) => {
+  const databasePath = databasePathFor(t);
+  const { record } = seedLegacyOutboxDatabase(databasePath);
+  const raw = new DatabaseSync(databasePath);
+  raw.exec("DROP TABLE memory_audit_outbox");
+  raw.close();
+
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  assert.deepEqual(store.read(), [record]);
+  assert.deepEqual(store.readOutbox(), []);
+  store.close();
+  const migrated = new DatabaseSync(databasePath);
+  assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 2);
+  migrated.close();
+});
+
+test("legacy migration fails closed and rolls back when an outbox row violates state invariants", (t) => {
+  const databasePath = databasePathFor(t);
+  seedLegacyOutboxDatabase(databasePath, { contradictory: true });
+
+  assert.throws(
+    () => createSqliteMemoryRecordStore({ databasePath }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
+  );
+  const raw = new DatabaseSync(databasePath);
+  assert.equal(raw.prepare("PRAGMA user_version").get().user_version, 0);
+  assert.ok(raw.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'memory_audit_outbox'").get());
+  assert.equal(raw.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'memory_audit_outbox_v1'").get(), undefined);
+  raw.close();
+});
+
+test("unknown future schema version fails closed before creating memory tables", (t) => {
+  const databasePath = databasePathFor(t);
+  const raw = new DatabaseSync(databasePath);
+  raw.exec("PRAGMA user_version = 99");
+  raw.close();
+  assert.throws(
+    () => createSqliteMemoryRecordStore({ databasePath }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "UNSUPPORTED_SCHEMA_VERSION"
+  );
+});
+
+test("declared schema v2 with missing constraints fails closed", (t) => {
+  const databasePath = databasePathFor(t);
+  seedLegacyOutboxDatabase(databasePath);
+  const raw = new DatabaseSync(databasePath);
+  raw.exec(`
+    ALTER TABLE memory_audit_outbox ADD COLUMN claim_token TEXT;
+    ALTER TABLE memory_audit_outbox ADD COLUMN claimed_at TEXT;
+    ALTER TABLE memory_audit_outbox ADD COLUMN claim_expires_at TEXT;
+    PRAGMA user_version = 2;
+  `);
+  raw.close();
+  assert.throws(
+    () => createSqliteMemoryRecordStore({ databasePath }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "SCHEMA_INTEGRITY_VIOLATION"
+  );
 });
 
 test("SQLite store atomically persists one idempotent identity across restart", async (t) => {
@@ -200,6 +335,15 @@ test("outbox delivery is bounded, retryable, and marked delivered only after suc
   const store = createSqliteMemoryRecordStore({ databasePath });
   await store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event });
 
+  await assert.rejects(
+    store.dispatchOutbox(() => true, { timeoutMs: 10, limit: 2, claimTtlMs: 20 }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "INVALID_OUTBOX_DISPATCH"
+  );
+  await assert.rejects(
+    store.dispatchOutbox(() => true, { rogue: true }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "INVALID_OUTBOX_DISPATCH"
+  );
+
   const startedAt = Date.now();
   const timedOut = await store.dispatchOutbox(() => new Promise(() => {}), { timeoutMs: 20, now: () => FIXED_NOW });
   assert.equal(timedOut[0].delivery, "TIMEOUT_PENDING");
@@ -213,6 +357,95 @@ test("outbox delivery is bounded, retryable, and marked delivered only after suc
   assert.equal(success[0].delivery, "DELIVERED");
   assert.deepEqual(delivered, [event]);
   assert.deepEqual(store.readOutbox(), []);
+  store.close();
+});
+
+test("concurrent dispatcher instances claim one pending event only once", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-claim" });
+  const event = outboxEntry(record, "admit-outbox-claim");
+  const firstStore = createSqliteMemoryRecordStore({ databasePath });
+  await firstStore.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event });
+  const secondStore = createSqliteMemoryRecordStore({ databasePath });
+  let releaseDelivery;
+  let signalDelivery;
+  const deliveryEntered = new Promise((resolve) => { signalDelivery = resolve; });
+  const deliveryRelease = new Promise((resolve) => { releaseDelivery = resolve; });
+  let deliveryCalls = 0;
+
+  const firstPending = firstStore.dispatchOutbox(async () => {
+    deliveryCalls += 1;
+    signalDelivery();
+    await deliveryRelease;
+    return true;
+  }, { timeoutMs: 200, claimTtlMs: 1_000, limit: 1, now: () => FIXED_NOW });
+  await deliveryEntered;
+  assert.throws(
+    () => firstStore.close(),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "LEASE_ACTIVE"
+  );
+  const second = await secondStore.dispatchOutbox(() => { deliveryCalls += 1; return true; }, {
+    timeoutMs: 200,
+    claimTtlMs: 1_000,
+    limit: 1,
+    now: () => FIXED_NOW
+  });
+  assert.deepEqual(second, []);
+  releaseDelivery();
+  const first = await firstPending;
+  assert.equal(first[0].delivery, "DELIVERED");
+  assert.equal(deliveryCalls, 1);
+  assert.deepEqual(firstStore.readOutbox(), []);
+  firstStore.close();
+  secondStore.close();
+});
+
+test("an expired dispatcher claim is recovered and retried without losing the event", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-expired-claim" });
+  const event = outboxEntry(record, "admit-outbox-expired-claim");
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event });
+  const raw = new DatabaseSync(databasePath);
+  raw.prepare(`
+    UPDATE memory_audit_outbox
+       SET delivery_status = 'IN_FLIGHT', delivery_attempts = 1,
+           claim_token = 'orphaned-claim', claimed_at = ?, claim_expires_at = ?
+  `).run(FIXED_NOW.toISOString(), new Date(FIXED_NOW.getTime() + 1_000).toISOString());
+  raw.close();
+
+  const later = new Date(FIXED_NOW.getTime() + 2_000);
+  const recovered = await store.dispatchOutbox(() => true, {
+    timeoutMs: 100,
+    claimTtlMs: 1_000,
+    limit: 1,
+    now: () => later
+  });
+  assert.equal(recovered[0].delivery, "DELIVERED");
+  assert.equal(recovered[0].record.delivery_attempts, 2);
+  assert.deepEqual(store.readOutbox(), []);
+  store.close();
+});
+
+test("delivery-clock failure releases the claim and preserves a retryable event", async (t) => {
+  const databasePath = databasePathFor(t);
+  const record = storedRecord({ memory_record_id: "mem-outbox-clock" });
+  const event = outboxEntry(record, "admit-outbox-clock");
+  const store = createSqliteMemoryRecordStore({ databasePath });
+  await store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event });
+  let clockCalls = 0;
+  await assert.rejects(
+    store.dispatchOutbox(() => true, {
+      timeoutMs: 100,
+      limit: 1,
+      claimTtlMs: 1_000,
+      now: () => ++clockCalls === 1 ? FIXED_NOW : new Date(NaN)
+    }),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_CLOCK_UNAVAILABLE"
+  );
+  assert.equal(store.readOutbox()[0].delivery_attempts, 1);
+  const retry = await store.dispatchOutbox(() => true, { timeoutMs: 100, limit: 1, claimTtlMs: 1_000, now: () => FIXED_NOW });
+  assert.equal(retry[0].delivery, "DELIVERED");
   store.close();
 });
 
@@ -245,6 +478,10 @@ test("outbox integrity verification rejects contradictory delivery state", async
   raw.prepare("UPDATE memory_audit_outbox SET delivered_at = ?").run(FIXED_NOW.toISOString());
   assert.throws(() => store.readOutbox(), (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION");
   raw.prepare("UPDATE memory_audit_outbox SET delivery_status = 'DELIVERED', delivery_attempts = 0, delivered_at = 'garbage'").run();
+  assert.throws(
+    () => store.readOutbox(),
+    (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
+  );
   await assert.rejects(
     store.appendWithOutbox(record, { idempotency_key: event.idempotency_key, outbox_entry: event }),
     (error) => error instanceof SqliteMemoryStoreError && error.code === "OUTBOX_INTEGRITY_VIOLATION"
@@ -494,8 +731,15 @@ test("gateway restart at a later clock replays the durable admission instant", a
   });
   const firstStore = createSqliteMemoryRecordStore({ databasePath });
   const first = await createGateway(firstStore, FIXED_NOW).admit(structuredClone(request));
-  await firstStore.dispatchOutbox((entry) => { replayLedger.writer(entry); return true; });
   firstStore.close();
+
+  const raw = new DatabaseSync(databasePath);
+  raw.prepare(`
+    UPDATE memory_audit_outbox
+       SET delivery_status = 'IN_FLIGHT', delivery_attempts = 1,
+           claim_token = 'active-restart-claim', claimed_at = ?, claim_expires_at = ?
+  `).run(FIXED_NOW.toISOString(), new Date(FIXED_NOW.getTime() + 600_000).toISOString());
+  raw.close();
 
   const restartedStore = createSqliteMemoryRecordStore({ databasePath });
   const replay = await createGateway(restartedStore, new Date(FIXED_NOW.getTime() + 300_000)).admit(structuredClone(request));
