@@ -208,6 +208,7 @@
     "contracts/skill-grant-record.schema.json",
     "src/skills/package-descriptor-mapper.mjs",
     "tests/skill-contract-split.test.mjs",
+    "tests/skill-resolution-time-authority.test.mjs",
     "src/registry/skill-resolver.mjs",
     "tests/fixtures/valid/skill-manifest.json",
     "tests/fixtures/valid/skill-package-descriptor.json",

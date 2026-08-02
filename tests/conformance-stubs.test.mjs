@@ -397,7 +397,12 @@ test("V-013 skill: skill lifecycle through SkillsHub", () => {
   // strongest lookup contract: resolveEffective at a trusted instant, so
   // reverted or expired promotion decisions deny registration
   const resolver = new SkillResolver({
-    decisionLookup: (ref) => promotions.resolveEffective(ref, { at: "2026-07-19T12:00:00Z" }).decision
+    decisionLookup: (ref) => promotions.resolveEffective(ref, { at: "2026-07-19T12:00:00Z" }).decision,
+    // WP-SK-R2 / DEF-R3: evidence_refs are now resolved, not counted. The
+    // fixture must therefore model evidence that exists - previously it cited
+    // references nothing checked, which is the defect the control closes.
+    evidenceLookup: (ref) => (ref === "ev_skill_1" ? { evidence_id: ref, verification_status: "VERIFIED" } : null),
+    now: () => "2026-07-19T12:00:00Z"
   });
   const manifest = (overrides = {}) => ({
     skill_id: "SKILL-V013",

@@ -61,7 +61,9 @@ function governedManifest(overrides = {}) {
 
 function governedResolver() {
   const resolver = new SkillResolver({
-    decisionLookup: (id) => (id === 'dec_promo_1' ? { decision_id: 'dec_promo_1', decision_type: 'GOVERNANCE' } : null)
+    decisionLookup: (id) => (id === 'dec_promo_1' ? { decision_id: 'dec_promo_1', decision_type: 'GOVERNANCE' } : null),
+    // WP-SK-R2 / DEF-R3: evidence is resolved rather than counted.
+    evidenceLookup: (ref) => (ref === 'ev_skill_eval' ? { evidence_id: ref } : null)
   });
   resolver.registerSkill(governedManifest());
   return resolver;

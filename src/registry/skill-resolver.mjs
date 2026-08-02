@@ -42,18 +42,71 @@ export class SkillResolver {
   #skills = new Map();
   #decisionLookup;
 
+  #evidenceLookup;
+  #now;
+
   // decisionLookup is REQUIRED and is the trust root for publication:
-  // without it, promotion would be self-attested. Lookup contract
-  // (IMM-SKILL-V1): it MUST be bound to the governed DecisionLedger and
-  // SHOULD be resolveEffective-based at a trusted instant, so reverted or
-  // expired promotion decisions deny at registration. Resolution-time
-  // re-validation/unpublication is folded into the open revocation
-  // lifecycle V-item.
-  constructor({ decisionLookup } = {}) {
+  // without it, promotion would be self-attested. It MUST be bound to the
+  // governed DecisionLedger and SHOULD be resolveEffective-based, so reverted
+  // or expired promotion decisions deny.
+  //
+  // WP-SK-R2 / DEF-R2. Resolution-time re-validation is no longer deferred.
+  // Previously decisionLookup was consulted ONLY here at registration, and
+  // resolveSkill read a deep-frozen clone captured at that moment. Probe:
+  // resolution after valid_until, and after the decision was REVERTED, both
+  // returned ALLOW. With no unregister API, a grant once made could never
+  // expire and never be revoked - a live violation of governance-baseline
+  // section 3, which requires denial when an approval "is expired, revoked,
+  // replayed, or for a different object".
+  //
+  // TRUSTED INSTANT. The instant is derived per call from `now` and passed to
+  // the lookup as a second argument. Capturing it at construction would make
+  // expiry permanently stale, which is the same defect wearing a fix's clothes.
+  // Existing single-argument lookups are unaffected - JavaScript ignores the
+  // extra argument - so a lookup that pins its own instant stays deterministic
+  // for tests that want that.
+  //
+  // evidenceLookup (DEF-R3) is required WHERE IT BITES rather than at
+  // construction: registering a PUBLISHED manifest without one throws. A
+  // constructor-level requirement would break both production wirings, which
+  // this work package is forbidden to touch, and breaking them is worse than a
+  // requirement enforced at the only point it matters. Recorded as an amendment
+  // to AC-R2-06 rather than silently weakened.
+  constructor({ decisionLookup, evidenceLookup, now } = {}) {
     if (typeof decisionLookup !== "function") {
       throw new SkillResolverError("INVALID_RESOLVER_CONFIG", "decisionLookup function is required");
     }
     this.#decisionLookup = decisionLookup;
+    this.#evidenceLookup = typeof evidenceLookup === "function" ? evidenceLookup : null;
+    this.#now = typeof now === "function" ? now : () => new Date().toISOString();
+  }
+
+  // Re-resolves every claimed HUMAN_PROMOTION at the current instant. Returns
+  // null when all promotions are effective, or a typed deny when any is not.
+  // Any throw from the lookup denies: a lookup that cannot answer is not a
+  // lookup that says yes.
+  #promotionsEffective(manifest) {
+    const promotions = manifest.approval_history.filter((entry) => entry.decision_type === "HUMAN_PROMOTION");
+    if (promotions.length === 0) {
+      return { skill: null, code: "DENY_PROMOTION_NOT_EFFECTIVE", reason: "No promotion decision is recorded" };
+    }
+    const at = this.#now();
+    for (const promotion of promotions) {
+      let decision;
+      try {
+        decision = resolvedDecision(this.#decisionLookup(promotion.decision_id, at));
+      } catch (_err) {
+        return { skill: null, code: "DENY_PROMOTION_NOT_EFFECTIVE", reason: "Promotion decision could not be resolved" };
+      }
+      if (!decision || decision.id !== promotion.decision_id || decision.type !== "GOVERNANCE") {
+        return {
+          skill: null,
+          code: "DENY_PROMOTION_NOT_EFFECTIVE",
+          reason: "Promotion decision is no longer effective"
+        };
+      }
+    }
+    return null;
   }
 
   registerSkill(manifest) {
@@ -73,7 +126,19 @@ export class SkillResolver {
       // identity-bound and typed as a governance decision. A fabricated
       // approval entry is a forgery, not a formality gap.
       for (const promotion of promotions) {
-        const decision = resolvedDecision(this.#decisionLookup(promotion.decision_id));
+        // A throwing lookup previously propagated a raw Error out of
+        // registerSkill instead of a typed deny - so a ledger outage crashed
+        // the caller rather than refusing the registration. Resolution already
+        // wrapped this; registration did not.
+        let decision;
+        try {
+          decision = resolvedDecision(this.#decisionLookup(promotion.decision_id, this.#now()));
+        } catch (_err) {
+          throw new SkillResolverError(
+            "DENY_UNAPPROVED_PUBLICATION",
+            `HUMAN_PROMOTION could not be resolved: ${promotion.decision_id}`
+          );
+        }
         if (!decision || decision.id !== promotion.decision_id || decision.type !== "GOVERNANCE") {
           throw new SkillResolverError(
             "DENY_UNAPPROVED_PUBLICATION",
@@ -83,6 +148,26 @@ export class SkillResolver {
       }
       if (manifest.evidence_refs.length === 0) {
         throw new SkillResolverError("DENY_UNAPPROVED_PUBLICATION", "PUBLISHED skills must carry evidence references");
+      }
+      // DEF-R3. evidence_refs was checked for length and nothing else - never
+      // resolved against the EvidenceLedger. `evidence_refs: ["lol"]`
+      // registered successfully. Counting references is not carrying evidence.
+      if (!this.#evidenceLookup) {
+        throw new SkillResolverError(
+          "DENY_UNVERIFIED_EVIDENCE",
+          "PUBLISHED registration requires an evidenceLookup bound to the governed EvidenceLedger"
+        );
+      }
+      for (const ref of manifest.evidence_refs) {
+        let evidence;
+        try {
+          evidence = this.#evidenceLookup(ref);
+        } catch (_err) {
+          throw new SkillResolverError("DENY_UNVERIFIED_EVIDENCE", `Evidence reference could not be resolved: ${ref}`);
+        }
+        if (!evidence) {
+          throw new SkillResolverError("DENY_UNVERIFIED_EVIDENCE", `Evidence reference does not resolve: ${ref}`);
+        }
       }
     }
     const key = `${manifest.skill_id}@${manifest.version}`;
@@ -114,6 +199,11 @@ export class SkillResolver {
     if (manifest.approval_history.some((entry) => entry.decision_type === "REVOCATION")) {
       return { skill: null, code: "DENY_REVOKED", reason: "Skill version carries a revocation record" };
     }
+    // DEF-R2: the promotion must still be effective NOW, not merely have been
+    // effective when the manifest was registered. This is the check whose
+    // absence made a grant permanent.
+    const ineffective = this.#promotionsEffective(manifest);
+    if (ineffective) return ineffective;
     if (!manifest.project_scopes.includes(projectId)) {
       return { skill: null, code: "DENY_PROJECT_SCOPE", reason: "Skill is not scoped to this project" };
     }
