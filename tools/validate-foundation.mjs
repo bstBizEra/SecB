@@ -111,6 +111,106 @@ for (const file of schemaFiles) {
   assert(missing.length === 0, `schema.identity.${file}`, "identity and version fields required");
 }
 
+// EXACT-SET pins. The loop above is a SUBSET test: it proves the pinned
+// identity fields are present and says nothing about what else joined them.
+// It is retained deliberately - it names the fields a contract may never lose,
+// which is a narrower and more legible claim than the sets below - but it is
+// not a gate on contract shape and cannot be made into one.
+//
+// Sabotage-verified before this block existed: adding a property to
+// contracts/decision-record.schema.json left `npm run validate` at exit 0, and
+// pushing that property into the schema's `required` array ALSO left it at
+// exit 0. Only the per-contract unit test caught either. A gate that a
+// contract change can walk past is not a gate on contract change.
+//
+// BOTH dimensions are pinned, because neither implies the other:
+//   - Every governed contract is `additionalProperties: false`, so its
+//     property-name set IS its wire surface. A new OPTIONAL property is
+//     already a contract change - it admits a payload the contract previously
+//     rejected - and a required-only pin is blind to it.
+//   - Promoting an existing optional property to required changes `required`
+//     and leaves `properties` identical. Demoting required to optional is the
+//     same move in reverse, and is the one that silently widens what the
+//     system will accept.
+//
+// Both maps are recorded from the schema files themselves, and held by
+// coverage assertions so a newly allowlisted contract cannot arrive unpinned.
+// The maintenance cost is one line per deliberate contract change; the failure
+// message names the file and the expected size.
+const exactRequiredSets = {
+  "contracts/agent-registration.schema.json": ["provider_id","runtime_product_id","runtime_deployment_id","agent_profile_id","agent_instance_id","runtime_version","deployment_location","owner","permitted_roles","authority_ceiling","max_data_classification","evaluation_status","lifecycle_state"],
+  "contracts/capability-record.schema.json": ["capability_id","version","adapter_id","tool","access","status","source_identity","immutable_version","integrity","tool_inventory","filesystem_boundary","network_boundary","credential_handle","intake_evidence_refs","approvals","revocation"],
+  "contracts/context-receipt.schema.json": ["receipt_id","version","project_id","objective_id","work_package_id","session_id","assigned_role","authority_scope","baseline_version","acceptance_criteria","allowed_tools","allowed_skills","evidence_obligations","freshness_timestamp","source_references","content_hash"],
+  "contracts/evidence-envelope.schema.json": ["evidence_id","version","project_id","work_package_id","session_id","actor_id","evidence_type","source","observed_at","procedure","result","exit_status","limitations","content_hash","verification_status","classification","retention_policy"],
+  "contracts/event-envelope.schema.json": ["event_id","version","project_id","work_package_id","session_id","actor_id","event_type","occurred_at","observed_fact","source","idempotency_key","classification","content_hash"],
+  "contracts/handoff-envelope.schema.json": ["handoff_id","version","project_id","work_package_id","source_session_id","destination_role","objective","authorized_scope","work_completed","artifacts","assumptions","evidence_refs","checks","limitations","unresolved_findings","risks","recommended_next_action","context_delta","content_hash"],
+  "contracts/project-contract.schema.json": ["project_id","version","status","profile_id","owners","repositories","approvals"],
+  "contracts/work-package.schema.json": ["work_package_id","version","project_id","objective","risk_class","status","baseline","scope","non_scope","acceptance_criteria","roles","allowed_paths","prohibited_paths","evidence_obligations","valid_until"],
+  "contracts/decision-record.schema.json": ["decision_id","version","project_id","work_package_id","session_id","actor_id","decision_type","outcome","rationale","authority_ref","evidence_refs","decided_at","valid_from","valid_until"],
+  "contracts/knowledge-claim.schema.json": ["claim_id","version","project_id","work_package_id","session_id","actor_id","statement","derivation","truth_status","evidence_refs","claimed_at","valid_from","valid_until","retention_policy"],
+  "contracts/outcome-receipt.schema.json": ["outcome_id","version","project_id","work_package_id","session_id","actor_id","decision_ref","knowledge_refs","skill_refs","outcome_status","details","evidence_refs","observed_at","reversion_required"],
+  "contracts/skill-manifest.schema.json": ["skill_id","version","name","status","owner","source","purpose","supported_runtimes","project_scopes","max_data_classification","evidence_refs","approval_history","revocation_conditions"],
+  "contracts/goal.schema.json": ["goal_id","version","project_id","level","title","status","parent_goal_id","provenance","content_hash"],
+  "contracts/skill-candidate.schema.json": ["skill_candidate_id","version","name","purpose","status","source_identity","immutable_version","integrity","tool_inventory","filesystem_boundary","network_boundary","credential_handle","harness_compatibility","intake_evidence_refs","withdrawal"],
+  "contracts/checkpoint.schema.json": ["checkpoint_id","version","project_id","work_package_id","session_id","actor_id","source_ledger_id","sequence_at_checkpoint","state_snapshot_ref","created_at","content_hash"],
+  "contracts/delegation-request.schema.json": ["delegation_id","version","project_id","work_package_id","session_id","source_actor_id","destination_role","objective","inputs","expected_output","acceptance_criteria","ceiling","skills","budget","due_condition","escalation_route","evidence_obligations","created_at","content_hash"],
+  "contracts/workspace-lease.schema.json": ["lease_id","version","project_id","work_package_id","session_id","actor_id","write_set","issued_at","ttl","expires_at","content_hash"],
+  "contracts/memory-record.schema.json": ["memory_record_id","version","project_id","work_package_id","session_id","actor_id","layer","source","statement","classification","confidence","provenance","valid_from","valid_until","retention_policy","admitted_at","content_hash"],
+  "contracts/skill-promotion.schema.json": ["decision_id","version","project_id","work_package_id","session_id","actor_id","skill_candidate_id","skill_version","status","producer_actor_id","independent_review_actor_id","governance_actor_id","bound_action","bound_object_version","evidence_refs","risk_class","decided_at","content_hash"],
+  "contracts/integration-queue-entry.schema.json": ["queue_entry_id","version","project_id","work_package_id","session_id","candidate_branch","candidate_tip_commit","base_ref","declared_write_set","status","submitted_by","submitted_at","content_hash"]
+};
+
+const exactPropertySets = {
+  "contracts/agent-registration.schema.json": ["provider_id","runtime_product_id","runtime_deployment_id","agent_profile_id","agent_instance_id","runtime_version","deployment_location","owner","permitted_roles","authority_ceiling","approved_models","approved_tools","approved_mcp_methods","approved_skills","repository_scopes","environment_scopes","max_data_classification","delegation_rights","evidence_obligations","workload_identity_ref","evaluation_status","lifecycle_state"],
+  "contracts/capability-record.schema.json": ["capability_id","version","adapter_id","tool","access","status","source_identity","immutable_version","integrity","tool_inventory","filesystem_boundary","network_boundary","credential_handle","intake_evidence_refs","approvals","revocation"],
+  "contracts/context-receipt.schema.json": ["receipt_id","version","project_id","objective_id","work_package_id","session_id","assigned_role","authority_scope","baseline_version","acceptance_criteria","allowed_tools","allowed_skills","evidence_obligations","freshness_timestamp","source_references","content_hash"],
+  "contracts/evidence-envelope.schema.json": ["evidence_id","version","project_id","work_package_id","session_id","actor_id","evidence_type","source","observed_at","procedure","result","exit_status","limitations","content_hash","verification_status","classification","retention_policy"],
+  "contracts/event-envelope.schema.json": ["event_id","version","project_id","work_package_id","session_id","actor_id","event_type","occurred_at","observed_fact","source","idempotency_key","classification","content_hash"],
+  "contracts/handoff-envelope.schema.json": ["handoff_id","version","project_id","work_package_id","source_session_id","destination_role","objective","authorized_scope","work_completed","artifacts","assumptions","evidence_refs","checks","limitations","unresolved_findings","risks","recommended_next_action","context_delta","content_hash"],
+  "contracts/project-contract.schema.json": ["project_id","version","status","profile_id","namespace","name","description","owners","repositories","risk_class","evidence_destination","valid_from","valid_until","risk_ceiling","environments","security_classification","data_categories","applicable_policies","governing_lifecycle_policy","evidence_chain","open_register_alignment","authority_invariant","approved_runtime_deployments","proposed_runtime_deployments","approved_agents","proposed_agent_registrations","approved_models","approved_tools","approved_mcp_methods","approved_skills","evidence_root","evidence_destination_status","memory_policy","release_authority","integration_authority","data_residency","provider_transport_policy","agent_tool_network_policy","credential_policy","retention_policy","required_exit_gates","activation_restrictions","revocation_policy","expiry_policy","effective_from","expires_at","approvals"],
+  "contracts/work-package.schema.json": ["work_package_id","version","project_id","objective","risk_class","status","baseline","scope","non_scope","acceptance_criteria","roles","allowed_paths","prohibited_paths","evidence_obligations","valid_until"],
+  "contracts/decision-record.schema.json": ["decision_id","version","project_id","work_package_id","session_id","actor_id","decision_type","outcome","rationale","authority_ref","evidence_refs","decided_at","valid_from","valid_until","reverts"],
+  "contracts/knowledge-claim.schema.json": ["claim_id","version","project_id","work_package_id","session_id","actor_id","statement","derivation","truth_status","evidence_refs","claimed_at","valid_from","valid_until","retention_policy"],
+  "contracts/outcome-receipt.schema.json": ["outcome_id","version","project_id","work_package_id","session_id","actor_id","decision_ref","knowledge_refs","skill_refs","outcome_status","details","evidence_refs","observed_at","reversion_required"],
+  "contracts/skill-manifest.schema.json": ["skill_id","version","name","status","owner","source","purpose","supported_runtimes","project_scopes","max_data_classification","evidence_refs","approval_history","revocation_conditions"],
+  "contracts/goal.schema.json": ["goal_id","version","project_id","level","title","status","parent_goal_id","provenance","content_hash"],
+  "contracts/skill-candidate.schema.json": ["skill_candidate_id","version","name","purpose","status","source_identity","immutable_version","integrity","tool_inventory","filesystem_boundary","network_boundary","credential_handle","harness_compatibility","intake_evidence_refs","withdrawal"],
+  "contracts/checkpoint.schema.json": ["checkpoint_id","version","project_id","work_package_id","session_id","actor_id","source_ledger_id","sequence_at_checkpoint","state_snapshot_ref","created_at","content_hash"],
+  "contracts/delegation-request.schema.json": ["delegation_id","version","project_id","work_package_id","session_id","source_actor_id","destination_role","objective","inputs","expected_output","acceptance_criteria","ceiling","skills","budget","due_condition","escalation_route","evidence_obligations","created_at","content_hash"],
+  "contracts/workspace-lease.schema.json": ["lease_id","version","project_id","work_package_id","session_id","actor_id","write_set","issued_at","ttl","expires_at","content_hash"],
+  "contracts/memory-record.schema.json": ["memory_record_id","version","project_id","work_package_id","session_id","actor_id","layer","source","statement","classification","confidence","provenance","valid_from","valid_until","retention_policy","admitted_at","supersedes","content_hash"],
+  "contracts/skill-promotion.schema.json": ["decision_id","version","project_id","work_package_id","session_id","actor_id","skill_candidate_id","skill_version","status","producer_actor_id","independent_review_actor_id","governance_actor_id","bound_action","bound_object_version","evidence_refs","risk_class","decided_at","content_hash"],
+  "contracts/integration-queue-entry.schema.json": ["queue_entry_id","version","project_id","work_package_id","session_id","candidate_branch","candidate_tip_commit","base_ref","declared_write_set","status","submitted_by","submitted_at","content_hash"]
+};
+
+const pinnedContractSet = JSON.stringify([...schemaFiles].sort());
+assert(
+  JSON.stringify(Object.keys(exactRequiredSets).sort()) === pinnedContractSet,
+  "schema.required.exact.coverage",
+  `${schemaFiles.length} governed contracts carry an exact required-set pin`
+);
+assert(
+  JSON.stringify(Object.keys(exactPropertySets).sort()) === pinnedContractSet,
+  "schema.properties.exact.coverage",
+  `${schemaFiles.length} governed contracts carry an exact property-set pin`
+);
+for (const [file, expected] of Object.entries(exactRequiredSets)) {
+  const actual = [...JSON.parse(read(file)).required].sort();
+  assert(
+    JSON.stringify(actual) === JSON.stringify([...expected].sort()),
+    `schema.required.exact.${file}`,
+    `required set is exactly ${expected.length} fields`
+  );
+}
+for (const [file, expected] of Object.entries(exactPropertySets)) {
+  const actual = Object.keys(JSON.parse(read(file)).properties ?? {}).sort();
+  assert(
+    JSON.stringify(actual) === JSON.stringify([...expected].sort()),
+    `schema.properties.exact.${file}`,
+    `property set is exactly ${expected.length} names`
+  );
+}
+
 const sourceLine = read("docs/source/ASSESSMENT.sha256").trim();
 assert(sourceLine.startsWith(manifest.source_sha256), "source.digest", manifest.source_sha256);
 
