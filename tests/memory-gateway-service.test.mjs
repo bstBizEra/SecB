@@ -16,13 +16,19 @@ import test from "node:test";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createMemoryGateway, MemoryGatewayConfigurationError } from "../src/services/memory-gateway-service.mjs";
+import { createMemoryGateway as createMemoryGatewayImpl, MemoryGatewayConfigurationError } from "../src/services/memory-gateway-service.mjs";
 import { validateContract } from "../src/contracts/contract-validator.mjs";
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");
 const FIXED_NOW = new Date("2026-07-20T10:00:00Z");
+const TEST_CURSOR_MAC_KEY = Buffer.alloc(32, 0x53);
+
+function createMemoryGateway(options) {
+  const suppliedKey = options !== null && options !== undefined && Object.prototype.hasOwnProperty.call(options, "cursorMacKey");
+  return createMemoryGatewayImpl({ ...(options ?? {}), cursorMacKey: suppliedKey ? options.cursorMacKey : TEST_CURSOR_MAC_KEY });
+}
 
 // Kernel SoD primitive, reused config-only (no wrapper behavior added).
 const kernelSodRules = { checkPairwiseDistinct };
@@ -171,6 +177,16 @@ test("construction is fail-closed on every missing or malformed collaborator", (
   assert.throws(
     () => createMemoryGateway({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {}, replayResolver: {} }),
     hasCode("INVALID_REPLAY_RESOLVER")
+  );
+  for (const cursorMacKey of [null, "public-key", new Uint8Array(31)]) {
+    assert.throws(
+      () => createMemoryGateway({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {}, cursorMacKey }),
+      hasCode("INVALID_CURSOR_MAC_KEY")
+    );
+  }
+  assert.throws(
+    () => createMemoryGatewayImpl({ layerStores: layerConfig(), sodRules: kernelSodRules, now: () => FIXED_NOW, ledgerWriter: () => {} }),
+    hasCode("INVALID_CURSOR_MAC_KEY")
   );
   for (const timeouts of [null, { audit_ms: 0 }, { replay_ms: 2_147_483_648 }, { rogue: 1 }]) {
     assert.throws(
@@ -1156,13 +1172,19 @@ test("a non-settling terminal audit times out and releases the store lease", asy
     ledgerWriter: (entry) => entry.disposition === "COMMITTED" ? new Promise(() => {}) : undefined,
     timeouts: { audit_ms: 20, replay_ms: 20 }
   });
-  const startedAt = Date.now();
+  const watchdog = Symbol("aggregate-load watchdog");
+  let watchdogHandle;
+  const watchdogPromise = new Promise((resolveWatchdog) => {
+    watchdogHandle = setTimeout(() => resolveWatchdog(watchdog), 500);
+  });
+  const result = await Promise.race([
+    gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } }),
+    watchdogPromise
+  ]).finally(() => clearTimeout(watchdogHandle));
 
-  const result = await gateway.admit({ layer: "session", record: sessionRecord(), admission: { producer: "agent-a" } });
-
+  assert.notEqual(result, watchdog, "the configured dependency timeout must settle before the longer event-loop watchdog");
   assert.equal(result.decision, "RECONCILIATION_REQUIRED");
   assert.equal(result.reason, "COMMIT_AUDIT_UNAVAILABLE");
-  assert.ok(Date.now() - startedAt < 500, "terminal audit timeout must return promptly");
   assert.equal(leaseHeld, false);
 });
 
@@ -1222,9 +1244,10 @@ test("retrieve uses the bounded scoped-read port and carries an opaque cursor", 
   assert.equal(first.records.length, 1);
   assert.match(first.next_cursor, /^[A-Za-z0-9_-]+$/);
   const decodedCursor = JSON.parse(Buffer.from(first.next_cursor, "base64url").toString("utf8"));
-  assert.equal(decodedCursor.project_id, "proj-1");
-  assert.equal(decodedCursor.layer, "session");
+  assert.equal(decodedCursor.scope_hash, canonicalFingerprint({ project_id: "proj-1", layer: "session" }));
+  assert.equal(decodedCursor.memory_record_id_hash, canonicalFingerprint({ memory_record_id: firstRecord.memory_record_id }));
   assert.equal(Object.prototype.hasOwnProperty.call(decodedCursor, "sequence"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(decodedCursor, "project_id"), false);
 
   const second = gateway.retrieve({
     layer: "session",
@@ -1243,7 +1266,7 @@ test("retrieve uses the bounded scoped-read port and carries an opaque cursor", 
       layer: "session",
       limit: 1,
       after: {
-        memory_record_id: firstRecord.memory_record_id,
+        memory_record_id_hash: canonicalFingerprint({ memory_record_id: firstRecord.memory_record_id }),
         version: firstRecord.version,
         content_hash: firstRecord.content_hash
       }
@@ -1357,25 +1380,90 @@ test("retrieve cursor is integrity-bound, scope-bound, and rejects non-progressi
   store.readScoped = (query) => query.after === null || repeatAnchor
     ? { records: [firstRecord], has_more: true }
     : { records: [], has_more: false };
+  const cursorMacKey = Buffer.alloc(32, 0x41);
+  const gateway = createMemoryGateway({
+    layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } },
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter(),
+    cursorMacKey
+  });
+  const base = { layer: "session", project_id: "proj-1", scope_project_id: "proj-1", limit: 1 };
+  const first = gateway.retrieve(base);
+  assert.equal(first.decision, "ALLOW");
+  assert.notEqual(first.next_cursor, null);
+  cursorMacKey.fill(0); // the gateway must retain its construction-time key snapshot
+
+  const finalCharacter = first.next_cursor.at(-1);
+  const tampered = `${first.next_cursor.slice(0, -1)}${finalCharacter === "A" ? "B" : "A"}`;
+  assert.equal(gateway.retrieve({ ...base, cursor: tampered }).code, "DENY_MALFORMED_REQUEST");
+  const forgedEnvelope = JSON.parse(Buffer.from(first.next_cursor, "base64url").toString("utf8"));
+  forgedEnvelope.memory_record_id_hash = "f".repeat(64);
+  forgedEnvelope.mac = canonicalFingerprint({ forged: true });
+  const forged = Buffer.from(JSON.stringify(forgedEnvelope), "utf8").toString("base64url");
+  assert.equal(gateway.retrieve({ ...base, cursor: forged }).code, "DENY_MALFORMED_REQUEST");
+  assert.equal(gateway.retrieve({ ...base, project_id: "proj-2", scope_project_id: "proj-2", cursor: first.next_cursor }).code, "DENY_MALFORMED_REQUEST");
+  assert.equal(gateway.retrieve({ ...base, cursor: "A".repeat(2049) }).code, "DENY_MALFORMED_REQUEST");
+
+  repeatAnchor = true;
+  assert.equal(gateway.retrieve({ ...base, cursor: first.next_cursor }).code, "DENY_STORE_UNAVAILABLE");
+});
+
+test("retrieve snapshots every hostile query field exactly once before authorization", () => {
+  const store = makeStore();
+  const row = { ...sessionRecord({ memory_record_id: "mem-query-snapshot" }), layer: "session", admitted_at: FIXED_NOW.toISOString() };
+  const storeQueries = [];
+  store.readScoped = (query) => {
+    storeQueries.push(query);
+    return query.after === null && query.project_id === "proj-1"
+      ? { records: [row], has_more: true }
+      : { records: [], has_more: false };
+  };
   const gateway = createMemoryGateway({
     layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } },
     sodRules: kernelSodRules,
     now: () => FIXED_NOW,
     ledgerWriter: makeAuditWriter()
   });
-  const base = { layer: "session", project_id: "proj-1", scope_project_id: "proj-1", limit: 1 };
-  const first = gateway.retrieve(base);
+  const first = gateway.retrieve({ layer: "session", project_id: "proj-1", scope_project_id: "proj-1", limit: 1 });
   assert.equal(first.decision, "ALLOW");
-  assert.notEqual(first.next_cursor, null);
+  const reads = new Map();
+  const query = {};
+  for (const [key, value] of Object.entries({ layer: "session", project_id: "proj-1", scope_project_id: "proj-1", limit: 1, cursor: first.next_cursor })) {
+    Object.defineProperty(query, key, {
+      enumerable: true,
+      get() {
+        reads.set(key, (reads.get(key) ?? 0) + 1);
+        return key === "project_id" && reads.get(key) > 1 ? "proj-other" : value;
+      }
+    });
+  }
+  const result = gateway.retrieve(query);
+  assert.equal(result.decision, "ALLOW");
+  assert.equal(result.records.length, 0);
+  assert.equal(storeQueries.at(-1).project_id, "proj-1");
+  assert.deepEqual(Object.fromEntries(reads), { layer: 1, project_id: 1, scope_project_id: 1, limit: 1, cursor: 1 });
+  const hostile = new Proxy({}, { ownKeys() { throw new Error("hostile query"); } });
+  assert.equal(gateway.retrieve(hostile).code, "DENY_MALFORMED_REQUEST");
+});
 
-  const finalCharacter = first.next_cursor.at(-1);
-  const tampered = `${first.next_cursor.slice(0, -1)}${finalCharacter === "A" ? "B" : "A"}`;
-  assert.equal(gateway.retrieve({ ...base, cursor: tampered }).code, "DENY_MALFORMED_REQUEST");
-  assert.equal(gateway.retrieve({ ...base, project_id: "proj-2", scope_project_id: "proj-2", cursor: first.next_cursor }).code, "DENY_MALFORMED_REQUEST");
-  assert.equal(gateway.retrieve({ ...base, cursor: "A".repeat(2049) }).code, "DENY_MALFORMED_REQUEST");
-
-  repeatAnchor = true;
-  assert.equal(gateway.retrieve({ ...base, cursor: first.next_cursor }).code, "DENY_STORE_UNAVAILABLE");
+test("cursor encoding stays bounded for a valid oversized memory record id", () => {
+  const store = makeStore();
+  const longIdRecord = { ...sessionRecord({ memory_record_id: "m".repeat(1_800) }), layer: "session", admitted_at: FIXED_NOW.toISOString() };
+  store.readScoped = ({ after }) => after === null
+    ? { records: [longIdRecord], has_more: true }
+    : { records: [], has_more: false };
+  const gateway = createMemoryGateway({
+    layerStores: { session: { store, admission: { classificationCeiling: "CONFIDENTIAL", ttlMs: 60_000, sod: "producer-only" } } },
+    sodRules: kernelSodRules,
+    now: () => FIXED_NOW,
+    ledgerWriter: makeAuditWriter()
+  });
+  const query = { layer: "session", project_id: "proj-1", scope_project_id: "proj-1", limit: 1 };
+  const first = gateway.retrieve(query);
+  assert.equal(first.decision, "ALLOW");
+  assert.ok(first.next_cursor.length < 2_048);
+  assert.equal(gateway.retrieve({ ...query, cursor: first.next_cursor }).decision, "ALLOW");
 });
 
 test("legacy retrieval also snapshots a value-varying row once", () => {

@@ -73,6 +73,14 @@ const OPERATIONAL_INDEXES = Object.freeze([
     sql: "CREATE INDEX IF NOT EXISTS memory_records_scope_sequence_idx ON memory_records(project_id, layer, sequence)"
   }),
   Object.freeze({
+    name: "memory_records_scope_anchor_idx",
+    table: "memory_records",
+    unique: 0,
+    partial: 0,
+    columns: Object.freeze(["project_id", "layer", "record_version", "content_hash"]),
+    sql: "CREATE INDEX IF NOT EXISTS memory_records_scope_anchor_idx ON memory_records(project_id, layer, record_version, content_hash)"
+  }),
+  Object.freeze({
     name: "memory_outbox_delivery_status_idx",
     table: "memory_audit_outbox",
     unique: 0,
@@ -518,10 +526,10 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
      ORDER BY sequence
      LIMIT ?
   `);
-  const selectScopedCursorAnchor = database.prepare(`
-    SELECT sequence
+  const selectScopedCursorAnchors = database.prepare(`
+    SELECT sequence, memory_record_id
       FROM memory_records
-     WHERE project_id = ? AND layer = ? AND memory_record_id = ?
+     WHERE project_id = ? AND layer = ?
        AND record_version = ? AND content_hash = ?
   `);
   const selectOutboxById = database.prepare(`
@@ -810,22 +818,21 @@ export function createSqliteMemoryRecordStore({ databasePath, busyTimeoutMs = 5_
         const keys = Reflect.ownKeys(snapshot);
         if (
           keys.length !== 3
-          || keys.some((key) => typeof key !== "string" || !["memory_record_id", "version", "content_hash"].includes(key))
-          || typeof snapshot.memory_record_id !== "string" || snapshot.memory_record_id.trim() === ""
+          || keys.some((key) => typeof key !== "string" || !["memory_record_id_hash", "version", "content_hash"].includes(key))
+          || typeof snapshot.memory_record_id_hash !== "string" || !/^[a-f0-9]{64}$/.test(snapshot.memory_record_id_hash)
           || !Number.isSafeInteger(snapshot.version) || snapshot.version < 1
           || typeof snapshot.content_hash !== "string" || !/^[a-f0-9]{64}$/.test(snapshot.content_hash)
         ) throw new SqliteMemoryStoreError("INVALID_SCOPED_READ", "cursor anchor is malformed");
-        const anchor = selectScopedCursorAnchor.get(
+        const anchors = selectScopedCursorAnchors.all(
           projectId,
           layer,
-          snapshot.memory_record_id,
           snapshot.version,
           snapshot.content_hash
-        );
-        if (anchor === undefined || !Number.isSafeInteger(Number(anchor.sequence)) || Number(anchor.sequence) < 1) {
+        ).filter((candidate) => canonicalFingerprint({ memory_record_id: candidate.memory_record_id }) === snapshot.memory_record_id_hash);
+        if (anchors.length !== 1 || !Number.isSafeInteger(Number(anchors[0].sequence)) || Number(anchors[0].sequence) < 1) {
           throw new SqliteMemoryStoreError("INVALID_SCOPED_READ", "cursor anchor is unavailable in this scope");
         }
-        afterSequence = Number(anchor.sequence);
+        afterSequence = Number(anchors[0].sequence);
       }
       const rows = readScopedPage.all(projectId, layer, afterSequence, limit + 1);
       const hasMore = rows.length > limit;

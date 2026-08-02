@@ -9,13 +9,19 @@ import { DatabaseSync } from "node:sqlite";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
-import { createMemoryGateway } from "../src/services/memory-gateway-service.mjs";
+import { createMemoryGateway as createMemoryGatewayImpl } from "../src/services/memory-gateway-service.mjs";
 import { createSqliteMemoryRecordStore, SqliteMemoryStoreError } from "../src/services/sqlite-memory-record-store.mjs";
 
 const execFileAsync = promisify(execFile);
 const FIXED_NOW = new Date("2026-07-20T10:00:00Z");
 const STORE_MODULE_URL = new URL("../src/services/sqlite-memory-record-store.mjs", import.meta.url).href;
 const GATEWAY_MODULE_URL = new URL("../src/services/memory-gateway-service.mjs", import.meta.url).href;
+const TEST_CURSOR_MAC_KEY = Buffer.alloc(32, 0x53);
+
+function createMemoryGateway(options) {
+  const suppliedKey = options !== null && options !== undefined && Object.prototype.hasOwnProperty.call(options, "cursorMacKey");
+  return createMemoryGatewayImpl({ ...(options ?? {}), cursorMacKey: suppliedKey ? options.cursorMacKey : TEST_CURSOR_MAC_KEY });
+}
 
 function databasePathFor(t) {
   const directory = mkdtempSync(join(tmpdir(), "secb-memory-store-"));
@@ -300,7 +306,7 @@ test("scoped reads are bounded, project-and-layer isolated, and cursor paginated
     project_id: "proj-1",
     layer: "session",
     limit: 2,
-    after: { memory_record_id: anchor.memory_record_id, version: anchor.version, content_hash: anchor.content_hash }
+    after: { memory_record_id_hash: canonicalFingerprint({ memory_record_id: anchor.memory_record_id }), version: anchor.version, content_hash: anchor.content_hash }
   });
   assert.deepEqual(second.records.map((record) => record.memory_record_id), ["mem-scoped-4", "mem-scoped-5"]);
   assert.equal(second.has_more, false);
@@ -316,6 +322,7 @@ test("scoped reads are bounded, project-and-layer isolated, and cursor paginated
   const indexes = new Set(raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all().map((row) => row.name));
   for (const name of [
     "memory_records_scope_sequence_idx",
+    "memory_records_scope_anchor_idx",
     "memory_outbox_delivery_status_idx",
     "memory_outbox_claim_expiry_idx",
     "memory_outbox_claim_token_idx"
@@ -351,8 +358,9 @@ test("gateway cursor pagination survives restart without cross-project gaps or l
   assert.equal(first.decision, "ALLOW");
   assert.equal(first.records.length, 2);
   const cursorEnvelope = JSON.parse(Buffer.from(first.next_cursor, "base64url").toString("utf8"));
-  assert.equal(cursorEnvelope.project_id, "proj-page");
+  assert.equal(cursorEnvelope.scope_hash, canonicalFingerprint({ project_id: "proj-page", layer: "session" }));
   assert.equal(Object.prototype.hasOwnProperty.call(cursorEnvelope, "sequence"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(cursorEnvelope, "project_id"), false);
   const observed = first.records.map((entry) => entry.record.memory_record_id);
   let cursor = first.next_cursor;
   store.close();
@@ -373,6 +381,7 @@ test("gateway cursor pagination survives restart without cross-project gaps or l
 test("startup rejects same-name substitutions for every operational index", (t) => {
   const substitutions = [
     ["memory_records_scope_sequence_idx", "CREATE INDEX memory_records_scope_sequence_idx ON memory_records(sequence)"],
+    ["memory_records_scope_anchor_idx", "CREATE INDEX memory_records_scope_anchor_idx ON memory_records(content_hash)"],
     ["memory_outbox_delivery_status_idx", "CREATE INDEX memory_outbox_delivery_status_idx ON memory_audit_outbox(outbox_id)"],
     ["memory_outbox_claim_expiry_idx", "CREATE INDEX memory_outbox_claim_expiry_idx ON memory_audit_outbox(delivery_status)"],
     ["memory_outbox_claim_token_idx", "CREATE INDEX memory_outbox_claim_token_idx ON memory_audit_outbox(claim_token)"]
@@ -804,7 +813,8 @@ test("parallel gateway first admissions with different clocks verify one durable
       replayResolver: ({ idempotency_key }) => {
         const row = readAnchor.get(idempotency_key);
         return row === undefined ? null : { status: "COMMITTED", idempotency_key: row.idempotency_key, project_id: row.project_id, layer: row.layer, memory_record_id: row.memory_record_id, version: row.record_version, content_hash: row.content_hash, admitted_at: row.admitted_at };
-      }
+      },
+      cursorMacKey: new Uint8Array(32).fill(83)
     });
     let result = await gateway.admit(${JSON.stringify(request)});
     await store.dispatchOutbox((entry) => {

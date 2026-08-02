@@ -40,6 +40,7 @@
 
 import { validateContract } from "../contracts/contract-validator.mjs";
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const LAYERS = Object.freeze(["session", "work", "project"]);
 // Port classification vocabulary (candidate-source-port kind "memory").
@@ -85,8 +86,9 @@ const ADMISSION_KEYS = Object.freeze(["producer", "reviewer", "approver"]);
 const RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id", "limit", "cursor"]);
 const REQUIRED_RETRIEVE_KEYS = Object.freeze(["layer", "project_id", "scope_project_id"]);
 const SCOPED_PAGE_KEYS = Object.freeze(["records", "has_more"]);
-const RETRIEVE_CURSOR_KEYS = Object.freeze(["v", "project_id", "layer", "memory_record_id", "version", "content_hash", "checksum"]);
+const RETRIEVE_CURSOR_KEYS = Object.freeze(["v", "scope_hash", "memory_record_id_hash", "version", "content_hash", "mac"]);
 const MAX_RETRIEVE_CURSOR_LENGTH = 2_048;
+const MIN_CURSOR_MAC_KEY_BYTES = 32;
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -141,15 +143,34 @@ function cursorIdentity(row) {
   return identity;
 }
 
-function encodeRetrieveCursor(projectId, layer, row) {
+function cursorAnchor(row) {
   const identity = cursorIdentity(row);
   if (identity === null) return null;
-  const payload = { v: 1, project_id: projectId, layer, ...identity };
-  const envelope = { ...payload, checksum: canonicalFingerprint(payload) };
-  return Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+  return {
+    memory_record_id_hash: canonicalFingerprint({ memory_record_id: identity.memory_record_id }),
+    version: identity.version,
+    content_hash: identity.content_hash
+  };
 }
 
-function decodeRetrieveCursor(token, projectId, layer) {
+function cursorMac(key, payload) {
+  return createHmac("sha256", key).update(JSON.stringify(payload), "utf8").digest("hex");
+}
+
+function encodeRetrieveCursor(key, projectId, layer, row) {
+  const anchor = cursorAnchor(row);
+  if (anchor === null) return null;
+  const payload = {
+    v: 2,
+    scope_hash: canonicalFingerprint({ project_id: projectId, layer }),
+    ...anchor
+  };
+  const envelope = { ...payload, mac: cursorMac(key, payload) };
+  const token = Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+  return token.length <= MAX_RETRIEVE_CURSOR_LENGTH ? token : null;
+}
+
+function decodeRetrieveCursor(key, token, projectId, layer) {
   try {
     if (
       typeof token !== "string" || token.length < 1 || token.length > MAX_RETRIEVE_CURSOR_LENGTH
@@ -165,17 +186,22 @@ function decodeRetrieveCursor(token, projectId, layer) {
       || keys.some((key) => typeof key !== "string" || !RETRIEVE_CURSOR_KEYS.includes(key))
       || RETRIEVE_CURSOR_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(envelope, key))
     ) return null;
-    const { checksum, ...payload } = envelope;
-    const identity = cursorIdentity(payload);
+    const { mac, ...payload } = envelope;
+    const expectedMac = cursorMac(key, payload);
     if (
-      payload.v !== 1
-      || payload.project_id !== projectId
-      || payload.layer !== layer
-      || typeof checksum !== "string"
-      || checksum !== canonicalFingerprint(payload)
-      || identity === null
+      payload.v !== 2
+      || payload.scope_hash !== canonicalFingerprint({ project_id: projectId, layer })
+      || typeof payload.memory_record_id_hash !== "string" || !/^[a-f0-9]{64}$/.test(payload.memory_record_id_hash)
+      || !Number.isSafeInteger(payload.version) || payload.version < 1
+      || typeof payload.content_hash !== "string" || !/^[a-f0-9]{64}$/.test(payload.content_hash)
+      || typeof mac !== "string" || !/^[a-f0-9]{64}$/.test(mac)
+      || !timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expectedMac, "hex"))
     ) return null;
-    return Object.freeze(identity);
+    return Object.freeze({
+      memory_record_id_hash: payload.memory_record_id_hash,
+      version: payload.version,
+      content_hash: payload.content_hash
+    });
   } catch {
     return null;
   }
@@ -265,7 +291,7 @@ async function boundedCall(operation, timeoutMs) {
   return outcome;
 }
 
-export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, replayResolver, timeouts } = {}) {
+export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, replayResolver, timeouts, cursorMacKey } = {}) {
   // --- Fail-closed construction ------------------------------------------
   let layerNames;
   try {
@@ -369,6 +395,16 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
   }
   if (replayResolver !== undefined && typeof replayResolver !== "function") {
     throw new MemoryGatewayConfigurationError("INVALID_REPLAY_RESOLVER", "replayResolver must be a function when durable replay is enabled");
+  }
+  let cursorMacKeySnapshot;
+  try {
+    if (!(cursorMacKey instanceof Uint8Array)) throw new Error("cursorMacKey is not bytes");
+    cursorMacKeySnapshot = Buffer.from(cursorMacKey);
+  } catch {
+    throw new MemoryGatewayConfigurationError("INVALID_CURSOR_MAC_KEY", "cursorMacKey must be immutable server-owned key material");
+  }
+  if (cursorMacKeySnapshot.length < MIN_CURSOR_MAC_KEY_BYTES) {
+    throw new MemoryGatewayConfigurationError("INVALID_CURSOR_MAC_KEY", `cursorMacKey must contain at least ${MIN_CURSOR_MAC_KEY_BYTES} bytes`);
   }
   let auditTimeoutMs;
   let replayTimeoutMs;
@@ -844,6 +880,23 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
   }
 
   // --- Retrieval shape validation ----------------------------------------
+  function snapshotRetrieveQuery(query) {
+    try {
+      if (!isPlainObject(query)) return null;
+      const proto = Object.getPrototypeOf(query);
+      if (proto !== Object.prototype && proto !== null) return null;
+      const ownKeys = Reflect.ownKeys(query);
+      if (ownKeys.some((key) => typeof key !== "string" || !RETRIEVE_KEYS.includes(key))) return null;
+      const snapshot = { __proto__: null };
+      for (const key of RETRIEVE_KEYS) {
+        if (ownKeys.includes(key)) snapshot[key] = query[key];
+      }
+      return snapshot;
+    } catch {
+      return null;
+    }
+  }
+
   function validateRetrieveShape(query) {
     if (!isPlainObject(query)) return { code: "DENY_MALFORMED_REQUEST", reason: "Retrieval query must be an object" };
     const unknown = Object.keys(query).filter((key) => !RETRIEVE_KEYS.includes(key));
@@ -864,8 +917,11 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
   // fallback); TTL-expired records are filtered honestly (computed, not stored);
   // surviving records are returned frozen and marked data_untrusted.
   function retrieve(query) {
-    const shapeError = validateRetrieveShape(query);
+    const querySnapshot = snapshotRetrieveQuery(query);
+    if (querySnapshot === null) return deny("DENY_MALFORMED_REQUEST", "Retrieval query could not be snapshotted safely");
+    const shapeError = validateRetrieveShape(querySnapshot);
     if (shapeError) return deny(shapeError.code, shapeError.reason);
+    query = Object.freeze(querySnapshot);
 
     const instant = serverInstant();
     if (instant === null) return deny("DENY_CLOCK_UNAVAILABLE", "Server time source is unavailable");
@@ -881,7 +937,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
 
     const limit = query.limit ?? DEFAULT_RETRIEVE_LIMIT;
     const cursor = query.cursor ?? null;
-    const after = cursor === null ? null : decodeRetrieveCursor(cursor, query.project_id, query.layer);
+    const after = cursor === null ? null : decodeRetrieveCursor(cursorMacKeySnapshot, cursor, query.project_id, query.layer);
     if (cursor !== null && after === null) return deny("DENY_MALFORMED_REQUEST", "Retrieval cursor is invalid for this scope");
     let rows;
     let hasMore;
@@ -909,11 +965,11 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
         let offset = 0;
         if (after !== null) {
           const anchor = scopedRows.findIndex((row) => {
-            const identity = cursorIdentity(row);
-            return identity !== null
-              && identity.memory_record_id === after.memory_record_id
-              && identity.version === after.version
-              && identity.content_hash === after.content_hash;
+            const anchor = cursorAnchor(row);
+            return anchor !== null
+              && anchor.memory_record_id_hash === after.memory_record_id_hash
+              && anchor.version === after.version
+              && anchor.content_hash === after.content_hash;
           });
           if (anchor === -1) throw new Error("legacy cursor anchor is unavailable");
           offset = anchor + 1;
@@ -929,7 +985,7 @@ export function createMemoryGateway({ layerStores, sodRules, now, ledgerWriter, 
     let nextCursor = null;
     if (hasMore) {
       if (rows.length !== limit) return deny("DENY_STORE_UNAVAILABLE", "Layer store returned a non-progressing scoped page");
-      nextCursor = encodeRetrieveCursor(query.project_id, query.layer, rows.at(-1));
+      nextCursor = encodeRetrieveCursor(cursorMacKeySnapshot, query.project_id, query.layer, rows.at(-1));
       if (nextCursor === null || nextCursor === cursor) {
         return deny("DENY_STORE_UNAVAILABLE", "Layer store returned an invalid or non-progressing scoped page");
       }
