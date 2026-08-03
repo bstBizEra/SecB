@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
+import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
 import {
   MemoryLifecycleConfigurationError,
   MemoryLifecycleLedger,
@@ -13,6 +14,7 @@ import {
 
 const NOW = new Date("2026-08-03T12:00:00.000Z");
 const MANIFEST_HASH = "c".repeat(64);
+const INTEGRITY_KEY = Buffer.alloc(32, 7);
 
 function memory(overrides = {}) {
   const record = {
@@ -48,10 +50,32 @@ function authority(expected, overrides = {}) {
     decision: "ALLOW",
     code: "ALLOW_MEMORY_LIFECYCLE",
     ...expected,
+    decision_id: "decision-memory-lifecycle-1",
     actor_id: "governor-1",
+    producer_actor_id: "producer-1",
+    reviewer_actor_id: "reviewer-1",
+    approver_actor_id: "governor-1",
     work_package_id: "wp-lifecycle",
     session_id: "session-lifecycle",
     authority_ref: "authority:memory-lifecycle",
+    valid_from: "2026-08-03T11:00:00.000Z",
+    valid_until: "2026-08-03T13:00:00.000Z",
+    ...overrides
+  };
+}
+
+function evidence(request, overrides = {}) {
+  const { active_legal_hold_count: activeHoldCount, ...expected } = request;
+  return {
+    decision: "ACCEPTED",
+    code: "EVIDENCE_ACCEPTED",
+    evidence_id: "evidence-lifecycle-1",
+    evidence_hash: "e".repeat(64),
+    ...expected,
+    evidence_acceptor_actor_id: "evidence-acceptor-1",
+    preservation_action: activeHoldCount > 0 && ["REDACTION_APPLIED", "TOMBSTONED"].includes(request.event_type)
+      ? "PRESERVE_ORIGINAL"
+      : "NOT_APPLICABLE",
     valid_from: "2026-08-03T11:00:00.000Z",
     valid_until: "2026-08-03T13:00:00.000Z",
     ...overrides
@@ -85,16 +109,20 @@ function harness(t, overrides = {}) {
   const directory = mkdtempSync(join(tmpdir(), "secb-memory-lifecycle-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const filePath = join(directory, "lifecycle.jsonl");
-  const ledger = overrides.ledger ?? new MemoryLifecycleLedger({ filePath });
+  const ledger = overrides.ledger ?? new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY });
   let records = overrides.records ?? [memory()];
   const service = createMemoryLifecycleService({
     ledger,
     now: overrides.now ?? (() => new Date(NOW)),
     authorityResolver: overrides.authorityResolver ?? (async (expected) => authority(expected)),
     recordResolver: overrides.recordResolver ?? (async () => records),
+    evidenceResolver: overrides.evidenceResolver ?? (async (request) => evidence(request)),
+    sodRules: overrides.sodRules ?? { checkPairwiseDistinct },
+    timeouts: overrides.timeouts,
     retentionPolicyResolver: overrides.retentionPolicyResolver ?? (async (request) => ({
       decision: "ALLOW",
       code: "ALLOW_RETENTION",
+      decision_id: "retention-decision-1",
       project_id: request.project_id,
       memory_record_id: request.memory_record_id,
       memory_record_version: request.memory_record_version,
@@ -115,20 +143,15 @@ test("construction fails closed when lifecycle collaborators are absent", () => 
 test("a current, temporally valid, retained record resolves effective", async (t) => {
   const { service } = harness(t);
   const result = await service.resolve(resolution());
-  assert.deepEqual(result, {
-    ok: true,
-    code: "MEMORY_EFFECTIVE",
-    project_id: "project-1",
-    layer: "project",
-    memory_record_id: "mem-1",
-    memory_record_version: 1,
-    content_hash: memory().content_hash,
-    evaluated_at: NOW.toISOString(),
-    lifecycle_sequence: 0,
-    lifecycle_head_hash: "0".repeat(64),
-    active_legal_hold_count: 0,
-    preservation_required: false
-  });
+  assert.equal(result.ok, true);
+  assert.equal(result.code, "MEMORY_EFFECTIVE");
+  assert.equal(result.memory_record_id, "mem-1");
+  assert.equal(result.content_hash, memory().content_hash);
+  assert.equal(result.authority_decision_id, "decision-memory-lifecycle-1");
+  assert.match(result.state_fingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(result.lifecycle_sequence, 0);
+  assert.equal(result.lifecycle_head_hash, "0".repeat(64));
+  assert.equal(result.preservation_required, false);
   assert.ok(Object.isFrozen(result));
 });
 
@@ -213,11 +236,13 @@ test("legal hold placement and release are append-only and durable across restar
   assert.equal(replay.receipt.replayed, true);
 
   const restarted = createMemoryLifecycleService({
-    ledger: new MemoryLifecycleLedger({ filePath }),
+    ledger: new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY }),
     now: () => new Date(NOW),
     authorityResolver: async (expected) => authority(expected),
     recordResolver: async () => [memory()],
-    retentionPolicyResolver: async (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", project_id: request.project_id, memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: null })
+    evidenceResolver: async (request) => evidence(request),
+    sodRules: { checkPairwiseDistinct },
+    retentionPolicyResolver: async (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-decision-1", project_id: request.project_id, memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: null })
   });
   assert.equal((await restarted.resolve(resolution())).active_legal_hold_count, 1);
   const released = await restarted.recordLifecycleEvent(mutation("LEGAL_HOLD_RELEASED", { hold_id: "hold-1", idempotency_key: "release-1" }));
@@ -235,7 +260,7 @@ test("invalid legal-hold transitions deny without appending", async (t) => {
 });
 
 test("retention expiry denies retrieval while active hold preserves storage obligation", async (t) => {
-  const { service } = harness(t, { retentionPolicyResolver: async (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", project_id: request.project_id, memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: "2026-08-03T11:59:59.000Z" }) });
+  const { service } = harness(t, { retentionPolicyResolver: async (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-decision-1", project_id: request.project_id, memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: "2026-08-03T11:59:59.000Z" }) });
   assert.equal((await service.resolve(resolution())).preservation_required, false);
   await service.recordLifecycleEvent(mutation("LEGAL_HOLD_PLACED", { hold_id: "hold-retention" }));
   const held = await service.resolve(resolution());
@@ -271,7 +296,7 @@ test("authority and retention are re-evaluated at the final trusted-time boundar
   const retentionDrift = harness(t, {
     now: () => new Date(retentionClockCalls++ === 0 ? "2026-08-03T12:00:00.000Z" : "2026-08-03T12:30:00.000Z"),
     authorityResolver: async (expected) => authority(expected, { valid_until: "2026-08-03T14:00:00.000Z" }),
-    retentionPolicyResolver: async (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", project_id: request.project_id, memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: "2026-08-03T12:15:00.000Z" })
+    retentionPolicyResolver: async (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-decision-1", project_id: request.project_id, memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: "2026-08-03T12:15:00.000Z" })
   });
   assert.equal((await retentionDrift.service.resolve(resolution())).code, "DENY_RETENTION_EXPIRED");
 });
@@ -281,11 +306,12 @@ test("resolution denies when lifecycle head changes during the read", async (t) 
   const ledger = {
     appendLifecycleEvent() { throw new Error("unused"); },
     readLifecycleEvents() { return []; },
+    readLifecycleEventByIdempotencyKey() { return null; },
     verify() {
       verification += 1;
       return verification === 1
-        ? { count: 0, headHash: "0".repeat(64) }
-        : { count: 1, headHash: "1".repeat(64) };
+        ? { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: "0".repeat(64) }
+        : { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 1, headHash: "1".repeat(64) };
     }
   };
   const { service } = harness(t, { ledger });
@@ -339,5 +365,144 @@ test("ledger tampering is detected before lifecycle state is returned", async (t
 test("mutation of an absent target is denied and does not write", async (t) => {
   const { service, ledger } = harness(t, { records: [memory({ memory_record_id: "other" })] });
   assert.equal((await service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_MEMORY_RECORD_NOT_FOUND");
+  assert.equal(ledger.verify().count, 0);
+});
+
+test("concurrent tombstone during retention evaluation is denied at the return boundary", async (t) => {
+  let injected = false;
+  let fixture;
+  fixture = harness(t, {
+    retentionPolicyResolver: async (request) => {
+      if (!injected) {
+        injected = true;
+        const tombstone = await fixture.service.recordLifecycleEvent(mutation("TOMBSTONED", { idempotency_key: "race-tombstone" }));
+        assert.equal(tombstone.ok, true);
+      }
+      return {
+        decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-race",
+        project_id: request.project_id, memory_record_id: request.memory_record_id,
+        memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: null
+      };
+    }
+  });
+  assert.equal((await fixture.service.resolve(resolution())).code, "DENY_MEMORY_TOMBSTONED");
+});
+
+test("concurrent supersession during retention evaluation is denied", async (t) => {
+  let fixture;
+  fixture = harness(t, {
+    retentionPolicyResolver: async (request) => {
+      fixture.setRecords([
+        memory(),
+        memory({ memory_record_id: "mem-2", version: 2, supersedes: "mem-1", statement: "concurrent replacement" })
+      ]);
+      return {
+        decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-race",
+        project_id: request.project_id, memory_record_id: request.memory_record_id,
+        memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: null
+      };
+    }
+  });
+  assert.equal((await fixture.service.resolve(resolution())).code, "DENY_MEMORY_SUPERSEDED");
+});
+
+test("authority revoked after precheck denies before return or append", async (t) => {
+  let calls = 0;
+  const fixture = harness(t, {
+    authorityResolver: async (expected) => {
+      calls += 1;
+      return calls === 1 ? authority(expected) : { decision: "DENY" };
+    }
+  });
+  assert.equal((await fixture.service.resolve(resolution())).code, "DENY_LIFECYCLE_AUTHORITY");
+  calls = 0;
+  assert.equal((await fixture.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_AUTHORITY");
+  assert.equal(fixture.ledger.verify().count, 0);
+});
+
+test("idempotent retry remains stable when trusted time advances", async (t) => {
+  let clockCalls = 0;
+  const { service, ledger } = harness(t, {
+    now: () => new Date(clockCalls++ < 2 ? "2026-08-03T12:00:00.000Z" : "2026-08-03T12:30:00.000Z")
+  });
+  const request = mutation("LEGAL_HOLD_PLACED", { hold_id: "hold-stable-replay" });
+  assert.equal((await service.recordLifecycleEvent(request)).ok, true);
+  const replay = await service.recordLifecycleEvent(request);
+  assert.equal(replay.ok, true);
+  assert.equal(replay.receipt.replayed, true);
+  assert.equal(ledger.verify().count, 1);
+});
+
+test("append without exact durable readback fails closed", async (t) => {
+  const ledger = {
+    appendLifecycleEvent() { return null; },
+    readLifecycleEvents() { return []; },
+    readLifecycleEventByIdempotencyKey() { return null; },
+    verify() { return { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: "0".repeat(64) }; }
+  };
+  const { service } = harness(t, { ledger });
+  assert.equal((await service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_DURABILITY");
+});
+
+test("malformed ledger output and dependency timeout are contained", async (t) => {
+  const malformedLedger = {
+    appendLifecycleEvent() { throw new Error("unused"); },
+    readLifecycleEvents() { return {}; },
+    readLifecycleEventByIdempotencyKey() { return null; },
+    verify() { return { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: "0".repeat(64) }; }
+  };
+  assert.equal((await harness(t, { ledger: malformedLedger }).service.resolve(resolution())).code, "DENY_LIFECYCLE_STORE_UNAVAILABLE");
+
+  const never = new Promise(() => {});
+  const timed = harness(t, { authorityResolver: async () => never, timeouts: { authority_ms: 5 } });
+  assert.equal((await timed.service.resolve(resolution())).code, "DENY_LIFECYCLE_AUTHORITY");
+});
+
+test("same-id versions require monotonic admission time", async (t) => {
+  const records = [memory(), memory({ version: 2, admitted_at: "2026-07-31T00:00:00.000Z", statement: "backdated version" })];
+  assert.equal((await harness(t, { records }).service.resolve(resolution({ memory_record_version: 2 }))).code, "DENY_LINEAGE_INVALID");
+});
+
+test("commit authority, evidence, and separation-of-duties bindings are exact", async (t) => {
+  const substituted = harness(t, {
+    authorityResolver: async (expected) => authority(expected, expected.phase === "COMMIT" ? { parameters_hash: "f".repeat(64) } : {})
+  });
+  assert.equal((await substituted.service.recordLifecycleEvent(mutation("LEGAL_HOLD_PLACED", { hold_id: "hold-bound" }))).code, "DENY_LIFECYCLE_AUTHORITY");
+  assert.equal(substituted.ledger.verify().count, 0);
+
+  const badEvidence = harness(t, {
+    evidenceResolver: async (request) => evidence(request, { target_content_hash: "a".repeat(64) })
+  });
+  assert.equal((await badEvidence.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_EVIDENCE");
+
+  const overlapping = harness(t, {
+    evidenceResolver: async (request) => evidence(request, { evidence_acceptor_actor_id: "producer-1" })
+  });
+  assert.equal((await overlapping.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_SOD");
+});
+
+test("authenticated lifecycle events reject malicious rewrite even after base hashes are recomputed", async (t) => {
+  const { service, filePath } = harness(t);
+  assert.equal((await service.recordLifecycleEvent(mutation("LEGAL_HOLD_PLACED", { hold_id: "hold-authenticated" }))).ok, true);
+  const record = JSON.parse(readFileSync(filePath, "utf8").trim());
+  record.entry.payload.reason = "malicious rewrite";
+  record.entryHash = canonicalFingerprint(record.entry);
+  record.recordHash = canonicalFingerprint({
+    ledgerId: record.ledgerId,
+    sequence: record.sequence,
+    previousHash: record.previousHash,
+    entryHash: record.entryHash
+  });
+  writeFileSync(filePath, `${JSON.stringify(record)}\n`, "utf8");
+  assert.equal((await service.resolve(resolution())).code, "LIFECYCLE_EVENT_INTEGRITY_FAILURE");
+});
+
+test("integrity key and request resource bounds fail closed", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-key-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  assert.throws(() => new MemoryLifecycleLedger({ filePath: join(directory, "ledger.jsonl"), integrityKey: Buffer.alloc(8) }), /integrityKey/);
+
+  const { service, ledger } = harness(t);
+  assert.equal((await service.recordLifecycleEvent(mutation("TOMBSTONED", { reason: "x".repeat(2_049) }))).code, "DENY_LIFECYCLE_REQUEST_MALFORMED");
   assert.equal(ledger.verify().count, 0);
 });
