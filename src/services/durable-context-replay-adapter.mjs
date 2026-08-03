@@ -302,7 +302,10 @@ export class DurableContextReplayAdapter {
         const next = { count: predicted.count, headHash: predicted.headHash };
         const commitment = this.#transactionCommitment(predicted);
         const prepared = this.#prepareAnchor({ expected, next, commitment });
-        if (prepared !== true) throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "trusted replay head rejected prepare");
+        if (prepared !== true) {
+          boundedBackoff(attempt);
+          continue;
+        }
         const appended = this.#ledger.append(entry, { expectedSequence: anchoredBefore.count });
         validateStored(appended, lookup.identity);
         if (appended.sequence !== predicted.count || appended.recordHash !== predicted.headHash) {

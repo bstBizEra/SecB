@@ -269,6 +269,27 @@ test("full peer commit between ledger verification and anchor read retries inste
   assert.equal(reader.verify().count, 1);
 }));
 
+test("peer commit immediately before prepare reconciles as exact replay", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const context = provider();
+  const realAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY, initialize: true });
+  const winner = adapter(filePath, context, realAnchor);
+  let race = true;
+  const losingAnchor = {
+    snapshot: realAnchor.snapshot.bind(realAnchor),
+    prepare(input) {
+      if (race) { race = false; winner.issueReceipt(request()); }
+      return realAnchor.prepare(input);
+    },
+    markDurable: realAnchor.markDurable.bind(realAnchor), finalize: realAnchor.finalize.bind(realAnchor)
+  };
+  const loser = adapter(filePath, context, losingAnchor);
+  const reconciled = loser.issueReceipt(request());
+  assert.equal(reconciled.replayed, true);
+  assert.equal(loser.verify().count, 1);
+}));
+
 test("construction requires the trusted head collaborator", () => withTemp((directory) => {
   assert.throws(() => new DurableContextReplayAdapter({ filePath: join(directory, "replay.ndjson"),
     contextFederation: provider() }),
