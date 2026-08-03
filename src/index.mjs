@@ -119,6 +119,11 @@ export {
 } from "./services/memory-gateway-service.mjs";
 
 export {
+  createMemoryAuthorityGateway,
+  MemoryAuthorityGatewayConfigurationError
+} from "./services/memory-authority-gateway-service.mjs";
+
+export {
   createMemoryCandidateProvider,
   MemoryCandidateProviderConfigurationError
 } from "./services/memory-candidate-provider.mjs";
