@@ -1,9 +1,10 @@
 schema_version: "0.1"
 record_metadata:
   record_id: "wp_sk_audit_01_autonomous_skill_audit_v1_candidate"
-  record_status: "AWAITING_GOV_AUTHORIZATION"
+  record_status: "AUTHORIZED"
   source_template: "docs/templates/work-package.yaml"
   producer_runtime: "Claude Code"
+  authorization: "Authorized by Operator (BizEra) 2026-08-03 via SECB-DECISION-SHEET-001 item 5. No result is claimable until AC-AUDIT-01 calibration passes; the answer key is held by REV, not the producer."
   limitations:
     - "Producer is also the assigned ENGIN and may not accept its own evidence."
     - "This work package proposes an audit performed BY agents. The producer is an agent, proposing that agents be trusted to audit. That conflict is the reason AC-AUDIT-01 exists and is non-negotiable: no result from this system is claimable until the system has been shown to catch violations it was not told about."
@@ -44,7 +45,7 @@ problem_statement: >-
 
 risk_class: "R1"
 mutation_class: "M1"
-status: "PROPOSED"
+status: "AUTHORIZED"
 
 baseline:
   target_branch: "feat/secb-ruflo-command-center"

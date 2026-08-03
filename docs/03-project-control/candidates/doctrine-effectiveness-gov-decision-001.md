@@ -1,7 +1,10 @@
 # GOV Decision Request — Are `DRAFT / NOT EFFECTIVE` documents in the pinned baseline binding?
 
 **Document ID:** `SECB-GOV-DECISION-DOCTRINE-EFFECTIVENESS-001`
-**Status:** `PREPARED — AWAITING RULING`
+**Status:** `RULED — option C, two tiers. Symmetry rule ADOPTED. The docs/README.md line 6 sub-item was NOT ruled and remains open.`
+
+> **RULED 2026-08-03 by Operator (BizEra).** See [`SECB-DECISION-SHEET-001`](secb-decision-sheet-001.md), which is the record of record for this ruling. This document is unchanged below and remains the full statement of the reasoning.
+
 **Decision owner:** GOV
 **Prepared by:** Claude Code (worker agent) — prepares the decision, does not make it
 **Prepared at:** 2026-08-02, baseline `dcbabc4`; **re-verified at `b7d7f41`**

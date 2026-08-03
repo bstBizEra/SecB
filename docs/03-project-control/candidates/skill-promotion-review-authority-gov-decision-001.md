@@ -1,7 +1,10 @@
 # GOV Decision Request — Who holds independent review for a skill promotion?
 
 **Document ID:** `SECB-GOV-DECISION-SKILL-REV-AUTHORITY-001`
-**Status:** `PREPARED — AWAITING RULING`
+**Status:** `RULED — option D. Skill promotion remains fail-closed; no REV assigned, no exception granted.`
+
+> **RULED 2026-08-03 by Operator (BizEra).** See [`SECB-DECISION-SHEET-001`](secb-decision-sheet-001.md), which is the record of record for this ruling. This document is unchanged below and remains the full statement of the reasoning.
+
 **Decision owner:** GOV (human governance body). SEC consulted. No agent is eligible to rule or to be assigned by this record without an explicit ruling that names it.
 **Prepared by:** Claude Code (worker agent) — prepares the decision, does not make it
 **Prepared at:** 2026-08-03, verified against `main` at `e8eb4ec`

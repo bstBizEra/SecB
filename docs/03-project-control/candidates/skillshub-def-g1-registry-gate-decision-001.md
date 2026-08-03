@@ -1,7 +1,10 @@
 # SEC + GOV Decision Request — Replacing the circular resolver-registry gate
 
 **Document ID:** `SECB-SEC-GOV-DECISION-SKILLSHUB-G1-001`
-**Status:** `PREPARED — AWAITING RULING`
+**Status:** `WITHDRAWN — superseded by the ruling on SECB-DECISION-SHEET-001 item 2`
+
+> **Withdrawn 2026-08-03.** Item 2 was ruled **A — retire the gate**, not B — replace it. A replacement gate and a retirement could not both be granted. The purpose analysis in this packet (the gate protects exactly two mechanisms, both requiring ALLOW, and protects the withheld tally not at all) is what supported the retirement and is retained. The G1-G3 conditions themselves are not adopted.
+
 **Decision owner:** SEC (control content) and GOV (the superseding-record route). Neither alone.
 **Prepared by:** Claude Code (worker agent) — prepares the decision, does not make it
 **Prepared at:** 2026-08-02, baseline `dcbabc4`; **re-verified at `b7d7f41`**

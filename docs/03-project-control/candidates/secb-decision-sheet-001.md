@@ -1,10 +1,27 @@
 # SecB Decision Sheet 001 — everything currently awaiting a signature
 
 **Document ID:** `SECB-DECISION-SHEET-001`
-**Status:** `PREPARED — AWAITING RULING`
+**Status:** `RULED — items 1-5 decided 2026-08-03. This sheet is the record of record for those five rulings.`
+**Decided by:** Operator (BizEra), 2026-08-03, concurring with the preparer's recommendation on every item
 **Prepared by:** Claude Code (worker agent). Prepares decisions, makes none.
 **Prepared at:** 2026-08-03, baseline `05f0147`
-**Purpose:** collapse five open decisions into one pass. Each line below is decidable on its own; you can sign all, some, or none.
+**Purpose:** collapse five open decisions into one pass. Each line below is decidable on its own.
+
+> **How this ruling was given, recorded exactly.** The operator returned the five
+> items in the one-line form the preparer requested:
+> `1 = D · 2 = A · 3 = C + symmetry rule · 4 = อนุมัติ · 5 = อนุมัติ · hand-off = made`.
+> The agent transcribed it into the boxes below and changed no item's text. This
+> follows the precedent of `SECB-SEC-DECISION-SKILLSHUB-C3-001`, whose signature
+> block likewise records an operator ruling given in session.
+>
+> **One sub-item was NOT ruled and is left open.** Item 3 offered two separate
+> boxes - adopt the symmetry rule, and rule `docs/README.md` line 6 erroneous. The
+> operator named the symmetry rule and did not name the README. The agent left the
+> README box unticked rather than inferring it: editing `docs/README.md` alters a
+> member of the pinned pack and is not a by-product of ruling C.
+>
+> **`SECB-DELEGATION-STANDING-001` was not ruled on and remains unsigned.** The
+> agent continues to ask first on everything outside its existing producer role.
 
 > **Why this sheet exists.** Five separate records were prepared over this
 > session, each correct in isolation and each requiring a full read. That is a
@@ -57,8 +74,13 @@ needs to be *denied* to anyone, which is the only thing governed promotion adds.
 If that changes, this decision is reopened with a real business reason attached.
 
 ```
-[ ] A    [ ] B    [ ] C    [ ] D ← recommended
+[ ] A    [ ] B    [ ] C    [x] D    RULED 2026-08-03
 ```
+
+**Ruled: D.** Skill promotion remains fail-closed. `approval-binding.mjs` is
+unchanged and unweakened; no exception was granted; no REV was assigned. The 25
+packages continue to be used as files. This decision is reopened only with a
+business reason for needing to deny a skill to a caller.
 
 ---
 
@@ -77,9 +99,18 @@ exists becomes *undecidable*, not satisfied, and every future reader must
 re-derive that it is moot.
 
 ```
-[ ] A - retire ← recommended     [ ] B - replace with G1-G3
+[x] A - retire                   [ ] B - replace with G1-G3
 [ ] C - leave standing           [ ] D - retire + also open the OD-SK-11 tally question
+                                 RULED 2026-08-03
 ```
+
+**Ruled: A.** The registry gate of `SECB-SEC-DECISION-SKILLSHUB-C3-001` is
+retired. That signed record is left byte-unchanged; the gate is retired by the
+superseding record, not by rewriting the original. The G1–G3 replacement packet
+is therefore withdrawn — A and B could not both be granted.
+
+The `OD-SK-11` withheld-tally question was **not** folded in, per option D not
+being taken. It remains open and separately raisable.
 
 **One thing must not be dropped with it.** Of the risks the gate held, three die
 with the branch and one is closed on `main`. One is **live on `main` and `main`
@@ -88,8 +119,15 @@ through, so the caller supplies its own project, runtime and data class.
 
 ```
 Hand-off of SECB-FINDING-MAIN-SKILL-CTX-001 to the MOD-SKILL owner:
-[ ] made      [ ] declined      [ ] assigned to: ________________
+[x] made      [ ] declined      [ ] assigned to: ________________
+              RULED 2026-08-03
 ```
+
+**Ruled: hand-off made.** The live risk the gate was holding — `main`'s
+`secb_skill_resolve` passing `args.context` straight through — passes to the
+`MOD-SKILL` owner rather than lapsing with the gate. The finding record stands on
+its own and states its own unchecked assumption: nobody searched for an upstream
+caller that derives the context, and that remains the most likely disposition.
 
 ---
 
@@ -118,11 +156,29 @@ offered as a route anywhere in the tree, though the P0 authority packet proves i
 is real and has been used.
 
 ```
-[ ] A    [ ] B    [ ] C ← recommended
+[ ] A    [ ] B    [x] C    RULED 2026-08-03
 
-Symmetry rule adopted:  [ ] yes ← recommended    [ ] no
-docs/README.md line 6 ruled erroneous:  [ ] yes ← recommended    [ ] no
+Symmetry rule adopted:  [x] yes    [ ] no        RULED 2026-08-03
+docs/README.md line 6 ruled erroneous:  [ ] yes    [ ] no    NOT RULED - still open
 ```
+
+**Ruled: C, and the symmetry rule is adopted.** The pinned pack carries
+reference authority, not operative authority. Every existing MUST keeps its
+basis, restated as design-baseline conformance rather than effective-control
+compliance. `validate-foundation.mjs:36` stays green and unedited.
+
+The symmetry rule now binds: **within one status tier, every clause has the same
+force; no clause may be treated as binding while a same-status clause is treated
+as unavailable.** Its immediate effect is that `governance-baseline` §5's
+enabling limb — the nine-field exception route — is as available as its
+prohibition limb, which has been used to delete requirements while the enabling
+limb was never offered anywhere in the tree.
+
+**`docs/README.md` line 6 was not ruled on.** It remains the single artifact in
+the tree asserting operative authority for the pack, contradicting the manifest,
+the validator and all 34 self-declared headers. Ruling C does not resolve that
+contradiction by itself, and the agent has not edited the file. Raisable
+separately.
 
 ---
 
@@ -146,8 +202,15 @@ work package is what converts that drift from unauthorized to authorized, and
 scopes the seven pin updates into the slice that receives it.
 
 ```
-[ ] authorize ← recommended    [ ] decline    [ ] defer
+[x] authorize    [ ] decline    [ ] defer    RULED 2026-08-03
 ```
+
+**Ruled: authorized.** `WP-GOV-VF1` is authorized. The validator modification on
+`main` is now an authorized modification in the idiom the byte-identity guards
+themselves record, and the seven blob pins are inside this slice's remit. The
+prepared branch `fix/validate-foundation-exact-pins` at `8f7a91e` is the starting
+point; it does not become mergeable until the pins are updated and `AC-VF1-06`
+demonstrates the guards still bite afterwards.
 
 ---
 
@@ -170,8 +233,13 @@ struck from the audit's claimed coverage rather than reported as "no violations
 found". The answer key is held by REV, not the producer.
 
 ```
-[ ] authorize ← recommended    [ ] decline    [ ] defer
+[x] authorize    [ ] decline    [ ] defer    RULED 2026-08-03
 ```
+
+**Ruled: authorized.** `WP-SK-AUDIT-01` is authorized. No result it produces is
+claimable until `AC-AUDIT-01` calibration passes, and the calibration answer key
+is held by REV rather than by the producer. `.agents/` remains read-only
+throughout.
 
 ---
 
@@ -194,13 +262,25 @@ Signing this sheet records rulings on items 1–5. Each item's source record
 remains the full statement of its reasoning and is unmodified by this sheet.
 
 ```
-Decided by:        ____________________
-Role:              ____________________
-Date:              ____________________
+Decided by:        Operator (BizEra)
+Role:              Operator / GOV. Per p0-wave-1-authority-packet.yaml,
+                   "A single local human operator is the available GOV authority".
+Date:              2026-08-03
 
-SEC verification (items 2, 3):   ____________________   Date: ____________
-GOV verification (items 1, 3-5): ____________________   Date: ____________
+SEC verification (items 2, 3):   NOT INDEPENDENTLY VERIFIED - see below
+GOV verification (items 1, 3-5): held by the same operator who decided
 ```
+
+**Recorded honestly rather than completed cosmetically.** This sheet asked for
+SEC and GOV verification separate from the decider. This project has one human,
+who holds all three roles - the same fact that produced ruling D on item 1. The
+verification lines are therefore recorded as unfilled rather than signed by the
+decider, because a verifier who is the decider is not a verification, and writing
+one in would manufacture exactly the appearance of independent review that item 1
+declined to manufacture.
+
+The rulings stand on the operator's authority as GOV. What they do not carry is
+independent verification, and that limitation is part of the record.
 
 **Authority statement.** This sheet prepares decisions. It makes none, approves
 nothing, authorizes nothing, and activates nothing. Every item remains

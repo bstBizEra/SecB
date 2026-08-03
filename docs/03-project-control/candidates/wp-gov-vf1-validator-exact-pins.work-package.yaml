@@ -1,9 +1,10 @@
 schema_version: "0.1"
 record_metadata:
   record_id: "wp_gov_vf1_validator_exact_pins_v1_candidate"
-  record_status: "AWAITING_GOV_AUTHORIZATION"
+  record_status: "AUTHORIZED"
   source_template: "docs/templates/work-package.yaml"
   producer_runtime: "Claude Code"
+  authorization: "Authorized by Operator (BizEra) 2026-08-03 via SECB-DECISION-SHEET-001 item 4. Not mergeable until the seven byte-identity pins are updated and AC-VF1-06 shows the guards still bite."
   limitations:
     - "Producer is also the assigned ENGIN and may not accept its own evidence."
     - "The code is already written and sabotage-verified on branch fix/validate-foundation-exact-pins at 8f7a91e. This work package exists to obtain the AUTHORITY to land it, not to schedule the writing. Authorizing it is authorizing a modification to a file main deliberately guards; the work is not the interesting part of the request."
@@ -39,7 +40,7 @@ problem_statement: >-
 
 risk_class: "R2"
 mutation_class: "M2"
-status: "PROPOSED"
+status: "AUTHORIZED"
 
 baseline:
   target_branch: "main"
