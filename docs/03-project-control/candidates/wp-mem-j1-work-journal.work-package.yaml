@@ -90,7 +90,7 @@ scope:
   - "tests/work-journal.test.mjs."
 
 non_scope:
-  - "NO memory-gateway wiring. The gateway is on main, declares itself UNWIRED with no state, no I/O and no persistence, and wiring it is an operator-gated act on main's own terms. This package stops at the KnowledgeLedger."
+  - "NO memory-gateway wiring. The gateway is HERE on this branch, not on main as an earlier line of this package wrongly said, and it declares itself UNWIRED with no state, no I/O and no persistence. Wiring it is an operator-gated act on its own terms, and it also needs contracts/memory-record.schema.json, which this branch lacks. This package stops at the KnowledgeLedger."
   - "NO contract change of any kind, and specifically NO widening of memory-record's `source` enum. The enum is the provenance requirement; widening it to admit working notes would remove the property that makes a memory worth trusting."
   - "NO change to appendEvidence or appendClaim. Their gates are what this package relies on; a package that relaxed them to make its own job easier would be worthless."
   - "NO automatic recording. An agent decides what is worth a claim. A journal that records everything produces a corpus with the same defect as the eval suite: 220 instances of 10 things."
