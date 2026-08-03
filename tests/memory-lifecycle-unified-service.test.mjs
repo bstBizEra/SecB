@@ -313,16 +313,40 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   assert.equal((await terminal.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_FINAL_LIFECYCLE");
   assert.equal(federationCalls, 0);
 
-  const good = await harness().service.issueReceipt({ retrieval: retrieval(), issue });
+  const bindingEvidence = bindingLedgerFixture();
+  const good = await harness({ lifecycleBindingLedger: bindingEvidence.ledger }).service.issueReceipt({ retrieval: retrieval(), issue });
   assert.equal(good.state, "ISSUED");
   assert.equal(good.sourceStateBinding.context_receipt_fingerprint, issue.document.content_hash);
   assert.match(good.sourceStateBinding.lifecycle_state_digest, /^[a-f0-9]{64}$/);
   assert.equal(good.sourceStateBinding.evaluated_at, NOW);
-  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding), true);
-  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, lifecycle_state_digest: "f".repeat(64) }), false);
-  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, ledger_sequence: "evil" }), false);
-  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, ledger_record_hash: "bad" }), false);
-  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, replayed: "yes" }), false);
+  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records), true);
+  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    lifecycle_state_digest: "f".repeat(64) }, bindingEvidence.records), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_sequence: "evil" }, bindingEvidence.records), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_record_hash: "bad" }, bindingEvidence.records), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    replayed: "yes" }, bindingEvidence.records), false);
+  for (const mutate of [
+    (records) => { records[0].entry.payload.status = "COMMITTED"; },
+    (records) => { records[0].entryHash = "f".repeat(64); },
+    (records) => { records[1].recordHash = "f".repeat(64); },
+    (records) => { records[1].previousHash = "f".repeat(64); },
+    (records) => { records.reverse(); },
+    (records) => { records.shift(); }
+  ]) {
+    const tampered = structuredClone(bindingEvidence.records); mutate(tampered);
+    assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, tampered), false);
+  }
+  const orphan = structuredClone([bindingEvidence.records[1]]);
+  orphan[0].sequence = 1; orphan[0].previousHash = "0".repeat(64);
+  orphan[0].entryHash = canonicalFingerprint(orphan[0].entry);
+  orphan[0].recordHash = canonicalFingerprint({ ledgerId: orphan[0].ledgerId, sequence: orphan[0].sequence,
+    previousHash: orphan[0].previousHash, entryHash: orphan[0].entryHash });
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_sequence: 1, ledger_record_hash: orphan[0].recordHash }, orphan), false);
   const expectedContextRequest = { ...issue, candidateSources: normalizeCandidateSources([source(memory())]).candidates };
   assert.equal(good.sourceStateBinding.context_issue_fingerprint,
     canonicalFingerprint({ op: "ISSUE", request: { ...expectedContextRequest, idempotencyKey: undefined } }));
@@ -333,7 +357,7 @@ test("durable binding failure denies before Context Federation mutation", async 
   let federationCalls = 0;
   const fixture = harness({ lifecycleBindingLedger: { verify() { return { valid: false }; }, read() { return []; }, append() { throw new Error("must not append"); } },
     contextFederation: { issueReceipt() { federationCalls += 1; throw new Error("must not issue"); } } });
-  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_LEDGER");
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_RECOVERY");
   assert.equal(federationCalls, 0);
 });
 
@@ -364,6 +388,59 @@ test("Context failure records ABORTED and a deterministic retry can COMMIT", asy
   assert.equal(issued.state, "ISSUED");
   assert.equal(issued.sourceStateBinding.binding_status, "COMMITTED");
   assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "ABORTED", "COMMITTED"]);
+});
+
+test("crash after Context issuance recovers original binding before any new lifecycle evaluation", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem-crash" };
+  let failCommit = true;
+  const binding = bindingLedgerFixture({ onAppend(entry) {
+    if (entry.payload.status === "COMMITTED" && failCommit) { failCommit = false; throw new Error("simulated crash"); }
+  } });
+  let contextCalls = 0;
+  let originalRequest;
+  let nowMs = Date.parse(NOW);
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger, now: () => new Date(nowMs), contextFederation: { issueReceipt(request) {
+    contextCalls += 1;
+    if (originalRequest === undefined) originalRequest = structuredClone(request);
+    else assert.deepEqual(request, originalRequest);
+    return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
+      boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: contextCalls > 1 };
+  } } });
+  const first = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(first.state, "ISSUED");
+  assert.equal(first.sourceStateBinding.binding_status, "RECOVERY_REQUIRED");
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED"]);
+  const bindingA = first.sourceStateBinding.binding_fingerprint;
+  const callsBeforeRecovery = structuredClone(fixture.calls);
+  nowMs += 3_600_000;
+
+  const recovered = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(recovered.state, "ISSUED");
+  assert.equal(recovered.replayed, true);
+  assert.equal(recovered.sourceStateBinding.binding_status, "COMMITTED");
+  assert.equal(recovered.sourceStateBinding.binding_fingerprint, bindingA);
+  assert.deepEqual(fixture.calls, callsBeforeRecovery);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "COMMITTED"]);
+  assert.equal(verifyMemoryContextLifecycleBinding(recovered.sourceStateBinding, binding.records), true);
+
+  const replay = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(replay.sourceStateBinding, recovered.sourceStateBinding);
+  assert.deepEqual(fixture.calls, callsBeforeRecovery);
+  assert.equal(binding.records.length, 2);
+  assert.equal(contextCalls, 3);
+});
+
+test("failed ABORTED write surfaces an unresolved recovery-required state", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem-abort" };
+  const binding = bindingLedgerFixture({ onAppend(entry) {
+    if (entry.payload.status === "ABORTED") throw new Error("simulated abort persistence failure");
+  } });
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger, contextFederation: { issueReceipt() { return { decision: "DENY" }; } } });
+  const denied = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(denied.code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.equal(denied.recovery_required, true);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED"]);
 });
 
 test("timed-out issuance fence cannot invoke Context Federation later", async () => {

@@ -34,9 +34,11 @@ const MAX_TIMEOUT_MS = 30_000;
 const DEFAULT_FRESHNESS_MS = 1_000;
 const MAX_FRESHNESS_MS = 60_000;
 const BINDING_CORE_KEYS = Object.freeze([
-  "context_receipt_fingerprint", "context_issue_fingerprint", "context_idempotency_key_fingerprint",
+  "context_receipt_fingerprint", "context_intent_fingerprint", "context_issue_fingerprint", "context_idempotency_key_fingerprint",
   "lifecycle_batch_fingerprint", "lifecycle_state_digest", "evaluated_at", "binding_fingerprint"
 ]);
+const LEDGER_RECORD_KEYS = Object.freeze(["ledgerId", "sequence", "previousHash", "entry", "entryHash", "recordHash"]);
+const ZERO_HASH = "0".repeat(64);
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -161,19 +163,66 @@ function syncCall(operation) {
 
 const deny = (code, message, stage) => deepFreeze({ decision: "DENY", code, message, stage });
 
-export function verifyMemoryContextLifecycleBinding(value) {
+function verifiedLedgerChain(value) {
+  if (!Array.isArray(value)) return null;
+  try {
+    const records = [];
+    let priorHash = ZERO_HASH;
+    let ledgerId;
+    for (let index = 0; index < value.length; index += 1) {
+      const record = exactSnapshot(value[index], LEDGER_RECORD_KEYS);
+      if (record === null || isBlank(record.ledgerId) || !Number.isSafeInteger(record.sequence)
+        || record.sequence !== index + 1 || !isHash(record.previousHash) || !isPlainObject(record.entry)
+        || !isHash(record.entryHash) || !isHash(record.recordHash)
+        || (ledgerId !== undefined && record.ledgerId !== ledgerId) || record.previousHash !== priorHash
+        || canonicalFingerprint(record.entry) !== record.entryHash
+        || canonicalFingerprint({ ledgerId: record.ledgerId, sequence: record.sequence,
+          previousHash: record.previousHash, entryHash: record.entryHash }) !== record.recordHash) return null;
+      ledgerId ??= record.ledgerId;
+      priorHash = record.recordHash;
+      records.push(record);
+    }
+    return records;
+  } catch {
+    return null;
+  }
+}
+
+function bindingCore(value) {
+  const binding = exactSnapshot(value, BINDING_CORE_KEYS);
+  if (binding === null || !isHash(binding.context_receipt_fingerprint) || !isHash(binding.context_intent_fingerprint)
+    || !isHash(binding.lifecycle_batch_fingerprint) || !isHash(binding.context_issue_fingerprint)
+    || !isHash(binding.context_idempotency_key_fingerprint) || !isHash(binding.lifecycle_state_digest)
+    || !isHash(binding.binding_fingerprint) || !isCanonicalInstant(binding.evaluated_at)) return null;
+  const { binding_fingerprint: ignoredFingerprint, ...tuple } = binding; void ignoredFingerprint;
+  return canonicalFingerprint(tuple) === binding.binding_fingerprint ? binding : null;
+}
+
+export function verifyMemoryContextLifecycleBinding(value, ledgerEvidence) {
   const binding = exactSnapshot(value, [...BINDING_CORE_KEYS, "binding_status", "ledger_sequence", "ledger_record_hash", "replayed"]);
-  if (binding === null || !isHash(binding.context_receipt_fingerprint) || !isHash(binding.lifecycle_batch_fingerprint)
-    || !isHash(binding.context_issue_fingerprint) || !isHash(binding.context_idempotency_key_fingerprint)
-    || !isHash(binding.lifecycle_state_digest) || !isHash(binding.binding_fingerprint) || !isCanonicalInstant(binding.evaluated_at)
+  const core = binding === null ? null : bindingCore(Object.fromEntries(BINDING_CORE_KEYS.map((key) => [key, binding[key]])));
+  const records = verifiedLedgerChain(ledgerEvidence);
+  if (binding === null || core === null || records === null
     || binding.binding_status !== "COMMITTED" || !Number.isSafeInteger(binding.ledger_sequence) || binding.ledger_sequence < 1
     || !isHash(binding.ledger_record_hash) || typeof binding.replayed !== "boolean") return false;
-  const tuple = { context_receipt_fingerprint: binding.context_receipt_fingerprint,
-    context_issue_fingerprint: binding.context_issue_fingerprint,
-    context_idempotency_key_fingerprint: binding.context_idempotency_key_fingerprint,
-    lifecycle_batch_fingerprint: binding.lifecycle_batch_fingerprint, lifecycle_state_digest: binding.lifecycle_state_digest,
-    evaluated_at: binding.evaluated_at };
-  return canonicalFingerprint(tuple) === binding.binding_fingerprint;
+  const record = records[binding.ledger_sequence - 1];
+  if (record === undefined || record.recordHash !== binding.ledger_record_hash) return false;
+  const payload = exactSnapshot(record.entry?.payload, ["binding", "status", "context_result_fingerprint"]);
+  const prepared = records.filter((candidate) => candidate.sequence < record.sequence
+    && candidate.entry?.type === "MEMORY_CONTEXT_LIFECYCLE_BINDING_PREPARED"
+    && candidate.entry?.payload?.status === "PREPARED"
+    && isPlainObject(candidate.entry?.payload?.binding)
+    && canonicalFingerprint(candidate.entry?.payload?.binding) === canonicalFingerprint(core));
+  const aborted = records.some((candidate) => candidate.sequence < record.sequence
+    && candidate.entry?.type === "MEMORY_CONTEXT_LIFECYCLE_BINDING_ABORTED"
+    && candidate.entry?.payload?.status === "ABORTED"
+    && isPlainObject(candidate.entry?.payload?.binding)
+    && canonicalFingerprint(candidate.entry?.payload?.binding) === canonicalFingerprint(core));
+  const preparedPayload = prepared.length === 1 ? exactSnapshot(prepared[0].entry.payload,
+    ["binding", "status", "context_issue_request"]) : null;
+  return record.entry?.type === "MEMORY_CONTEXT_LIFECYCLE_BINDING_COMMITTED" && preparedPayload !== null && !aborted
+    && payload !== null && payload.status === "COMMITTED" && isHash(payload.context_result_fingerprint)
+    && canonicalFingerprint(payload.binding) === canonicalFingerprint(core);
 }
 
 export class MemoryLifecycleUnifiedConfigurationError extends Error {
@@ -231,6 +280,141 @@ export function createMemoryLifecycleUnifiedService({
   const appendLifecycleBinding = Function.prototype.bind.call(appendBinding, lifecycleBindingLedger);
   const readLifecycleBindings = Function.prototype.bind.call(readBindings, lifecycleBindingLedger);
   const verifyLifecycleBindings = Function.prototype.bind.call(verifyBindings, lifecycleBindingLedger);
+
+  const normalizedContextResultFingerprint = (issued) => {
+    const { replayed: ignoredReplay, ...stableResult } = issued; void ignoredReplay;
+    return canonicalFingerprint(stableResult);
+  };
+
+  const snapshotIssued = (rawIssued, projectId, receiptId) => {
+    const issued = exactSnapshot(rawIssued, ISSUE_RESULT_KEYS);
+    return issued !== null && issued.state === "ISSUED" && issued.projectId === projectId
+      && issued.receiptId === receiptId && Number.isSafeInteger(issued.version) && issued.version >= 1
+      && ((Number.isSafeInteger(issued.boundWpVersion) && issued.boundWpVersion > 0) || !isBlank(issued.boundWpVersion))
+      && isCanonicalInstant(issued.expiresAt) && Array.isArray(issued.exclusions) && typeof issued.replayed === "boolean"
+      ? issued : null;
+  };
+
+  const readVerifiedLedger = () => {
+    const headCall = syncCall(() => verifyLifecycleBindings());
+    const readCall = headCall.ok && headCall.value?.valid === true ? syncCall(() => readLifecycleBindings()) : { ok: false };
+    const records = readCall.ok ? verifiedLedgerChain(readCall.value) : null;
+    if (records === null || !Number.isSafeInteger(headCall.value?.count) || headCall.value.count !== records.length
+      || headCall.value.headHash !== (records.at(-1)?.recordHash ?? ZERO_HASH)
+      || (records.length > 0 && headCall.value.ledgerId !== records[0].ledgerId)) return null;
+    return records;
+  };
+
+  const persistBindingEvent = ({ binding, contextIssueRequest, issueInput, retrieval, status, extra = {} }) => {
+    const records = readVerifiedLedger();
+    if (records === null) return null;
+    const entry = {
+      entryId: canonicalFingerprint({ binding_fingerprint: binding.binding_fingerprint, status }), projectId: retrieval.project_id,
+      workPackageId: issueInput.document.work_package_id, sessionId: issueInput.document.session_id,
+      actorId: issueInput.actorId, type: `MEMORY_CONTEXT_LIFECYCLE_BINDING_${status}`,
+      payload: { binding, status, ...(status === "PREPARED" ? { context_issue_request: contextIssueRequest } : {}), ...extra },
+      timestamp: binding.evaluated_at,
+      idempotencyKey: JSON.stringify([retrieval.project_id, issueInput.document.receipt_id, binding.binding_fingerprint, status])
+    };
+    const appendedCall = syncCall(() => appendLifecycleBinding(entry, { expectedSequence: records.length }));
+    const appended = appendedCall.ok ? exactSnapshot(appendedCall.value, LEDGER_RECEIPT_KEYS) : null;
+    const after = appended === null ? null : readVerifiedLedger();
+    const readback = after?.find((record) => record.sequence === appended.sequence);
+    const { replayed: ignoredReplay, ...persistedReceipt } = appended ?? {}; void ignoredReplay;
+    if (appended === null || canonicalFingerprint(appended.entry) !== canonicalFingerprint(entry)
+      || canonicalFingerprint(readback) !== canonicalFingerprint(persistedReceipt)) return null;
+    return appended;
+  };
+
+  const recoveryRequired = (message) => deepFreeze({ decision: "DENY", code: "DENY_UNIFY_BINDING_RECOVERY",
+    message, stage: "binding-recovery", recovery_required: true });
+
+  function makeSourceStateBinding(binding, committed) {
+    return deepFreeze({ ...binding, binding_status: "COMMITTED", ledger_sequence: committed.sequence,
+      ledger_record_hash: committed.recordHash, replayed: false });
+  }
+
+  function reconcileExistingBinding(retrieval, issueInput) {
+    const records = readVerifiedLedger();
+    if (records === null) return recoveryRequired("binding ledger chain evidence is invalid or unavailable");
+    const intentFingerprint = canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: issueInput });
+    const idempotencyFingerprint = canonicalFingerprint(issueInput.idempotencyKey);
+    const groups = new Map();
+    for (const record of records) {
+      const payload = record.entry?.payload;
+      if (!isPlainObject(payload) || !isPlainObject(payload.binding)) continue;
+      const core = bindingCore(payload.binding);
+      if (core === null || core.context_intent_fingerprint !== intentFingerprint
+        || core.context_idempotency_key_fingerprint !== idempotencyFingerprint
+        || core.context_receipt_fingerprint !== issueInput.document.content_hash
+        || record.entry.projectId !== retrieval.project_id) continue;
+      const events = groups.get(core.binding_fingerprint) ?? [];
+      events.push({ record, payload, core });
+      groups.set(core.binding_fingerprint, events);
+    }
+    const active = [];
+    for (const events of groups.values()) {
+      const preparedEvents = events.filter(({ payload }) => payload.status === "PREPARED");
+      const committedEvents = events.filter(({ payload }) => payload.status === "COMMITTED");
+      const abortedEvents = events.filter(({ payload }) => payload.status === "ABORTED");
+      if (events.length !== preparedEvents.length + committedEvents.length + abortedEvents.length
+        || preparedEvents.length !== 1 || committedEvents.length > 1 || abortedEvents.length > 1
+        || (committedEvents.length === 1 && abortedEvents.length === 1)) {
+        return recoveryRequired("binding ledger contains an impossible lifecycle event history");
+      }
+      const prepared = preparedEvents[0];
+      const committed = committedEvents[0];
+      const aborted = abortedEvents[0];
+      const preparedPayload = exactSnapshot(prepared.payload, ["binding", "status", "context_issue_request"]);
+      const committedPayload = committed === undefined ? null
+        : exactSnapshot(committed.payload, ["binding", "status", "context_result_fingerprint"]);
+      const abortedPayload = aborted === undefined ? null : exactSnapshot(aborted.payload, ["binding", "status", "reason"]);
+      if (prepared.record.entry.type !== "MEMORY_CONTEXT_LIFECYCLE_BINDING_PREPARED" || preparedPayload === null
+        || (committed !== undefined && (committed.record.entry.type !== "MEMORY_CONTEXT_LIFECYCLE_BINDING_COMMITTED"
+          || committedPayload === null || !isHash(committedPayload.context_result_fingerprint)
+          || committed.record.sequence <= prepared.record.sequence))
+        || (aborted !== undefined && (aborted.record.entry.type !== "MEMORY_CONTEXT_LIFECYCLE_BINDING_ABORTED"
+          || abortedPayload === null || isBlank(abortedPayload.reason) || aborted.record.sequence <= prepared.record.sequence))) {
+        return recoveryRequired("binding ledger event types, shapes, or ordering are inconsistent");
+      }
+      if (committed !== undefined || aborted === undefined) active.push({ prepared, committed });
+    }
+    if (active.length === 0) return null;
+    if (active.length !== 1) return recoveryRequired("multiple lifecycle bindings claim the exact Context issuance identity");
+    const { prepared, committed } = active[0];
+    const contextIssueRequest = exactSnapshot(prepared.payload.context_issue_request,
+      [...ISSUE_KEYS, "candidateSources"], ["document", "actorId", "authorityRef", "baseline", "idempotencyKey", "candidateSources"]);
+    const binding = prepared.core;
+    if (contextIssueRequest === null || canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT",
+      request: Object.fromEntries(ISSUE_KEYS.filter((key) => Object.hasOwn(contextIssueRequest, key)).map((key) => [key, contextIssueRequest[key]])) }) !== intentFingerprint
+      || canonicalFingerprint({ op: "ISSUE", request: { ...contextIssueRequest, idempotencyKey: undefined } }) !== binding.context_issue_fingerprint) {
+      return recoveryRequired("prepared binding does not contain its exact original Context request");
+    }
+    const rawIssued = syncCall(() => issueContext(deepFreeze(structuredClone(contextIssueRequest))));
+    const issued = rawIssued.ok ? snapshotIssued(rawIssued.value, retrieval.project_id, issueInput.document.receipt_id) : null;
+    if (issued === null) {
+      if (committed !== undefined) return recoveryRequired("committed binding could not replay its original Context receipt");
+      const aborted = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
+        status: "ABORTED", extra: { reason: "RECOVERY_CONTEXT_DENIED" } });
+      return aborted === null ? recoveryRequired("failed recovery remains an unresolved PREPARED binding")
+        : deny("DENY_UNIFY_CONTEXT", "Context Federation did not confirm the prepared issuance", "binding-recovery");
+    }
+    const resultFingerprint = normalizedContextResultFingerprint(issued);
+    if (committed !== undefined) {
+      const committedPayload = exactSnapshot(committed.payload, ["binding", "status", "context_result_fingerprint"]);
+      if (issued.replayed !== true || committedPayload === null || committedPayload.status !== "COMMITTED"
+        || committedPayload.context_result_fingerprint !== resultFingerprint) {
+        return recoveryRequired("committed binding does not match the replayed Context receipt");
+      }
+      return deepFreeze({ ...issued, sourceStateBinding: makeSourceStateBinding(binding, committed.record) });
+    }
+    const committedReceipt = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
+      status: "COMMITTED", extra: { context_result_fingerprint: resultFingerprint } });
+    if (committedReceipt === null) return deepFreeze({ ...issued, sourceStateBinding: deepFreeze({ ...binding,
+      binding_status: "RECOVERY_REQUIRED", ledger_sequence: prepared.record.sequence,
+      ledger_record_hash: prepared.record.recordHash, replayed: false }) });
+    return deepFreeze({ ...issued, sourceStateBinding: makeSourceStateBinding(binding, committedReceipt) });
+  }
 
   async function retrieveCandidateSources(request) {
     const input = exactSnapshot(request, REQUEST_KEYS, REQUIRED_KEYS);
@@ -427,6 +611,8 @@ export function createMemoryLifecycleUnifiedService({
     } catch {
       return deny("DENY_UNIFY_ISSUE_REQUEST", "Context Receipt contract or seal is invalid", "request");
     }
+    const recovered = reconcileExistingBinding(retrieval, issueInput);
+    if (recovered !== null) return recovered;
     const unified = await retrieveCandidateSources(retrieval);
     if (unified.decision !== "ALLOW") return unified;
     const finalInstant = trustedInstant(now);
@@ -462,6 +648,7 @@ export function createMemoryLifecycleUnifiedService({
       const contextIssueRequest = { ...issueInput, candidateSources: unified.sources };
       const binding = {
         context_receipt_fingerprint: issueInput.document.content_hash,
+        context_intent_fingerprint: canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: issueInput }),
         context_issue_fingerprint: canonicalFingerprint({ op: "ISSUE", request: { ...contextIssueRequest, idempotencyKey: undefined } }),
         context_idempotency_key_fingerprint: canonicalFingerprint(issueInput.idempotencyKey),
         lifecycle_batch_fingerprint: finalBatch.batch_fingerprint,
@@ -469,28 +656,8 @@ export function createMemoryLifecycleUnifiedService({
         evaluated_at: finalBatch.evaluated_at
       };
       binding.binding_fingerprint = canonicalFingerprint(binding);
-      const persistBindingEvent = (status, extra = {}) => {
-        const head = syncCall(() => verifyLifecycleBindings());
-        const entry = {
-          entryId: canonicalFingerprint({ binding_fingerprint: binding.binding_fingerprint, status }), projectId: retrieval.project_id,
-          workPackageId: issueInput.document.work_package_id, sessionId: issueInput.document.session_id,
-          actorId: issueInput.actorId, type: `MEMORY_CONTEXT_LIFECYCLE_BINDING_${status}`,
-          payload: { binding, status, ...extra }, timestamp: finalBatch.evaluated_at,
-          idempotencyKey: JSON.stringify([retrieval.project_id, issueInput.document.receipt_id, binding.binding_fingerprint, status])
-        };
-        const appendedCall = head.ok && head.value?.valid === true && Number.isSafeInteger(head.value.count)
-          ? syncCall(() => appendLifecycleBinding(entry, { expectedSequence: head.value.count })) : { ok: false };
-        const appended = appendedCall.ok ? exactSnapshot(appendedCall.value, LEDGER_RECEIPT_KEYS) : null;
-        const readbackCall = appended === null ? { ok: false } : syncCall(() => readLifecycleBindings());
-        const readback = readbackCall.ok && Array.isArray(readbackCall.value)
-          ? readbackCall.value.find((record) => record?.sequence === appended.sequence) : null;
-        const { replayed: ignoredReplay, ...persistedReceipt } = appended ?? {}; void ignoredReplay;
-        if (appended === null || canonicalFingerprint(appended.entry) !== canonicalFingerprint(entry)
-          || !isHash(appended.recordHash) || !isHash(appended.entryHash)
-          || canonicalFingerprint(readback) !== canonicalFingerprint(persistedReceipt)) return null;
-        return appended;
-      };
-      const prepared = persistBindingEvent("PREPARED");
+      const persist = (status, extra = {}) => persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval, status, extra });
+      const prepared = persist("PREPARED");
       if (prepared === null) {
         callbackResult = deny("DENY_UNIFY_BINDING_LEDGER", "durable lifecycle binding preparation failed", "binding-ledger");
         settleCallback({ kind: "callback", value: callbackResult });
@@ -499,28 +666,26 @@ export function createMemoryLifecycleUnifiedService({
       const preMutationInstant = trustedInstant(now);
       if (preMutationInstant === null || !withinWindow(Date.parse(finalBatch.evaluated_at), preMutationInstant.ms, freshnessMs)
         || !withinWindow(unifiedRetrievedMs, preMutationInstant.ms, freshnessMs)) {
-        persistBindingEvent("ABORTED", { reason: "STALE_BEFORE_CONTEXT" });
-        callbackResult = deny("DENY_UNIFY_FRESHNESS", "lifecycle binding became stale before Context mutation", "clock");
+        const aborted = persist("ABORTED", { reason: "STALE_BEFORE_CONTEXT" });
+        callbackResult = aborted === null ? recoveryRequired("stale preparation could not be durably aborted")
+          : deny("DENY_UNIFY_FRESHNESS", "lifecycle binding became stale before Context mutation", "clock");
         settleCallback({ kind: "callback", value: callbackResult });
         return callbackResult;
       }
       const rawIssued = syncCall(() => issueContext(contextIssueRequest));
-      const issued = rawIssued.ok ? exactSnapshot(rawIssued.value, ISSUE_RESULT_KEYS) : null;
-      if (issued === null || issued.state !== "ISSUED" || issued.projectId !== retrieval.project_id
-        || issued.receiptId !== issueInput.document.receipt_id || !Number.isSafeInteger(issued.version) || issued.version < 1
-        || !((Number.isSafeInteger(issued.boundWpVersion) && issued.boundWpVersion > 0) || !isBlank(issued.boundWpVersion))
-        || !isCanonicalInstant(issued.expiresAt) || !Array.isArray(issued.exclusions) || typeof issued.replayed !== "boolean") {
-        persistBindingEvent("ABORTED", { reason: "CONTEXT_DENIED" });
-        callbackResult = deny("DENY_UNIFY_CONTEXT", "Context Federation returned an unbound issuance result", "context-federation");
+      const issued = rawIssued.ok ? snapshotIssued(rawIssued.value, retrieval.project_id, issueInput.document.receipt_id) : null;
+      if (issued === null) {
+        const aborted = persist("ABORTED", { reason: "CONTEXT_DENIED" });
+        callbackResult = aborted === null ? recoveryRequired("Context denial could not durably abort its prepared binding")
+          : deny("DENY_UNIFY_CONTEXT", "Context Federation returned an unbound issuance result", "context-federation");
         settleCallback({ kind: "callback", value: callbackResult });
         return callbackResult;
       }
-      const committed = persistBindingEvent("COMMITTED", { context_result_fingerprint: canonicalFingerprint(issued) });
+      const committed = persist("COMMITTED", { context_result_fingerprint: normalizedContextResultFingerprint(issued) });
       const sourceStateBinding = committed === null
         ? deepFreeze({ ...binding, binding_status: "RECOVERY_REQUIRED", ledger_sequence: prepared.sequence,
-          ledger_record_hash: prepared.recordHash, replayed: prepared.replayed })
-        : deepFreeze({ ...binding, binding_status: "COMMITTED", ledger_sequence: committed.sequence,
-          ledger_record_hash: committed.recordHash, replayed: committed.replayed });
+          ledger_record_hash: prepared.recordHash, replayed: false })
+        : makeSourceStateBinding(binding, committed);
       callbackResult = deepFreeze({ decision: "ALLOW", code: "MEMORY_CONTEXT_ISSUED",
         issued: { ...issued, sourceStateBinding } });
       settleCallback({ kind: "callback", value: callbackResult });
