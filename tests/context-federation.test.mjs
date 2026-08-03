@@ -133,6 +133,28 @@ test("CF-05 idempotency conflict and stable replay", () => {
   denies(() => h.issue({ document: { objective_id: "different" } }), "DENY_IDEMPOTENCY_CONFLICT");
 });
 
+test("CF-05R replay-only lookup is non-mutating, stable, and exact-request bound", () => {
+  const h = harness();
+  const request = {
+    document: receiptDoc(), candidateSources: SOURCES,
+    actorId: ENGIN, authorityRef: "g_e", baseline: BASE, idempotencyKey: "idem_replay_only"
+  };
+
+  denies(() => h.svc.replayReceipt(request), "DENY_CONTEXT_REPLAY_MISS");
+  denies(() => h.svc.getReceiptLedger(PROJECT, "rc_1"), "DENY_UNKNOWN_RECEIPT");
+
+  const issued = h.svc.issueReceipt(request);
+  const ledgerBeforeReplay = h.svc.getReceiptLedger(PROJECT, "rc_1");
+  const replay = h.svc.replayReceipt(request);
+  const repeatedReplay = h.svc.replayReceipt(request);
+
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.expiresAt, issued.expiresAt);
+  assert.deepEqual(repeatedReplay, replay);
+  assert.deepEqual(h.svc.getReceiptLedger(PROJECT, "rc_1"), ledgerBeforeReplay);
+  denies(() => h.svc.replayReceipt({ ...request, baseline: "deadbeef" }), "DENY_IDEMPOTENCY_CONFLICT");
+});
+
 test("CF: source_references must equal the retrieval survivor set (no unauthorized, no duplicate under-claim)", () => {
   const h = harness();
   // unauthorized ref appended

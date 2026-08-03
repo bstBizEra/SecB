@@ -238,7 +238,9 @@ test("no real mutation: pilot writes only into the injected ephemeral ledger dir
 const NUL = String.fromCharCode(0);
 const PINNED_BLOBS = Object.freeze({
   "src/services/work-package-service.mjs": "6b2af450726cef0b7f74601834b4f91c7db19ed2",
-  "src/services/context-federation-service.mjs": "7eb57a289b8331d5576703c5c656624c98f1c029",
+  // Authorized candidate change under WP-MEM-RUNTIME-RECONCILE-001: the
+  // service adds only the fail-closed replayReceipt recovery surface.
+  "src/services/context-federation-service.mjs": "38c0239389dec17ab9a95d1f1500f9bf6e9838bc",
   "src/services/context-retrieval-policy.mjs": "a7ba0120fc6a0e3b7469f264e52ea4d0c76ec7ff",
   "src/services/evidence-envelope-service.mjs": "62359eb1a209cbb868332f4f324e1e0cb203644f",
   "src/registry/runtime-registry.mjs": "d6e1ce8897940901a9a9b8d339676d0abae67c35",

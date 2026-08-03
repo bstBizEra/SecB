@@ -50,6 +50,7 @@ function baseRecord(over = {}) {
     provenance: { evidence_refs: ["ev_verified_001"], origin_record_id: "orig_a" },
     valid_from: "2026-07-01T00:00:00Z",
     valid_until: "2027-01-01T00:00:00Z",
+    access_policy: "project-members",
     retention_policy: "retain-12-months",
     admitted_at: "2026-07-19T10:00:00Z",
     content_hash: HASH_A,

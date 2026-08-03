@@ -456,7 +456,6 @@ test("config-equivalence: evaluateWriteSet agrees with context-federation pathSu
 
 test("byte-identity: files read but not modified are unchanged vs main @ 71b9d41", () => {
   const guarded = [
-    "src/services/context-federation-service.mjs",
     "src/control/risk-registry.mjs",
     "package.json"
   ];
@@ -465,6 +464,14 @@ test("byte-identity: files read but not modified are unchanged vs main @ 71b9d41
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, mainBlob, `${rel} blob differs from main`);
   }
+  // WP-MEM-RUNTIME-RECONCILE-001 deliberately adds the fail-closed,
+  // replay-only recovery lookup to Context Federation. Preserve tamper
+  // detection with an exact candidate pin rather than a false unchanged claim.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "src/services/context-federation-service.mjs")], { cwd: root, encoding: "utf8" }).trim(),
+    "38c0239389dec17ab9a95d1f1500f9bf6e9838bc",
+    "context-federation-service.mjs pinned to the WP-MEM-RUNTIME-RECONCILE-001 candidate blob"
+  );
   // tools/validate-foundation.mjs was authorized-modified by MOD-MEM S2
   // (memory-record schema registration, 17->18 schemas; see
   // docs/03-project-control/candidates/mod-mem-s2-memory-record-contract-producer-verification-001.md),
