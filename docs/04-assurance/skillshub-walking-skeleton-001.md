@@ -153,6 +153,45 @@ it is the party that would benefit from the capability being switched on.
 | **Adopt `main`'s mechanism** | `skill-promotion.schema.json` already binds `bound_action` and `bound_object_version` and carries a producer/review/governance triple | closes `DEF-R1` structurally, and needs a REV — which the operator ruled fail-closed on 2026-08-03 |
 | **Wire it as it stands** | nothing | the first decision becomes a master key for every skill registered after it. Defensible ONLY under a recorded limit — one decision, one skill, never reused — and that limit is a promise, not a control |
 
+## Addendum, 2026-08-03 — DEF-R1 closed, and the next step is a stop
+
+`WP-SK-R1` landed at `f3ac99a`. The three cases above now read:
+
+```
+the skill the decision names                ALLOW -> ALLOW
+a completely unrelated skill                ALLOW -> DENY_SUBJECT_MISMATCH
+a manifest widening its own grant           ALLOW -> DENY_SUBJECT_MISMATCH
+a decision carrying no subject                    -> DENY_UNBOUND_SUBJECT
+```
+
+The master key is gone. The obvious next step looked like wiring
+`decisionLookup` to a real ledger. **It is not, and the check that says so took
+one command:**
+
+| | count |
+|---|---|
+| `new DecisionLedger` in `src/` or `tools/` | **0** |
+| callers of `SkillResolver.registerSkill` in production | **0** |
+| `.ndjson` ledger files anywhere in the tree | **0** |
+
+Wiring the lookup would change nothing. The registry would still be empty,
+because **nothing registers**. What is missing is not a lookup — it is the
+intake and promotion path that would put a manifest into the resolver, and that
+path is `WP-SK-05` from the roadmap this programme already withdrew.
+
+It exists on `main`: `skill-candidate-registry.mjs`, `skill-promotion-ledger.mjs`,
+`skill-revocation-ledger.mjs`. Building it here would duplicate `MOD-SKILL` a
+second time, which is the exact mistake that closed `SECB-PRD-SKILLSHUB-001`.
+
+**So the honest ceiling for this branch was DEF-R1, and it has been reached.**
+Closing it was worth doing on its own terms: this branch's resolver carries the
+`WP-SK-R2` resolution-time revalidation that `main` still lacks and its own
+revocation ledger names as deferred, so the two fixes travel together whenever
+this work is extracted.
+
+The count stays at `0 authorized of 25`, and that is now a statement about where
+the promotion path lives rather than about a defect.
+
 ## What this record does not do
 
 - **It wires nothing.** No production `decisionLookup` was changed; both remain
