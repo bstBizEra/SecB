@@ -1,0 +1,97 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_wp_gov_vf1_rev_request_001_v1_candidate"
+  record_status: "DRAFT_CANDIDATE"
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: "Operator dispatch, 2026-08-03. Follows the precedent of mcp-p0a-rev-request-001.handoff.yaml."
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer (Claude Code) may not self-review. This packet requests independent REV from a Codex identity per docs/03-project-control/candidates/agents/, distinct from the producer."
+    - "Review scope is FROZEN at the pinned tip. Commits after the pin — including this packet — are governance records, not review targets."
+    - "The producer wrote the validator change AND the seven pins that now vouch for it. That is the specific thing an independent reader is here to break."
+
+handoff:
+  handoff_id: "HANDOFF-WP-GOV-VF1-REV-001"
+  sequence: 1
+  source_agent_instance_id: "claude-code-secb-session-2026-08-03"
+  source_session_id: "bfb2c907-d860-4d79-a475-042b1ebdf7ee"
+  destination_role: "REV (Codex identity per docs/03-project-control/candidates/agents/, distinct from producer)"
+  project_id: "prj_secb_local"
+  work_package_id: "WP-GOV-VF1"
+
+  objective: >-
+    Independent review of PR #136 — exact-set contract pins that make
+    tools/validate-foundation.mjs capable of failing when a governed contract
+    gains, loses or promotes a field, plus the authorized re-pin of the seven
+    byte-identity guards that vouch for that file.
+
+  authorized_scope:
+    - "PR #136, branch fix/validate-foundation-exact-pins, PINNED at 5d97c4cb66547b08fcc811cae08aae8a6c905f50."
+    - "Review target: 531bad6 + 5d97c4c relative to origin/main at 8be8c9953716c06cadfc6a581fe248e819747380."
+    - "Read-only review. Findings as records; no fixes inside the frozen range without a new pinned round."
+    - "8 files, +113/-10. PR state at dispatch: MERGEABLE, CLEAN, 0 commits behind origin/main."
+
+  work_completed:
+    - "Sabotage-verified the defect on main BEFORE the fix: adding an optional property to decision-record.schema.json left validate at exit 0, and promoting it to required also left it at exit 0."
+    - "Added exact-set pins on both the required set and the property-name set of all 20 governed contracts, plus two coverage assertions holding each map's key set equal to the schema allowlist."
+    - "Retained the existing subset pin rather than replacing it."
+    - "First commit deliberately left all seven byte-identity guards FAILING; second commit re-pinned them under WP-GOV-VF1, recorded in the idiom the guards already carry."
+    - "Ran AC-VF1-06: after re-pinning, an injected drift failed every guard; reverting returned the suite to baseline."
+
+  artifacts:
+    - "tools/validate-foundation.mjs"
+    - "tests/{cadence-policy,event-family-policy,kpi-registry,overlap-policy,replay-assembler,scorecard-assembler,write-set-policy}.test.mjs"
+    - "docs/03-project-control/candidates/wp-gov-vf1-validator-exact-pins.work-package.yaml"
+    - "PR #136 comment 5168912733 — the producer's own review brief, including where it is guessing"
+
+  evidence_refs:
+    - "Sabotage matrix, raw exit codes, in the WP-GOV-VF1 record and the PR body."
+    - "AC-VF1-06 drift demonstration."
+    - "Clean-checkout baseline of origin/main at 8be8c99 showing one pre-existing failure unrelated to this branch."
+
+  checks:
+    - "npm run validate                 # expect 0"
+    - "node --test tests/*.test.mjs     # expect 1 — one PRE-EXISTING failure on main, see limitations"
+    - "Mutation: add an optional property to contracts/decision-record.schema.json -> validate must exit 1"
+    - "Mutation: promote that property into required                              -> must exit 1"
+    - "Mutation: remove `outcome` from decision-record's required                 -> must exit 1  (not in the subset pin, so it tests the NEW assertions)"
+    - "AC-VF1-06: append a line to tools/validate-foundation.mjs -> all seven guards must fail; revert -> baseline"
+
+  limitations:
+    - "RUN IN A CHECKOUT THAT HAS node_modules. A fresh worktree without it returns exit 1 for unrelated reasons; the producer nearly reported that false baseline as a pre-existing main failure."
+    - "One test on main is ALREADY RED and is not from this branch: `byte-identity: reused primitives, the S1/S2 siblings, and skill-resolver.mjs are byte-identical to origin/main @ 0aa13f8`. It fails on a clean origin/main at 8be8c99 with and without these commits, verified both ways. One failure is expected."
+
+  unresolved_findings:
+    - "THE PINS PASS BY CONSTRUCTION. They were generated from the schemas and then assert against those same schemas. Verifying they match the contracts today verifies nothing; their entire value is future drift detection, so the mutation matrix is the only evidence and is not a formality."
+    - "The seven guards were re-pinned by MECHANICALLY replacing the old hash string. Exactly one occurrence per file was confirmed, but the producer did not read what each occurrence asserts. If any file pinned that hash for a different purpose, its meaning changed unnoticed."
+    - "schemaFiles is every .schema.json in MANIFEST.json, not only contracts/. On main today those sets are identical (20 and 20). If a subsystem schema is ever added to the manifest, the coverage assertion will demand a pin for a file that is not a governed contract. Unhandled."
+    - "THE AUTHORIZATION IS A CHAT MESSAGE. WP-GOV-VF1 records an operator ruling given in session and transcribed by the producer into a record the producer also wrote. The guards' comments now read 'authorized-modified by WP-GOV-VF1' in the same idiom as MOD-WSPACE-S3 and MOD-MEM-S2 above them, which carry heavier provenance. If that idiom implies more process than occurred, the comment should be reworded rather than the pin reverted."
+
+  risks:
+    - "A DESIGN CALL THE PRODUCER MADE ALONE, with a cost it has never watched anyone pay: after this, EVERY contract edit fails validate until someone updates a line in this file. The producer wrote that the cost is 'one line per deliberate contract change' and has never seen another contributor hit it. Whether that tax is worth paying on main is a judgement for its maintainers, not for the producer."
+    - "If the mutation matrix is not re-run independently, this PR lands a control whose only evidence came from the party it vouches for."
+
+  recommended_next_action: >-
+    REV: re-run the four mutations and AC-VF1-06 rather than reading their
+    recorded outcomes, then attack the three ways the producer named — add a
+    schema to MANIFEST.json without a pin entry (both coverage assertions must
+    fail), demote a required field to optional (the direction that silently
+    WIDENS what the system accepts), and rename a property rather than adding one
+    (cardinality unchanged, membership differs).
+
+    Then answer the one question the producer cannot: whether the maintenance
+    cost this imposes on every future contract change is acceptable on main.
+
+    Return a verdict as a record. The operator merges or orders rework; the
+    producer does neither.
+
+  context_delta: >-
+    This is the first extraction under SARCHI decision
+    SECB-SARCHI-BRANCH-INTEGRATION-001, which reversed the integration direction
+    for feat/secb-ruflo-command-center: extract narrow PRs to main rather than
+    merging main into the branch. Three further extractions — the skill audit,
+    CodeGraph, and memory — are expected to follow the same pattern.
+
+    That makes this review worth more than its diff. If the pattern holds, three
+    more land the same way; if it breaks, it breaks here, before the others are
+    built on the assumption that it works.
