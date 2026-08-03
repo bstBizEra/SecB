@@ -1,7 +1,25 @@
 schema_version: "1.0"
 record_metadata:
   record_id: "handoff_wp_gov_vf1_rev_round2_001_v1_candidate"
-  record_status: "DRAFT_CANDIDATE"
+  record_status: "WITHDRAWN"
+  withdrawn_at: "2026-08-04"
+  withdrawn_by: "Producer (Claude Code), on operator instruction to cut what is not necessary"
+  withdrawal_reason: >-
+    This packet asks an independent reviewer for a full round to correct comment
+    text that the same reviewer rated LOW, on a commit measured to change no
+    executable logic and no pinned hash. Nine of ten open pull requests are
+    already stale under the frozen-SHA rule; spending a tenth round here spends
+    reviewer attention where it is worth least.
+
+    The packet is left intact below rather than deleted, because its embedded
+    proof is the evidence that withdrawing is safe. Withdrawing the round does
+    NOT close REV-VF1-N02. The guards still carry provenance text naming the
+    wrong work package. The finding stays open in
+    wp-gov-vf1-rev-verdict-001.md, and the fix stays available at 7a975f0 on
+    fix/validate-foundation-exact-pins for whoever next has an authorized reason
+    to touch those seven files.
+  superseded_note: >-
+    PR #136 is closed. PR #137 carries the reviewed commit 5d97c4cb exactly.
   source_template: "docs/templates/handoff-envelope.yaml"
   source: >-
     Producer-initiated, 2026-08-04. Round 2 exists because the producer pushed a
