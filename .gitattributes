@@ -1,0 +1,22 @@
+# Line-ending normalisation.
+#
+# Without this, a fresh checkout on Windows gets CRLF while the index holds LF,
+# and the two are not interchangeable for anything that hashes file bytes. The
+# skill audit computes a sha256 per file and a digest per package; the SAME
+# package measured 2364 bytes in one checkout and 2417 in another, producing
+# digests 8ce96f97... and 1206f8cc... for identical content. An integrity check
+# whose answer depends on which checkout ran it is not an integrity check.
+#
+# Found 2026-08-03 when the audit suite passed in the main working tree and
+# failed in a fresh worktree of the same commit.
+
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
