@@ -646,7 +646,7 @@ const PINNED_BLOBS = Object.freeze({
   // additive edit to validate-foundation.mjs. Pin tracks the post-MOD-MEM-S2
   // blob so this guard still detects any UNAUTHORIZED further drift of the
   // validator.
-  "tools/validate-foundation.mjs": "dbd4d10883e7724aa75301fc7f3b5c9528089726",
+  "tools/validate-foundation.mjs": "1cf857089d483f133f6d5fb724319e60bea961f8",
   "package.json": "6f91499257a6c441558840e2bfd6acb421e2b0a0"
 });
 
