@@ -17,6 +17,7 @@ import * as packageRoot from "../src/index.mjs";
 const PROJECT = "proj-memory-authority";
 const ACTOR = "agent-memory-producer";
 const NOW = new Date("2026-07-20T10:00:00.000Z");
+const CURSOR_MAC_KEY = Buffer.alloc(32, 0x62);
 
 function callerRecord(overrides = {}) {
   return {
@@ -99,6 +100,7 @@ function facade(memoryGateway, overrides = {}) {
     scopeResolver: allowScope,
     admissionAuthorityResolver: allowAdmission,
     retrievalAuthorityResolver: allowRetrieval,
+    cursorMacKey: CURSOR_MAC_KEY,
     ...overrides
   });
 }
@@ -110,6 +112,10 @@ test("construction captures both gateway ports and exports a frozen facade", () 
   assert.throws(
     () => createMemoryAuthorityGateway({ memoryGateway: { admit() {}, retrieve() {} }, identityResolver: true }),
     hasCode("INVALID_AUTHORITY_RESOLVER")
+  );
+  assert.throws(
+    () => createMemoryAuthorityGateway({ memoryGateway: { admit() {}, retrieve() {} } }),
+    hasCode("INVALID_CURSOR_MAC_KEY")
   );
   const built = fakeGateway();
   const instance = facade(built.memoryGateway);
@@ -123,7 +129,7 @@ test("construction captures both gateway ports and exports a frozen facade", () 
 
 test("default authority ports deny before the Memory Gateway", async () => {
   const { memoryGateway, calls } = fakeGateway();
-  const instance = createMemoryAuthorityGateway({ memoryGateway });
+  const instance = createMemoryAuthorityGateway({ memoryGateway, cursorMacKey: CURSOR_MAC_KEY });
   assert.equal((await instance.admit({ layer: "session", record: callerRecord() })).code, "DENY_MEMORY_IDENTITY");
   assert.equal(instance.retrieve({ project_id: PROJECT, layer: "session" }).code, "DENY_MEMORY_IDENTITY");
   assert.deepEqual(calls, { admit: [], retrieve: [] });
@@ -370,6 +376,66 @@ test("hidden-only upstream pages do not expose their cursor boundaries", () => {
   assert.deepEqual(result.records, []);
   assert.equal(result.next_cursor, null);
   assert.equal(calls, 2);
+});
+
+test("access cursor is HMAC-bound to the exact actor and authority profile", () => {
+  const makeRecord = (id, accessPolicy) => {
+    const body = {
+      ...callerRecord({ memory_record_id: id }),
+      actor_id: ACTOR,
+      layer: "session",
+      access_policy: accessPolicy,
+      admitted_at: "2026-07-20T09:30:00.000Z"
+    };
+    const { admitted_at, ...hashBody } = body;
+    void admitted_at;
+    return { ...body, content_hash: canonicalFingerprint(hashBody) };
+  };
+  const records = [
+    makeRecord("high-1", "high-policy"),
+    makeRecord("low-1", "low-policy"),
+    makeRecord("high-2", "high-policy")
+  ];
+  const memoryGateway = {
+    admit: async () => ({ decision: "DENY", code: "NOT_USED" }),
+    retrieve: ({ cursor }) => {
+      const index = cursor === undefined ? 0 : Number(cursor.slice(1));
+      return {
+        decision: "ALLOW",
+        code: "RETRIEVED",
+        retrieved_at: NOW.toISOString(),
+        records: [{ data_untrusted: true, record: records[index] }],
+        next_cursor: index + 1 < records.length ? `r${index + 1}` : null
+      };
+    }
+  };
+  let profile = "high";
+  const instance = facade(memoryGateway, {
+    retrievalAuthorityResolver: ({ project_id, layer }) => ({
+      decision: "ALLOW",
+      decision_id: `access-${profile}`,
+      actor_id: ACTOR,
+      project_id,
+      layer,
+      classification_clearance: "INTERNAL",
+      permitted_access_policies: [`${profile}-policy`]
+    })
+  });
+  const first = instance.retrieve({ project_id: PROJECT, layer: "session", limit: 1 });
+  assert.deepEqual(first.records.map((entry) => entry.record.memory_record_id), ["high-1"]);
+  assert.notEqual(first.next_cursor, null);
+  const second = instance.retrieve({ project_id: PROJECT, layer: "session", limit: 1, cursor: first.next_cursor });
+  assert.deepEqual(second.records.map((entry) => entry.record.memory_record_id), ["high-2"]);
+  assert.equal(second.next_cursor, null);
+
+  profile = "low";
+  const replayed = instance.retrieve({ project_id: PROJECT, layer: "session", limit: 1, cursor: first.next_cursor });
+  assert.equal(replayed.code, "DENY_MALFORMED_REQUEST");
+  const replacement = `${first.next_cursor.slice(0, -1)}${first.next_cursor.endsWith("A") ? "B" : "A"}`;
+  assert.equal(
+    instance.retrieve({ project_id: PROJECT, layer: "session", limit: 1, cursor: replacement }).code,
+    "DENY_MALFORMED_REQUEST"
+  );
 });
 
 test("malformed clearance and policy grants deny before Memory retrieval", () => {

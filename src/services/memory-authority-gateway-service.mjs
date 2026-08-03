@@ -7,6 +7,7 @@
 
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
 import { validateContract } from "../contracts/contract-validator.mjs";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const OPERATIONS = Object.freeze({ ADMIT: "memory-admit", RETRIEVE: "memory-retrieve" });
 const LAYERS = Object.freeze(["session", "work", "project"]);
@@ -38,8 +39,10 @@ const REQUIRED_APPEND_KEYS = Object.freeze(APPEND_KEYS.filter((key) => key !== "
 const MAX_LIMIT = 1_000;
 const DEFAULT_LIMIT = 100;
 const MAX_ACCESS_SCAN = 10_000;
-const MAX_CURSOR_LENGTH = 2_048;
+const MAX_CURSOR_LENGTH = 4_096;
+const MIN_CURSOR_MAC_KEY_BYTES = 32;
 const POLICY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const ACCESS_CURSOR_KEYS = Object.freeze(["v", "scope_hash", "upstream_cursor", "mac"]);
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -93,6 +96,54 @@ function snapshotPolicyIds(value) {
       out.push(policy);
     }
     return new Set(out).size === out.length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function cursorMac(key, payload) {
+  return createHmac("sha256", key).update(JSON.stringify(payload), "utf8").digest("hex");
+}
+
+function accessScopeHash({ actorId, projectId, layer, authorityDecisionId, classificationClearance, permittedPolicies }) {
+  return canonicalFingerprint({
+    actor_id: actorId,
+    project_id: projectId,
+    layer,
+    authority_decision_id: authorityDecisionId,
+    classification_clearance: classificationClearance,
+    permitted_access_policies: [...permittedPolicies].sort()
+  });
+}
+
+function encodeAccessCursor(key, upstreamCursor, bindings) {
+  try {
+    const payload = { v: 1, scope_hash: accessScopeHash(bindings), upstream_cursor: upstreamCursor };
+    const envelope = { ...payload, mac: cursorMac(key, payload) };
+    const token = Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+    return token.length <= MAX_CURSOR_LENGTH ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeAccessCursor(key, token, bindings) {
+  try {
+    const decoded = Buffer.from(token, "base64url");
+    if (decoded.toString("base64url") !== token) return null;
+    const envelope = JSON.parse(decoded.toString("utf8"));
+    if (!hasExactKeys(envelope, ACCESS_CURSOR_KEYS)) return null;
+    const { mac, ...payload } = envelope;
+    const expectedMac = cursorMac(key, payload);
+    if (
+      payload.v !== 1
+      || payload.scope_hash !== accessScopeHash(bindings)
+      || typeof payload.upstream_cursor !== "string" || payload.upstream_cursor.length < 1
+      || payload.upstream_cursor.length > 2_048 || !/^[A-Za-z0-9_-]+$/.test(payload.upstream_cursor)
+      || typeof mac !== "string" || !/^[a-f0-9]{64}$/.test(mac)
+      || !timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expectedMac, "hex"))
+    ) return null;
+    return payload.upstream_cursor;
   } catch {
     return null;
   }
@@ -169,7 +220,8 @@ export function createMemoryAuthorityGateway({
   identityResolver,
   scopeResolver,
   admissionAuthorityResolver,
-  retrievalAuthorityResolver
+  retrievalAuthorityResolver,
+  cursorMacKey
 } = {}) {
   let gatewayAdmit;
   let gatewayRetrieve;
@@ -186,6 +238,13 @@ export function createMemoryAuthorityGateway({
     if (resolver !== undefined && typeof resolver !== "function") {
       throw new MemoryAuthorityGatewayConfigurationError("INVALID_AUTHORITY_RESOLVER", `${name} must be a function when provided`);
     }
+  }
+  let cursorMacKeySnapshot;
+  try {
+    if (!(cursorMacKey instanceof Uint8Array) || cursorMacKey.byteLength < MIN_CURSOR_MAC_KEY_BYTES) throw new Error("weak key");
+    cursorMacKeySnapshot = Buffer.from(cursorMacKey);
+  } catch {
+    throw new MemoryAuthorityGatewayConfigurationError("INVALID_CURSOR_MAC_KEY", "cursorMacKey must contain at least 32 bytes");
   }
 
   const admitMemory = Function.prototype.bind.call(gatewayAdmit, memoryGateway);
@@ -355,6 +414,14 @@ export function createMemoryAuthorityGateway({
       || permittedPolicies === null
     ) return deny("DENY_MEMORY_RETRIEVAL_AUTHORITY", "Memory retrieval authority is not effective or is not exactly bound", "authority");
 
+    const cursorBindings = {
+      actorId: bindings.identity.actor_id,
+      projectId: query.project_id,
+      layer: query.layer,
+      authorityDecisionId: authority.decision_id,
+      classificationClearance: authority.classification_clearance,
+      permittedPolicies
+    };
     const clearanceRank = CLASSIFICATIONS.indexOf(authority.classification_clearance);
     const canRead = (entry) => (
       CLASSIFICATIONS.indexOf(entry.record.classification) <= clearanceRank
@@ -362,7 +429,12 @@ export function createMemoryAuthorityGateway({
     );
     const seenCursors = new Set();
     let scanned = 0;
-    let scanCursor = query.cursor ?? null;
+    let scanCursor = query.cursor === undefined
+      ? null
+      : decodeAccessCursor(cursorMacKeySnapshot, query.cursor, cursorBindings);
+    if (query.cursor !== undefined && scanCursor === null) {
+      return deny("DENY_MALFORMED_REQUEST", "Memory access cursor is invalid for the current authority profile", "request");
+    }
     let lastRetrievedAt = null;
 
     function fetchOne(cursor) {
@@ -453,12 +525,16 @@ export function createMemoryAuthorityGateway({
       ))
     ) return deny("DENY_MEMORY_RETRIEVAL", "Memory records changed temporal status during access scan", "gateway");
 
+    const outwardCursor = nextCursor === null ? null : encodeAccessCursor(cursorMacKeySnapshot, nextCursor, cursorBindings);
+    if (nextCursor !== null && outwardCursor === null) {
+      return deny("DENY_MEMORY_RETRIEVAL", "Memory access cursor could not be bound safely", "gateway");
+    }
     return deepFreeze({
       decision: "ALLOW",
       code: "RETRIEVED",
       retrieved_at: lastRetrievedAt,
       records: authorizedRecords,
-      next_cursor: nextCursor,
+      next_cursor: outwardCursor,
       actor_id: bindings.identity.actor_id,
       identity_decision_id: bindings.identity.decision_id,
       scope_decision_id: bindings.scope.decision_id,
