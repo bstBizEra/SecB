@@ -1,0 +1,182 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_gov_vf2_merge_guard_repin_v1_candidate"
+  record_status: "AWAITING_GOV_AUTHORIZATION"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer is also the assigned ENGIN and may not accept its own evidence."
+    - "The merge this package unblocks is already resolved and preserved at b1a85c6 on branch merge/main-into-feat. The producer deliberately did NOT re-pin the guards there, because re-pinning tamper detection to an artefact the producer wrote, without authorization, is exactly the move those guards exist to prevent. This package is the request for that authorization."
+    - "While resolving the merge the producer twice damaged tools/validate-foundation.mjs: a union that treated surrounding code as a schema list DELETED a check while leaving the file parseable and the suite green, and a line-range splice meant to repair it removed 183 lines. Both were caught and the file was rebuilt from main plus two re-applied additions. A reviewer should treat that file as the one most likely to carry a quiet loss."
+
+work_package_id: "WP-GOV-VF2"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-GOV"
+title: "Authorized modification: re-pin the byte-identity guards for the origin/main merge"
+
+objective: >-
+  Authorize the five guarded files that merging origin/main into
+  feat/secb-ruflo-command-center necessarily changes, and re-pin the sixteen
+  test files whose byte-identity guards assert those files are unchanged.
+
+problem_statement: >-
+  The merge is resolved. All eight conflicts are closed, `npm run validate`
+  exits 0, and 1822 of 1844 tests pass. Sixteen test files fail, and every
+  failure is a byte-identity guard.
+
+  The guards are not wrong. They pin specific files byte-for-byte so that any
+  UNAUTHORIZED drift fails, and the merge changes five of those files. It has to:
+  merging two contract registries edits the registry, and merging two schema
+  allowlists edits the validator. There is no resolution of these conflicts that
+  leaves the pinned files untouched.
+
+  This is the same shape as WP-GOV-VF1, which authorized one such file. That
+  package's own reasoning applies here unchanged - the code was never the missing
+  piece, the authorization was.
+
+the_five_files:
+  - path: "tools/validate-foundation.mjs"
+    guards: 7
+    why_the_merge_changes_it: >-
+      Both branches maintain the governed-schema allowlist and both added to it -
+      ours reached 30 contracts, main's 20, the union is 35. The merged file also
+      carries our subsystem-schema check, which main's version has no equivalent
+      of, and the WP-GOV-VF1 exact-set pins regenerated across all 35.
+  - path: "src/contracts/contract-validator.mjs"
+    guards: 3
+    why_the_merge_changes_it: >-
+      Both branches register contracts here. Ours registers the ADR-0013
+      descriptor/grant pair and the runtime-provider plugin; main registers
+      skill-candidate, skill-promotion, delegation-request, checkpoint,
+      workspace-lease, memory-record and integration-queue-entry. A merge that
+      dropped either side would leave contracts unreachable to the validator.
+  - path: "src/registry/skill-resolver.mjs"
+    guards: 2
+    why_the_merge_changes_it: >-
+      This branch's WP-SK-R2 closed DEF-R2 and DEF-R3 - resolution-time
+      re-validation of promotion decisions, and evidence that is resolved rather
+      than counted. main's copy has neither, and its own revocation ledger names
+      that work as an explicitly deferred, operator-gated follow-up. The merge
+      carries the fix forward.
+  - path: "src/registry/runtime-registry.mjs"
+    guards: 1
+    why_the_merge_changes_it: >-
+      Both sides added a distinct precondition to the same method: ours validates
+      the runtime-provider binding, main dedupes on a normalized identifier. The
+      resolution keeps both, because dropping either silently removes a check
+      that is live on the branch it came from.
+  - path: "src/registry/adapters.mjs"
+    guards: 1
+    why_the_merge_changes_it: >-
+      main adds a Gemini CLI adapter and populates project_scopes on the existing
+      adapters. Ours does not modify this file; the change is main's, arriving
+      through the merge.
+
+risk_class: "R2"
+mutation_class: "M2"
+status: "PROPOSED"
+
+baseline:
+  merge_branch: "merge/main-into-feat"
+  merge_commit: "b1a85c6"
+  target_branch: "feat/secb-ruflo-command-center"
+  merged_from: "origin/main at 8be8c99"
+  measured_state: >-
+    validate exit 0. Suite: 1844 tests, 1822 pass, 17 fail across 16 files, all
+    byte-identity guards. 250 files changed by the merge; 5 of them are pinned.
+
+scope:
+  - "Re-pin the byte-identity guards in the sixteen affected test files to the merged blobs, and record the authorization in the idiom the guards already carry - they read 'authorized-modified by MOD-WSPACE-S3', 'then again by MOD-MEM S2', and WP-GOV-VF1 added a third. This is the fourth."
+  - "Each re-pin names WHICH of the five files it covers and why that file changed, using the table above, so a later reader can tell an authorized merge from unauthorized drift."
+
+non_scope:
+  - "NO relaxation of any guard. Not one becomes a warning, gets a skip, or has its file list narrowed. A guard that stops asserting is worse than a guard that fails, because it fails silently thereafter."
+  - "NO re-resolution of the merge. The eight conflicts are settled at b1a85c6 and this package does not reopen them. If a reviewer disagrees with a resolution, that is a separate finding against that commit."
+  - "NO change to the five guarded files themselves. Their content is fixed by the merge; this package changes only what vouches for them."
+  - "NO advancing feat/secb-ruflo-command-center. That is a separate act after this work is accepted."
+
+acceptance_criteria:
+  - id: "AC-VF2-01"
+    statement: "The suite passes on the merged tree."
+    verification: "`npm run validate` exit 0 and `node --test tests/*.test.mjs` exit 0, run in a checkout that HAS node_modules. A worktree without dependencies returns exit 1 for reasons unrelated to this work and is not a baseline."
+  - id: "AC-VF2-02"
+    statement: "THE GUARDS STILL BITE. After re-pinning, an unauthorized drift injected into each of the five files fails the guards that pin it."
+    verification: >-
+      Five mutations, one per file, each reverted after measurement. Record the
+      failing guard count per file. This is the criterion that matters: a re-pin
+      not shown to still detect the next change is a re-pin to nothing, and it
+      is the criterion WP-GOV-VF1 was accepted on.
+  - id: "AC-VF2-03"
+    statement: "No guard's coverage is narrower after this work than before."
+    verification: >-
+      Diff each touched test file and confirm every change is a hash value or a
+      comment. A path removed from a guard's file list, an assertion commented
+      out, or a test skipped fails this criterion regardless of whether the suite
+      goes green.
+  - id: "AC-VF2-04"
+    statement: "The subsystem-schema check survives in tools/validate-foundation.mjs."
+    verification: >-
+      Assert `schemas.subsystem` is present and fires when a subsystem schema is
+      added or removed. Named explicitly because this check was silently DELETED
+      once during the merge by a bad union, and the file still parsed and the
+      validator still exited 0. Anything that can happen once by accident can
+      happen again.
+  - id: "AC-VF2-05"
+    statement: "The merged validator's exact-set pins cover all 35 contracts."
+    verification: >-
+      `schema.required.exact.coverage` and `schema.properties.exact.coverage`
+      pass, and a contract added without a pin entry fails them. Verified by
+      deleting one entry and observing exit 1.
+
+roles:
+  ENGIN: "unassigned — the producer resolved the merge and may not accept its own evidence"
+  REV: "unassigned — must not be the producer. This package would benefit most from a reviewer reading the merge resolution rather than the re-pins."
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted. The authority-bearing element is the re-pin, not the merge."
+  GOV: "authorizes"
+
+allowed_paths:
+  - "tests/approval-binding.test.mjs"
+  - "tests/cadence-policy.test.mjs"
+  - "tests/conformance-p0-18-candidate.test.mjs"
+  - "tests/conformance-v016-drift.test.mjs"
+  - "tests/event-family-policy.test.mjs"
+  - "tests/integration-queue-ledger.test.mjs"
+  - "tests/kpi-registry.test.mjs"
+  - "tests/mcp-lazy-ajv.test.mjs"
+  - "tests/overlap-policy.test.mjs"
+  - "tests/p0-19-self-pilot.test.mjs"
+  - "tests/replay-assembler.test.mjs"
+  - "tests/scorecard-assembler.test.mjs"
+  - "tests/skill-candidate-registry.test.mjs"
+  - "tests/skill-revocation-ledger.test.mjs"
+  - "tests/workspace-lease-ledger.test.mjs"
+  - "tests/write-set-policy.test.mjs"
+
+prohibited_paths:
+  - "contracts/**"
+  - "src/**"
+  - "tools/**"
+  - ".agents/**"
+  - "MANIFEST.json"
+  - "docs/MANIFEST.json"
+
+evidence_obligations:
+  - "The AC-VF2-02 drift matrix: five mutations, guards failed per file, raw exit codes, and confirmation each was reverted."
+  - "The diff of every touched test file, for AC-VF2-03."
+  - "Before-and-after blob hashes for each of the five guarded files."
+  - "A statement of which checkout the suite ran in and whether node_modules was present."
+
+valid_until: "2026-11-03T00:00:00Z"
+
+authority_note: >-
+  The guards say what they are for: any UNAUTHORIZED drift of a pinned file must
+  fail. The merge produces authorized drift in five files, and the only thing
+  separating the two is a decision recorded somewhere a reader can find it.
+
+  The producer left all sixteen failing rather than re-pinning them, for the same
+  reason WP-GOV-VF1's first commit did: re-pinning would have made the branch
+  look mergeable while removing the only signal that it was not. GOV
+  authorization of this package is what converts that drift from unauthorized to
+  authorized. Without it there is nothing here to land.
