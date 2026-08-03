@@ -318,6 +318,8 @@
     "src/ledger/memory-lifecycle-ledger.mjs",
     "src/services/memory-lifecycle-service.mjs",
     "tests/memory-lifecycle-service.test.mjs",
+    "src/services/memory-lifecycle-unified-service.mjs",
+    "tests/memory-lifecycle-unified-service.test.mjs",
     "docs/03-project-control/candidates/mod-mem-s1-rev-001.md",
     "tests/context-receipt-mint.test.mjs",
     "src/services/candidate-source-port.mjs",

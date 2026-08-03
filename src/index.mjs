@@ -144,6 +144,11 @@ export {
 } from "./services/memory-lifecycle-service.mjs";
 
 export {
+  createMemoryLifecycleUnifiedService,
+  MemoryLifecycleUnifiedConfigurationError
+} from "./services/memory-lifecycle-unified-service.mjs";
+
+export {
   DATA_CLASS_ORDER,
   RISK_ORDER,
   intersectWithParent,
