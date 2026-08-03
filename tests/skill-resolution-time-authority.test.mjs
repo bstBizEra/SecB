@@ -58,7 +58,13 @@ function withLedger(run) {
       decision_id: "d1", version: 1, project_id: "prj_a", work_package_id: "WP-SK-R2", session_id: "s1",
       actor_id: "human-gov", decision_type: "GOVERNANCE", outcome: "PROMOTE_SKILL",
       rationale: "fixture", authority_ref: "grant", evidence_refs: ["ev1"],
-      decided_at: "2026-08-02T00:00:00Z", valid_from: "2026-08-02T00:00:00Z", valid_until: "2026-09-01T00:00:00Z"
+      decided_at: "2026-08-02T00:00:00Z", valid_from: "2026-08-02T00:00:00Z", valid_until: "2026-09-01T00:00:00Z",
+      // WP-SK-R1: a promotion must now name what it authorizes. Adding the
+      // subject here is not a workaround - it is the change biting on every
+      // fixture that mints a promotion, which is what a fail-closed binding
+      // is supposed to do.
+      subject: { kind: "SKILL_VERSION", id: "SKILL-R2", version: "1.0.0",
+                 grant: { project_scopes: ["prj_a"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" } }
     }, { expectedSequence: 0, idempotencyKey: "k1" });
 
     // A movable clock. The instant must be derived PER CALL: capturing one at
@@ -111,7 +117,9 @@ describe("WP-SK-R2 / DEF-R2 — a grant stops authorizing when its decision does
   it("AC-R2-01: the lookup is consulted on EVERY resolution, not once at registration", () => {
     let calls = 0;
     const counting = new SkillResolver({
-      decisionLookup: (ref) => { calls += 1; return { decision_id: ref, decision_type: "GOVERNANCE" }; },
+      decisionLookup: (ref) => { calls += 1; return { decision_id: ref, decision_type: "GOVERNANCE",
+        subject: { kind: "SKILL_VERSION", id: "SKILL-R2", version: "1.0.0",
+                   grant: { project_scopes: ["prj_a"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" } } }; },
       evidenceLookup: (ref) => ({ evidence_id: ref }),
       now: () => IN_WINDOW
     });
@@ -159,7 +167,9 @@ describe("WP-SK-R2 / AC-R2-04 — the new deny code keeps its type through the h
 });
 
 describe("WP-SK-R2 / DEF-R3 — evidence is resolved, not counted", () => {
-  const base = { decisionLookup: () => ({ decision_id: "d1", decision_type: "GOVERNANCE" }), now: () => IN_WINDOW };
+  const base = { decisionLookup: () => ({ decision_id: "d1", decision_type: "GOVERNANCE",
+    subject: { kind: "SKILL_VERSION", id: "SKILL-R2", version: "1.0.0",
+               grant: { project_scopes: ["prj_a"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" } } }), now: () => IN_WINDOW };
 
   it("AC-R2-05: an evidence reference that does not resolve denies at registration", () => {
     assert.doesNotThrow(

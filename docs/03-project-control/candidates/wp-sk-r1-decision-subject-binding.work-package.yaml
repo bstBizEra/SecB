@@ -1,16 +1,16 @@
 schema_version: "0.1"
 record_metadata:
   record_id: "wp_sk_r1_decision_subject_binding_v1_candidate"
-  record_status: "AWAITING_GOV_AUTHORIZATION"
+  record_status: "AUTHORIZED"
+  authorized_by: "Operator (BizEra), 2026-08-03"
+  authorization_note: >-
+    Given in session. The producer flagged that a contract change approved in one
+    word, transcribed by the agent into its own work package, is the pattern this
+    project's controls exist to catch, and asked for confirmation. The operator
+    reaffirmed. Recorded that way - flagged, reaffirmed, proceeded - rather than
+    as a clean signature, because the sequence is the part a later reader needs.
   source_template: "docs/templates/work-package.yaml"
   producer_runtime: "Claude Code"
-  operator_direction: >-
-    The operator approved the DIRECTION on 2026-08-03 - close DEF-R1 on this
-    branch by binding a decision to what it authorizes - and asked for the work
-    package. That approval is recorded as direction, not as authorization: a
-    contract change signed off in one word, by an agent transcribing it into its
-    own work package, is the pattern this project's controls exist to catch. The
-    ruling block below is blank and stays blank until signed.
   limitations:
     - "Producer is also the assigned ENGIN and may not accept its own evidence."
     - "The producer is the party that benefits from SkillsHub being switched on, and therefore has a stake in this defect being closed. The design below is ARCHI's from an independent analysis earlier in this session, not the producer's preference."
@@ -56,7 +56,7 @@ problem_statement: >-
 
 risk_class: "R3"
 mutation_class: "M3"
-status: "PROPOSED"
+status: "AUTHORIZED"
 
 baseline:
   target_branch: "feat/secb-ruflo-command-center"

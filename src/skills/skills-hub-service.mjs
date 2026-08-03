@@ -71,7 +71,12 @@ const DENY_CODES = new Set([
   // or reverted. Distinct from DENY_REVOKED, which reads a REVOCATION entry
   // recorded IN the manifest; this one is the ledger disagreeing with a
   // manifest that still claims to be published.
-  "DENY_PROMOTION_NOT_EFFECTIVE"
+  "DENY_PROMOTION_NOT_EFFECTIVE",
+  // WP-SK-R1: a promotion that does not name what it authorizes, and one that
+  // names something else. Bucketing these as DENY_UNRESOLVED would lose exactly
+  // the distinction the fix exists to create.
+  "DENY_UNBOUND_SUBJECT",
+  "DENY_SUBJECT_MISMATCH"
 ]);
 
 /**

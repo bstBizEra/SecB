@@ -32,10 +32,45 @@ function isBlank(value) {
 
 function resolvedDecision(value) {
   if (!value || typeof value !== "object") return null;
+  const payload = value.entry?.payload ?? value;
   return {
     id: value.entry?.entryId ?? value.decision_id ?? null,
-    type: value.entry?.payload?.decision_type ?? value.decision_type ?? null
+    type: payload.decision_type ?? null,
+    // WP-SK-R1 / DEF-R1. This projection previously discarded everything except
+    // id and type, so both check sites could only compare the ledger's answer
+    // against the CALLER'S OWN CLAIM - which detects a miswired lookup, not an
+    // unauthorized skill. Reproduced before the fix: one decision returned ALLOW
+    // for an unrelated skill AND for a manifest that widened its own scope and
+    // raised its own data class.
+    subject: payload.subject ?? null
   };
+}
+
+// WP-SK-R1 / DEF-R1. Compares what the decision SAYS it authorizes against what
+// the manifest IS. Returns null when bound, or a typed deny code.
+//
+// A decision with no subject authorizes nothing. It stays perfectly valid for its
+// own purpose and simply cannot promote a skill - that asymmetry, optional in the
+// schema and mandatory here, is what lets this ship without invalidating a single
+// existing decision record.
+function subjectDenial(subject, manifest) {
+  if (!subject) return "DENY_UNBOUND_SUBJECT";
+  if (subject.kind !== "SKILL_VERSION") return "DENY_SUBJECT_MISMATCH";
+  if (subject.id !== manifest.skill_id) return "DENY_SUBJECT_MISMATCH";
+  // Version binds because registerSkill keys on skill_id@version and refuses a
+  // duplicate: without it, registering a widened version FIRST simply wins.
+  if (subject.version !== manifest.version) return "DENY_SUBJECT_MISMATCH";
+
+  const grant = subject.grant;
+  if (!grant) return "DENY_SUBJECT_MISMATCH";
+  // Self-widening. Subset, not equality: a manifest NARROWER than its grant is
+  // fine, a manifest that claims more than was granted is not.
+  if (!manifest.project_scopes.every((scope) => grant.project_scopes.includes(scope))) return "DENY_SUBJECT_MISMATCH";
+  if (!manifest.supported_runtimes.every((rt) => grant.supported_runtimes.includes(rt))) return "DENY_SUBJECT_MISMATCH";
+  if (DATA_CLASS_ORDER.indexOf(manifest.max_data_classification) > DATA_CLASS_ORDER.indexOf(grant.max_data_classification)) {
+    return "DENY_SUBJECT_MISMATCH";
+  }
+  return null;
 }
 
 export class SkillResolver {
@@ -105,6 +140,16 @@ export class SkillResolver {
           reason: "Promotion decision is no longer effective"
         };
       }
+      const denial = subjectDenial(decision.subject, manifest);
+      if (denial) {
+        return {
+          skill: null,
+          code: denial,
+          reason: denial === "DENY_UNBOUND_SUBJECT"
+            ? "Promotion decision does not name what it authorizes"
+            : "Promotion decision does not authorize this skill at this scope"
+        };
+      }
     }
     return null;
   }
@@ -144,6 +189,10 @@ export class SkillResolver {
             "DENY_UNAPPROVED_PUBLICATION",
             `HUMAN_PROMOTION does not resolve to a governed decision: ${promotion.decision_id}`
           );
+        }
+        const denial = subjectDenial(decision.subject, manifest);
+        if (denial) {
+          throw new SkillResolverError(denial, "Promotion " + promotion.decision_id + " does not authorize " + manifest.skill_id + "@" + manifest.version + " at the declared scope");
         }
       }
       if (manifest.evidence_refs.length === 0) {
