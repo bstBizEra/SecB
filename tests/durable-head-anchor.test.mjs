@@ -47,10 +47,13 @@ test("authenticated prepare is restart-durable and finalize is exact", () => wit
   const commitment = "c".repeat(64);
   assert.equal(anchor.prepare({ expected, next, commitment }), true);
   assert.deepEqual(anchor.read(), expected);
-  assert.deepEqual(anchor.readPending(), { ...next, commitment });
+  assert.deepEqual(anchor.readPending(), { ...next, commitment, phase: "PREPARED" });
   const restarted = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY });
-  assert.deepEqual(restarted.readPending(), { ...next, commitment });
+  assert.deepEqual(restarted.readPending(), { ...next, commitment, phase: "PREPARED" });
   assert.equal(restarted.finalize({ expected, next, commitment: "d".repeat(64) }), false);
+  assert.equal(restarted.finalize({ expected, next, commitment }), false);
+  assert.equal(restarted.markDurable({ expected, next, commitment }), true);
+  assert.deepEqual(restarted.readPending(), { ...next, commitment, phase: "DURABLE" });
   assert.equal(restarted.finalize({ expected, next, commitment }), true);
   assert.deepEqual(restarted.read(), next);
   assert.equal(restarted.readPending(), null);

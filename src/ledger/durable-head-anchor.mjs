@@ -106,10 +106,11 @@ export class DurableHeadAnchor {
       && ((state.count === 0) === (state.head_hash === ZERO_HASH));
     const pendingValid = state?.version !== 2 || state.pending === null || (
       state.pending && typeof state.pending === "object" && !Array.isArray(state.pending)
-      && Reflect.ownKeys(state.pending).length === 3
+      && Reflect.ownKeys(state.pending).length === 4
       && Number.isSafeInteger(state.pending.count) && state.pending.count === state.count + 1
       && isHash(state.pending.head_hash) && state.pending.head_hash !== state.head_hash
       && isHash(state.pending.commitment)
+      && ["PREPARED", "DURABLE"].includes(state.pending.phase)
     );
     if (keys.length !== allowed.length || keys.some((key) => typeof key !== "string" || !allowed.includes(key))
       || ![1, 2].includes(state?.version) || state.ledger_id !== this.#ledgerId || !currentValid
@@ -157,7 +158,17 @@ export class DurableHeadAnchor {
   readPending() {
     const pending = this.#readState().pending;
     return pending === null ? null : Object.freeze({ count: pending.count, headHash: pending.head_hash,
-      commitment: pending.commitment });
+      commitment: pending.commitment, phase: pending.phase });
+  }
+
+  snapshot() {
+    const state = this.#readState();
+    return Object.freeze({
+      current: Object.freeze({ count: state.count, headHash: state.head_hash }),
+      pending: state.pending === null ? null : Object.freeze({ count: state.pending.count,
+        headHash: state.pending.head_hash, commitment: state.pending.commitment, phase: state.pending.phase }),
+      revision: state.mac
+    });
   }
 
   #withLock(operation) {
@@ -181,10 +192,26 @@ export class DurableHeadAnchor {
       if (current.pending !== null) return current.pending.count === nextCheckpoint.count
         && current.pending.head_hash === nextCheckpoint.headHash && current.pending.commitment === transactionCommitment;
       this.#writeState({ version: 2, ledger_id: this.#ledgerId, count: current.count, head_hash: current.head_hash,
-        pending: { count: nextCheckpoint.count, head_hash: nextCheckpoint.headHash, commitment: transactionCommitment } });
+        pending: { count: nextCheckpoint.count, head_hash: nextCheckpoint.headHash,
+          commitment: transactionCommitment, phase: "PREPARED" } });
       const pending = this.#readState().pending;
       return pending?.count === nextCheckpoint.count && pending.head_hash === nextCheckpoint.headHash
         && pending.commitment === transactionCommitment;
+    });
+  }
+
+  markDurable({ expected, next, commitment } = {}) {
+    const expectedCheckpoint = exactCheckpoint(expected, "expected");
+    const nextCheckpoint = exactCheckpoint(next, "next");
+    const transactionCommitment = exactCommitment(commitment);
+    return this.#withLock(() => {
+      const current = this.#readState();
+      if (current.count !== expectedCheckpoint.count || current.head_hash !== expectedCheckpoint.headHash
+        || current.pending?.count !== nextCheckpoint.count || current.pending.head_hash !== nextCheckpoint.headHash
+        || current.pending.commitment !== transactionCommitment) return false;
+      if (current.pending.phase === "DURABLE") return true;
+      this.#writeState({ ...current, pending: { ...current.pending, phase: "DURABLE" } });
+      return this.#readState().pending?.phase === "DURABLE";
     });
   }
 
@@ -197,7 +224,7 @@ export class DurableHeadAnchor {
       if (current.count === nextCheckpoint.count && current.head_hash === nextCheckpoint.headHash && current.pending === null) return true;
       if (current.count !== expectedCheckpoint.count || current.head_hash !== expectedCheckpoint.headHash
         || current.pending?.count !== nextCheckpoint.count || current.pending.head_hash !== nextCheckpoint.headHash
-        || current.pending.commitment !== transactionCommitment) return false;
+        || current.pending.commitment !== transactionCommitment || current.pending.phase !== "DURABLE") return false;
       this.#writeState({ version: 2, ledger_id: this.#ledgerId, count: nextCheckpoint.count,
         head_hash: nextCheckpoint.headHash, pending: null });
       const readback = this.#readState();

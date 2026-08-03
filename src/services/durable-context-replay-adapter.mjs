@@ -114,24 +114,24 @@ export class DurableContextReplayAdapter {
   #filePath;
   #issue;
   #replay;
-  #readAnchor;
-  #readPending;
+  #snapshotAnchor;
   #prepareAnchor;
+  #markAnchorDurable;
   #finalizeAnchor;
 
   constructor({ filePath, contextFederation, headAnchor } = {}) {
     let issue;
     let replay;
-    let readAnchor;
-    let readPending;
+    let snapshotAnchor;
     let prepareAnchor;
+    let markAnchorDurable;
     let finalizeAnchor;
     try {
       issue = contextFederation?.issueReceipt;
       replay = contextFederation?.replayReceipt;
-      readAnchor = headAnchor?.read;
-      readPending = headAnchor?.readPending;
+      snapshotAnchor = headAnchor?.snapshot;
       prepareAnchor = headAnchor?.prepare;
+      markAnchorDurable = headAnchor?.markDurable;
       finalizeAnchor = headAnchor?.finalize;
     } catch {
       throw new DurableContextReplayError("INVALID_REPLAY_PROVIDER", "Context provider could not be inspected");
@@ -139,16 +139,16 @@ export class DurableContextReplayAdapter {
     if (typeof issue !== "function" || typeof replay !== "function") {
       throw new DurableContextReplayError("INVALID_REPLAY_PROVIDER", "issueReceipt and replayReceipt are required");
     }
-    if ([readAnchor, readPending, prepareAnchor, finalizeAnchor].some((operation) => typeof operation !== "function")) {
+    if ([snapshotAnchor, prepareAnchor, markAnchorDurable, finalizeAnchor].some((operation) => typeof operation !== "function")) {
       throw new DurableContextReplayError("INVALID_REPLAY_HEAD_ANCHOR", "a transactional monotonic headAnchor is required");
     }
     this.#filePath = resolve(filePath);
     this.#ledger = new DurableLedger({ filePath: this.#filePath, ledgerId: LEDGER_ID });
     this.#issue = Function.prototype.bind.call(issue, contextFederation);
     this.#replay = Function.prototype.bind.call(replay, contextFederation);
-    this.#readAnchor = Function.prototype.bind.call(readAnchor, headAnchor);
-    this.#readPending = Function.prototype.bind.call(readPending, headAnchor);
+    this.#snapshotAnchor = Function.prototype.bind.call(snapshotAnchor, headAnchor);
     this.#prepareAnchor = Function.prototype.bind.call(prepareAnchor, headAnchor);
+    this.#markAnchorDurable = Function.prototype.bind.call(markAnchorDurable, headAnchor);
     this.#finalizeAnchor = Function.prototype.bind.call(finalizeAnchor, headAnchor);
   }
 
@@ -156,40 +156,49 @@ export class DurableContextReplayAdapter {
     return canonicalFingerprint({ ledgerId: head.ledgerId, count: head.count, headHash: head.headHash });
   }
 
-  #verifiedHead() {
+  #verifiedState() {
     let verified;
-    let anchor;
-    let pending;
+    let snapshot;
     try {
       verified = this.#ledger.verify();
-      anchor = safeSnapshot(this.#readAnchor(), "replay head anchor");
-      pending = safeSnapshot(this.#readPending(), "replay pending head");
+      snapshot = safeSnapshot(this.#snapshotAnchor(), "replay head snapshot");
     } catch (cause) {
       if (cause instanceof DurableContextReplayError) throw cause;
       throw new DurableContextReplayError(cause?.code ?? "REPLAY_LEDGER_UNAVAILABLE", "durable replay evidence is unavailable");
     }
-    const anchorValid = isPlainObject(anchor) && Reflect.ownKeys(anchor).length === 2
-      && Number.isSafeInteger(anchor.count) && anchor.count >= 0 && isHash(anchor.headHash);
-    const currentMatch = anchorValid && anchor.count === verified.count && anchor.headHash === verified.headHash;
-    const pendingMatch = anchorValid && isPlainObject(pending) && Reflect.ownKeys(pending).length === 3
-      && Number.isSafeInteger(pending.count) && isHash(pending.headHash) && isHash(pending.commitment)
-      && pending.count === anchor.count + 1 && pending.count === verified.count && pending.headHash === verified.headHash
+    const current = snapshot?.current;
+    const pending = snapshot?.pending;
+    const snapshotValid = isPlainObject(snapshot) && Reflect.ownKeys(snapshot).length === 3 && isHash(snapshot.revision)
+      && isPlainObject(current) && Reflect.ownKeys(current).length === 2
+      && Number.isSafeInteger(current.count) && current.count >= 0 && isHash(current.headHash)
+      && (pending === null || (isPlainObject(pending) && Reflect.ownKeys(pending).length === 4
+        && Number.isSafeInteger(pending.count) && pending.count === current.count + 1
+        && isHash(pending.headHash) && isHash(pending.commitment) && ["PREPARED", "DURABLE"].includes(pending.phase)));
+    const currentMatch = snapshotValid && current.count === verified.count && current.headHash === verified.headHash;
+    const pendingMatch = snapshotValid && pending !== null && pending.count === verified.count && pending.headHash === verified.headHash
       && pending.commitment === this.#transactionCommitment(verified);
     if (!currentMatch && !pendingMatch) {
       throw new DurableContextReplayError("REPLAY_LEDGER_ROLLBACK_DETECTED", "replay ledger does not match its trusted head anchor");
     }
-    return verified;
+    const trusted = pendingMatch && pending.phase === "DURABLE" ? verified
+      : { ...verified, count: current.count, headHash: current.headHash };
+    return { verified, trusted, snapshot };
   }
 
-  #finalizeCommittedPending() {
-    const verified = this.#verifiedHead();
-    const anchor = safeSnapshot(this.#readAnchor(), "replay head anchor");
-    const pending = safeSnapshot(this.#readPending(), "replay pending head");
-    if (pending === null || (anchor.count === verified.count && anchor.headHash === verified.headHash)) return verified;
-    const finalized = this.#finalizeAnchor({ expected: anchor,
-      next: { count: pending.count, headHash: pending.headHash }, commitment: pending.commitment });
+  #recoverPendingForWrite() {
+    const state = this.#verifiedState();
+    const { current, pending } = state.snapshot;
+    if (pending === null || (current.count === state.verified.count && current.headHash === state.verified.headHash)) return state.trusted;
+    const expected = current;
+    const next = { count: pending.count, headHash: pending.headHash };
+    if (pending.phase === "PREPARED") {
+      this.#syncLedger();
+      const durable = this.#markAnchorDurable({ expected, next, commitment: pending.commitment });
+      if (durable !== true) throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "pending replay head could not become durable");
+    }
+    const finalized = this.#finalizeAnchor({ expected, next, commitment: pending.commitment });
     if (finalized !== true) throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "pending replay head could not be finalized");
-    return this.#verifiedHead();
+    return this.#verifiedState().trusted;
   }
 
   #syncLedger() {
@@ -214,17 +223,28 @@ export class DurableContextReplayAdapter {
   #lookup(request) {
     const identity = requestIdentity(request);
     let records;
-    try {
-      const before = this.#verifiedHead();
-      records = this.#ledger.read();
-      const after = this.#verifiedHead();
-      if (before.count !== after.count || before.headHash !== after.headHash || records.length !== after.count) {
-        throw new DurableContextReplayError("REPLAY_LEDGER_CHANGED", "replay ledger changed during exact lookup");
+    for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
+      try {
+        const before = this.#verifiedState();
+        const observed = this.#ledger.read();
+        const after = this.#verifiedState();
+        if (before.snapshot.revision !== after.snapshot.revision || before.trusted.count !== after.trusted.count
+          || before.trusted.headHash !== after.trusted.headHash || observed.length < after.trusted.count) {
+          boundedBackoff(attempt);
+          continue;
+        }
+        records = observed.slice(0, after.trusted.count);
+        break;
+      } catch (cause) {
+        if (["HEAD_ANCHOR_BUSY", "EBUSY", "EPERM"].includes(cause?.code)) {
+          boundedBackoff(attempt);
+          continue;
+        }
+        if (cause instanceof DurableContextReplayError) throw cause;
+        throw new DurableContextReplayError(cause?.code ?? "REPLAY_LEDGER_UNAVAILABLE", "durable replay ledger is unavailable");
       }
-    } catch (cause) {
-      if (cause instanceof DurableContextReplayError) throw cause;
-      throw new DurableContextReplayError(cause?.code ?? "REPLAY_LEDGER_UNAVAILABLE", "durable replay ledger is unavailable");
     }
+    if (records === undefined) throw new DurableContextReplayError("REPLAY_LEDGER_CHANGED", "replay ledger did not stabilize during exact lookup");
     const matches = records.filter((record) => record.entry?.entryId === identity);
     if (matches.length > 1) throw new DurableContextReplayError("REPLAY_LEDGER_CONTRACT_FAILURE", "duplicate replay identity");
     if (matches.length === 0) return { identity, match: null, requestFingerprint: canonicalFingerprint(request) };
@@ -254,7 +274,9 @@ export class DurableContextReplayAdapter {
       try {
         const concurrent = this.#lookup(request);
         if (concurrent.match !== null) return concurrent.match;
-        const anchoredBefore = this.#finalizeCommittedPending();
+        const anchoredBefore = this.#recoverPendingForWrite();
+        const afterRecovery = this.#lookup(request);
+        if (afterRecovery.match !== null) return afterRecovery.match;
         const entryHash = canonicalFingerprint(entry);
         const predicted = { ledgerId: anchoredBefore.ledgerId, count: anchoredBefore.count + 1,
           headHash: canonicalFingerprint({ ledgerId: anchoredBefore.ledgerId, sequence: anchoredBefore.count + 1,
@@ -270,9 +292,11 @@ export class DurableContextReplayAdapter {
           throw new DurableContextReplayError("REPLAY_LEDGER_CONTRACT_FAILURE", "persisted replay record differs from its prepared commitment");
         }
         this.#syncLedger();
+        const durable = this.#markAnchorDurable({ expected, next, commitment });
+        if (durable !== true) throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "trusted replay head rejected durable phase");
         const finalized = this.#finalizeAnchor({ expected, next, commitment });
         if (finalized !== true) throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "trusted replay head rejected finalize");
-        const anchoredAfter = this.#verifiedHead();
+        const anchoredAfter = this.#verifiedState().trusted;
         if (anchoredAfter.count !== appended.sequence || anchoredAfter.headHash !== appended.recordHash) {
           throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "replay evidence did not converge with its trusted head");
         }
@@ -293,7 +317,7 @@ export class DurableContextReplayAdapter {
 
   issueReceipt(rawRequest) {
     const request = safeSnapshot(rawRequest, "Context request");
-    this.#finalizeCommittedPending();
+    this.#recoverPendingForWrite();
     const lookup = this.#lookup(request);
     if (lookup.match !== null) return deepFreeze({ ...lookup.match, replayed: true });
     const issued = stableResult(this.#issue(deepFreeze(structuredClone(request))));
@@ -314,7 +338,7 @@ export class DurableContextReplayAdapter {
   }
 
   verify() {
-    const verified = this.#verifiedHead();
+    const verified = this.#verifiedState().trusted;
     return deepFreeze({ ...verified, headHash: verified.headHash ?? ZERO_HASH });
   }
 }

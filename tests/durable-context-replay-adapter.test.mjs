@@ -137,8 +137,9 @@ test("crash after ledger append is replayable without mutation and finalizes on 
     integrityKey: ANCHOR_KEY, initialize: true });
   let crash = true;
   const crashAfterAppend = {
-    read: realAnchor.read.bind(realAnchor), readPending: realAnchor.readPending.bind(realAnchor),
+    snapshot: realAnchor.snapshot.bind(realAnchor),
     prepare: realAnchor.prepare.bind(realAnchor),
+    markDurable: realAnchor.markDurable.bind(realAnchor),
     finalize(input) {
       if (crash) { crash = false; throw Object.assign(new Error("simulated crash"), { code: "SIMULATED_CRASH" }); }
       return realAnchor.finalize(input);
@@ -166,13 +167,13 @@ test("crash after authenticated prepare resumes the same issuance identity", () 
     integrityKey: ANCHOR_KEY, initialize: true });
   let crash = true;
   const crashAfterPrepare = {
-    read: realAnchor.read.bind(realAnchor), readPending: realAnchor.readPending.bind(realAnchor),
+    snapshot: realAnchor.snapshot.bind(realAnchor),
     prepare(input) {
       const prepared = realAnchor.prepare(input);
       if (crash) { crash = false; throw Object.assign(new Error("simulated crash"), { code: "SIMULATED_CRASH" }); }
       return prepared;
     },
-    finalize: realAnchor.finalize.bind(realAnchor)
+    markDurable: realAnchor.markDurable.bind(realAnchor), finalize: realAnchor.finalize.bind(realAnchor)
   };
   assert.throws(() => adapter(filePath, context, crashAfterPrepare).issueReceipt(request()),
     (error) => error.code === "SIMULATED_CRASH");
@@ -182,6 +183,68 @@ test("crash after authenticated prepare resumes the same issuance identity", () 
   assert.equal(resumed.replayed, false);
   assert.equal(realAnchor.readPending(), null);
   assert.equal(realAnchor.read().count, 1);
+}));
+
+test("PREPARED ledger tail is not replay-trusted until fsync durability is recorded", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const context = provider();
+  const realAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY, initialize: true });
+  let crash = true;
+  const crashBeforeDurable = {
+    snapshot: realAnchor.snapshot.bind(realAnchor), prepare: realAnchor.prepare.bind(realAnchor),
+    markDurable(input) {
+      if (crash) { crash = false; throw Object.assign(new Error("simulated pre-durable crash"), { code: "SIMULATED_CRASH" }); }
+      return realAnchor.markDurable(input);
+    },
+    finalize: realAnchor.finalize.bind(realAnchor)
+  };
+  assert.throws(() => adapter(filePath, context, crashBeforeDurable).issueReceipt(request()),
+    (error) => error.code === "SIMULATED_CRASH");
+  assert.equal(realAnchor.readPending().phase, "PREPARED");
+  const replayCallsBefore = context.calls.replay;
+  const restarted = adapter(filePath, context, realAnchor);
+  assert.equal(restarted.replayReceipt(request()).replayed, true);
+  assert.equal(context.calls.replay, replayCallsBefore + 1); // untrusted tail was ignored; provider replay supplied the result
+  assert.equal(realAnchor.readPending().phase, "PREPARED");
+  assert.equal(restarted.issueReceipt(request()).replayed, true);
+  assert.equal(realAnchor.readPending(), null);
+  assert.equal(restarted.verify().count, 1);
+}));
+
+test("finalize interleaving between atomic head snapshots retries without false rollback", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const context = provider();
+  const realAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY, initialize: true });
+  let suppressFinalize = true;
+  const leaveDurablePending = {
+    snapshot: realAnchor.snapshot.bind(realAnchor), prepare: realAnchor.prepare.bind(realAnchor),
+    markDurable: realAnchor.markDurable.bind(realAnchor),
+    finalize(input) {
+      if (suppressFinalize) { suppressFinalize = false; throw Object.assign(new Error("pause at durable"), { code: "SIMULATED_CRASH" }); }
+      return realAnchor.finalize(input);
+    }
+  };
+  assert.throws(() => adapter(filePath, context, leaveDurablePending).issueReceipt(request()),
+    (error) => error.code === "SIMULATED_CRASH");
+  let interleave = true;
+  const interleavingAnchor = {
+    snapshot() {
+      const snapshot = realAnchor.snapshot();
+      if (interleave && snapshot.pending?.phase === "DURABLE") {
+        interleave = false;
+        realAnchor.finalize({ expected: snapshot.current,
+          next: { count: snapshot.pending.count, headHash: snapshot.pending.headHash }, commitment: snapshot.pending.commitment });
+      }
+      return snapshot;
+    },
+    prepare: realAnchor.prepare.bind(realAnchor), markDurable: realAnchor.markDurable.bind(realAnchor),
+    finalize: realAnchor.finalize.bind(realAnchor)
+  };
+  const replayed = adapter(filePath, context, interleavingAnchor).replayReceipt(request());
+  assert.equal(replayed.replayed, true);
+  assert.equal(realAnchor.readPending(), null);
 }));
 
 test("construction requires the trusted head collaborator", () => withTemp((directory) => {
