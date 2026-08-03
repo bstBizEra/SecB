@@ -520,11 +520,12 @@ test(`byte-identity: files read but not modified are unchanged vs main @ ${BASE_
   // workspace-lease schema registration, 16->17 schemas), then again by
   // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), so it is
   // no longer blob-identical to the base commit. Pin it to its post-MOD-MEM-S2
-  // blob so any UNAUTHORIZED further drift of the validator still fails this
+  // Authorized-modified a THIRD time by WP-GOV-VF1 (exact-set contract pins,
+  // closing DEF-M2). // blob so any UNAUTHORIZED further drift of the validator still fails this
   // guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "dbd4d10883e7724aa75301fc7f3b5c9528089726",
+    "1cf857089d483f133f6d5fb724319e60bea961f8",
     "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
   );
 });
