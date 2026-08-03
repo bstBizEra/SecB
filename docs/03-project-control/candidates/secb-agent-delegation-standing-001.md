@@ -1,7 +1,28 @@
 # SecB Standing Delegation — what the agent decides, and what it must never decide
 
 **Document ID:** `SECB-DELEGATION-STANDING-001`
-**Status:** `PREPARED — AWAITING RULING`
+**Status:** `WITHDRAWN BY THE PREPARER — no ruling requested`
+**Withdrawn at:** 2026-08-03. No signature was requested or received.
+
+> ## Withdrawal
+>
+> The preparer wrote this instrument, and it would have expanded the preparer's
+> own authority. It was offered because every routine judgement was returning to
+> the operator; it is withdrawn because the operator's queue turned out to hold
+> six prepared records at once, and adding a seventh that widens the producer
+> makes that worse rather than better.
+>
+> Nothing depends on it. The agent continues to ask first on everything outside
+> its existing producer role, which is the position this document would have
+> changed and which needs no record to remain in force.
+>
+> **Retained rather than deleted.** Class 3 - the list of acts that must never be
+> delegated - is the part worth keeping, and it is unchanged by the withdrawal:
+> authorizing work packages, varying signed controls, ruling on doctrine,
+> promotion, serving as REV/QA/SEC/GOV, merging or pushing, re-pinning tamper
+> detection to one's own artefact, declaring production, writing to `.agents/`,
+> and widening this document. Those held throughout this session without any
+> instrument saying so.
 **Owner:** GOV. **Prepared by:** Claude Code (worker agent).
 **Prepared at:** 2026-08-03, baseline `1370977`
 

@@ -1,0 +1,106 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_main_skill_ctx_001_v1_candidate"
+  record_status: "DRAFT_CANDIDATE"
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: "Operator ruling of 2026-08-03, SECB-DECISION-SHEET-001 item 2: hand-off [x] made"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "This is a hand-off, not a defect report and not a change request. The producer does not own src/mcp/ on any branch and proposes no change to it."
+    - "The finding is UNVERIFIED in one specific way, stated in the record it carries: nobody searched for an upstream caller that derives args.context before it reaches the dispatch. That is the most likely disposition and it would close the finding outright."
+    - "The operator ticked hand-off as made on 2026-08-03. This record is that hand-off travelling through the project's own channel rather than as a message, so it can be found later by someone who was not in the conversation."
+
+handoff:
+  handoff_id: "HANDOFF-MAIN-SKILL-CTX-001"
+  sequence: 1
+  source_agent_instance_id: "claude-code-secb-session-2026-08-03"
+  source_session_id: "bfb2c907-d860-4d79-a475-042b1ebdf7ee"
+  destination_role: "Owner of MOD-SKILL on main (Codex identity per docs/03-project-control/candidates/agents/, distinct from producer)"
+  project_id: "prj_secb_local"
+  work_package_id: "WP-SK-AUDIT-01"
+
+  objective: >-
+    Hand one live finding about `main` to the module that owns it. The finding was
+    surfaced while establishing what the retired SkillsHub registry gate was
+    protecting, and it belongs to main rather than to the branch that found it.
+
+  authorized_scope:
+    - "Read-only observation of origin/main at 8be8c99. Nothing on main was modified."
+    - "No change to src/mcp/ is proposed, on any branch. The producer has treated that directory as another agent's territory throughout."
+
+  work_completed:
+    - "Read main's secb_skill_resolve dispatch and its wiring."
+    - "Confirmed the resolver reads all three authorization inputs from the caller-supplied object."
+    - "Confirmed the finding is latent rather than live, and identified the exact change that makes it reachable."
+    - "Recorded it as SECB-FINDING-MAIN-SKILL-CTX-001 with four ways it could be closed."
+
+  artifacts:
+    - "docs/03-project-control/candidates/main-skill-resolve-context-finding-001.md"
+    - "docs/03-project-control/candidates/skillshub-def-g1-gate-retirement-001.md (section 4, where it was first raised)"
+
+  the_finding: >-
+    On main, src/mcp/secb-mcp-server.mjs dispatches
+
+        case "secb_skill_resolve":
+          return s.skillResolver.resolveSkill(args.skill_id, args.version, args.context ?? {});
+
+    The resolver reads projectId, runtime and dataClassification from that object
+    and compares each against the registered manifest, at skill-resolver.mjs:117,
+    :120 and :123. A caller naming a project it is not scoped to, or a data class
+    above its clearance, is not contradicted anywhere in this path.
+
+    LATENT, NOT LIVE. main's wiring is `new SkillResolver({ decisionLookup: () => null })`,
+    so no PUBLISHED skill registers and the comparison is unreachable in the wired
+    server today.
+
+  the_sequencing_point: >-
+    It becomes reachable at exactly the moment main wires a real decision lookup -
+    which is main's own deferred "component 3", named in
+    src/ledger/skill-revocation-ledger.mjs as EXPLICITLY OUT OF SCOPE, an
+    operator-gated follow-up covering resolution-time re-validation.
+
+    So the recommendation is a sequencing one and it is the whole point of this
+    hand-off: treat the caller-context binding as a PRECONDITION of component 3
+    rather than as a separate backlog item. Shipping component 3 first would open
+    this path in the same commit that makes the path useful.
+
+  assumptions:
+    - "That src/mcp/ on main is owned by an identity other than this producer. If that is wrong, this hand-off has no recipient and should be redirected."
+    - "That args.context is not derived by an upstream caller. NOT CHECKED - see unresolved_findings."
+
+  evidence_refs:
+    - "Read of origin/main at 8be8c99: src/mcp/secb-mcp-server.mjs, src/registry/skill-resolver.mjs, tools/secb-mcp-server-wiring.mjs, src/ledger/skill-revocation-ledger.mjs"
+
+  checks:
+    - "git show origin/main:src/mcp/secb-mcp-server.mjs | grep -n 'args.context'"
+    - "git show origin/main:tools/secb-mcp-server-wiring.mjs | grep -n 'decisionLookup'"
+    - "git show origin/main:src/registry/skill-resolver.mjs | sed -n '117p;120p;123p'"
+
+  limitations:
+    - "Read, not executed. main is not checked out in the producer's working tree and was not run."
+    - "Line numbers are main's. The same three checks sit at :207, :210 and :213 on feat/secb-ruflo-command-center, which carries WP-SK-R2 above them. The producer first cited the branch's numbers for main and corrected them before filing - noted because citing one tree's line numbers for another is the error class that closed the previous programme."
+
+  unresolved_findings:
+    - "Whether an upstream caller derives args.context from a registered identity. NOT SEARCHED. This is the most likely disposition and would close the finding outright; the producer searched the dispatch site only."
+    - "Whether secb_skill_resolve is reachable from any transport in the wired server, or is dispatch-only today. NOT CHECKED."
+
+  risks:
+    - "If component 3 is wired without this binding, a caller can assert its own project scope and data classification at the moment skills first become resolvable."
+    - "The opposite risk is also real and is why this is a question rather than a claim: if the context IS derived upstream, acting on this finding would add a redundant check and imply a defect that does not exist."
+
+  recommended_next_action: >-
+    Either name the upstream caller that derives the context, which closes this,
+    or record caller-asserted context as the intended contract with its trust
+    boundary stated where a reader of secb-mcp-server.mjs will find it - the
+    resolver's own doc comment currently says agents "receive only skill versions
+    authorized for their project, runtime, and data class", which reads
+    differently if the caller names those.
+
+  context_delta: >-
+    The SkillsHub programme on feat/secb-ruflo-command-center closed on
+    2026-08-02 as superseded by MOD-SKILL S1/S2 on main. Its registry gate was
+    retired by operator ruling on 2026-08-03. Of the risks that gate was holding,
+    three were branch-local and died with the programme, one is closed on main by
+    skill-promotion.schema.json's object binding, and this is the one that
+    survives and belongs elsewhere. It is handed over rather than dropped,
+    because retiring a gate is the right moment to check what it was holding.
