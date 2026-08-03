@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -188,6 +188,19 @@ test("construction requires the trusted head collaborator", () => withTemp((dire
   assert.throws(() => new DurableContextReplayAdapter({ filePath: join(directory, "replay.ndjson"),
     contextFederation: provider() }),
   (error) => error instanceof DurableContextReplayError && error.code === "INVALID_REPLAY_HEAD_ANCHOR");
+}));
+
+test("exhausted writer contention is retryable and reconciles on the next exact issue", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const context = provider();
+  const replayAdapter = adapter(filePath, context);
+  const anchorLock = `${filePath}.head.lock`;
+  mkdirSync(anchorLock);
+  assert.throws(() => replayAdapter.issueReceipt(request()), (error) => error.code === "REPLAY_RECEIPT_RETRYABLE");
+  rmSync(anchorLock, { recursive: true, force: true });
+  const recovered = replayAdapter.issueReceipt(request());
+  assert.equal(recovered.receiptId, "receipt-1");
+  assert.equal(replayAdapter.verify().count, 1);
 }));
 
 test("unsafe request graphs are denied before either provider operation", () => withTemp((directory) => {

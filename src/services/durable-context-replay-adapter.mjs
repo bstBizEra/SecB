@@ -9,7 +9,8 @@ import { dirname, resolve } from "node:path";
 
 const LEDGER_ID = "secb-context-replay-ledger";
 const ZERO_HASH = "0".repeat(64);
-const MAX_APPEND_ATTEMPTS = 8;
+const MAX_APPEND_ATTEMPTS = 64;
+const MAX_RETRY_DELAY_MS = 16;
 const MAX_GRAPH_NODES = 10_000;
 const MAX_GRAPH_DEPTH = 64;
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
@@ -24,6 +25,11 @@ function deepFreeze(value) {
     for (const child of Object.values(value)) deepFreeze(child);
   }
   return value;
+}
+
+function boundedBackoff(attempt) {
+  const delayMs = Math.min(2 ** Math.min(attempt, 4), MAX_RETRY_DELAY_MS);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
 }
 
 function safeSnapshot(value, label) {
@@ -273,11 +279,16 @@ export class DurableContextReplayAdapter {
         return null;
       } catch (cause) {
         if ((cause instanceof LedgerError && (cause.code === "DENY_SEQUENCE_CONFLICT" || cause.code === "LEDGER_BUSY"))
-          || ["HEAD_ANCHOR_BUSY", "EBUSY", "EPERM"].includes(cause?.code)) continue;
+          || ["HEAD_ANCHOR_BUSY", "EBUSY", "EPERM"].includes(cause?.code)) {
+          boundedBackoff(attempt);
+          continue;
+        }
         throw new DurableContextReplayError(cause?.code ?? "REPLAY_RECEIPT_PERSISTENCE_FAILURE", "Context replay receipt could not be persisted");
       }
     }
-    throw new DurableContextReplayError("REPLAY_RECEIPT_PERSISTENCE_FAILURE", "Context replay receipt append did not converge");
+    const converged = this.#lookup(request);
+    if (converged.match !== null) return converged.match;
+    throw new DurableContextReplayError("REPLAY_RECEIPT_RETRYABLE", "Context replay receipt append did not converge before the bounded retry deadline");
   }
 
   issueReceipt(rawRequest) {
