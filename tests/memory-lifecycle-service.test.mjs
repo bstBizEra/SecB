@@ -28,6 +28,29 @@ function createHeadAnchor() {
   };
 }
 
+function createBoundaryCoordinator(getRecords, overrides = {}) {
+  const authorityDecision = overrides.authorityDecision ?? ((expected) => authority(expected));
+  const evidenceDecision = overrides.evidenceDecision ?? ((request) => evidence(request));
+  const retentionDecision = overrides.retentionDecision ?? ((request) => ({
+    decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-decision-1",
+    project_id: request.project_id, memory_record_id: request.memory_record_id,
+    memory_record_version: request.memory_record_version, policy_id: request.policy_id,
+    retain_until: "2026-09-02T00:00:00.000Z"
+  }));
+  return {
+    withMutationFence(request, callback) {
+      return callback({
+        records: getRecords(),
+        evidence: evidenceDecision({ ...request.evidence_expected, active_legal_hold_count: request.active_legal_hold_count }),
+        authority: authorityDecision(request.authority_expected)
+      });
+    },
+    withResolutionFence(request, callback) {
+      return callback({ records: getRecords(), retention: retentionDecision(request.retention_request), authority: authorityDecision(request.authority_expected) });
+    }
+  };
+}
+
 function memory(overrides = {}) {
   const record = {
     memory_record_id: "mem-1",
@@ -124,12 +147,14 @@ function harness(t, overrides = {}) {
   const headAnchor = overrides.headAnchor ?? createHeadAnchor();
   const ledger = overrides.ledger ?? new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor });
   let records = overrides.records ?? [memory()];
+  const boundaryCoordinator = overrides.boundaryCoordinator ?? createBoundaryCoordinator(() => records);
   const service = createMemoryLifecycleService({
     ledger,
     now: overrides.now ?? (() => new Date(NOW)),
     authorityResolver: overrides.authorityResolver ?? (async (expected) => authority(expected)),
     recordResolver: overrides.recordResolver ?? (async () => records),
     evidenceResolver: overrides.evidenceResolver ?? (async (request) => evidence(request)),
+    boundaryCoordinator,
     sodRules: overrides.sodRules ?? { checkPairwiseDistinct },
     timeouts: overrides.timeouts,
     retentionPolicyResolver: overrides.retentionPolicyResolver ?? (async (request) => ({
@@ -254,6 +279,11 @@ test("legal hold placement and release are append-only and durable across restar
     authorityResolver: async (expected) => authority(expected),
     recordResolver: async () => [memory()],
     evidenceResolver: async (request) => evidence(request),
+    boundaryCoordinator: createBoundaryCoordinator(() => [memory()], { retentionDecision: (request) => ({
+      decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-decision-1", project_id: request.project_id,
+      memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version,
+      policy_id: request.policy_id, retain_until: null
+    }) }),
     sodRules: { checkPairwiseDistinct },
     retentionPolicyResolver: async (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-decision-1", project_id: request.project_id, memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version, policy_id: request.policy_id, retain_until: null })
   });
@@ -585,7 +615,8 @@ test("replay requires fresh current authority and authenticated event validation
   const denied = createMemoryLifecycleService({
     ledger: fixture.ledger, now: () => new Date(NOW), authorityResolver: async () => ({ decision: "DENY" }),
     recordResolver: async () => [memory()], retentionPolicyResolver: async () => ({ decision: "DENY" }),
-    evidenceResolver: async () => ({ decision: "DENY" }), sodRules: { checkPairwiseDistinct }
+    evidenceResolver: async () => ({ decision: "DENY" }), boundaryCoordinator: createBoundaryCoordinator(() => [memory()]),
+    sodRules: { checkPairwiseDistinct }
   });
   assert.equal((await denied.recordLifecycleEvent(request)).code, "DENY_LIFECYCLE_AUTHORITY");
 });
@@ -639,4 +670,65 @@ test("canonical producer binding and monotonic head anchor prevent self-review a
   assert.equal((await rollback.service.recordLifecycleEvent(mutation("TOMBSTONED"))).ok, true);
   writeFileSync(rollback.filePath, "", "utf8");
   assert.equal((await rollback.service.resolve(resolution())).code, "LIFECYCLE_ROLLBACK_DETECTED");
+});
+
+test("exception recovery rejects an authenticated competing event bound to another target", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-competing-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const headAnchor = createHeadAnchor();
+  const real = new MemoryLifecycleLedger({ filePath: join(directory, "ledger.jsonl"), integrityKey: INTEGRITY_KEY, headAnchor });
+  const wrapper = {
+    appendLifecycleEvent(event, options) {
+      const { event_id: ignored, event_mac: ignoredMac, ...body } = event;
+      void ignored; void ignoredMac;
+      const competingBody = { ...body, parameters_hash: "b".repeat(64), target_content_hash: "f".repeat(64), target_record_fingerprint: "e".repeat(64) };
+      real.appendLifecycleEvent({ event_id: canonicalFingerprint(competingBody), ...competingBody }, options);
+      throw Object.assign(new Error("competing append"), { code: "DENY_IDEMPOTENCY_CONFLICT" });
+    },
+    readLifecycleEvents(selector) { return real.readLifecycleEvents(selector); },
+    readLifecycleEventByIdempotencyKey(key) { return real.readLifecycleEventByIdempotencyKey(key); },
+    validateLifecycleEvent(event) { return real.validateLifecycleEvent(event); },
+    verify() { return real.verify(); }
+  };
+  const result = await harness(t, { ledger: wrapper }).service.recordLifecycleEvent(mutation("TOMBSTONED"));
+  assert.equal(result.code, "DENY_IDEMPOTENCY_CONFLICT");
+  assert.equal(real.verify().count, 1);
+});
+
+test("final decisions execute inside one synchronous fenced boundary", async (t) => {
+  let records = [memory()];
+  let locked = false;
+  let pendingRecords = null;
+  const setRecords = (next) => { if (locked) pendingRecords = next; else records = next; };
+  const coordinator = createBoundaryCoordinator(() => records);
+  const fenced = {
+    withMutationFence(request, callback) {
+      locked = true;
+      try { return coordinator.withMutationFence(request, callback); }
+      finally { locked = false; if (pendingRecords !== null) { records = pendingRecords; pendingRecords = null; } }
+    },
+    withResolutionFence(request, callback) {
+      locked = true;
+      try { return coordinator.withResolutionFence(request, callback); }
+      finally { locked = false; if (pendingRecords !== null) { records = pendingRecords; pendingRecords = null; } }
+    }
+  };
+  let fixture;
+  fixture = harness(t, {
+    recordResolver: async () => records,
+    boundaryCoordinator: fenced,
+    now: () => {
+      if (locked) setRecords([memory(), memory({ memory_record_id: "mem-2", version: 2, supersedes: "mem-1", statement: "queued successor" })]);
+      return new Date(NOW);
+    }
+  });
+  const linearized = await fixture.service.resolve(resolution());
+  assert.equal(linearized.code, "MEMORY_EFFECTIVE");
+  assert.equal((await fixture.service.resolve(resolution())).code, "DENY_MEMORY_SUPERSEDED");
+
+  const asyncFence = harness(t, { boundaryCoordinator: {
+    async withMutationFence(request, callback) { return callback({ records: [memory()], evidence: evidence({ ...request.evidence_expected, active_legal_hold_count: 0 }), authority: authority(request.authority_expected) }); },
+    async withResolutionFence(request, callback) { return callback({ records: [memory()], retention: { decision: "DENY" }, authority: authority(request.authority_expected) }); }
+  } });
+  assert.equal((await asyncFence.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_FENCE");
 });
