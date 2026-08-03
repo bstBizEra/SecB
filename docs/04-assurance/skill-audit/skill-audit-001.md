@@ -1,6 +1,6 @@
 # SecB skill audit
 
-Generated: 2026-08-03T04:09:57.601Z
+Generated: 2026-08-03T07:26:24.859Z
 
 ## Coverage bounds — read before the counts
 

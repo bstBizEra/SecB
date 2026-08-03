@@ -217,3 +217,54 @@ design_note: >-
   changed. An audit that fires when a file changes, or when the invocation log
   shows a tool used outside a declared inventory, is reporting on the thing that
   just happened - and its cost scales with change rather than with corpus size.
+
+delivery_record:
+  recorded_at: "2026-08-03"
+  recorded_by: "Claude Code (producer). NOT an acceptance - the producer may not accept its own evidence."
+  status: "PARTIAL - the deterministic half is delivered and calibrated; the autonomous half is a prototype only."
+
+  met:
+    AC-AUDIT-01: "Calibration gate delivered. 9 mutation classes, 9 caught, 0 spurious, verified across 14 seeds. Two arms: detection and repair, because a check hard-wired to always fire scores 100% on detection alone. Five harness defects were found and fixed, every one of which would have struck a WORKING check off claimed coverage. Weaker than the criterion asks in one named way: the answer key is held by the seed-holder rather than by REV, because the operator ruled on 2026-08-03 that review stays fail-closed."
+    AC-AUDIT-02: "Enforced in the runner as a gate, not left to author discipline. A check whose positive control does not fire aborts the entire run - no findings at all, rather than publishing working checks beside a dead one, which would read as a single audit. Verified by control."
+    AC-AUDIT-04: "Three-valued throughout, and enforced in the report WORDING as well as the data: the word pass appears nowhere, the NO_EVIDENCE line carries its disclaimer every time it prints, and no exit code is defined to mean clean."
+    AC-AUDIT-05: "resolveCitations rejects any finding whose file:line does not resolve. This is also the anti-fabrication gate for the autonomous layer - an agent that invents a line number is rejected mechanically rather than caught by a reader."
+    AC-AUDIT-06: "Coverage bounds print ABOVE the counts. An absent module is a bound, not a zero."
+    AC-AUDIT-07: "Asserted by digest before and after every run, in each module's tests and in the calibration suite. .agents/ is byte-identical throughout."
+    AC-AUDIT-08: "The finding record carries observation, evidence and verdict only. The criterion itself was corrected on 2026-08-03: it had listed severity among permitted fields while the same work package treats ranking as the disposition holder call - it authorized the field it also forbade."
+
+  partial:
+    AC-AUDIT-03: "PROTOTYPE ONLY. Three lenses with distinct slices were built and run blind against a planted corpus - authority 3/3, content 2/2 with exact lines, sibling 5/5 quantified. The sibling lens works from a genuinely different FRAME (no specification; each package judged against its 24 siblings), which is the structural defence against the shared blind spot that closed the previous programme. What is NOT delivered: adversarial pairing, event-driven triggering, and any detection RATE. One run is an anecdote; agents are non-deterministic and a rate needs N runs."
+
+  what_the_audit_found:
+    - "22 of 22 governed manifests declare evaluation.suite: evals/<skill-name>, and no such path exists in any package. Every governed package claims a suite the repository contradicts. Not in any prior review."
+    - "220 expectation instances collapse to 10 distinct strings; 0 of 220 use a string unique to their package."
+    - "22 of 22 negative-trigger cases cannot fail - the expectation is an absence-assertion the empty output satisfies. The check discriminates: of 66 failure-family cases only the 22 negative-typed ones are incapable."
+    - "176 of 220 expectations (80%) are undecidable by any mechanical procedure. This CONTRADICTS the 30% carried in the defect register."
+    - "3 packages carry no manifest, matching the runtime DENY_UNGOVERNED_PACKAGE tally exactly."
+    - "graphify SKILL.md:94 instructs `python -m graphify hook install`, installing git hooks and a merge driver, with other lines binding an MCP server to 0.0.0.0 and taking an --api-key. Found by the CONTENT LENS, not by any check, and not planted by anyone. Of the 25 packages it is the only one containing executable commands: 0 across all 22 governed packages, 0 in the other two ungoverned ones, 14 in graphify."
+
+  the_finding_that_justifies_the_autonomous_layer: >-
+    The deterministic checks say of graphify only that it contains no manifest.yaml
+    and makes no evaluation claim. The lens said what the ungoverned package tells
+    an agent to do. No amount of structural computation reaches "this file
+    instructs installing a git hook", so the gap is not a tuning problem. The
+    operator has since classified graphify as a TOOL rather than a skill, which
+    reframes it further: SecB already carries contracts/capability-record.schema.json
+    requiring network_boundary, credential_handle and filesystem_boundary - the
+    exact three dimensions that are risky here. graphify has no manifest not
+    through negligence but because it is filed under the wrong contract family.
+
+  not_delivered:
+    - "Adversarial pairing (contest). Two agents arguing opposite sides of the same evidence."
+    - "Event-driven triggering. Currently batch only."
+    - "A detection rate for the lenses. Requires N runs per lens."
+    - "Tier 2 observation - comparing declared tool_inventory against invocationLog. The log substrate exists and is fail-closed; nothing reads it."
+
+  honest_limit: >-
+    The two declaration checks return zero violations on the real corpus, and that
+    zero is publishable because their positive controls fire on realistic text.
+    Its information content is nonetheless low: all 22 governed packages are the
+    same template with a swapped H1. These checks cannot distinguish a sound corpus
+    from one file duplicated 22 times, because on this tree both hypotheses predict
+    identical output. The variance that exercises them comes only from the
+    calibration corpus.
