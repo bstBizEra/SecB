@@ -1,0 +1,213 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_sk_audit_01_autonomous_skill_audit_v1_candidate"
+  record_status: "AWAITING_GOV_AUTHORIZATION"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer is also the assigned ENGIN and may not accept its own evidence."
+    - "This work package proposes an audit performed BY agents. The producer is an agent, proposing that agents be trusted to audit. That conflict is the reason AC-AUDIT-01 exists and is non-negotiable: no result from this system is claimable until the system has been shown to catch violations it was not told about."
+    - "The producer's prior programme on this branch was closed because six rounds of independent agent review shared one blind spot - every round was given the same stale baseline. AC-AUDIT-03 exists because of that, and it is a design constraint rather than a preference."
+    - "Empirical basis, stated so it can be checked rather than assumed: across this branch's review history, independent agent review caught roughly fifteen substantive producer errors, including three instances of the producer asserting in a governance record that a control had a property the code did not have. The same mechanism then missed a 296-commit baseline gap in all six rounds. Both numbers are in SECB-PRD-SKILLSHUB-DEFECTS-001."
+
+work_package_id: "WP-SK-AUDIT-01"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-SKILL"
+title: "Autonomous, event-driven audit of the skill corpus over a deterministic evidence layer"
+
+objective: >-
+  Make the declarations in a skill package checkable rather than self-attested,
+  by pairing a deterministic evidence layer that computes facts with an
+  autonomous auditor that judges only what requires judgement - and by
+  calibrating that auditor against planted violations so its findings can be
+  claimed rather than merely believed.
+
+problem_statement: >-
+  A skill package declares its integrity, tool inventory and boundaries. Nothing
+  checks any of it. A declaration nobody verifies is self-attestation, which is
+  DEF-M1 at the level of the corpus rather than the test suite: a control that
+  cannot fail is not evidence.
+
+  The corpus is 69 markdown and 66 yaml files with zero executable files, so the
+  packages are instruction sets, not programs. This has a consequence that shapes
+  the whole design: FOR AN INSTRUCTION PACKAGE THE PACKAGE IS NOT THE SECURITY
+  BOUNDARY. A SKILL.md that says "analyze only" cannot stop an agent holding a
+  write tool. Auditing the text establishes what a package ASKS FOR and can never
+  establish what an agent CAN DO. This work package is therefore scoped to
+  detection and evidence, and explicitly does not claim to be an enforcement
+  control. Enforcement is named in non_scope and depends on a separate finding.
+
+  Verified starting state at b23d386: 25 package directories, 22 carrying a
+  manifest and 3 without - which matches the runtime tally
+  (DENY_UNGOVERNED_PACKAGE: 3) exactly. All 22 declare mutation_class M0.
+
+risk_class: "R1"
+mutation_class: "M1"
+status: "PROPOSED"
+
+baseline:
+  target_branch: "feat/secb-ruflo-command-center"
+  baseline_commit: "b23d386"
+  corpus_state: "25 package directories under .agents/skills; 22 governed, 3 without a manifest; 69 .md and 66 .yaml files; zero executable files"
+  note: >-
+    .agents/ declares mutation_authorized: false and is READ-ONLY to this work
+    package without exception. Planted violations under AC-AUDIT-01 are seeded
+    into a COPY outside the repository, never into .agents/.
+
+scope:
+  - "Deterministic evidence layer. Computes, never judges: per-file sha256 and a package digest; manifest coverage; SKILL.md structural conformance against the section set the corpus already shares (Authority boundary / Required inputs / Workflow / Required outputs / Evidence and reasoning discipline / Completion gate / Supporting files); declared-vs-instructed mutation class; duplicate skill_id and version collisions; eval-case statistics including distinct-expectation count and how many negative cases are capable of failing."
+  - "Autonomous auditor. Judges only what the evidence layer cannot compute, over the evidence pack rather than over raw files, so it never guesses at a fact that was already calculated."
+  - "Lens separation. Distinct briefs - authority and boundary; declaration versus content; evidence and eval quality; cross-package consistency - each receiving a DIFFERENT evidence slice, not the same pack four times."
+  - "Adversarial pairing. For any finding above the lowest severity, one agent argues the package is sound and another argues it is not, on the same evidence. Disagreement is recorded as signal. Agreement is recorded together with whether disagreement was reachable at all."
+  - "Event-driven triggering. A changed skill file audits that package only; an invocationLog entry naming a tool outside a loaded skill's declared inventory audits that package; a new intake audits the new package. Batch runs are supported but are not the operating mode."
+  - "Report output: machine-readable findings plus a human summary, written under docs/04-assurance/skill-audit/. Every finding carries file:line, a verdict of VIOLATION / NO_EVIDENCE / UNDECIDABLE, and the ref it was verified against."
+
+non_scope:
+  - "NO write of any kind under .agents/. mutation_authorized is false there. The audit reads it and reports; it never edits, never annotates, never adds a sidecar file."
+  - "NO disposition authority. The auditor produces findings. It does not accept, waive, promote, revoke, block, or close anything. A finding is an input to a human decision and is never itself a decision."
+  - "NO enforcement. Binding a skill's declared tool_inventory to a session's allowed_tools is the control that would make declarations load-bearing, and it is deliberately excluded. It depends on an unverified assumption about how context receipts are issued, and building on that assumption before checking it would repeat the failure that closed SECB-PRD-SKILLSHUB-001. Verify the assumption first, then scope it separately."
+  - "NO skill promotion, registration, or resolver change. This work package is reachable with the actors this project has and does not depend on SECB-GOV-DECISION-SKILL-REV-AUTHORITY-001."
+  - "NO adversarial or red-team evaluation of skill content. The existing eval corpus - 220 expectation instances drawn from 10 distinct strings, 30 percent undecidable, and 0 of 22 negative cases capable of failing - is evidence that this project cannot yet produce meaningful evaluations. Building red-teaming on that foundation would produce numbers that look good and prove nothing."
+
+acceptance_criteria:
+  - id: "AC-AUDIT-01"
+    statement: >-
+      CALIBRATION GATE. No result this system produces is claimable until it has
+      detected planted violations it was not told about. A calibration corpus is
+      built as a COPY outside the repository, seeded with violations of each
+      class the audit claims to detect, and the auditor is run without being
+      told which packages were seeded or how many.
+    verification: >-
+      Report detection rate per violation class, and report false positives on
+      the unseeded packages. A class with zero detections is a class the audit
+      does NOT cover, and must be struck from the audit's claimed coverage
+      rather than reported as "no violations found". State the seed count and
+      the seed classes in the evidence; a calibration whose answer key is not
+      recorded cannot be re-run by a reviewer.
+    rationale: >-
+      This is the only criterion that separates an autonomous auditor from an
+      expensive way of agreeing. It is the mutation matrix applied to an agent
+      instead of a script.
+  - id: "AC-AUDIT-02"
+    statement: >-
+      BOTH ARMS. Every check, deterministic and autonomous alike, is demonstrated
+      producing BOTH outcomes. A check that has only ever passed is not evidence
+      that anything is clean.
+    verification: >-
+      For each deterministic check, a positive control input that trips it and a
+      negative control that does not. For the autonomous lenses, at least one
+      recorded VIOLATION verdict on calibration input and at least one
+      NO_EVIDENCE verdict, from the same lens.
+    rationale: >-
+      A probe run during preparation found 0 of 22 packages instructing writes
+      against an M0 declaration. That result is only meaningful because the
+      pattern was first shown to fire on three control strings. Without the
+      control it would have been an unfalsifiable zero.
+  - id: "AC-AUDIT-03"
+    statement: >-
+      DIVERGENT BASELINE. No two lenses receive an identical evidence pack, and
+      the audit records for each lens exactly which ref and which slice it saw.
+    verification: >-
+      Per-lens manifests differ, and each finding carries the ref it was derived
+      against. A finding without a ref is rejected by the report builder rather
+      than published with a caveat.
+    rationale: >-
+      Six independent reviews on this branch shared one baseline and therefore
+      one blind spot, which cost the entire programme. Running the same view N
+      times yields one look with N times the confidence.
+  - id: "AC-AUDIT-04"
+    statement: >-
+      THREE-VALUED OUTPUT. No finding may report a binary pass. NO_EVIDENCE and
+      UNDECIDABLE are distinct from each other and neither may be rendered,
+      summarised, or aggregated as "clean" or "passed".
+    verification: >-
+      A summary containing the word "passed" for a package whose findings are
+      NO_EVIDENCE fails this criterion. Static analysis cannot prove absence;
+      reporting absence of evidence as evidence of absence would manufacture the
+      exact defect this system exists to detect.
+  - id: "AC-AUDIT-05"
+    statement: >-
+      CITATION BINDING. Every finding carries file:line resolving in the audited
+      package at the audited ref.
+    verification: >-
+      The report builder resolves every citation and fails the run on any that
+      does not. An autonomous finding without a resolvable citation is an
+      opinion and must not reach a report.
+  - id: "AC-AUDIT-06"
+    statement: >-
+      NO SILENT CAPS. Any bound on coverage - packages skipped, findings
+      truncated, lenses not run, a token budget reached - appears in the report.
+    verification: >-
+      A run that audited 19 of 25 packages says so in its headline, not in a
+      footnote. Silent truncation reads as full coverage and is how a partial
+      audit becomes a false clean bill.
+  - id: "AC-AUDIT-07"
+    statement: >-
+      READ-ONLY PROOF. The audit leaves .agents/ byte-identical.
+    verification: >-
+      Digest the tree before and after a full run and compare; also confirm via
+      git status. Both, because the first catches content and the second catches
+      files added and removed.
+  - id: "AC-AUDIT-08"
+    statement: >-
+      NO DISPOSITION. The auditor emits no field that accepts, waives, closes,
+      approves, or authorizes, and no consumer treats a finding as a decision.
+    verification: >-
+      Schema review of the finding record: it carries observation, evidence,
+      verdict and severity, and carries no disposition, approval, or status
+      field that a downstream reader could mistake for a ruling.
+
+roles:
+  ENGIN: "unassigned - the producer prepared this and may not accept its own evidence"
+  REV: "unassigned - must not be the producer. NOTE: AC-AUDIT-01's calibration answer key must be held by REV, not by ENGIN. A producer that knows which packages were seeded cannot calibrate its own auditor."
+  QA: "unassigned - must not be the producer or REV"
+  SEC: "consulted on the finding schema, specifically that no field can be read as a disposition"
+  GOV: "authorizes"
+
+allowed_paths:
+  - "src/audit/**"
+  - "tools/secb-skill-audit.mjs"
+  - "tests/skill-audit*.test.mjs"
+  - "docs/04-assurance/skill-audit/**"
+
+prohibited_paths:
+  - ".agents/**"
+  - "contracts/**"
+  - "src/registry/**"
+  - "src/ledger/**"
+  - "src/mcp/**"
+  - "tools/validate-foundation.mjs"
+  - "MANIFEST.json"
+
+evidence_obligations:
+  - "The AC-AUDIT-01 calibration report: seed classes, seed count, per-class detection rate, false positives, and the answer key, held by REV."
+  - "The AC-AUDIT-02 control matrix: for every check, the input that trips it and the input that does not, with outcomes."
+  - "Per-lens evidence manifests demonstrating AC-AUDIT-03 divergence."
+  - "The before-and-after .agents/ digests and git status for AC-AUDIT-07."
+  - "A statement of every coverage bound the run hit, per AC-AUDIT-06, including runs where none were hit."
+
+valid_until: "2026-11-03T00:00:00Z"
+
+design_note: >-
+  The deterministic layer is not the audit. It is the evidence pack the
+  autonomous auditor reasons over.
+
+  Facts that are decidable - hashes, coverage, structural conformance, diffs,
+  invocation-log comparisons - are computed, because an LLM performing them is
+  slower, more expensive, and capable of producing a plausible wrong hash.
+  Judgement that is not decidable - whether an instruction exceeds a declared
+  authority boundary, whether an eval case could ever fail, whether two packages
+  conflict in intent - goes to the auditor, over computed facts so it never has
+  to guess at something already known.
+
+  This split is the design's main quality lever, and it is drawn from observed
+  behaviour rather than principle: across this branch's review history the agent
+  reviews that held up were the ones that ran a probe before concluding, and the
+  ones that failed were the ones that read and inferred.
+
+  The event-driven trigger is what makes the audit natural rather than
+  ceremonial. An audit that runs on a schedule reports on a corpus nobody
+  changed. An audit that fires when a file changes, or when the invocation log
+  shows a tool used outside a declared inventory, is reporting on the thing that
+  just happened - and its cost scales with change rather than with corpus size.
