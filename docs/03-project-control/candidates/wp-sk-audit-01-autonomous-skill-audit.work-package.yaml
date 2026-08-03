@@ -60,7 +60,7 @@ scope:
   - "Deterministic evidence layer. Computes, never judges: per-file sha256 and a package digest; manifest coverage; SKILL.md structural conformance against the section set the corpus already shares (Authority boundary / Required inputs / Workflow / Required outputs / Evidence and reasoning discipline / Completion gate / Supporting files); declared-vs-instructed mutation class; duplicate skill_id and version collisions; eval-case statistics including distinct-expectation count and how many negative cases are capable of failing."
   - "Autonomous auditor. Judges only what the evidence layer cannot compute, over the evidence pack rather than over raw files, so it never guesses at a fact that was already calculated."
   - "Lens separation. Distinct briefs - authority and boundary; declaration versus content; evidence and eval quality; cross-package consistency - each receiving a DIFFERENT evidence slice, not the same pack four times."
-  - "Adversarial pairing. For any finding above the lowest severity, one agent argues the package is sound and another argues it is not, on the same evidence. Disagreement is recorded as signal. Agreement is recorded together with whether disagreement was reachable at all."
+  - "Adversarial pairing. For any finding a lens marks as contestable, one agent argues the package is sound and another argues it is not, on the same evidence. Disagreement is recorded as signal. Agreement is recorded together with whether disagreement was reachable at all."
   - "Event-driven triggering. A changed skill file audits that package only; an invocationLog entry naming a tool outside a loaded skill's declared inventory audits that package; a new intake audits the new package. Batch runs are supported but are not the operating mode."
   - "Report output: machine-readable findings plus a human summary, written under docs/04-assurance/skill-audit/. Every finding carries file:line, a verdict of VIOLATION / NO_EVIDENCE / UNDECIDABLE, and the ref it was verified against."
 
@@ -156,8 +156,13 @@ acceptance_criteria:
       approves, or authorizes, and no consumer treats a finding as a decision.
     verification: >-
       Schema review of the finding record: it carries observation, evidence,
-      verdict and severity, and carries no disposition, approval, or status
-      field that a downstream reader could mistake for a ruling.
+      verdict, and carries no severity, disposition, approval or status field
+      that a downstream reader could mistake for a ruling. CORRECTED 2026-08-03:
+      this criterion previously listed "severity" among the permitted fields
+      while the same work package treats ranking as a judgement reserved to the
+      disposition holder - it authorized the field it also forbade. Caught by the
+      implementing agent before the finding schema was written, and fixed here
+      rather than in the code, because the code was right.
 
 roles:
   ENGIN: "unassigned - the producer prepared this and may not accept its own evidence"
