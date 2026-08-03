@@ -159,12 +159,29 @@ export class DurableContextReplayAdapter {
   #verifiedState() {
     let verified;
     let snapshot;
-    try {
-      verified = this.#ledger.verify();
-      snapshot = safeSnapshot(this.#snapshotAnchor(), "replay head snapshot");
-    } catch (cause) {
-      if (cause instanceof DurableContextReplayError) throw cause;
-      throw new DurableContextReplayError(cause?.code ?? "REPLAY_LEDGER_UNAVAILABLE", "durable replay evidence is unavailable");
+    for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
+      try {
+        const before = safeSnapshot(this.#snapshotAnchor(), "replay head snapshot");
+        const observed = this.#ledger.verify();
+        const after = safeSnapshot(this.#snapshotAnchor(), "replay head snapshot");
+        if (before?.revision !== after?.revision) {
+          boundedBackoff(attempt);
+          continue;
+        }
+        verified = observed;
+        snapshot = after;
+        break;
+      } catch (cause) {
+        if (["HEAD_ANCHOR_BUSY", "EBUSY", "EPERM"].includes(cause?.code)) {
+          boundedBackoff(attempt);
+          continue;
+        }
+        if (cause instanceof DurableContextReplayError) throw cause;
+        throw new DurableContextReplayError(cause?.code ?? "REPLAY_LEDGER_UNAVAILABLE", "durable replay evidence is unavailable");
+      }
+    }
+    if (verified === undefined || snapshot === undefined) {
+      throw new DurableContextReplayError("REPLAY_LEDGER_CHANGED", "trusted replay evidence did not stabilize");
     }
     const current = snapshot?.current;
     const pending = snapshot?.pending;

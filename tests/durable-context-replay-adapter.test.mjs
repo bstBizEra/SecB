@@ -247,6 +247,28 @@ test("finalize interleaving between atomic head snapshots retries without false 
   assert.equal(realAnchor.readPending(), null);
 }));
 
+test("full peer commit between ledger verification and anchor read retries instead of false rollback", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const context = provider();
+  const realAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY, initialize: true });
+  const writer = adapter(filePath, context, realAnchor);
+  let snapshots = 0;
+  const racingAnchor = {
+    snapshot() {
+      snapshots += 1;
+      if (snapshots === 2) writer.issueReceipt(request());
+      return realAnchor.snapshot();
+    },
+    prepare: realAnchor.prepare.bind(realAnchor), markDurable: realAnchor.markDurable.bind(realAnchor),
+    finalize: realAnchor.finalize.bind(realAnchor)
+  };
+  const reader = adapter(filePath, context, racingAnchor);
+  const replayed = reader.replayReceipt(request());
+  assert.equal(replayed.replayed, true);
+  assert.equal(reader.verify().count, 1);
+}));
+
 test("construction requires the trusted head collaborator", () => withTemp((directory) => {
   assert.throws(() => new DurableContextReplayAdapter({ filePath: join(directory, "replay.ndjson"),
     contextFederation: provider() }),
