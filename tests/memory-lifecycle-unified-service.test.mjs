@@ -85,6 +85,11 @@ function bindingLedgerFixture({ onAppend = () => {} } = {}) {
   };
 }
 
+const trustedAnchor = (ledger) => {
+  const { ledgerId, count, headHash } = ledger.verify();
+  return { ledgerId, count, headHash };
+};
+
 function harness(overrides = {}) {
   const rows = overrides.rows ?? [memory()];
   const calls = { lifecycle: 0, fence: 0, provider: 0, federation: 0 };
@@ -107,11 +112,11 @@ function harness(overrides = {}) {
       project_id: query.project_id, retrieved_at: NOW, sources: query.records.map(source), exclusions: [],
       accounting: { requested: query.records.length, included: query.records.length, excluded: 0 } };
   } };
-  const contextFederation = overrides.contextFederation ?? { issueReceipt(request) {
+  const contextFederation = { replayReceipt() { return { decision: "DENY", code: "DENY_CONTEXT_REPLAY_MISS" }; }, ...(overrides.contextFederation ?? { issueReceipt(request) {
     calls.federation += 1;
     return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
       boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false };
-  } };
+  } }) };
   const lifecycleBindingLedger = overrides.lifecycleBindingLedger ?? bindingLedgerFixture().ledger;
   return { calls, service: createMemoryLifecycleUnifiedService({
     memoryAuthorityGateway, lifecycleResolver, memoryCandidateProvider, contextFederation, lifecycleBindingLedger,
@@ -125,15 +130,19 @@ const retrieval = (overrides = {}) => ({ project_id: "project-1", layer: "projec
 test("construction requires trusted clock, atomic batch resolver, issuance fence, provider, and federation", () => {
   for (const missing of ["memoryAuthorityGateway", "lifecycleResolver", "memoryCandidateProvider", "contextFederation", "lifecycleBindingLedger"]) {
     const ports = { memoryAuthorityGateway: { retrieve() {} }, lifecycleResolver: { resolveBatch() {}, withIssuanceFence() {} },
-      memoryCandidateProvider: { toCandidateSources() {} }, contextFederation: { issueReceipt() {} },
+      memoryCandidateProvider: { toCandidateSources() {} }, contextFederation: { issueReceipt() {}, replayReceipt() {} },
       lifecycleBindingLedger: { append() {}, read() {}, verify() {} }, now() { return new Date(NOW); } };
     delete ports[missing];
     assert.throws(() => createMemoryLifecycleUnifiedService(ports), MemoryLifecycleUnifiedConfigurationError);
   }
   assert.throws(() => createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: { retrieve() {} },
     lifecycleResolver: { resolveBatch() {} }, memoryCandidateProvider: { toCandidateSources() {} },
-    contextFederation: { issueReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verify() {} },
+    contextFederation: { issueReceipt() {}, replayReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verify() {} },
     now() { return new Date(NOW); } }), MemoryLifecycleUnifiedConfigurationError);
+  assert.throws(() => createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: { retrieve() {} },
+    lifecycleResolver: { resolveBatch() {}, withIssuanceFence() {} }, memoryCandidateProvider: { toCandidateSources() {} },
+    contextFederation: { issueReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verify() {} },
+    now() { return new Date(NOW); } }), (error) => error.code === "INVALID_CONTEXT_RECOVERY");
 });
 
 test("one authority-bound page is atomically lifecycle-resolved and normalized", async () => {
@@ -319,16 +328,19 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   assert.equal(good.sourceStateBinding.context_receipt_fingerprint, issue.document.content_hash);
   assert.match(good.sourceStateBinding.lifecycle_state_digest, /^[a-f0-9]{64}$/);
   assert.equal(good.sourceStateBinding.evaluated_at, NOW);
-  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records), true);
+  const anchor = trustedAnchor(bindingEvidence.ledger);
+  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records, anchor), true);
   assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding), false);
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
-    lifecycle_state_digest: "f".repeat(64) }, bindingEvidence.records), false);
+    lifecycle_state_digest: "f".repeat(64) }, bindingEvidence.records, anchor), false);
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
-    ledger_sequence: "evil" }, bindingEvidence.records), false);
+    ledger_sequence: "evil" }, bindingEvidence.records, anchor), false);
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
-    ledger_record_hash: "bad" }, bindingEvidence.records), false);
+    ledger_record_hash: "bad" }, bindingEvidence.records, anchor), false);
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
-    replayed: "yes" }, bindingEvidence.records), false);
+    replayed: "yes" }, bindingEvidence.records, anchor), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    replayed: true }, bindingEvidence.records, anchor), false);
   for (const mutate of [
     (records) => { records[0].entry.payload.status = "COMMITTED"; },
     (records) => { records[0].entryHash = "f".repeat(64); },
@@ -338,7 +350,7 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
     (records) => { records.shift(); }
   ]) {
     const tampered = structuredClone(bindingEvidence.records); mutate(tampered);
-    assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, tampered), false);
+    assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, tampered, anchor), false);
   }
   const orphan = structuredClone([bindingEvidence.records[1]]);
   orphan[0].sequence = 1; orphan[0].previousHash = "0".repeat(64);
@@ -346,7 +358,33 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   orphan[0].recordHash = canonicalFingerprint({ ledgerId: orphan[0].ledgerId, sequence: orphan[0].sequence,
     previousHash: orphan[0].previousHash, entryHash: orphan[0].entryHash });
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
-    ledger_sequence: 1, ledger_record_hash: orphan[0].recordHash }, orphan), false);
+    ledger_sequence: 1, ledger_record_hash: orphan[0].recordHash }, orphan,
+  { ledgerId: orphan[0].ledgerId, count: 1, headHash: orphan[0].recordHash }), false);
+  const selfConsistentForgery = structuredClone(bindingEvidence.records);
+  selfConsistentForgery[1].entry.entryId = "attacker-entry";
+  let priorHash = "0".repeat(64);
+  for (const forged of selfConsistentForgery) {
+    forged.previousHash = priorHash;
+    forged.entryHash = canonicalFingerprint(forged.entry);
+    forged.recordHash = canonicalFingerprint({ ledgerId: forged.ledgerId, sequence: forged.sequence,
+      previousHash: forged.previousHash, entryHash: forged.entryHash });
+    priorHash = forged.recordHash;
+  }
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_record_hash: selfConsistentForgery[1].recordHash }, selfConsistentForgery,
+  { ledgerId: selfConsistentForgery[0].ledgerId, count: 2, headHash: selfConsistentForgery[1].recordHash }), false);
+  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records,
+    { ...anchor, headHash: "f".repeat(64) }), false);
+  const preparedEntry = bindingEvidence.records[0].entry;
+  bindingEvidence.ledger.append({ ...structuredClone(preparedEntry),
+    entryId: canonicalFingerprint({ binding_fingerprint: good.sourceStateBinding.binding_fingerprint, status: "ABORTED" }),
+    type: "MEMORY_CONTEXT_LIFECYCLE_BINDING_ABORTED",
+    payload: { binding: structuredClone(preparedEntry.payload.binding), status: "ABORTED", reason: "IMPOSSIBLE_AFTER_COMMIT" },
+    idempotencyKey: JSON.stringify([issue.document.project_id, issue.document.receipt_id,
+      good.sourceStateBinding.binding_fingerprint, "ABORTED"])
+  }, { expectedSequence: 2 });
+  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records,
+    trustedAnchor(bindingEvidence.ledger)), false);
   const expectedContextRequest = { ...issue, candidateSources: normalizeCandidateSources([source(memory())]).candidates };
   assert.equal(good.sourceStateBinding.context_issue_fingerprint,
     canonicalFingerprint({ op: "ISSUE", request: { ...expectedContextRequest, idempotencyKey: undefined } }));
@@ -387,7 +425,7 @@ test("Context failure records ABORTED and a deterministic retry can COMMIT", asy
   const issued = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
   assert.equal(issued.state, "ISSUED");
   assert.equal(issued.sourceStateBinding.binding_status, "COMMITTED");
-  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "ABORTED", "COMMITTED"]);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "ABORTED", "PREPARED", "COMMITTED"]);
 });
 
 test("crash after Context issuance recovers original binding before any new lifecycle evaluation", async () => {
@@ -399,7 +437,14 @@ test("crash after Context issuance recovers original binding before any new life
   let contextCalls = 0;
   let originalRequest;
   let nowMs = Date.parse(NOW);
-  const fixture = harness({ lifecycleBindingLedger: binding.ledger, now: () => new Date(nowMs), contextFederation: { issueReceipt(request) {
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger, now: () => new Date(nowMs), contextFederation: {
+    replayReceipt(request) {
+      if (originalRequest === undefined) return { decision: "DENY", code: "DENY_CONTEXT_REPLAY_MISS" };
+      contextCalls += 1;
+      assert.deepEqual(request, originalRequest);
+      return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
+        boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: true };
+    }, issueReceipt(request) {
     contextCalls += 1;
     if (originalRequest === undefined) originalRequest = structuredClone(request);
     else assert.deepEqual(request, originalRequest);
@@ -414,6 +459,14 @@ test("crash after Context issuance recovers original binding before any new life
   const callsBeforeRecovery = structuredClone(fixture.calls);
   nowMs += 3_600_000;
 
+  const conflicting = await fixture.service.issueReceipt({ retrieval: retrieval(), issue: { ...issue, baseline: "changed" } });
+  assert.equal(conflicting.code, "DENY_UNIFY_BINDING_RECOVERY");
+  const conflictingDocument = receiptDocument({ objective_id: "changed-objective" });
+  const documentConflict = await fixture.service.issueReceipt({ retrieval: retrieval(), issue: { ...issue, document: conflictingDocument } });
+  assert.equal(documentConflict.code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.deepEqual(fixture.calls, callsBeforeRecovery);
+  assert.equal(binding.records.length, 1);
+
   const recovered = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
   assert.equal(recovered.state, "ISSUED");
   assert.equal(recovered.replayed, true);
@@ -421,7 +474,8 @@ test("crash after Context issuance recovers original binding before any new life
   assert.equal(recovered.sourceStateBinding.binding_fingerprint, bindingA);
   assert.deepEqual(fixture.calls, callsBeforeRecovery);
   assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "COMMITTED"]);
-  assert.equal(verifyMemoryContextLifecycleBinding(recovered.sourceStateBinding, binding.records), true);
+  assert.equal(verifyMemoryContextLifecycleBinding(recovered.sourceStateBinding,
+    binding.records, trustedAnchor(binding.ledger)), true);
 
   const replay = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
   assert.equal(replay.replayed, true);
@@ -441,6 +495,40 @@ test("failed ABORTED write surfaces an unresolved recovery-required state", asyn
   assert.equal(denied.code, "DENY_UNIFY_BINDING_RECOVERY");
   assert.equal(denied.recovery_required, true);
   assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED"]);
+});
+
+test("pre-Context crash aborts A read-only and requires fresh lifecycle evaluation for B", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem-pre-context" };
+  let failAbort = true;
+  const binding = bindingLedgerFixture({ onAppend(entry) {
+    if (entry.payload.status === "ABORTED" && failAbort) { failAbort = false; throw new Error("simulated crash before abort"); }
+  } });
+  let contextCalls = 0;
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger, contextFederation: {
+    replayReceipt() { return { decision: "DENY", code: "DENY_CONTEXT_REPLAY_MISS" }; },
+    issueReceipt(request) {
+      contextCalls += 1;
+      if (contextCalls === 1) return { decision: "DENY" };
+      return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
+        boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false };
+    }
+  } });
+  const first = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(first.code, "DENY_UNIFY_BINDING_RECOVERY");
+  const bindingA = binding.records[0].entry.payload.binding.binding_fingerprint;
+  const callsAfterFirst = structuredClone(fixture.calls);
+
+  const reconciled = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(reconciled.code, "DENY_UNIFY_CONTEXT_NOT_ISSUED");
+  assert.deepEqual(fixture.calls, callsAfterFirst);
+  assert.equal(contextCalls, 1);
+
+  const issued = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(issued.state, "ISSUED");
+  assert.notEqual(issued.sourceStateBinding.binding_fingerprint, bindingA);
+  assert.equal(fixture.calls.lifecycle, callsAfterFirst.lifecycle + 1);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status),
+    ["PREPARED", "ABORTED", "PREPARED", "COMMITTED"]);
 });
 
 test("timed-out issuance fence cannot invoke Context Federation later", async () => {
@@ -547,8 +635,26 @@ test("real authority gateway, provider, Context Federation, and durable binding 
       project_id: request.project_id, layer: request.layer, evaluated_at: request.as_of,
       batch_fingerprint: canonicalFingerprint(request), decisions: request.records.map((item) => effectiveDecision(request, item)) }); }
   };
+  const replayStore = new Map();
+  const contextPort = {
+    issueReceipt(request) {
+      const result = federation.issueReceipt(request);
+      if (result?.state === "ISSUED") replayStore.set(canonicalFingerprint({ projectId: request.document.project_id,
+        receiptId: request.document.receipt_id, idempotencyKey: request.idempotencyKey }),
+      { requestFingerprint: canonicalFingerprint(request), result: structuredClone(result) });
+      return result;
+    },
+    replayReceipt(request) {
+      const stored = replayStore.get(canonicalFingerprint({ projectId: request.document.project_id,
+        receiptId: request.document.receipt_id, idempotencyKey: request.idempotencyKey }));
+      if (stored === undefined || stored.requestFingerprint !== canonicalFingerprint(request)) {
+        return { decision: "DENY", code: "DENY_CONTEXT_REPLAY_MISS" };
+      }
+      return { ...structuredClone(stored.result), replayed: true };
+    }
+  };
   const unified = createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: authorityGateway, lifecycleResolver,
-    memoryCandidateProvider: provider, contextFederation: federation, lifecycleBindingLedger, now: clock });
+    memoryCandidateProvider: provider, contextFederation: contextPort, lifecycleBindingLedger, now: clock });
   const projected = provider.toCandidateSources({ project_id: projectId, records: [row] });
   const candidates = normalizeCandidateSources(projected.sources).candidates;
   const minted = mintReceiptDocument({ receipt_id: "receipt-real-1", project_id: projectId, objective_id: "objective-real-1",
@@ -563,5 +669,8 @@ test("real authority gateway, provider, Context Federation, and durable binding 
   assert.match(issued.sourceStateBinding.lifecycle_state_digest, /^[a-f0-9]{64}$/);
   assert.match(issued.sourceStateBinding.binding_fingerprint, /^[a-f0-9]{64}$/);
   assert.match(issued.sourceStateBinding.ledger_record_hash, /^[a-f0-9]{64}$/);
-  assert.equal(lifecycleBindingLedger.verify().count, 2);
+  const realAnchor = trustedAnchor(lifecycleBindingLedger);
+  assert.equal(realAnchor.count, 2);
+  assert.equal(verifyMemoryContextLifecycleBinding(issued.sourceStateBinding,
+    lifecycleBindingLedger.read(), realAnchor), true);
 });
