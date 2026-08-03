@@ -1,0 +1,206 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_mem_j1_work_journal_v1_candidate"
+  record_status: "AWAITING_GOV_AUTHORIZATION"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer is also the assigned ENGIN and may not accept its own evidence."
+    - "The path this work package builds on was proved end-to-end before the package was written, by running it rather than by reading the contracts. The transcript and the full script are in the evidence appendix so a reviewer can re-derive both rather than take the producer's word."
+    - "THREE CLAIMS IN THE FIRST DRAFT OF THIS PACKAGE WERE WRONG, corrected before it was recorded. The producer wrote that the memory gateway lives only on main; it is present on this branch, byte-identical, dated 2026-07-20. It wrote that the admission-SoD question could not be answered without the merge; it could, and was. It implied that requirement might block the path; it is per-layer CONFIGURATION, not a fixed constraint. Only contracts/memory-record.schema.json is genuinely absent here. The errors are recorded rather than quietly fixed because this package argues for checking before building, and it was written without checking a file that was sitting in the tree."
+
+work_package_id: "WP-MEM-J1"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-MEM"
+title: "Work journal — turn what an agent learns during work into governed evidence and claims"
+
+objective: >-
+  Give agents a way to record what they learn WHILE working, in a form the
+  existing governed ledgers already accept, so that transferring it into SecB
+  Memory later is an admission call rather than a rewrite.
+
+problem_statement: >-
+  Everything reusable this session produced - a standing rule that a "does not
+  exist" claim must carry the ref it was verified against, that tamper detection
+  must never be re-pinned to one's own artefact, that working-tree-wide git
+  commands are unsafe on a shared repo - lives in commit messages and in a
+  markdown file under the agent's own home directory. None of it is in SecB.
+
+  It is not in SecB because there was no shape to put it in. `memory-record`
+  restricts `source` to four values, none of which is "an agent wrote this down",
+  and that restriction is correct: a memory whose origin is "someone typed it"
+  carries no provenance. The four permitted sources are all governed,
+  hash-chained, append-only ledgers.
+
+  The route is therefore not to widen that enum. It is that a good working note
+  IS a knowledge claim - a statement, how it was derived, whether it is verified,
+  and what evidence backs it - and `KnowledgeLedger` is the front door that
+  already exists.
+
+verified_path: >-
+  Proved by running, at b23d386 and later, in a temporary ledger outside the
+  repository. Transcript in the evidence appendix. Both ledgers are on THIS
+  branch; neither requires the merge.
+
+    appendEvidence  contract + idempotencyKey.  NO separation-of-duties gate.
+    appendClaim     every evidence_ref must resolve, be identity-bound, and
+                    carry VERIFIED or ACCEPTED.  NO separation-of-duties gate.
+
+  Both admit a single actor, so the operator's ruling of 2026-08-03 that review
+  stays fail-closed does NOT block this path. That was checked before this
+  package was written, because building a pipeline and discovering its far end
+  is shut is the failure that closed SECB-PRD-SKILLSHUB-001.
+
+  The two controls matter more than the two passes:
+
+    a claim citing evidence that does not exist        -> DENY_EVIDENCE_CHAIN
+    a claim citing evidence still at CAPTURED status   -> DENY_EVIDENCE_CHAIN
+
+  "I think X" cannot enter the ledger, mechanically. Neither can a note whose
+  evidence was written down but never checked. That is the memory-pollution
+  guard, and it is enforced by the contract rather than by anyone's discipline.
+
+risk_class: "R2"
+mutation_class: "M2"
+status: "PROPOSED"
+
+baseline:
+  target_branch: "feat/secb-ruflo-command-center"
+  baseline_commit: "1ed7531"
+  depends_on_merge: false
+  note: >-
+    MORE of the memory substrate is on this branch than the producer first
+    claimed. Present and byte-identical to main: EvidenceLedger
+    (src/ledger/governed-ledgers.mjs), KnowledgeLedger
+    (src/ledger/temporal-ledgers.mjs), and the memory gateway
+    (src/services/memory-gateway-service.mjs, 2026-07-20).
+
+    Genuinely absent: contracts/memory-record.schema.json, which is on main only.
+    That single file is what the memory half waits on - not the gateway, and not
+    a wiring act this package needs. Taking it alone would mean editing
+    contracts/ and MANIFEST.json, both prohibited here, so the merge remains the
+    clean route to it.
+
+scope:
+  - "src/memory/work-journal.mjs — records a finding as an evidence envelope plus a knowledge claim citing it, through the existing ledgers. Wrap-not-modify: it calls appendEvidence and appendClaim and changes neither."
+  - "Derive verification_status from the evidence rather than accepting it as an argument. A finding carrying a procedure and an exit_status is VERIFIED; a finding without one is CAPTURED, and appendClaim will then refuse the claim. The refusal is the feature."
+  - "A projection to memory-record shape for the day the gateway is reachable: layer, source: KnowledgeLedger, statement, classification, confidence, provenance, validity window, retention policy — and deliberately NOT admitted_at, content_hash or memory_record_id."
+  - "tools/secb-journal.mjs — a CLI to record a finding and to list what is recorded."
+  - "tests/work-journal.test.mjs."
+
+non_scope:
+  - "NO memory-gateway wiring. The gateway is on main, declares itself UNWIRED with no state, no I/O and no persistence, and wiring it is an operator-gated act on main's own terms. This package stops at the KnowledgeLedger."
+  - "NO contract change of any kind, and specifically NO widening of memory-record's `source` enum. The enum is the provenance requirement; widening it to admit working notes would remove the property that makes a memory worth trusting."
+  - "NO change to appendEvidence or appendClaim. Their gates are what this package relies on; a package that relaxed them to make its own job easier would be worthless."
+  - "NO automatic recording. An agent decides what is worth a claim. A journal that records everything produces a corpus with the same defect as the eval suite: 220 instances of 10 things."
+
+acceptance_criteria:
+  - id: "AC-J1-01"
+    statement: "A finding with a procedure and an exit status is recorded as evidence at VERIFIED and its claim is accepted."
+    verification: "Write both, then read them back from the ledger and confirm the claim's evidence_refs resolve to the envelope written."
+  - id: "AC-J1-02"
+    statement: "A finding WITHOUT a procedure or exit status is recorded as evidence at CAPTURED, and its claim is REFUSED with DENY_EVIDENCE_CHAIN."
+    verification: >-
+      Assert the deny code, not merely that it failed. This is the criterion that
+      makes the journal a filter rather than a notebook: an unevidenced assertion
+      is stopped by the ledger, and the producer does not get to override it.
+  - id: "AC-J1-03"
+    statement: "verification_status cannot be supplied by the caller."
+    verification: >-
+      Passing it is rejected. A journal that lets its author declare their own
+      note VERIFIED reproduces the self-attestation the source enum exists to
+      prevent, one layer down.
+  - id: "AC-J1-04"
+    statement: "The memory projection omits admitted_at, content_hash and memory_record_id."
+    verification: >-
+      Assert those keys are absent. The gateway stamps admitted_at as trusted
+      time and states a caller may not supply the enforcement instant; a
+      projection that filled it in would be forging trusted time, and the gap is
+      the design rather than an omission.
+  - id: "AC-J1-05"
+    statement: "Every check in the suite is shown failing when it should."
+    verification: >-
+      Sabotage matrix with raw exit codes, plus a control run proving the new
+      assertions are what catch each mutation rather than something else in the
+      file. Per the DEF-M1 standing rule, validation is claimed by exit code and
+      never by grepping output for a status string.
+  - id: "AC-J1-06"
+    statement: "ALREADY ANSWERED, before this package was recorded. Admission separation of duties is per-layer CONFIGURATION, not a fixed requirement."
+    verification: >-
+      Read at src/services/memory-gateway-service.mjs on this branch:
+      LAYERS = ["session", "work", "project"]; each layer carries an
+      admission.ttlMs and an admission.sod; and
+      SOD_MODES = ["producer-only", "distinct-approver"], validated at
+      construction and INJECTED by whoever wires the gateway.
+
+      Consequence, and it is the useful one: a layer configured "producer-only"
+      admits with a single actor, so the operator ruling of 2026-08-03 does not
+      block memory admission the way it blocks skill promotion. What the ruling
+      does is turn "which layers require a second actor" into a live operator
+      decision rather than a property of the code. That question belongs with the
+      wiring act, not with this package, and is raised here so it is not
+      discovered at the end.
+
+roles:
+  ENGIN: "unassigned — the producer wrote the proof and may not accept its own evidence"
+  REV: "unassigned — must not be the producer"
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted on AC-J1-03, which is the self-attestation boundary"
+  GOV: "authorizes"
+
+allowed_paths:
+  - "src/memory/work-journal.mjs"
+  - "tools/secb-journal.mjs"
+  - "tests/work-journal*.test.mjs"
+
+prohibited_paths:
+  - "contracts/**"
+  - "src/ledger/**"
+  - "src/mcp/**"
+  - ".agents/**"
+  - "tools/validate-foundation.mjs"
+  - "MANIFEST.json"
+
+evidence_obligations:
+  - "The AC-J1-05 sabotage matrix with raw exit codes and its control column."
+  - "A transcript showing AC-J1-02's refusal by deny code."
+  - "The AC-J1-06 finding, recorded whichever way it comes out."
+
+valid_until: "2026-11-03T00:00:00Z"
+
+evidence_appendix:
+  transcript: |
+    === A. a real finding from this session, carrying an exit code ===
+      PASS    write evidence at VERIFIED
+      PASS    claim citing that evidence
+
+    === B. controls — what must be refused ===
+      REFUSED claim citing evidence that does not exist      -> DENY_EVIDENCE_CHAIN
+      REFUSED claim citing evidence still at CAPTURED        -> DENY_EVIDENCE_CHAIN
+
+    === C. is the accepted claim ready to become a memory record ===
+      projects to: layer, source, statement, classification, confidence,
+                   provenance, valid_from, valid_until, retention_policy
+      left for the gateway: admitted_at, content_hash, memory_record_id
+  reproduction: >-
+    The proof script was written in a scratchpad and is ephemeral. Its shape is
+    recorded here so a reviewer re-derives rather than trusts: construct an
+    EvidenceLedger and a KnowledgeLedger over temporary files, wire the
+    knowledge ledger's evidenceLookup to read the evidence ledger, then run the
+    four cases above. Two contract shapes bit the producer while writing it and
+    are worth knowing before starting: `limitations` is an ARRAY, not a string,
+    and `content_hash` must match ^[a-f0-9]{64}$ with no algorithm prefix. The
+    contract caught both; the producer did not.
+
+authority_note: >-
+  This package implements nothing that changes a control. It writes to two
+  ledgers through their existing public methods and relies entirely on their
+  existing gates - the strictest of which, DENY_EVIDENCE_CHAIN, is the reason
+  the journal is worth having.
+
+  What it does NOT do is the part that needs the operator: reaching SecB Memory
+  proper. That requires the merge, a store behind the gateway, and a wiring act
+  main itself marks operator-gated. This package is the half that is reachable
+  now, and it is shaped so the other half is an admission call rather than a
+  migration.
