@@ -109,6 +109,26 @@ export {
 } from "./services/context-retrieval-policy.mjs";
 
 export {
+  createMemoryContextSourceService,
+  MemoryContextSourceConfigurationError
+} from "./services/memory-context-source-service.mjs";
+
+export {
+  createMemoryGateway,
+  MemoryGatewayConfigurationError
+} from "./services/memory-gateway-service.mjs";
+
+export {
+  createMemoryCandidateProvider,
+  MemoryCandidateProviderConfigurationError
+} from "./services/memory-candidate-provider.mjs";
+
+export {
+  createSqliteMemoryRecordStore,
+  SqliteMemoryStoreError
+} from "./services/sqlite-memory-record-store.mjs";
+
+export {
   DATA_CLASS_ORDER,
   RISK_ORDER,
   intersectWithParent,
