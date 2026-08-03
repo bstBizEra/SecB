@@ -38,17 +38,46 @@ function candidateSource(id = "memory-1") {
   };
 }
 
+function retrievedRecord(overrides = {}) {
+  return {
+    memory_record_id: "memory-1",
+    version: 1,
+    project_id: PROJECT,
+    work_package_id: "wp-memory-1",
+    session_id: "session-memory-1",
+    actor_id: "agent-memory-producer",
+    layer: "session",
+    statement: "Bound memory candidate",
+    classification: "INTERNAL",
+    confidence: 0.9,
+    source: "KnowledgeLedger",
+    provenance: { evidence_refs: ["evidence-memory-1"], origin_record_id: "knowledge-1" },
+    content_hash: "a".repeat(64),
+    valid_from: "2026-07-20T09:00:00.000Z",
+    valid_until: "2026-07-20T11:00:00.000Z",
+    retention_policy: "retain-30-days",
+    admitted_at: NOW.toISOString(),
+    ...overrides
+  };
+}
+
 function service(overrides = {}) {
   const calls = { gateway: 0, provider: 0 };
   const memoryGateway = {
     retrieve(query) {
       calls.gateway += 1;
       void query;
-      return { decision: "ALLOW", code: "RETRIEVED", retrieved_at: NOW.toISOString(), records: [], next_cursor: null };
+      return {
+        decision: "ALLOW",
+        code: "RETRIEVED",
+        retrieved_at: NOW.toISOString(),
+        records: [{ data_untrusted: true, record: retrievedRecord() }],
+        next_cursor: null
+      };
     }
   };
   const memoryCandidateProvider = {
-    toCandidateSources() {
+    toCandidateSources(query) {
       calls.provider += 1;
       return {
         decision: "ALLOW",
@@ -58,7 +87,12 @@ function service(overrides = {}) {
         retrieved_at: NOW.toISOString(),
         sources: [candidateSource()],
         exclusions: [],
-        accounting: { requested: 0, included: 1, excluded: 0 }
+        accounting: {
+          requested: 1,
+          included: 1,
+          excluded: 0,
+          ...(query.token_budget === undefined ? {} : { token_budget: query.token_budget, tokens_used: 1 })
+        }
       };
     }
   };
@@ -186,7 +220,7 @@ test("gateway and provider denials are contained with typed integration stages",
   );
 });
 
-test("typed port exclusions are preserved and outputs are deeply frozen", () => {
+test("a provider source rejected by the typed port denies the whole projection", () => {
   const { instance } = service({
     scopeResolver: allowScope,
     activationResolver: allowActivation,
@@ -204,12 +238,82 @@ test("typed port exclusions are preserved and outputs are deeply frozen", () => 
     }
   });
   const result = instance.retrieveCandidateSources({ project_id: PROJECT, layer: "session" });
+  assert.equal(result.code, "DENY_MEMORY_PROVENANCE_BINDING");
+  assert.equal(result.stage, "provider-binding");
+});
+
+test("valid provider exclusions remain explicit and outputs are deeply frozen", () => {
+  const { instance } = service({
+    scopeResolver: allowScope,
+    activationResolver: allowActivation,
+    memoryCandidateProvider: {
+      toCandidateSources: ({ token_budget }) => ({
+        decision: "ALLOW",
+        code: "MEMORY_SOURCES_PROJECTED",
+        data_untrusted: true,
+        project_id: PROJECT,
+        retrieved_at: NOW.toISOString(),
+        sources: [],
+        exclusions: [{ ref: "memory-1", stage: "memory-provider", reason: "BUDGET_EXCEEDED" }],
+        accounting: { requested: 1, included: 0, excluded: 1, token_budget, tokens_used: 0 }
+      })
+    }
+  });
+  const result = instance.retrieveCandidateSources({ project_id: PROJECT, layer: "session", token_budget: 1 });
   assert.equal(result.decision, "ALLOW");
-  assert.equal(result.candidate_sources.length, 1);
-  assert.deepEqual(result.exclusions.map((entry) => entry.stage), ["memory-provider", "provider-port"]);
+  assert.equal(result.candidate_sources.length, 0);
+  assert.deepEqual(result.exclusions.map((entry) => entry.stage), ["memory-provider"]);
   assert.ok(Object.isFrozen(result));
   assert.ok(Object.isFrozen(result.candidate_sources));
   assert.throws(() => result.candidate_sources.push({}), TypeError);
+});
+
+test("provider additions, substitutions, duplicates, silent drops, and accounting drift deny", () => {
+  const gatewayFor = (records) => ({
+    retrieve: () => ({
+      decision: "ALLOW",
+      code: "RETRIEVED",
+      retrieved_at: NOW.toISOString(),
+      records: records.map((record) => ({ data_untrusted: true, record })),
+      next_cursor: null
+    })
+  });
+  const providerFor = (sources, exclusions = [], accounting = { requested: 1, included: sources.length, excluded: exclusions.length }) => ({
+    toCandidateSources: () => ({
+      decision: "ALLOW",
+      code: "MEMORY_SOURCES_PROJECTED",
+      data_untrusted: true,
+      project_id: PROJECT,
+      retrieved_at: NOW.toISOString(),
+      sources,
+      exclusions,
+      accounting
+    })
+  });
+  const cases = [
+    ["zero-to-one addition", [], providerFor([candidateSource()], [], { requested: 0, included: 1, excluded: 0 })],
+    ["id substitution", [retrievedRecord()], providerFor([candidateSource("substituted")])],
+    ["hash substitution", [retrievedRecord()], providerFor([{ ...candidateSource(), provenance: { ...candidateSource().provenance, content_hash: "b".repeat(64) } }])],
+    ["cross-project substitution", [retrievedRecord()], providerFor([{ ...candidateSource(), project_id: "proj-other" }])],
+    ["non-memory kind", [retrievedRecord()], providerFor([{ ...candidateSource(), kind: "knowledge" }])],
+    ["classification substitution", [retrievedRecord()], providerFor([{ ...candidateSource(), classification: "CONFIDENTIAL" }])],
+    ["origin substitution", [retrievedRecord()], providerFor([{ ...candidateSource(), provenance: { ...candidateSource().provenance, origin: "OutcomeLedger" } }])],
+    ["confidence substitution", [retrievedRecord()], providerFor([{ ...candidateSource(), relevance: 0.1 }])],
+    ["currency substitution", [retrievedRecord()], providerFor([{ ...candidateSource(), current: false }])],
+    ["duplicate addition", [retrievedRecord()], providerFor([candidateSource(), candidateSource()], [], { requested: 1, included: 2, excluded: 0 })],
+    ["silent drop", [retrievedRecord()], providerFor([], [], { requested: 1, included: 0, excluded: 0 })],
+    ["fabricated exclusion", [retrievedRecord()], providerFor([], [{ ref: "fabricated", stage: "memory-provider", reason: "BUDGET_EXCEEDED" }], { requested: 1, included: 0, excluded: 1 })],
+    ["accounting drift", [retrievedRecord()], providerFor([candidateSource()], [], { requested: 99, included: 1, excluded: 0 })]
+  ];
+  for (const [label, records, memoryCandidateProvider] of cases) {
+    const result = createMemoryContextSourceService({
+      memoryGateway: gatewayFor(records),
+      memoryCandidateProvider,
+      scopeResolver: allowScope,
+      activationResolver: allowActivation
+    }).retrieveCandidateSources({ project_id: PROJECT, layer: "session" });
+    assert.equal(result.code, "DENY_MEMORY_PROVENANCE_BINDING", label);
+  }
 });
 
 test("E2E: admitted SQLite memory becomes a Context Receipt source only through effective server gates", async (t) => {

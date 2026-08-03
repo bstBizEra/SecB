@@ -9,6 +9,8 @@
 // authority.
 
 import { normalizeCandidateSources } from "./candidate-source-port.mjs";
+import { MEMORY_PROVIDER_EXCLUSION_REASONS, MEMORY_PROVIDER_STAGE } from "./memory-candidate-provider.mjs";
+import { validateContract } from "../contracts/contract-validator.mjs";
 
 const CAPABILITY = "memory-context-retrieval";
 const REQUEST_KEYS = Object.freeze(["project_id", "layer", "limit", "cursor", "token_budget"]);
@@ -18,6 +20,8 @@ const ACTIVATION_KEYS = Object.freeze(["decision", "decision_id", "capability", 
 const GATEWAY_ALLOW_KEYS = Object.freeze(["decision", "code", "retrieved_at", "records", "next_cursor"]);
 const RECORD_ENVELOPE_KEYS = Object.freeze(["data_untrusted", "record"]);
 const PROVIDER_ALLOW_KEYS = Object.freeze(["decision", "code", "data_untrusted", "project_id", "retrieved_at", "sources", "exclusions", "accounting"]);
+const ACCOUNTING_KEYS = Object.freeze(["requested", "included", "excluded"]);
+const BUDGET_ACCOUNTING_KEYS = Object.freeze([...ACCOUNTING_KEYS, "token_budget", "tokens_used"]);
 const MAX_LIMIT = 1_000;
 const MAX_CURSOR_LENGTH = 2_048;
 
@@ -66,6 +70,85 @@ function hasExactKeys(value, keys) {
   return ownKeys.length === keys.length
     && ownKeys.every((key) => typeof key === "string" && keys.includes(key))
     && keys.every((key) => ownKeys.includes(key));
+}
+
+function projectionIsBound(records, projected, normalized, projectId, layer, tokenBudget) {
+  const accountingKeys = tokenBudget === undefined ? ACCOUNTING_KEYS : BUDGET_ACCOUNTING_KEYS;
+  if (
+    !hasExactKeys(projected.accounting, accountingKeys)
+    || projected.accounting.requested !== records.length
+    || projected.accounting.included !== projected.sources.length
+    || projected.accounting.excluded !== projected.exclusions.length
+    || projected.accounting.included + projected.accounting.excluded !== projected.accounting.requested
+    || projected.sources.length + projected.exclusions.length !== records.length
+    || normalized.exclusions.length !== 0
+    || normalized.candidates.length !== projected.sources.length
+  ) return false;
+  if (tokenBudget !== undefined && (
+    projected.accounting.token_budget !== tokenBudget
+    || !Number.isSafeInteger(projected.accounting.tokens_used)
+    || projected.accounting.tokens_used < 0
+    || projected.accounting.tokens_used > tokenBudget
+  )) return false;
+
+  try {
+    for (const record of records) {
+      validateContract("memoryRecord", record);
+      if (record.project_id !== projectId || record.layer !== layer) return false;
+    }
+  } catch {
+    return false;
+  }
+
+  const projectionMs = Date.parse(projected.retrieved_at);
+  const consumed = new Set();
+  for (const candidate of normalized.candidates) {
+    const matching = [];
+    records.forEach((record, index) => {
+      if (
+        !consumed.has(index)
+        && record.memory_record_id === candidate.ref
+        && record.content_hash === candidate.provenance?.content_hash
+      ) matching.push(index);
+    });
+    if (matching.length !== 1) return false;
+    const index = matching[0];
+    const record = records[index];
+    const expectedCurrent = Date.parse(record.valid_from) <= projectionMs && projectionMs < Date.parse(record.valid_until);
+    if (
+      candidate.kind !== "memory"
+      || candidate.projectId !== projectId
+      || record.project_id !== projectId
+      || candidate.classification !== record.classification
+      || candidate.verified !== true
+      || candidate.current !== expectedCurrent
+      || candidate.resolvable !== true
+      || candidate.relevance !== record.confidence
+      || candidate.provenance.origin !== record.source
+      || candidate.provenance.retrieved_at !== projected.retrieved_at
+    ) return false;
+    consumed.add(index);
+  }
+
+  for (const exclusion of projected.exclusions) {
+    if (
+      !isPlainObject(exclusion)
+      || typeof exclusion.ref !== "string"
+      || exclusion.stage !== MEMORY_PROVIDER_STAGE
+      || !MEMORY_PROVIDER_EXCLUSION_REASONS.includes(exclusion.reason)
+      || ["MEMORY_MALFORMED", "MEMORY_PROJECT_MISMATCH"].includes(exclusion.reason)
+      || (exclusion.reason === "BUDGET_EXCEEDED" && tokenBudget === undefined)
+    ) return false;
+    const matching = records.findIndex((record, index) => !consumed.has(index) && record.memory_record_id === exclusion.ref);
+    if (matching === -1) return false;
+    if (exclusion.reason === "DEDUP_DUPLICATE") {
+      const record = records[matching];
+      const earlierDuplicate = records.some((prior, index) => index < matching && prior.content_hash === record.content_hash);
+      if (!earlierDuplicate) return false;
+    }
+    consumed.add(matching);
+  }
+  return consumed.size === records.length;
 }
 
 function deny(code, reason, stage, upstreamCode) {
@@ -244,6 +327,9 @@ export function createMemoryContextSourceService({
       normalized = normalizeCandidateSources(projected.sources);
     } catch {
       return deny("DENY_CANDIDATE_SOURCE_PORT", "Memory candidates failed the typed source boundary", "candidate-source-port");
+    }
+    if (!projectionIsBound(records, projected, normalized, query.project_id, query.layer, query.token_budget)) {
+      return deny("DENY_MEMORY_PROVENANCE_BINDING", "Memory projection is not a subtractive binding of the retrieved records", "provider-binding");
     }
 
     const exclusions = [
