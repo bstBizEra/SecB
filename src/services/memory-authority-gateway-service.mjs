@@ -10,6 +10,7 @@ import { validateContract } from "../contracts/contract-validator.mjs";
 
 const OPERATIONS = Object.freeze({ ADMIT: "memory-admit", RETRIEVE: "memory-retrieve" });
 const LAYERS = Object.freeze(["session", "work", "project"]);
+const CLASSIFICATIONS = Object.freeze(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]);
 const ADMIT_REQUEST_KEYS = Object.freeze(["layer", "record"]);
 const RETRIEVE_REQUEST_KEYS = Object.freeze(["project_id", "layer", "limit", "cursor"]);
 const CALLER_RECORD_KEYS = Object.freeze([
@@ -21,9 +22,11 @@ const REQUIRED_CALLER_RECORD_KEYS = Object.freeze(CALLER_RECORD_KEYS.filter((key
 const IDENTITY_KEYS = Object.freeze(["decision", "decision_id", "actor_id"]);
 const SCOPE_KEYS = Object.freeze(["decision", "decision_id", "actor_id", "project_id"]);
 const ADMISSION_AUTHORITY_KEYS = Object.freeze([
-  "decision", "decision_id", "actor_id", "project_id", "layer", "producer", "reviewer", "approver"
+  "decision", "decision_id", "actor_id", "project_id", "layer", "producer", "reviewer", "approver", "access_policy"
 ]);
-const RETRIEVAL_AUTHORITY_KEYS = Object.freeze(["decision", "decision_id", "actor_id", "project_id", "layer"]);
+const RETRIEVAL_AUTHORITY_KEYS = Object.freeze([
+  "decision", "decision_id", "actor_id", "project_id", "layer", "classification_clearance", "permitted_access_policies"
+]);
 const ADMIT_ALLOW_KEYS = Object.freeze(["decision", "code", "admitted_at", "record", "append"]);
 const RETRIEVE_ALLOW_KEYS = Object.freeze(["decision", "code", "retrieved_at", "records", "next_cursor"]);
 const RECORD_ENVELOPE_KEYS = Object.freeze(["data_untrusted", "record"]);
@@ -120,12 +123,15 @@ function defaultScope() {
 function defaultAdmissionAuthority() {
   return {
     decision: "DENY", decision_id: "default-deny", actor_id: "", project_id: "", layer: "",
-    producer: "", reviewer: null, approver: null
+    producer: "", reviewer: null, approver: null, access_policy: ""
   };
 }
 
 function defaultRetrievalAuthority() {
-  return { decision: "DENY", decision_id: "default-deny", actor_id: "", project_id: "", layer: "" };
+  return {
+    decision: "DENY", decision_id: "default-deny", actor_id: "", project_id: "", layer: "",
+    classification_clearance: "", permitted_access_policies: []
+  };
 }
 
 export class MemoryAuthorityGatewayConfigurationError extends Error {
@@ -225,6 +231,7 @@ export function createMemoryAuthorityGateway({
       || authority.layer !== query.layer || authority.producer !== bindings.identity.actor_id
       || (authority.reviewer !== null && isBlank(authority.reviewer))
       || (authority.approver !== null && isBlank(authority.approver))
+      || isBlank(authority.access_policy)
     ) return deny("DENY_MEMORY_ADMISSION_AUTHORITY", "Memory admission authority is not effective or is not exactly bound", "authority");
     const authorityActors = [authority.producer, authority.reviewer, authority.approver].filter((actor) => actor !== null);
     if (
@@ -236,7 +243,8 @@ export function createMemoryAuthorityGateway({
     try {
       record = {
         ...callerRecord,
-        actor_id: bindings.identity.actor_id
+        actor_id: bindings.identity.actor_id,
+        access_policy: authority.access_policy
       };
       record.content_hash = canonicalFingerprint({ ...record, layer: query.layer });
     } catch {
@@ -316,10 +324,15 @@ export function createMemoryAuthorityGateway({
     } catch {
       authority = null;
     }
+    const permittedPolicies = authority === null ? null : detached(authority.permitted_access_policies);
     if (
       authority === null || authority.decision !== "ALLOW" || isBlank(authority.decision_id)
       || authority.actor_id !== bindings.identity.actor_id || authority.project_id !== query.project_id
       || authority.layer !== query.layer
+      || !CLASSIFICATIONS.includes(authority.classification_clearance)
+      || !Array.isArray(permittedPolicies) || permittedPolicies.length < 1 || permittedPolicies.length > 1_000
+      || permittedPolicies.some((policy) => isBlank(policy))
+      || new Set(permittedPolicies).size !== permittedPolicies.length
     ) return deny("DENY_MEMORY_RETRIEVAL_AUTHORITY", "Memory retrieval authority is not effective or is not exactly bound", "authority");
 
     let upstream;
@@ -372,8 +385,14 @@ export function createMemoryAuthorityGateway({
         isPlainObject(upstream) && typeof upstream.code === "string" ? upstream.code : undefined
       );
     }
+    const clearanceRank = CLASSIFICATIONS.indexOf(authority.classification_clearance);
+    const authorizedRecords = upstream.records.filter((entry) => (
+      CLASSIFICATIONS.indexOf(entry.record.classification) <= clearanceRank
+      && permittedPolicies.includes(entry.record.access_policy)
+    ));
     return deepFreeze({
       ...upstream,
+      records: authorizedRecords,
       actor_id: bindings.identity.actor_id,
       identity_decision_id: bindings.identity.decision_id,
       scope_decision_id: bindings.scope.decision_id,

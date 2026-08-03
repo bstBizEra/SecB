@@ -137,6 +137,7 @@ const RECORD_KEYS = Object.freeze([
   "provenance",
   "valid_from",
   "valid_until",
+  "access_policy",
   "retention_policy",
   "admitted_at",
   "supersedes",

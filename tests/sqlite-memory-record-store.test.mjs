@@ -43,6 +43,7 @@ function gatewayRecord(overrides = {}) {
     provenance: { evidence_refs: ["ev-1"], origin_record_id: "kc-1" },
     valid_from: "2026-07-20T09:00:00Z",
     valid_until: "2026-07-20T11:00:00Z",
+    access_policy: "project-members",
     retention_policy: "retain-30-days",
     statement: "durable store candidate",
     ...overrides

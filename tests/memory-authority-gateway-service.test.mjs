@@ -46,14 +46,17 @@ const allowAdmission = ({ project_id, layer }) => ({
   layer,
   producer: ACTOR,
   reviewer: null,
-  approver: layer === "project" ? "human-memory-approver" : null
+  approver: layer === "project" ? "human-memory-approver" : null,
+  access_policy: "project-members"
 });
 const allowRetrieval = ({ project_id, layer }) => ({
   decision: "ALLOW",
   decision_id: "retrieval-authority-1",
   actor_id: ACTOR,
   project_id,
-  layer
+  layer,
+  classification_clearance: "CONFIDENTIAL",
+  permitted_access_policies: ["project-members"]
 });
 
 function fakeGateway() {
@@ -136,6 +139,7 @@ test("admission injects server identity and authority roles and computes the bou
   const forwarded = calls.admit[0];
   assert.deepEqual(forwarded.admission, { producer: ACTOR });
   assert.equal(forwarded.record.actor_id, ACTOR);
+  assert.equal(forwarded.record.access_policy, "project-members");
   const { content_hash, ...recordWithoutHash } = forwarded.record;
   assert.equal(content_hash, canonicalFingerprint({ ...recordWithoutHash, layer: "session" }));
   assert.equal(Object.isFrozen(result), true);
@@ -157,6 +161,7 @@ test("caller cannot smuggle identity, scope, admission actors, or trusted hashes
   const attempts = [
     { layer: "session", record: { ...callerRecord(), actor_id: "attacker" } },
     { layer: "session", record: { ...callerRecord(), content_hash: "a".repeat(64) } },
+    { layer: "session", record: { ...callerRecord(), access_policy: "public" } },
     { layer: "session", record: callerRecord(), admission: { producer: "attacker" } }
   ];
   for (const attempt of attempts) assert.equal((await instance.admit(attempt)).code, "DENY_MALFORMED_REQUEST");
@@ -210,6 +215,7 @@ test("project admission enforces distinct producer, reviewer, and approver at th
         actor_id: ACTOR,
         project_id,
         layer,
+        access_policy: "project-members",
         ...roles
       })
     });
@@ -237,6 +243,7 @@ test("fabricated expired, future-valid, hash-tampered, and over-limit retrieval 
       ...callerRecord(),
       actor_id: ACTOR,
       layer: "session",
+      access_policy: "project-members",
       admitted_at: admittedAt,
       ...overrides
     };
@@ -267,6 +274,77 @@ test("fabricated expired, future-valid, hash-tampered, and over-limit retrieval 
   const overLimit = facade(pageGateway([first, secondBody]))
     .retrieve({ project_id: PROJECT, layer: "session", limit: 1 });
   assert.equal(overLimit.code, "DENY_MEMORY_RETRIEVAL");
+});
+
+test("retrieval returns only records within server clearance and permitted access policies", () => {
+  const admittedAt = "2026-07-20T09:30:00.000Z";
+  const memoryRecord = (id, classification, accessPolicy) => {
+    const body = {
+      ...callerRecord({ memory_record_id: id, classification }),
+      actor_id: ACTOR,
+      layer: "session",
+      access_policy: accessPolicy,
+      admitted_at: admittedAt
+    };
+    const { admitted_at, ...hashBody } = body;
+    void admitted_at;
+    return { ...body, content_hash: canonicalFingerprint(hashBody) };
+  };
+  const records = [
+    memoryRecord("memory-public", "PUBLIC", "project-members"),
+    memoryRecord("memory-confidential", "CONFIDENTIAL", "project-members"),
+    memoryRecord("memory-other-policy", "INTERNAL", "restricted-team")
+  ];
+  const memoryGateway = {
+    admit: async () => ({ decision: "DENY", code: "NOT_USED" }),
+    retrieve: () => ({
+      decision: "ALLOW",
+      code: "RETRIEVED",
+      retrieved_at: NOW.toISOString(),
+      records: records.map((record) => ({ data_untrusted: true, record })),
+      next_cursor: null
+    })
+  };
+  const result = facade(memoryGateway, {
+    retrievalAuthorityResolver: ({ project_id, layer }) => ({
+      decision: "ALLOW",
+      decision_id: "access-decision-1",
+      actor_id: ACTOR,
+      project_id,
+      layer,
+      classification_clearance: "INTERNAL",
+      permitted_access_policies: ["project-members"]
+    })
+  }).retrieve({ project_id: PROJECT, layer: "session" });
+  assert.equal(result.decision, "ALLOW");
+  assert.equal(result.authority_decision_id, "access-decision-1");
+  assert.deepEqual(result.records.map((entry) => entry.record.memory_record_id), ["memory-public"]);
+});
+
+test("malformed clearance and policy grants deny before Memory retrieval", () => {
+  const cases = [
+    ["unknown clearance", "TOP_SECRET", ["project-members"]],
+    ["empty policies", "INTERNAL", []],
+    ["duplicate policies", "INTERNAL", ["project-members", "project-members"]],
+    ["blank policy", "INTERNAL", [""]],
+    ["non-array", "INTERNAL", "project-members"]
+  ];
+  for (const [label, classificationClearance, permittedAccessPolicies] of cases) {
+    const { memoryGateway, calls } = fakeGateway();
+    const instance = facade(memoryGateway, {
+      retrievalAuthorityResolver: ({ project_id, layer }) => ({
+        decision: "ALLOW",
+        decision_id: "access-decision-1",
+        actor_id: ACTOR,
+        project_id,
+        layer,
+        classification_clearance: classificationClearance,
+        permitted_access_policies: permittedAccessPolicies
+      })
+    });
+    assert.equal(instance.retrieve({ project_id: PROJECT, layer: "session" }).code, "DENY_MEMORY_RETRIEVAL_AUTHORITY", label);
+    assert.equal(calls.retrieve.length, 0, label);
+  }
 });
 
 test("resolver failures and malformed upstream results are contained", async () => {
