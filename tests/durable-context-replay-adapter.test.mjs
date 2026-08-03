@@ -233,7 +233,7 @@ test("two OS-process replay adapters converge on one durable receipt", async () 
       const adapter = new DurableContextReplayAdapter({ filePath, contextFederation: provider, headAnchor: anchor });
       for (let attempt = 0; attempt < 50; attempt += 1) {
         try { console.log(JSON.stringify(adapter.issueReceipt(${JSON.stringify(requestValue)}))); process.exit(0); }
-        catch (error) { if (!["HEAD_ANCHOR_BUSY", "LEDGER_BUSY", "REPLAY_LEDGER_CHANGED", "REPLAY_LEDGER_ROLLBACK_DETECTED"].includes(error.code)) throw error; await new Promise((resolve) => setTimeout(resolve, 2)); }
+        catch (error) { if (!["HEAD_ANCHOR_BUSY", "LEDGER_BUSY", "REPLAY_LEDGER_CHANGED", "REPLAY_LEDGER_ROLLBACK_DETECTED", "EBUSY", "EPERM"].includes(error.code)) throw error; await new Promise((resolve) => setTimeout(resolve, 2)); }
       }
       process.exit(2);
     `;

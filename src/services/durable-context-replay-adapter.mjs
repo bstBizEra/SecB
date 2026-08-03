@@ -246,6 +246,8 @@ export class DurableContextReplayAdapter {
     };
     for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
       try {
+        const concurrent = this.#lookup(request);
+        if (concurrent.match !== null) return concurrent.match;
         const anchoredBefore = this.#finalizeCommittedPending();
         const entryHash = canonicalFingerprint(entry);
         const predicted = { ledgerId: anchoredBefore.ledgerId, count: anchoredBefore.count + 1,
@@ -268,9 +270,10 @@ export class DurableContextReplayAdapter {
         if (anchoredAfter.count !== appended.sequence || anchoredAfter.headHash !== appended.recordHash) {
           throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "replay evidence did not converge with its trusted head");
         }
-        return;
+        return null;
       } catch (cause) {
-        if (cause instanceof LedgerError && (cause.code === "DENY_SEQUENCE_CONFLICT" || cause.code === "LEDGER_BUSY")) continue;
+        if ((cause instanceof LedgerError && (cause.code === "DENY_SEQUENCE_CONFLICT" || cause.code === "LEDGER_BUSY"))
+          || ["HEAD_ANCHOR_BUSY", "EBUSY", "EPERM"].includes(cause?.code)) continue;
         throw new DurableContextReplayError(cause?.code ?? "REPLAY_RECEIPT_PERSISTENCE_FAILURE", "Context replay receipt could not be persisted");
       }
     }
@@ -283,7 +286,8 @@ export class DurableContextReplayAdapter {
     const lookup = this.#lookup(request);
     if (lookup.match !== null) return deepFreeze({ ...lookup.match, replayed: true });
     const issued = stableResult(this.#issue(deepFreeze(structuredClone(request))));
-    this.#persist(request, issued, lookup);
+    const concurrent = this.#persist(request, issued, lookup);
+    if (concurrent !== null) return deepFreeze({ ...concurrent, replayed: true });
     return deepFreeze(structuredClone(issued));
   }
 
