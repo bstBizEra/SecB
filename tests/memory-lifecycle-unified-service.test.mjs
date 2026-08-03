@@ -65,7 +65,7 @@ function bindingLedgerFixture({ onAppend = () => {} } = {}) {
     ledger: {
       verify() { return { valid: true, ledgerId: "memory-context-binding-test", count: records.length, headHash: records.at(-1)?.recordHash ?? "0".repeat(64) }; },
       read() { return structuredClone(records); },
-      append(entry, { expectedSequence }) {
+      append(entry, { expectedSequence, preWriteCheck } = {}) {
         onAppend(entry);
         const replay = records.find((record) => record.entry.idempotencyKey === entry.idempotencyKey);
         if (replay) {
@@ -73,6 +73,8 @@ function bindingLedgerFixture({ onAppend = () => {} } = {}) {
           return { ...structuredClone(replay), replayed: true };
         }
         if (expectedSequence !== records.length) throw new Error("sequence conflict");
+        const veto = preWriteCheck?.(structuredClone(records), structuredClone(entry));
+        if (veto) return veto;
         const record = { ledgerId: "memory-context-binding-test", sequence: records.length + 1,
           previousHash: records.at(-1)?.recordHash ?? "0".repeat(64), entry: structuredClone(entry),
           entryHash: canonicalFingerprint(entry) };
@@ -89,6 +91,19 @@ const trustedAnchor = (ledger) => {
   const { ledgerId, count, headHash } = ledger.verify();
   return { ledgerId, count, headHash };
 };
+
+function rehashChain(records) {
+  let priorHash = "0".repeat(64);
+  records.forEach((record, index) => {
+    record.sequence = index + 1;
+    record.previousHash = priorHash;
+    record.entryHash = canonicalFingerprint(record.entry);
+    record.recordHash = canonicalFingerprint({ ledgerId: record.ledgerId, sequence: record.sequence,
+      previousHash: record.previousHash, entryHash: record.entryHash });
+    priorHash = record.recordHash;
+  });
+  return records;
+}
 
 function harness(overrides = {}) {
   const rows = overrides.rows ?? [memory()];
@@ -373,6 +388,23 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
     ledger_record_hash: selfConsistentForgery[1].recordHash }, selfConsistentForgery,
   { ledgerId: selfConsistentForgery[0].ledgerId, count: 2, headHash: selfConsistentForgery[1].recordHash }), false);
+  const actorForgery = rehashChain(structuredClone(bindingEvidence.records));
+  actorForgery[0].entry.actorId = "ATTACKER"; actorForgery[1].entry.actorId = "ATTACKER";
+  rehashChain(actorForgery);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_record_hash: actorForgery[1].recordHash }, actorForgery,
+  { ledgerId: actorForgery[0].ledgerId, count: 2, headHash: actorForgery[1].recordHash }), false);
+  const reversedSemantics = rehashChain(structuredClone(bindingEvidence.records).reverse());
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_sequence: 1, ledger_record_hash: reversedSemantics[0].recordHash }, reversedSemantics,
+  { ledgerId: reversedSemantics[0].ledgerId, count: 2, headHash: reversedSemantics[1].recordHash }), false);
+  const malformedFamily = structuredClone(bindingEvidence.records);
+  malformedFamily.push({ ledgerId: malformedFamily[0].ledgerId, entry: { ...structuredClone(malformedFamily[0].entry),
+    entryId: "malformed-family", type: "MEMORY_CONTEXT_LIFECYCLE_BINDING_ABORTED", payload: {} } });
+  rehashChain(malformedFamily);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_record_hash: malformedFamily[1].recordHash }, malformedFamily,
+  { ledgerId: malformedFamily[0].ledgerId, count: 3, headHash: malformedFamily[2].recordHash }), false);
   assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records,
     { ...anchor, headHash: "f".repeat(64) }), false);
   const preparedEntry = bindingEvidence.records[0].entry;
@@ -529,6 +561,27 @@ test("pre-Context crash aborts A read-only and requires fresh lifecycle evaluati
   assert.equal(fixture.calls.lifecycle, callsAfterFirst.lifecycle + 1);
   assert.deepEqual(binding.records.map((record) => record.entry.payload.status),
     ["PREPARED", "ABORTED", "PREPARED", "COMMITTED"]);
+});
+
+test("atomic PREPARED reservation rejects an overlapping stale preflight before Context mutation", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem-overlap" };
+  const binding = bindingLedgerFixture();
+  const first = harness({ lifecycleBindingLedger: binding.ledger });
+  let secondContextCalls = 0;
+  const second = harness({ lifecycleBindingLedger: binding.ledger,
+    contextFederation: { issueReceipt() { secondContextCalls += 1; throw new Error("must not mutate"); } },
+    lifecycleResolver: { async withIssuanceFence(request, callback) {
+      const committedA = await first.service.issueReceipt({ retrieval: retrieval(), issue });
+      assert.equal(committedA.state, "ISSUED");
+      return callback({ ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
+        evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
+        decisions: request.records.map((item) => effectiveDecision(request, item)) });
+    } }
+  });
+  const deniedB = await second.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(deniedB.code, "DENY_UNIFY_BINDING_LEDGER");
+  assert.equal(secondContextCalls, 0);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "COMMITTED"]);
 });
 
 test("timed-out issuance fence cannot invoke Context Federation later", async () => {

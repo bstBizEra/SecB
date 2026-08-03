@@ -202,6 +202,64 @@ function bindingCore(value) {
   return canonicalFingerprint(tuple) === binding.binding_fingerprint ? binding : null;
 }
 
+function bindingLedgerSemantics(records) {
+  const groups = new Map();
+  for (const record of records) {
+    if (typeof record.entry?.type !== "string" || !record.entry.type.startsWith("MEMORY_CONTEXT_LIFECYCLE_BINDING_")) continue;
+    const entry = exactSnapshot(record.entry, BINDING_ENTRY_KEYS);
+    const payload = entry?.payload;
+    const core = isPlainObject(payload?.binding) ? bindingCore(payload.binding) : null;
+    const status = entry?.type?.slice("MEMORY_CONTEXT_LIFECYCLE_BINDING_".length);
+    if (entry === null || core === null || payload.status !== status || !["PREPARED", "COMMITTED", "ABORTED"].includes(status)) return null;
+    const events = groups.get(core.binding_fingerprint) ?? [];
+    events.push({ record, entry, payload, core });
+    groups.set(core.binding_fingerprint, events);
+  }
+  const result = new Map();
+  for (const [fingerprint, events] of groups) {
+    const preparedEvents = events.filter(({ payload }) => payload.status === "PREPARED");
+    const committedEvents = events.filter(({ payload }) => payload.status === "COMMITTED");
+    const abortedEvents = events.filter(({ payload }) => payload.status === "ABORTED");
+    if (events.length !== preparedEvents.length + committedEvents.length + abortedEvents.length
+      || preparedEvents.length !== 1 || committedEvents.length > 1 || abortedEvents.length > 1
+      || (committedEvents.length === 1 && abortedEvents.length === 1)) return null;
+    const prepared = preparedEvents[0];
+    const committed = committedEvents[0];
+    const aborted = abortedEvents[0];
+    const preparedPayload = exactSnapshot(prepared.payload, ["binding", "status", "context_issue_request"]);
+    const committedPayload = committed === undefined ? null
+      : exactSnapshot(committed.payload, ["binding", "status", "context_result_fingerprint"]);
+    const abortedPayload = aborted === undefined ? null : exactSnapshot(aborted.payload, ["binding", "status", "reason"]);
+    const contextIssueRequest = preparedPayload === null ? null : exactSnapshot(preparedPayload.context_issue_request,
+      [...ISSUE_KEYS, "candidateSources"], ["document", "actorId", "authorityRef", "baseline", "idempotencyKey", "candidateSources"]);
+    const issueInput = contextIssueRequest === null ? null
+      : Object.fromEntries(ISSUE_KEYS.filter((key) => Object.hasOwn(contextIssueRequest, key)).map((key) => [key, contextIssueRequest[key]]));
+    if (contextIssueRequest === null || !isPlainObject(contextIssueRequest.document)
+      || prepared.core.context_receipt_fingerprint !== contextIssueRequest.document.content_hash
+      || prepared.core.context_intent_fingerprint !== canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: issueInput })
+      || prepared.core.context_issue_fingerprint !== canonicalFingerprint({ op: "ISSUE",
+        request: { ...contextIssueRequest, idempotencyKey: undefined } })
+      || prepared.core.context_idempotency_key_fingerprint !== canonicalFingerprint(contextIssueRequest.idempotencyKey)
+      || committedPayload !== null && !isHash(committedPayload.context_result_fingerprint)
+      || abortedPayload !== null && isBlank(abortedPayload.reason)
+      || committed !== undefined && committed.record.sequence <= prepared.record.sequence
+      || aborted !== undefined && aborted.record.sequence <= prepared.record.sequence) return null;
+    for (const event of events) {
+      if (canonicalFingerprint(event.core) !== canonicalFingerprint(prepared.core)
+        || event.entry.projectId !== contextIssueRequest.document.project_id
+        || event.entry.workPackageId !== contextIssueRequest.document.work_package_id
+        || event.entry.sessionId !== contextIssueRequest.document.session_id
+        || event.entry.actorId !== contextIssueRequest.actorId
+        || event.entry.timestamp !== prepared.core.evaluated_at
+        || event.entry.entryId !== canonicalFingerprint({ binding_fingerprint: fingerprint, status: event.payload.status })
+        || event.entry.idempotencyKey !== JSON.stringify([event.entry.projectId, contextIssueRequest.document.receipt_id,
+          fingerprint, event.payload.status])) return null;
+    }
+    result.set(fingerprint, { events, prepared, committed, aborted, contextIssueRequest });
+  }
+  return result;
+}
+
 function verifyMemoryContextLifecycleBindingUnsafe(value, ledgerEvidence, trustedAnchor) {
   const binding = exactSnapshot(value, [...BINDING_CORE_KEYS, "binding_status", "ledger_sequence", "ledger_record_hash", "replayed"]);
   const core = binding === null ? null : bindingCore(Object.fromEntries(BINDING_CORE_KEYS.map((key) => [key, binding[key]])));
@@ -214,42 +272,10 @@ function verifyMemoryContextLifecycleBindingUnsafe(value, ledgerEvidence, truste
     || !isHash(binding.ledger_record_hash) || binding.replayed !== false) return false;
   const record = records[binding.ledger_sequence - 1];
   if (record === undefined || record.recordHash !== binding.ledger_record_hash) return false;
-  const payload = exactSnapshot(record.entry?.payload, ["binding", "status", "context_result_fingerprint"]);
-  const bindingEvents = records.filter((candidate) => isPlainObject(candidate.entry?.payload?.binding)
-    && canonicalFingerprint(candidate.entry.payload.binding) === canonicalFingerprint(core));
-  const prepared = bindingEvents.filter((candidate) => candidate.entry?.type === "MEMORY_CONTEXT_LIFECYCLE_BINDING_PREPARED"
-    && candidate.entry?.payload?.status === "PREPARED");
-  const committed = bindingEvents.filter((candidate) => candidate.entry?.type === "MEMORY_CONTEXT_LIFECYCLE_BINDING_COMMITTED"
-    && candidate.entry?.payload?.status === "COMMITTED");
-  const preparedPayload = prepared.length === 1 ? exactSnapshot(prepared[0].entry.payload,
-    ["binding", "status", "context_issue_request"]) : null;
-  const preparedEntry = prepared.length === 1 ? exactSnapshot(prepared[0].entry, BINDING_ENTRY_KEYS) : null;
-  const committedEntry = exactSnapshot(record.entry, BINDING_ENTRY_KEYS);
-  const contextIssueRequest = preparedPayload === null ? null : exactSnapshot(preparedPayload.context_issue_request,
-    [...ISSUE_KEYS, "candidateSources"], ["document", "actorId", "authorityRef", "baseline", "idempotencyKey", "candidateSources"]);
-  const issueInput = contextIssueRequest === null ? null
-    : Object.fromEntries(ISSUE_KEYS.filter((key) => Object.hasOwn(contextIssueRequest, key)).map((key) => [key, contextIssueRequest[key]]));
-  return committedEntry !== null && preparedEntry !== null
-    && record.entry.type === "MEMORY_CONTEXT_LIFECYCLE_BINDING_COMMITTED" && preparedPayload !== null
-    && bindingEvents.length === 2 && committed.length === 1 && committed[0].sequence === record.sequence
-    && payload !== null && payload.status === "COMMITTED" && isHash(payload.context_result_fingerprint)
-    && contextIssueRequest !== null && isPlainObject(contextIssueRequest.document)
-    && core.context_receipt_fingerprint === contextIssueRequest.document.content_hash
-    && core.context_intent_fingerprint === canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: issueInput })
-    && core.context_issue_fingerprint === canonicalFingerprint({ op: "ISSUE",
-      request: { ...contextIssueRequest, idempotencyKey: undefined } })
-    && core.context_idempotency_key_fingerprint === canonicalFingerprint(contextIssueRequest.idempotencyKey)
-    && preparedEntry.projectId === contextIssueRequest.document.project_id && committedEntry.projectId === preparedEntry.projectId
-    && preparedEntry.workPackageId === contextIssueRequest.document.work_package_id
-    && committedEntry.workPackageId === preparedEntry.workPackageId && committedEntry.sessionId === preparedEntry.sessionId
-    && preparedEntry.timestamp === core.evaluated_at && committedEntry.timestamp === core.evaluated_at
-    && preparedEntry.entryId === canonicalFingerprint({ binding_fingerprint: core.binding_fingerprint, status: "PREPARED" })
-    && committedEntry.entryId === canonicalFingerprint({ binding_fingerprint: core.binding_fingerprint, status: "COMMITTED" })
-    && preparedEntry.idempotencyKey === JSON.stringify([preparedEntry.projectId, contextIssueRequest.document.receipt_id,
-      core.binding_fingerprint, "PREPARED"])
-    && committedEntry.idempotencyKey === JSON.stringify([preparedEntry.projectId, contextIssueRequest.document.receipt_id,
-      core.binding_fingerprint, "COMMITTED"])
-    && canonicalFingerprint(payload.binding) === canonicalFingerprint(core);
+  const semantics = bindingLedgerSemantics(records);
+  const group = semantics?.get(core.binding_fingerprint);
+  return group !== undefined && group.events.length === 2 && group.aborted === undefined
+    && group.committed?.record.sequence === record.sequence;
 }
 
 export function verifyMemoryContextLifecycleBinding(value, ledgerEvidence, trustedAnchor) {
@@ -355,12 +381,28 @@ export function createMemoryLifecycleUnifiedService({
       timestamp: binding.evaluated_at,
       idempotencyKey: JSON.stringify([retrieval.project_id, issueInput.document.receipt_id, binding.binding_fingerprint, status])
     };
-    const appendedCall = syncCall(() => appendLifecycleBinding(entry, { expectedSequence: records.length }));
+    const preWriteCheck = status !== "PREPARED" ? undefined : (lockedRecords) => {
+      const chain = verifiedLedgerChain(lockedRecords);
+      const semantics = chain === null ? null : bindingLedgerSemantics(chain);
+      if (semantics === null) return { decision: "DENY", code: "DENY_BINDING_SEMANTICS" };
+      for (const group of semantics.values()) {
+        const sameIdentity = group.prepared.entry.projectId === retrieval.project_id
+          && group.contextIssueRequest.document.receipt_id === issueInput.document.receipt_id
+          && group.prepared.core.context_idempotency_key_fingerprint === canonicalFingerprint(issueInput.idempotencyKey);
+        const active = group.committed !== undefined || group.aborted === undefined;
+        if (sameIdentity && active && group.prepared.core.binding_fingerprint !== binding.binding_fingerprint) {
+          return { decision: "DENY", code: "DENY_BINDING_IDENTITY_RESERVED" };
+        }
+      }
+      return null;
+    };
+    const appendedCall = syncCall(() => appendLifecycleBinding(entry, { expectedSequence: records.length, preWriteCheck }));
     const appended = appendedCall.ok ? exactSnapshot(appendedCall.value, LEDGER_RECEIPT_KEYS) : null;
     const after = appended === null ? null : readVerifiedLedger();
     const readback = after?.find((record) => record.sequence === appended.sequence);
     const { replayed: ignoredReplay, ...persistedReceipt } = appended ?? {}; void ignoredReplay;
-    if (appended === null || canonicalFingerprint(appended.entry) !== canonicalFingerprint(entry)
+    if (appended === null || (status === "PREPARED" && appended.replayed === true)
+      || canonicalFingerprint(appended.entry) !== canonicalFingerprint(entry)
       || canonicalFingerprint(readback) !== canonicalFingerprint(persistedReceipt)) return null;
     return appended;
   };
@@ -378,84 +420,22 @@ export function createMemoryLifecycleUnifiedService({
     if (records === null) return recoveryRequired("binding ledger chain evidence is invalid or unavailable");
     const intentFingerprint = canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: issueInput });
     const idempotencyFingerprint = canonicalFingerprint(issueInput.idempotencyKey);
-    const groups = new Map();
-    for (const record of records) {
-      if (typeof record.entry?.type !== "string" || !record.entry.type.startsWith("MEMORY_CONTEXT_LIFECYCLE_BINDING_")) continue;
-      const entry = exactSnapshot(record.entry, BINDING_ENTRY_KEYS);
-      const payload = record.entry?.payload;
-      if (entry === null || !isPlainObject(payload) || !isPlainObject(payload.binding)) {
-        return recoveryRequired("binding ledger contains a malformed binding event");
-      }
-      const core = bindingCore(payload.binding);
-      const expectedStatus = record.entry.type.slice("MEMORY_CONTEXT_LIFECYCLE_BINDING_".length);
-      if (core === null || payload.status !== expectedStatus || !["PREPARED", "COMMITTED", "ABORTED"].includes(expectedStatus)) {
-        return recoveryRequired("binding ledger contains an invalid binding core or event type");
-      }
-      const events = groups.get(core.binding_fingerprint) ?? [];
-      events.push({ record, payload, core });
-      groups.set(core.binding_fingerprint, events);
-    }
+    const groups = bindingLedgerSemantics(records);
+    if (groups === null) return recoveryRequired("binding ledger event semantics are invalid");
     const active = [];
-    for (const events of groups.values()) {
-      const preparedEvents = events.filter(({ payload }) => payload.status === "PREPARED");
-      const committedEvents = events.filter(({ payload }) => payload.status === "COMMITTED");
-      const abortedEvents = events.filter(({ payload }) => payload.status === "ABORTED");
-      if (events.length !== preparedEvents.length + committedEvents.length + abortedEvents.length
-        || preparedEvents.length !== 1 || committedEvents.length > 1 || abortedEvents.length > 1
-        || (committedEvents.length === 1 && abortedEvents.length === 1)) {
-        return recoveryRequired("binding ledger contains an impossible lifecycle event history");
-      }
-      const prepared = preparedEvents[0];
-      const committed = committedEvents[0];
-      const aborted = abortedEvents[0];
-      const preparedPayload = exactSnapshot(prepared.payload, ["binding", "status", "context_issue_request"]);
-      const committedPayload = committed === undefined ? null
-        : exactSnapshot(committed.payload, ["binding", "status", "context_result_fingerprint"]);
-      const abortedPayload = aborted === undefined ? null : exactSnapshot(aborted.payload, ["binding", "status", "reason"]);
-      if (prepared.record.entry.type !== "MEMORY_CONTEXT_LIFECYCLE_BINDING_PREPARED" || preparedPayload === null
-        || (committed !== undefined && (committed.record.entry.type !== "MEMORY_CONTEXT_LIFECYCLE_BINDING_COMMITTED"
-          || committedPayload === null || !isHash(committedPayload.context_result_fingerprint)
-          || committed.record.sequence <= prepared.record.sequence))
-        || (aborted !== undefined && (aborted.record.entry.type !== "MEMORY_CONTEXT_LIFECYCLE_BINDING_ABORTED"
-          || abortedPayload === null || isBlank(abortedPayload.reason) || aborted.record.sequence <= prepared.record.sequence))) {
-        return recoveryRequired("binding ledger event types, shapes, or ordering are inconsistent");
-      }
-      const storedContextRequest = exactSnapshot(preparedPayload.context_issue_request,
-        [...ISSUE_KEYS, "candidateSources"], ["document", "actorId", "authorityRef", "baseline", "idempotencyKey", "candidateSources"]);
-      const storedIssueInput = storedContextRequest === null ? null
-        : Object.fromEntries(ISSUE_KEYS.filter((key) => Object.hasOwn(storedContextRequest, key)).map((key) => [key, storedContextRequest[key]]));
-      if (storedContextRequest === null || !isPlainObject(storedContextRequest.document)
-        || prepared.core.context_receipt_fingerprint !== storedContextRequest.document.content_hash
-        || prepared.core.context_intent_fingerprint !== canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: storedIssueInput })
-        || prepared.core.context_issue_fingerprint !== canonicalFingerprint({ op: "ISSUE",
-          request: { ...storedContextRequest, idempotencyKey: undefined } })
-        || prepared.core.context_idempotency_key_fingerprint !== canonicalFingerprint(storedContextRequest.idempotencyKey)
-        || prepared.record.entry.projectId !== storedContextRequest.document.project_id) {
-        return recoveryRequired("binding ledger does not preserve its exact Context identity");
-      }
-      for (const { record, payload } of events) {
-        if (record.entry.entryId !== canonicalFingerprint({ binding_fingerprint: prepared.core.binding_fingerprint,
-          status: payload.status }) || record.entry.idempotencyKey !== JSON.stringify([record.entry.projectId,
-          storedContextRequest.document.receipt_id, prepared.core.binding_fingerprint, payload.status])
-          || record.entry.workPackageId !== storedContextRequest.document.work_package_id
-          || record.entry.sessionId !== storedContextRequest.document.session_id
-          || record.entry.timestamp !== prepared.core.evaluated_at) {
-          return recoveryRequired("binding event metadata is inconsistent with its stored Context request");
-        }
-      }
+    for (const group of groups.values()) {
+      const { prepared, committed, aborted, contextIssueRequest: storedContextRequest } = group;
       if (prepared.core.context_idempotency_key_fingerprint !== idempotencyFingerprint
         || storedContextRequest.document.receipt_id !== issueInput.document.receipt_id
         || prepared.record.entry.projectId !== retrieval.project_id) continue;
-      if (committed !== undefined || aborted === undefined) active.push({ prepared, committed });
+      if (committed !== undefined || aborted === undefined) active.push(group);
     }
     if (active.length === 0) return null;
     if (active.length !== 1) return recoveryRequired("multiple lifecycle bindings claim the exact Context issuance identity");
-    const { prepared, committed } = active[0];
+    const { prepared, committed, contextIssueRequest } = active[0];
     if (prepared.core.context_intent_fingerprint !== intentFingerprint) {
       return recoveryRequired("the reserved Context receipt/idempotency identity conflicts with this issuance intent");
     }
-    const contextIssueRequest = exactSnapshot(prepared.payload.context_issue_request,
-      [...ISSUE_KEYS, "candidateSources"], ["document", "actorId", "authorityRef", "baseline", "idempotencyKey", "candidateSources"]);
     const binding = prepared.core;
     if (contextIssueRequest === null || canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT",
       request: Object.fromEntries(ISSUE_KEYS.filter((key) => Object.hasOwn(contextIssueRequest, key)).map((key) => [key, contextIssueRequest[key]])) }) !== intentFingerprint
