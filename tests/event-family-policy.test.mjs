@@ -643,7 +643,7 @@ const PINNED_BLOBS = Object.freeze({
   "tests/risk-registry.test.mjs": "1ea047adbc00ab8a9f5b737be0b67ede01b5583d",
   // Repinned from 082638c1 by MOD-WSPACE-S3, then again by MOD-MEM S2: the
   // memory-record schema registration (17->18 schemas) is an authorized
-  // additive edit to validate-foundation.mjs. Pin tracks the post-MOD-MEM-S2
+  // additive edit to validate-foundation.mjs. Pin tracks the post-WP-GOV-VF1
   // blob so this guard still detects any UNAUTHORIZED further drift of the
   // validator.
   "tools/validate-foundation.mjs": "1cf857089d483f133f6d5fb724319e60bea961f8",

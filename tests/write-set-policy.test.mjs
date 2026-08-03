@@ -469,12 +469,12 @@ test("byte-identity: files read but not modified are unchanged vs main @ 71b9d41
   // (memory-record schema registration, 17->18 schemas; see
   // docs/03-project-control/candidates/mod-mem-s2-memory-record-contract-producer-verification-001.md),
   // so it no longer matches main's blob on this pre-merge branch. Pin it to
-  // its post-MOD-MEM-S2 blob so any UNAUTHORIZED further drift of the
+  // its post-WP-GOV-VF1 blob so any UNAUTHORIZED further drift of the
   // validator still fails this guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
     "1cf857089d483f133f6d5fb724319e60bea961f8",
-    "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
+    "validate-foundation.mjs pinned to its post-WP-GOV-VF1 blob"
   );
   // Sanity: the guarded source actually still contains the pathSubset the parity
   // oracle mirrors, so the guard is protecting the right thing.

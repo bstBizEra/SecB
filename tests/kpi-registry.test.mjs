@@ -445,14 +445,14 @@ test(`byte-identity: files read but not modified are unchanged vs main @ ${BASE_
   // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
   // workspace-lease schema registration, 16->17 schemas), then again by
   // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), so it is
-  // no longer blob-identical to the base commit. Pin it to its post-MOD-MEM-S2
+  // no longer blob-identical to the base commit. Pin it to its post-WP-GOV-VF1
   // Authorized-modified a THIRD time by WP-GOV-VF1 (exact-set contract pins,
-  // closing DEF-M2). // blob so any UNAUTHORIZED further drift of the validator still fails this
-  // guard.
+  // closing DEF-M2), so this pin names the post-WP-GOV-VF1 blob and any
+  // UNAUTHORIZED further drift of the validator still fails this guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
     "1cf857089d483f133f6d5fb724319e60bea961f8",
-    "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
+    "validate-foundation.mjs pinned to its post-WP-GOV-VF1 blob"
   );
   // Sanity: the guarded doctrine doc still contains a KPI this suite pins, so
   // the guard is protecting the right file.

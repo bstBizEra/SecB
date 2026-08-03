@@ -474,13 +474,13 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
   // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
   // workspace-lease schema registration, 16->17 schemas), then again by
   // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), so it is
-  // no longer blob-identical to ${BASE}. Pin it to its post-MOD-MEM-S2 blob
+  // no longer blob-identical to ${BASE}. Pin it to its post-WP-GOV-VF1 blob
   // instead of dropping the guard, so any UNAUTHORIZED further drift of the
   // validator still fails.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
     "1cf857089d483f133f6d5fb724319e60bea961f8",
-    "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
+    "validate-foundation.mjs pinned to its post-WP-GOV-VF1 blob"
   );
   // Sanity: the reused primitive actually still exports the containment evaluator
   // this module leans on, so the guard protects the right thing.
