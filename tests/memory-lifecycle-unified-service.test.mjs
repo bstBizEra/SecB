@@ -722,26 +722,8 @@ test("real authority gateway, provider, Context Federation, and durable binding 
       project_id: request.project_id, layer: request.layer, evaluated_at: request.as_of,
       batch_fingerprint: canonicalFingerprint(request), decisions: request.records.map((item) => effectiveDecision(request, item)) }); }
   };
-  const replayStore = new Map();
-  const contextPort = {
-    issueReceipt(request) {
-      const result = federation.issueReceipt(request);
-      if (result?.state === "ISSUED") replayStore.set(canonicalFingerprint({ projectId: request.document.project_id,
-        receiptId: request.document.receipt_id, idempotencyKey: request.idempotencyKey }),
-      { requestFingerprint: canonicalFingerprint(request), result: structuredClone(result) });
-      return result;
-    },
-    replayReceipt(request) {
-      const stored = replayStore.get(canonicalFingerprint({ projectId: request.document.project_id,
-        receiptId: request.document.receipt_id, idempotencyKey: request.idempotencyKey }));
-      if (stored === undefined || stored.requestFingerprint !== canonicalFingerprint(request)) {
-        return { decision: "DENY", code: "DENY_CONTEXT_REPLAY_MISS" };
-      }
-      return { ...structuredClone(stored.result), replayed: true };
-    }
-  };
   const unified = createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: authorityGateway, lifecycleResolver,
-    memoryCandidateProvider: provider, contextFederation: contextPort, lifecycleBindingLedger, now: clock });
+    memoryCandidateProvider: provider, contextFederation: federation, lifecycleBindingLedger, now: clock });
   const projected = provider.toCandidateSources({ project_id: projectId, records: [row] });
   const candidates = normalizeCandidateSources(projected.sources).candidates;
   const minted = mintReceiptDocument({ receipt_id: "receipt-real-1", project_id: projectId, objective_id: "objective-real-1",
