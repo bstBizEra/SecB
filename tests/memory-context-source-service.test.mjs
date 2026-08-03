@@ -316,6 +316,58 @@ test("provider additions, substitutions, duplicates, silent drops, and accountin
   }
 });
 
+test("provider retrieval time must exactly match the gateway observation time", () => {
+  const cases = [
+    {
+      label: "backdated projection cannot revive expired memory",
+      gatewayRetrievedAt: "2026-07-20T12:00:00.000Z",
+      providerRetrievedAt: "2026-07-20T10:00:00.000Z",
+      record: retrievedRecord()
+    },
+    {
+      label: "future-dated projection cannot prematurely activate memory",
+      gatewayRetrievedAt: "2026-07-20T10:00:00.000Z",
+      providerRetrievedAt: "2026-07-20T12:30:00.000Z",
+      record: retrievedRecord({
+        valid_from: "2026-07-20T12:00:00.000Z",
+        valid_until: "2026-07-20T13:00:00.000Z"
+      })
+    }
+  ];
+
+  for (const { label, gatewayRetrievedAt, providerRetrievedAt, record } of cases) {
+    const result = createMemoryContextSourceService({
+      memoryGateway: {
+        retrieve: () => ({
+          decision: "ALLOW",
+          code: "RETRIEVED",
+          retrieved_at: gatewayRetrievedAt,
+          records: [{ data_untrusted: true, record }],
+          next_cursor: null
+        })
+      },
+      memoryCandidateProvider: {
+        toCandidateSources: () => ({
+          decision: "ALLOW",
+          code: "MEMORY_SOURCES_PROJECTED",
+          data_untrusted: true,
+          project_id: PROJECT,
+          retrieved_at: providerRetrievedAt,
+          sources: [candidateSource()],
+          exclusions: [],
+          accounting: { requested: 1, included: 1, excluded: 0 }
+        })
+      },
+      scopeResolver: allowScope,
+      activationResolver: allowActivation
+    }).retrieveCandidateSources({ project_id: PROJECT, layer: "session" });
+
+    assert.equal(result.decision, "DENY", label);
+    assert.equal(result.code, "DENY_MEMORY_PROVENANCE_BINDING", label);
+    assert.equal(result.stage, "provider-binding", label);
+  }
+});
+
 test("E2E: admitted SQLite memory becomes a Context Receipt source only through effective server gates", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "secb-memory-context-"));
   const store = createSqliteMemoryRecordStore({ databasePath: join(directory, "memory.sqlite") });

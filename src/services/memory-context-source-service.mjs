@@ -72,7 +72,7 @@ function hasExactKeys(value, keys) {
     && keys.every((key) => ownKeys.includes(key));
 }
 
-function projectionIsBound(records, projected, normalized, projectId, layer, tokenBudget) {
+function projectionIsBound(records, projected, normalized, projectId, layer, tokenBudget, gatewayRetrievedAt) {
   const accountingKeys = tokenBudget === undefined ? ACCOUNTING_KEYS : BUDGET_ACCOUNTING_KEYS;
   if (
     !hasExactKeys(projected.accounting, accountingKeys)
@@ -100,7 +100,8 @@ function projectionIsBound(records, projected, normalized, projectId, layer, tok
     return false;
   }
 
-  const projectionMs = Date.parse(projected.retrieved_at);
+  if (projected.retrieved_at !== gatewayRetrievedAt) return false;
+  const projectionMs = Date.parse(gatewayRetrievedAt);
   const consumed = new Set();
   for (const candidate of normalized.candidates) {
     const matching = [];
@@ -328,7 +329,15 @@ export function createMemoryContextSourceService({
     } catch {
       return deny("DENY_CANDIDATE_SOURCE_PORT", "Memory candidates failed the typed source boundary", "candidate-source-port");
     }
-    if (!projectionIsBound(records, projected, normalized, query.project_id, query.layer, query.token_budget)) {
+    if (!projectionIsBound(
+      records,
+      projected,
+      normalized,
+      query.project_id,
+      query.layer,
+      query.token_budget,
+      retrieved.retrieved_at
+    )) {
       return deny("DENY_MEMORY_PROVENANCE_BINDING", "Memory projection is not a subtractive binding of the retrieved records", "provider-binding");
     }
 
