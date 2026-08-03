@@ -1,7 +1,23 @@
 schema_version: "0.1"
 record_metadata:
   record_id: "wp_gov_vf2_merge_guard_repin_v1_candidate"
-  record_status: "AWAITING_GOV_AUTHORIZATION"
+  record_status: "WITHDRAWN"
+  withdrawn_at: "2026-08-03"
+  withdrawn_by: "SARCHI decision SECB-SARCHI-BRANCH-INTEGRATION-001"
+  withdrawal_reason: >-
+    This package authorizes re-pinning five guarded files for a merge of
+    origin/main into feat/secb-ruflo-command-center. The SARCHI call reversed
+    the integration direction: the branch's own work touches NONE of those five
+    files, so extracting it as narrow PRs against main - the pattern PR #136
+    already proves - needs no guard re-pinning at all. The merge is what makes
+    the guarded files change, and the merge is no longer the route.
+
+    The analysis here stands and is why the alternative could be chosen
+    knowingly: the merge is resolved and preserved at b1a85c6, and this record
+    states exactly what landing it would have cost.
+
+    No signature was requested or received. If a merge is later wanted for a
+    different reason, this is re-raisable on that reason.
   source_template: "docs/templates/work-package.yaml"
   producer_runtime: "Claude Code"
   limitations:
