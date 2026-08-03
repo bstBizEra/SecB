@@ -330,8 +330,8 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     let active = true;
     try {
       const result = port(deepFreeze(structuredClone(request)), (snapshot) => {
-        if (!active || calls !== 0) throw new Error("boundary callback was invoked outside its single synchronous lease");
         calls += 1;
+        if (!active || calls !== 1) throw new Error("boundary callback was invoked outside its single synchronous lease");
         return callback(snapshot);
       });
       active = false;

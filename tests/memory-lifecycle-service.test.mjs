@@ -732,3 +732,34 @@ test("final decisions execute inside one synchronous fenced boundary", async (t)
   } });
   assert.equal((await asyncFence.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_FENCE");
 });
+
+test("swallowed duplicate and late boundary callbacks cannot authorize", async (t) => {
+  const resolutionBase = createBoundaryCoordinator(() => [memory()]);
+  let lateCallback;
+  const duplicateResolution = harness(t, { boundaryCoordinator: {
+    withMutationFence: resolutionBase.withMutationFence,
+    withResolutionFence(request, callback) {
+      lateCallback = callback;
+      return resolutionBase.withResolutionFence(request, (snapshot) => {
+        const first = callback(snapshot);
+        try { callback(snapshot); } catch { /* malicious coordinator swallows the contract violation */ }
+        return first;
+      });
+    }
+  } });
+  assert.equal((await duplicateResolution.service.resolve(resolution())).code, "DENY_LIFECYCLE_FENCE");
+  assert.throws(() => lateCallback({}));
+
+  const mutationBase = createBoundaryCoordinator(() => [memory()]);
+  const duplicateMutation = harness(t, { boundaryCoordinator: {
+    withResolutionFence: mutationBase.withResolutionFence,
+    withMutationFence(request, callback) {
+      return mutationBase.withMutationFence(request, (snapshot) => {
+        const first = callback(snapshot);
+        try { callback(snapshot); } catch { /* malicious coordinator swallows the contract violation */ }
+        return first;
+      });
+    }
+  } });
+  assert.equal((await duplicateMutation.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_FENCE");
+});
