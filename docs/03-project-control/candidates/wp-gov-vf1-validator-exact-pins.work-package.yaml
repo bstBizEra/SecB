@@ -130,3 +130,75 @@ authority_note: >-
 
   GOV authorization of this work package is what converts that drift from
   unauthorized to authorized. Without it there is nothing here to merge.
+
+review_verdict:
+  record_id: "WP-GOV-VF1-REV-001"
+  reviewer: "Codex (REV), independent of the producer"
+  reviewed_at: "2026-08-03"
+  scope: "PR 136, base 8be8c995, target 5d97c4cb. Later commits not reviewed. No merge performed."
+  verdict: "APPROVE_WITH_NOTES"
+  blocking_findings: 0
+  independently_reproduced:
+    - "npm run validate exit 0"
+    - "4 mutations each exit 1"
+    - "AC-VF1-06: 7/7 guards passed before, 7/7 failed after an injected drift, 7/7 passed after revert, worktree clean"
+    - "Full suite on target AND base both 1342 passed / 1 failed / 3 skipped - the target introduces no additional failure"
+  rev_noted_one_probe_was_weaker_than_the_producer_implied: >-
+    Removing `integrity` from skill-candidate's required set was caught by the
+    EXISTING schema.identity guard, not by the new exact-set pin. It is
+    fail-closed either way, but that probe does not independently exercise what
+    this work package added. The producer listed it among its evidence without
+    noticing.
+  answered_the_question_the_producer_could_not: >-
+    Acceptable on main, with conditions. A governed contract schema is a wire and
+    authority boundary, so an intentional shape change SHOULD fail validation
+    until the expected shape is explicitly updated in the same authorized and
+    reviewed change. Conditions: a re-pin is acknowledgement that a contract
+    changed, not proof it is safe or authorized; migration, compatibility and
+    authority implications still require review; the target SHA stays frozen and
+    any later commit needs a new round.
+
+producer_corrections_accepted:
+  - id: "REV-VF1-N01"
+    severity: "MEDIUM, non-blocking"
+    the_claim_that_was_wrong: >-
+      The producer stated the maintenance cost as "one line per deliberate
+      contract change", in the validator's own comment and in the review brief.
+      Incomplete. Editing validate-foundation.mjs also invalidates seven
+      byte-identity guards, so the real fan-out is the validator pin PLUS seven
+      test re-pins - EIGHT, not one.
+    why_it_matters: >-
+      The producer asked REV to judge whether that maintenance cost was
+      acceptable on main while understating it by a factor of eight. The verdict
+      survived the correction, but it was reached against a wrong number, and
+      that is the producer's error rather than the reviewer's.
+    where_it_is_NOT_corrected: >-
+      The claim also sits in a comment inside tools/validate-foundation.mjs on
+      the frozen target. Correcting it there would change that file's blob and
+      invalidate all seven pins, forcing another authorized re-pin round for a
+      sentence. It is left standing and corrected here instead - a reader of that
+      comment should treat this record as the accurate figure.
+    recommendation_accepted_not_opened: >-
+      REV recommends a separate bounded work package to move contract-shape
+      expectations into a declarative baseline, or to centralise the validator
+      integrity guard, WITHOUT weakening fail-closed behaviour. Recorded so it is
+      not lost; not opened here, because the queue is already full.
+  - id: "REV-VF1-N02"
+    severity: "LOW, non-blocking"
+    finding: "A spliced comment fragment in 3 files and stale post-MOD-MEM-S2 provenance in all 7."
+    status: >-
+      Corrected at 7a975f0 in a separately pinned revision, as REV asked. The
+      producer's commit message for that fix then overstated the diff as
+      comment-only when 10 of the changed lines are assertion message strings;
+      corrected on the PR rather than by force-pushing a branch under review.
+
+residual_risk_recorded_by_rev:
+  - "Updating the expected arrays alongside a schema can mechanically make validation green. The pin records that a change happened; it does not judge it."
+  - "Exact property and required sets do NOT detect changes to types, enums, formats or nested constraints."
+  - "This validator is a drift tripwire, not an authorization verifier. Human review remains necessary."
+
+authority_recorded:
+  technical_acceptance: "granted for the exact target 5d97c4cb"
+  governance_acceptance: "NOT granted"
+  merge_authority: "NOT granted - the operator merges"
+  deployment_or_activation: "NOT granted"
