@@ -405,6 +405,27 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
     ledger_record_hash: malformedFamily[1].recordHash }, malformedFamily,
   { ledgerId: malformedFamily[0].ledgerId, count: 3, headHash: malformedFamily[2].recordHash }), false);
+  const conflictingCommitted = structuredClone(bindingEvidence.records);
+  const { binding_fingerprint: ignoredBindingFingerprint, ...bindingBody } = conflictingCommitted[0].entry.payload.binding;
+  void ignoredBindingFingerprint;
+  const bindingB = { ...bindingBody, binding_attempt: bindingBody.binding_attempt + 2 };
+  bindingB.binding_fingerprint = canonicalFingerprint(bindingB);
+  for (const sourceRecord of bindingEvidence.records) {
+    const recordB = structuredClone(sourceRecord);
+    const status = recordB.entry.payload.status;
+    recordB.entry.payload.binding = structuredClone(bindingB);
+    recordB.entry.entryId = canonicalFingerprint({ binding_fingerprint: bindingB.binding_fingerprint, status });
+    recordB.entry.idempotencyKey = JSON.stringify([recordB.entry.projectId, issue.document.receipt_id,
+      bindingB.binding_fingerprint, status]);
+    conflictingCommitted.push(recordB);
+  }
+  rehashChain(conflictingCommitted);
+  const conflictingAnchor = { ledgerId: conflictingCommitted[0].ledgerId, count: 4,
+    headHash: conflictingCommitted[3].recordHash };
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_record_hash: conflictingCommitted[1].recordHash }, conflictingCommitted, conflictingAnchor), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...bindingB, binding_status: "COMMITTED", ledger_sequence: 4,
+    ledger_record_hash: conflictingCommitted[3].recordHash, replayed: false }, conflictingCommitted, conflictingAnchor), false);
   assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records,
     { ...anchor, headHash: "f".repeat(64) }), false);
   const preparedEntry = bindingEvidence.records[0].entry;

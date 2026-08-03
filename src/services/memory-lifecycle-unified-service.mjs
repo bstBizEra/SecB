@@ -257,6 +257,14 @@ function bindingLedgerSemantics(records) {
     }
     result.set(fingerprint, { events, prepared, committed, aborted, contextIssueRequest });
   }
+  const reservations = new Set();
+  for (const group of result.values()) {
+    if (group.committed === undefined && group.aborted !== undefined) continue;
+    const key = JSON.stringify([group.prepared.entry.projectId, group.contextIssueRequest.document.receipt_id,
+      group.prepared.core.context_idempotency_key_fingerprint]);
+    if (reservations.has(key)) return null;
+    reservations.add(key);
+  }
   return result;
 }
 
