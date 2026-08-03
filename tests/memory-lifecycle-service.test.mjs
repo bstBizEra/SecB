@@ -679,7 +679,7 @@ test("durable trusted head anchor survives restart and detects stale ledger roll
   const filePath = join(directory, "lifecycle.jsonl");
   const anchorPath = join(directory, "lifecycle-head.json");
   const headAnchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
-    integrityKey: Buffer.alloc(32, 0x31) });
+    integrityKey: Buffer.alloc(32, 0x31), initialize: true });
   const fixture = harness(t, { ledger: new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor }) });
   assert.equal((await fixture.service.recordLifecycleEvent(mutation("TOMBSTONED"))).ok, true);
 

@@ -1,6 +1,7 @@
-// WP-MEM-HEAD-ANCHOR-001 candidate. A local, independently persisted,
-// authenticated monotonic checkpoint provider for ledger heads. Construction
-// and exports do not wire or activate it on any runtime path.
+// WP-MEM-HEAD-ANCHOR-001 candidate. This local authenticated checkpoint is a
+// development adapter for the transactional head-provider port. Its file must
+// live outside the protected ledger's rollback/deletion domain in production;
+// local HMAC storage alone cannot detect restoration of an authentic pair.
 
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import {
@@ -16,8 +17,8 @@ const MIN_INTEGRITY_KEY_BYTES = 32;
 const isHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 const isBoundedString = (value, max = 256) => typeof value === "string" && value.trim() !== "" && value.length <= max;
 
-function macBody({ version, ledger_id, count, head_hash }) {
-  return JSON.stringify({ version, ledger_id, count, head_hash });
+function macBody({ version, ledger_id, count, head_hash, pending }) {
+  return JSON.stringify({ version, ledger_id, count, head_hash, ...(version === 2 ? { pending } : {}) });
 }
 
 function macFor(key, state) {
@@ -42,6 +43,11 @@ function exactCheckpoint(value, label) {
   return snapshot;
 }
 
+function exactCommitment(value) {
+  if (!isHash(value)) throw new DurableHeadAnchorError("DENY_HEAD_ANCHOR_REQUEST", "transaction commitment must be sha256");
+  return value;
+}
+
 export class DurableHeadAnchorError extends Error {
   constructor(code, message) {
     super(message);
@@ -56,7 +62,7 @@ export class DurableHeadAnchor {
   #ledgerId;
   #integrityKey;
 
-  constructor({ filePath, ledgerId, integrityKey } = {}) {
+  constructor({ filePath, ledgerId, integrityKey, initialize = false } = {}) {
     if (!isBoundedString(filePath, 4_096) || !isBoundedString(ledgerId)) {
       throw new DurableHeadAnchorError("INVALID_HEAD_ANCHOR_CONFIG", "filePath and bounded ledgerId are required");
     }
@@ -75,10 +81,16 @@ export class DurableHeadAnchor {
     this.#ledgerId = ledgerId;
     this.#integrityKey = key;
     mkdirSync(dirname(this.#filePath), { recursive: true });
+    if (!existsSync(this.#filePath)) {
+      if (initialize !== true) {
+        throw new DurableHeadAnchorError("HEAD_ANCHOR_NOT_PROVISIONED", "head anchor must be explicitly provisioned before use");
+      }
+      this.#writeState({ version: 2, ledger_id: this.#ledgerId, count: 0, head_hash: ZERO_HASH, pending: null });
+    }
   }
 
   #readState() {
-    if (!existsSync(this.#filePath)) return { version: 1, ledger_id: this.#ledgerId, count: 0, head_hash: ZERO_HASH };
+    if (!existsSync(this.#filePath)) throw new DurableHeadAnchorError("HEAD_ANCHOR_MISSING", "provisioned head anchor is missing");
     if (statSync(this.#filePath).size > MAX_ANCHOR_BYTES) {
       throw new DurableHeadAnchorError("HEAD_ANCHOR_RESOURCE_LIMIT", "head anchor file exceeds its size limit");
     }
@@ -87,17 +99,28 @@ export class DurableHeadAnchor {
       throw new DurableHeadAnchorError("HEAD_ANCHOR_INTEGRITY_FAILURE", "head anchor is not valid JSON");
     }
     const keys = state && typeof state === "object" && !Array.isArray(state) ? Reflect.ownKeys(state) : [];
-    if (keys.length !== 5 || keys.some((key) => typeof key !== "string"
-      || !["version", "ledger_id", "count", "head_hash", "mac"].includes(key))
-      || state.version !== 1 || state.ledger_id !== this.#ledgerId || !Number.isSafeInteger(state.count) || state.count < 1
-      || !isHash(state.head_hash) || state.head_hash === ZERO_HASH || !isHash(state.mac)) {
+    const allowed = state?.version === 2
+      ? ["version", "ledger_id", "count", "head_hash", "pending", "mac"]
+      : ["version", "ledger_id", "count", "head_hash", "mac"];
+    const currentValid = Number.isSafeInteger(state?.count) && state.count >= 0 && isHash(state.head_hash)
+      && ((state.count === 0) === (state.head_hash === ZERO_HASH));
+    const pendingValid = state?.version !== 2 || state.pending === null || (
+      state.pending && typeof state.pending === "object" && !Array.isArray(state.pending)
+      && Reflect.ownKeys(state.pending).length === 3
+      && Number.isSafeInteger(state.pending.count) && state.pending.count === state.count + 1
+      && isHash(state.pending.head_hash) && state.pending.head_hash !== state.head_hash
+      && isHash(state.pending.commitment)
+    );
+    if (keys.length !== allowed.length || keys.some((key) => typeof key !== "string" || !allowed.includes(key))
+      || ![1, 2].includes(state?.version) || state.ledger_id !== this.#ledgerId || !currentValid
+      || !pendingValid || !isHash(state.mac)) {
       throw new DurableHeadAnchorError("HEAD_ANCHOR_INTEGRITY_FAILURE", "head anchor contract is invalid");
     }
     const expectedMac = macFor(this.#integrityKey, state);
     if (!timingSafeEqual(Buffer.from(state.mac, "hex"), Buffer.from(expectedMac, "hex"))) {
       throw new DurableHeadAnchorError("HEAD_ANCHOR_AUTHENTICITY_FAILURE", "head anchor MAC is invalid");
     }
-    return state;
+    return state.version === 1 ? { ...state, version: 2, pending: null } : state;
   }
 
   #writeState(state) {
@@ -131,28 +154,73 @@ export class DurableHeadAnchor {
     return Object.freeze({ count: state.count, headHash: state.head_hash });
   }
 
+  readPending() {
+    const pending = this.#readState().pending;
+    return pending === null ? null : Object.freeze({ count: pending.count, headHash: pending.head_hash,
+      commitment: pending.commitment });
+  }
+
+  #withLock(operation) {
+    try { mkdirSync(this.#lockPath); } catch (cause) {
+      if (cause.code === "EEXIST") throw new DurableHeadAnchorError("HEAD_ANCHOR_BUSY", "head anchor is locked by another writer");
+      throw new DurableHeadAnchorError("HEAD_ANCHOR_UNAVAILABLE", "head anchor lock could not be acquired");
+    }
+    try { return operation(); } finally { rmSync(this.#lockPath, { recursive: true, force: true }); }
+  }
+
+  prepare({ expected, next, commitment } = {}) {
+    const expectedCheckpoint = exactCheckpoint(expected, "expected");
+    const nextCheckpoint = exactCheckpoint(next, "next");
+    const transactionCommitment = exactCommitment(commitment);
+    if (nextCheckpoint.count !== expectedCheckpoint.count + 1 || nextCheckpoint.headHash === expectedCheckpoint.headHash) {
+      throw new DurableHeadAnchorError("DENY_HEAD_ANCHOR_NON_MONOTONIC", "prepared checkpoint must advance exactly one distinct ledger head");
+    }
+    return this.#withLock(() => {
+      const current = this.#readState();
+      if (current.count !== expectedCheckpoint.count || current.head_hash !== expectedCheckpoint.headHash) return false;
+      if (current.pending !== null) return current.pending.count === nextCheckpoint.count
+        && current.pending.head_hash === nextCheckpoint.headHash && current.pending.commitment === transactionCommitment;
+      this.#writeState({ version: 2, ledger_id: this.#ledgerId, count: current.count, head_hash: current.head_hash,
+        pending: { count: nextCheckpoint.count, head_hash: nextCheckpoint.headHash, commitment: transactionCommitment } });
+      const pending = this.#readState().pending;
+      return pending?.count === nextCheckpoint.count && pending.head_hash === nextCheckpoint.headHash
+        && pending.commitment === transactionCommitment;
+    });
+  }
+
+  finalize({ expected, next, commitment } = {}) {
+    const expectedCheckpoint = exactCheckpoint(expected, "expected");
+    const nextCheckpoint = exactCheckpoint(next, "next");
+    const transactionCommitment = exactCommitment(commitment);
+    return this.#withLock(() => {
+      const current = this.#readState();
+      if (current.count === nextCheckpoint.count && current.head_hash === nextCheckpoint.headHash && current.pending === null) return true;
+      if (current.count !== expectedCheckpoint.count || current.head_hash !== expectedCheckpoint.headHash
+        || current.pending?.count !== nextCheckpoint.count || current.pending.head_hash !== nextCheckpoint.headHash
+        || current.pending.commitment !== transactionCommitment) return false;
+      this.#writeState({ version: 2, ledger_id: this.#ledgerId, count: nextCheckpoint.count,
+        head_hash: nextCheckpoint.headHash, pending: null });
+      const readback = this.#readState();
+      return readback.count === nextCheckpoint.count && readback.head_hash === nextCheckpoint.headHash && readback.pending === null;
+    });
+  }
+
   compareAndSet({ expected, next } = {}) {
     const expectedCheckpoint = exactCheckpoint(expected, "expected");
     const nextCheckpoint = exactCheckpoint(next, "next");
     if (nextCheckpoint.count !== expectedCheckpoint.count + 1 || nextCheckpoint.headHash === expectedCheckpoint.headHash) {
       throw new DurableHeadAnchorError("DENY_HEAD_ANCHOR_NON_MONOTONIC", "next checkpoint must advance exactly one distinct ledger head");
     }
-    try { mkdirSync(this.#lockPath); } catch (cause) {
-      if (cause.code === "EEXIST") throw new DurableHeadAnchorError("HEAD_ANCHOR_BUSY", "head anchor is locked by another writer");
-      throw new DurableHeadAnchorError("HEAD_ANCHOR_UNAVAILABLE", "head anchor lock could not be acquired");
-    }
-    try {
+    return this.#withLock(() => {
       const current = this.#readState();
-      if (current.count !== expectedCheckpoint.count || current.head_hash !== expectedCheckpoint.headHash) return false;
-      this.#writeState({ version: 1, ledger_id: this.#ledgerId,
-        count: nextCheckpoint.count, head_hash: nextCheckpoint.headHash });
+      if (current.count !== expectedCheckpoint.count || current.head_hash !== expectedCheckpoint.headHash || current.pending !== null) return false;
+      this.#writeState({ version: 2, ledger_id: this.#ledgerId,
+        count: nextCheckpoint.count, head_hash: nextCheckpoint.headHash, pending: null });
       const readback = this.#readState();
       if (readback.count !== nextCheckpoint.count || readback.head_hash !== nextCheckpoint.headHash) {
         throw new DurableHeadAnchorError("HEAD_ANCHOR_DURABILITY_FAILURE", "head anchor readback did not match the committed checkpoint");
       }
       return true;
-    } finally {
-      rmSync(this.#lockPath, { recursive: true, force: true });
-    }
+    });
   }
 }

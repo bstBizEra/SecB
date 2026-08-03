@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
@@ -10,9 +12,9 @@ import { DurableHeadAnchor } from "../src/ledger/durable-head-anchor.mjs";
 
 const ANCHOR_KEY = Buffer.alloc(32, 0x43);
 
-function adapter(filePath, contextFederation) {
-  const headAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
-    integrityKey: ANCHOR_KEY });
+function adapter(filePath, contextFederation, suppliedAnchor) {
+  const headAnchor = suppliedAnchor ?? new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY, initialize: true });
   return new DurableContextReplayAdapter({ filePath, contextFederation, headAnchor });
 }
 
@@ -128,6 +130,60 @@ test("trusted head rejects a valid old replay-ledger prefix after rollback", () 
     (error) => error.code === "REPLAY_LEDGER_ROLLBACK_DETECTED");
 }));
 
+test("crash after ledger append is replayable without mutation and finalizes on issue retry", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const context = provider();
+  const realAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY, initialize: true });
+  let crash = true;
+  const crashAfterAppend = {
+    read: realAnchor.read.bind(realAnchor), readPending: realAnchor.readPending.bind(realAnchor),
+    prepare: realAnchor.prepare.bind(realAnchor),
+    finalize(input) {
+      if (crash) { crash = false; throw Object.assign(new Error("simulated crash"), { code: "SIMULATED_CRASH" }); }
+      return realAnchor.finalize(input);
+    }
+  };
+  assert.throws(() => adapter(filePath, context, crashAfterAppend).issueReceipt(request()),
+    (error) => error.code === "SIMULATED_CRASH");
+  assert.deepEqual(realAnchor.read(), { count: 0, headHash: "0".repeat(64) });
+  assert.equal(realAnchor.readPending().count, 1);
+
+  const restarted = adapter(filePath, context, realAnchor);
+  const anchorBeforeReplay = realAnchor.read();
+  assert.equal(restarted.replayReceipt(request()).replayed, true);
+  assert.deepEqual(realAnchor.read(), anchorBeforeReplay); // replay-only path does not finalize
+  assert.equal(realAnchor.readPending().count, 1);
+  assert.equal(restarted.issueReceipt(request()).replayed, true);
+  assert.equal(realAnchor.readPending(), null);
+  assert.equal(restarted.verify().count, 1);
+}));
+
+test("crash after authenticated prepare resumes the same issuance identity", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const context = provider();
+  const realAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY, initialize: true });
+  let crash = true;
+  const crashAfterPrepare = {
+    read: realAnchor.read.bind(realAnchor), readPending: realAnchor.readPending.bind(realAnchor),
+    prepare(input) {
+      const prepared = realAnchor.prepare(input);
+      if (crash) { crash = false; throw Object.assign(new Error("simulated crash"), { code: "SIMULATED_CRASH" }); }
+      return prepared;
+    },
+    finalize: realAnchor.finalize.bind(realAnchor)
+  };
+  assert.throws(() => adapter(filePath, context, crashAfterPrepare).issueReceipt(request()),
+    (error) => error.code === "SIMULATED_CRASH");
+  assert.equal(adapter(filePath, context, realAnchor).verify().count, 0);
+  assert.equal(adapter(filePath, context, realAnchor).replayReceipt(request()).replayed, true);
+  const resumed = adapter(filePath, context, realAnchor).issueReceipt(request());
+  assert.equal(resumed.replayed, false);
+  assert.equal(realAnchor.readPending(), null);
+  assert.equal(realAnchor.read().count, 1);
+}));
+
 test("construction requires the trusted head collaborator", () => withTemp((directory) => {
   assert.throws(() => new DurableContextReplayAdapter({ filePath: join(directory, "replay.ndjson"),
     contextFederation: provider() }),
@@ -140,5 +196,55 @@ test("unsafe request graphs are denied before either provider operation", () => 
   const hostile = request();
   Object.defineProperty(hostile, "baseline", { enumerable: true, get() { throw new Error("getter ran"); } });
   assert.throws(() => replayAdapter.issueReceipt(hostile), (error) => error.code === "DENY_REPLAY_MALFORMED");
+  const deep = request();
+  let cursor = deep.document;
+  for (let index = 0; index < 70; index += 1) { cursor.nested = {}; cursor = cursor.nested; }
+  assert.throws(() => replayAdapter.issueReceipt(deep), (error) => error.code === "DENY_REPLAY_MALFORMED");
   assert.deepEqual(context.calls, { issue: 0, replay: 0 });
 }));
+
+function childResult(child) {
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
+  });
+}
+
+test("two OS-process replay adapters converge on one durable receipt", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-replay-process-"));
+  try {
+    const filePath = join(directory, "replay.ndjson");
+    new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+      integrityKey: ANCHOR_KEY, initialize: true });
+    const replayUrl = pathToFileURL(join(process.cwd(), "src/services/durable-context-replay-adapter.mjs")).href;
+    const anchorUrl = pathToFileURL(join(process.cwd(), "src/ledger/durable-head-anchor.mjs")).href;
+    const requestValue = request();
+    const script = `
+      import { DurableContextReplayAdapter } from ${JSON.stringify(replayUrl)};
+      import { DurableHeadAnchor } from ${JSON.stringify(anchorUrl)};
+      const filePath = process.argv[1];
+      const anchor = new DurableHeadAnchor({ filePath: filePath + ".head", ledgerId: "secb-context-replay-ledger", integrityKey: Buffer.from(process.argv[2], "hex") });
+      const result = { receiptId: "receipt-1", projectId: "project-1", version: 1, state: "ISSUED", boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false };
+      const provider = { issueReceipt() { return structuredClone(result); }, replayReceipt() { return { ...structuredClone(result), replayed: true }; } };
+      const adapter = new DurableContextReplayAdapter({ filePath, contextFederation: provider, headAnchor: anchor });
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        try { console.log(JSON.stringify(adapter.issueReceipt(${JSON.stringify(requestValue)}))); process.exit(0); }
+        catch (error) { if (!["HEAD_ANCHOR_BUSY", "LEDGER_BUSY", "REPLAY_LEDGER_CHANGED", "REPLAY_LEDGER_ROLLBACK_DETECTED"].includes(error.code)) throw error; await new Promise((resolve) => setTimeout(resolve, 2)); }
+      }
+      process.exit(2);
+    `;
+    const launch = () => spawn(process.execPath, ["--input-type=module", "-e", script, filePath, ANCHOR_KEY.toString("hex")],
+      { stdio: ["ignore", "pipe", "pipe"] });
+    const results = await Promise.all([childResult(launch()), childResult(launch())]);
+    assert.deepEqual(results.map((result) => result.code), [0, 0], JSON.stringify(results));
+    const restarted = adapter(filePath, provider());
+    assert.equal(restarted.verify().count, 1);
+    assert.equal(restarted.replayReceipt(request()).replayed, true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

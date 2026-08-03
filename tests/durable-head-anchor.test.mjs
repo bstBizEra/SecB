@@ -21,15 +21,43 @@ const withTemp = (run) => {
 
 test("authenticated checkpoint persists across provider restart", () => withTemp((directory) => {
   const filePath = join(directory, "head.json");
-  const first = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY });
+  const first = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
   assert.deepEqual(first.read(), { count: 0, headHash: ZERO });
   assert.equal(first.compareAndSet({ expected: first.read(), next: head("a") }), true);
   const restarted = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY });
   assert.deepEqual(restarted.read(), head("a"));
 }));
 
+test("provisioning is explicit and deletion never silently recreates genesis", () => withTemp((directory) => {
+  const filePath = join(directory, "head.json");
+  assert.throws(() => new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY }),
+    (error) => error.code === "HEAD_ANCHOR_NOT_PROVISIONED");
+  const provisioned = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
+  rmSync(filePath);
+  assert.throws(() => provisioned.read(), (error) => error.code === "HEAD_ANCHOR_MISSING");
+  assert.throws(() => new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY }),
+    (error) => error.code === "HEAD_ANCHOR_NOT_PROVISIONED");
+}));
+
+test("authenticated prepare is restart-durable and finalize is exact", () => withTemp((directory) => {
+  const filePath = join(directory, "head.json");
+  const anchor = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
+  const expected = anchor.read();
+  const next = head("a");
+  const commitment = "c".repeat(64);
+  assert.equal(anchor.prepare({ expected, next, commitment }), true);
+  assert.deepEqual(anchor.read(), expected);
+  assert.deepEqual(anchor.readPending(), { ...next, commitment });
+  const restarted = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY });
+  assert.deepEqual(restarted.readPending(), { ...next, commitment });
+  assert.equal(restarted.finalize({ expected, next, commitment: "d".repeat(64) }), false);
+  assert.equal(restarted.finalize({ expected, next, commitment }), true);
+  assert.deepEqual(restarted.read(), next);
+  assert.equal(restarted.readPending(), null);
+}));
+
 test("stale, skipped, and regressed checkpoints fail closed", () => withTemp((directory) => {
-  const anchor = new DurableHeadAnchor({ filePath: join(directory, "head.json"), ledgerId: LEDGER_ID, integrityKey: KEY });
+  const anchor = new DurableHeadAnchor({ filePath: join(directory, "head.json"), ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
   const zero = anchor.read();
   assert.equal(anchor.compareAndSet({ expected: zero, next: head("a") }), true);
   assert.equal(anchor.compareAndSet({ expected: zero, next: head("b") }), false);
@@ -41,7 +69,7 @@ test("stale, skipped, and regressed checkpoints fail closed", () => withTemp((di
 
 test("tamper, wrong trust key, and ledger-id substitution are detected", () => withTemp((directory) => {
   const filePath = join(directory, "head.json");
-  const anchor = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY });
+  const anchor = new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
   anchor.compareAndSet({ expected: anchor.read(), next: head("a") });
   assert.throws(() => new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID,
     integrityKey: Buffer.alloc(32, 0x58) }).read(), (error) => error.code === "HEAD_ANCHOR_AUTHENTICITY_FAILURE");
@@ -54,7 +82,7 @@ test("tamper, wrong trust key, and ledger-id substitution are detected", () => w
 }));
 
 test("trusted checkpoint distinguishes a competing ledger fork", () => withTemp((directory) => {
-  const anchor = new DurableHeadAnchor({ filePath: join(directory, "head.json"), ledgerId: LEDGER_ID, integrityKey: KEY });
+  const anchor = new DurableHeadAnchor({ filePath: join(directory, "head.json"), ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
   const leftPath = join(directory, "left.ndjson");
   const rightPath = join(directory, "right.ndjson");
   const left = new DurableLedger({ filePath: leftPath, ledgerId: LEDGER_ID });
@@ -87,6 +115,7 @@ test("two OS processes cannot both advance the same expected checkpoint", async 
   const directory = mkdtempSync(join(tmpdir(), "secb-head-anchor-process-"));
   try {
     const filePath = join(directory, "head.json");
+    new DurableHeadAnchor({ filePath, ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
     const moduleUrl = pathToFileURL(join(process.cwd(), "src/ledger/durable-head-anchor.mjs")).href;
     const script = `
       import { DurableHeadAnchor } from ${JSON.stringify(moduleUrl)};

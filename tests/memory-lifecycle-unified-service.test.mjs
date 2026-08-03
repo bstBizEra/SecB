@@ -717,7 +717,7 @@ test("real authority gateway, provider, durable replay adapter, Context Federati
     authorityRef, policyDecision: "ALLOW", evidence: [{ ref: `evidence-${requestedState}` }], idempotencyKey, reasonCode: "UNIFY_TEST" });
   const federation = new ContextFederationService({ workPackageService: wp, now: clock });
   const replayHeadAnchor = new DurableHeadAnchor({ filePath: join(dir, "context-replay-head.json"),
-    ledgerId: "secb-context-replay-ledger", integrityKey: Buffer.alloc(32, 0x52) });
+    ledgerId: "secb-context-replay-ledger", integrityKey: Buffer.alloc(32, 0x52), initialize: true });
   const durableReplay = new DurableContextReplayAdapter({ filePath: join(dir, "context-replay.ndjson"),
     contextFederation: federation, headAnchor: replayHeadAnchor });
   const lifecycleResolver = {
