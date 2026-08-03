@@ -58,6 +58,33 @@ function effectiveDecision(request, item) {
   };
 }
 
+function bindingLedgerFixture({ onAppend = () => {} } = {}) {
+  const records = [];
+  return {
+    records,
+    ledger: {
+      verify() { return { valid: true, ledgerId: "memory-context-binding-test", count: records.length, headHash: records.at(-1)?.recordHash ?? "0".repeat(64) }; },
+      read() { return structuredClone(records); },
+      append(entry, { expectedSequence }) {
+        onAppend(entry);
+        const replay = records.find((record) => record.entry.idempotencyKey === entry.idempotencyKey);
+        if (replay) {
+          if (canonicalFingerprint(replay.entry) !== canonicalFingerprint(entry)) throw new Error("idempotency conflict");
+          return { ...structuredClone(replay), replayed: true };
+        }
+        if (expectedSequence !== records.length) throw new Error("sequence conflict");
+        const record = { ledgerId: "memory-context-binding-test", sequence: records.length + 1,
+          previousHash: records.at(-1)?.recordHash ?? "0".repeat(64), entry: structuredClone(entry),
+          entryHash: canonicalFingerprint(entry) };
+        record.recordHash = canonicalFingerprint({ ledgerId: record.ledgerId, sequence: record.sequence,
+          previousHash: record.previousHash, entryHash: record.entryHash });
+        records.push(record);
+        return { ...structuredClone(record), replayed: false };
+      }
+    }
+  };
+}
+
 function harness(overrides = {}) {
   const rows = overrides.rows ?? [memory()];
   const calls = { lifecycle: 0, fence: 0, provider: 0, federation: 0 };
@@ -85,26 +112,7 @@ function harness(overrides = {}) {
     return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
       boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false };
   } };
-  const bindingRecords = [];
-  const lifecycleBindingLedger = overrides.lifecycleBindingLedger ?? {
-    verify() { return { valid: true, ledgerId: "memory-context-binding-test", count: bindingRecords.length, headHash: bindingRecords.at(-1)?.recordHash ?? "0".repeat(64) }; },
-    read() { return structuredClone(bindingRecords); },
-    append(entry, { expectedSequence }) {
-      const replay = bindingRecords.find((record) => record.entry.idempotencyKey === entry.idempotencyKey);
-      if (replay) {
-        if (canonicalFingerprint(replay.entry) !== canonicalFingerprint(entry)) throw new Error("idempotency conflict");
-        return { ...structuredClone(replay), replayed: true };
-      }
-      if (expectedSequence !== bindingRecords.length) throw new Error("sequence conflict");
-      const record = { ledgerId: "memory-context-binding-test", sequence: bindingRecords.length + 1,
-        previousHash: bindingRecords.at(-1)?.recordHash ?? "0".repeat(64), entry: structuredClone(entry),
-        entryHash: canonicalFingerprint(entry) };
-      record.recordHash = canonicalFingerprint({ ledgerId: record.ledgerId, sequence: record.sequence,
-        previousHash: record.previousHash, entryHash: record.entryHash });
-      bindingRecords.push(record);
-      return { ...structuredClone(record), replayed: false };
-    }
-  };
+  const lifecycleBindingLedger = overrides.lifecycleBindingLedger ?? bindingLedgerFixture().ledger;
   return { calls, service: createMemoryLifecycleUnifiedService({
     memoryAuthorityGateway, lifecycleResolver, memoryCandidateProvider, contextFederation, lifecycleBindingLedger,
     now: overrides.now ?? (() => new Date(NOW)), timeoutMs: overrides.timeoutMs ?? 50,
@@ -312,6 +320,12 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   assert.equal(good.sourceStateBinding.evaluated_at, NOW);
   assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding), true);
   assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, lifecycle_state_digest: "f".repeat(64) }), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, ledger_sequence: "evil" }), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, ledger_record_hash: "bad" }), false);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, replayed: "yes" }), false);
+  const expectedContextRequest = { ...issue, candidateSources: normalizeCandidateSources([source(memory())]).candidates };
+  assert.equal(good.sourceStateBinding.context_issue_fingerprint,
+    canonicalFingerprint({ op: "ISSUE", request: { ...expectedContextRequest, idempotencyKey: undefined } }));
 });
 
 test("durable binding failure denies before Context Federation mutation", async () => {
@@ -321,6 +335,35 @@ test("durable binding failure denies before Context Federation mutation", async 
     contextFederation: { issueReceipt() { federationCalls += 1; throw new Error("must not issue"); } } });
   assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_LEDGER");
   assert.equal(federationCalls, 0);
+});
+
+test("binding-ledger delay is rechecked immediately before Context mutation", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
+  let clockMs = Date.parse(NOW);
+  let federationCalls = 0;
+  const binding = bindingLedgerFixture({ onAppend: () => { clockMs += 5_000; } });
+  const fixture = harness({ freshnessMs: 1_000, now: () => new Date(clockMs), lifecycleBindingLedger: binding.ledger,
+    contextFederation: { issueReceipt() { federationCalls += 1; throw new Error("must not issue"); } } });
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_FRESHNESS");
+  assert.equal(federationCalls, 0);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "ABORTED"]);
+});
+
+test("Context failure records ABORTED and a deterministic retry can COMMIT", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
+  const binding = bindingLedgerFixture();
+  let contextCalls = 0;
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger, contextFederation: { issueReceipt(request) {
+    contextCalls += 1;
+    if (contextCalls === 1) return { decision: "DENY" };
+    return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
+      boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false };
+  } } });
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_CONTEXT");
+  const issued = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(issued.state, "ISSUED");
+  assert.equal(issued.sourceStateBinding.binding_status, "COMMITTED");
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "ABORTED", "COMMITTED"]);
 });
 
 test("timed-out issuance fence cannot invoke Context Federation later", async () => {
@@ -443,5 +486,5 @@ test("real authority gateway, provider, Context Federation, and durable binding 
   assert.match(issued.sourceStateBinding.lifecycle_state_digest, /^[a-f0-9]{64}$/);
   assert.match(issued.sourceStateBinding.binding_fingerprint, /^[a-f0-9]{64}$/);
   assert.match(issued.sourceStateBinding.ledger_record_hash, /^[a-f0-9]{64}$/);
-  assert.equal(lifecycleBindingLedger.verify().count, 1);
+  assert.equal(lifecycleBindingLedger.verify().count, 2);
 });
