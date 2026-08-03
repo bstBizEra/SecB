@@ -145,7 +145,8 @@ export {
 
 export {
   createMemoryLifecycleUnifiedService,
-  MemoryLifecycleUnifiedConfigurationError
+  MemoryLifecycleUnifiedConfigurationError,
+  verifyMemoryContextLifecycleBinding
 } from "./services/memory-lifecycle-unified-service.mjs";
 
 export {

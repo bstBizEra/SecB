@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
-import { createMemoryLifecycleUnifiedService, MemoryLifecycleUnifiedConfigurationError } from "../src/index.mjs";
+import { createMemoryLifecycleUnifiedService, MemoryLifecycleUnifiedConfigurationError,
+  verifyMemoryContextLifecycleBinding } from "../src/index.mjs";
 import { createMemoryAuthorityGateway } from "../src/services/memory-authority-gateway-service.mjs";
 import { createMemoryCandidateProvider } from "../src/services/memory-candidate-provider.mjs";
 import { normalizeCandidateSources } from "../src/services/candidate-source-port.mjs";
 import { ContextFederationService, mintReceiptDocument } from "../src/services/context-federation-service.mjs";
 import { WorkPackageContractService } from "../src/services/work-package-service.mjs";
+import { DurableLedger } from "../src/ledger/durable-ledger.mjs";
 
 const NOW = "2026-08-03T12:00:00.000Z";
 
@@ -26,6 +31,14 @@ function memory(overrides = {}) {
     row.content_hash = canonicalFingerprint(body);
   }
   return row;
+}
+
+function receiptDocument(overrides = {}) {
+  const body = { receipt_id: "receipt-1", version: 1, project_id: "project-1", objective_id: "objective-1",
+    work_package_id: "wp-1", session_id: "session-1", assigned_role: "REV", authority_scope: ["src/services"],
+    baseline_version: "9".repeat(40), acceptance_criteria: ["review"], allowed_tools: ["read"], allowed_skills: [],
+    evidence_obligations: ["review-report"], freshness_timestamp: NOW, source_references: ["mem-1"], ...overrides };
+  return { ...body, content_hash: canonicalFingerprint(body) };
 }
 
 function source(row) {
@@ -72,8 +85,28 @@ function harness(overrides = {}) {
     return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
       boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false };
   } };
+  const bindingRecords = [];
+  const lifecycleBindingLedger = overrides.lifecycleBindingLedger ?? {
+    verify() { return { valid: true, ledgerId: "memory-context-binding-test", count: bindingRecords.length, headHash: bindingRecords.at(-1)?.recordHash ?? "0".repeat(64) }; },
+    read() { return structuredClone(bindingRecords); },
+    append(entry, { expectedSequence }) {
+      const replay = bindingRecords.find((record) => record.entry.idempotencyKey === entry.idempotencyKey);
+      if (replay) {
+        if (canonicalFingerprint(replay.entry) !== canonicalFingerprint(entry)) throw new Error("idempotency conflict");
+        return { ...structuredClone(replay), replayed: true };
+      }
+      if (expectedSequence !== bindingRecords.length) throw new Error("sequence conflict");
+      const record = { ledgerId: "memory-context-binding-test", sequence: bindingRecords.length + 1,
+        previousHash: bindingRecords.at(-1)?.recordHash ?? "0".repeat(64), entry: structuredClone(entry),
+        entryHash: canonicalFingerprint(entry) };
+      record.recordHash = canonicalFingerprint({ ledgerId: record.ledgerId, sequence: record.sequence,
+        previousHash: record.previousHash, entryHash: record.entryHash });
+      bindingRecords.push(record);
+      return { ...structuredClone(record), replayed: false };
+    }
+  };
   return { calls, service: createMemoryLifecycleUnifiedService({
-    memoryAuthorityGateway, lifecycleResolver, memoryCandidateProvider, contextFederation,
+    memoryAuthorityGateway, lifecycleResolver, memoryCandidateProvider, contextFederation, lifecycleBindingLedger,
     now: overrides.now ?? (() => new Date(NOW)), timeoutMs: overrides.timeoutMs ?? 50,
     freshnessMs: overrides.freshnessMs ?? 1_000
   }) };
@@ -82,15 +115,17 @@ function harness(overrides = {}) {
 const retrieval = (overrides = {}) => ({ project_id: "project-1", layer: "project", ...overrides });
 
 test("construction requires trusted clock, atomic batch resolver, issuance fence, provider, and federation", () => {
-  for (const missing of ["memoryAuthorityGateway", "lifecycleResolver", "memoryCandidateProvider", "contextFederation"]) {
+  for (const missing of ["memoryAuthorityGateway", "lifecycleResolver", "memoryCandidateProvider", "contextFederation", "lifecycleBindingLedger"]) {
     const ports = { memoryAuthorityGateway: { retrieve() {} }, lifecycleResolver: { resolveBatch() {}, withIssuanceFence() {} },
-      memoryCandidateProvider: { toCandidateSources() {} }, contextFederation: { issueReceipt() {} }, now() { return new Date(NOW); } };
+      memoryCandidateProvider: { toCandidateSources() {} }, contextFederation: { issueReceipt() {} },
+      lifecycleBindingLedger: { append() {}, read() {}, verify() {} }, now() { return new Date(NOW); } };
     delete ports[missing];
     assert.throws(() => createMemoryLifecycleUnifiedService(ports), MemoryLifecycleUnifiedConfigurationError);
   }
   assert.throws(() => createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: { retrieve() {} },
     lifecycleResolver: { resolveBatch() {} }, memoryCandidateProvider: { toCandidateSources() {} },
-    contextFederation: { issueReceipt() {} }, now() { return new Date(NOW); } }), MemoryLifecycleUnifiedConfigurationError);
+    contextFederation: { issueReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verify() {} },
+    now() { return new Date(NOW); } }), MemoryLifecycleUnifiedConfigurationError);
 });
 
 test("one authority-bound page is atomically lifecycle-resolved and normalized", async () => {
@@ -200,12 +235,12 @@ test("throwing accessors and non-settling lifecycle batch are contained", async 
   assert.equal((await harness().service.retrieveCandidateSources(proxy)).code, "DENY_UNIFY_REQUEST");
   let tick = 0;
   const stale = harness({ freshnessMs: 5, now: () => new Date(Date.parse(NOW) + (tick++ === 0 ? 0 : 6)) });
-  assert.equal((await stale.service.retrieveCandidateSources(retrieval())).code, "DENY_UNIFY_FRESHNESS");
+  assert.equal((await stale.service.retrieveCandidateSources(retrieval())).code, "DENY_UNIFY_GATEWAY");
 });
 
 test("nested issue shape is closed against candidate smuggling, prototypes, symbols, and accessors", async () => {
   const { service } = harness();
-  const base = { document: { receipt_id: "receipt-1", project_id: "project-1", content_hash: "e".repeat(64) }, actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
+  const base = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   for (const issue of [
     { ...base, candidateSources: [] },
     Object.assign(Object.create({ candidateSources: [] }), base),
@@ -219,7 +254,7 @@ test("nested issue shape is closed against candidate smuggling, prototypes, symb
 });
 
 test("Context Federation issuance result is exact and bound", async () => {
-  const issue = { document: { receipt_id: "receipt-1", project_id: "project-1", content_hash: "e".repeat(64) }, actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   const good = await harness().service.issueReceipt({ retrieval: retrieval(), issue });
   assert.equal(good.state, "ISSUED");
   for (const result of [
@@ -234,14 +269,28 @@ test("Context Federation issuance result is exact and bound", async () => {
 
 test("project substitution is denied before Context Federation is invoked", async () => {
   const { service, calls } = harness();
-  const issue = { document: { receipt_id: "receipt-1", project_id: "other-project", content_hash: "e".repeat(64) }, actorId: "actor",
+  const issue = { document: receiptDocument({ project_id: "other-project" }), actorId: "actor",
     authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   assert.equal((await service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_ISSUE_REQUEST");
   assert.equal(calls.federation, 0);
 });
 
+test("cross-phase clock regression and forward staleness deny before the issuance fence", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
+  for (const offset of [-3_600_000, 3_600_000]) {
+    let calls = 0;
+    let fenceCalls = 0;
+    const fixture = harness({ freshnessMs: 1_000,
+      now: () => new Date(Date.parse(NOW) + (calls++ < 4 ? 0 : offset)),
+      lifecycleResolver: { async withIssuanceFence() { fenceCalls += 1; throw new Error("must not run"); } } });
+    assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_FRESHNESS");
+    assert.equal(fenceCalls, 0);
+    assert.equal(fixture.calls.federation, 0);
+  }
+});
+
 test("final lifecycle revalidation occurs inside the single issuance fence and binds its state digest", async () => {
-  const issue = { document: { receipt_id: "receipt-1", project_id: "project-1", content_hash: "e".repeat(64) }, actorId: "actor",
+  const issue = { document: receiptDocument(), actorId: "actor",
     authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   let federationCalls = 0;
   const terminal = harness({ lifecycleResolver: { async withIssuanceFence(request, callback) {
@@ -261,10 +310,21 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   assert.equal(good.sourceStateBinding.context_receipt_fingerprint, issue.document.content_hash);
   assert.match(good.sourceStateBinding.lifecycle_state_digest, /^[a-f0-9]{64}$/);
   assert.equal(good.sourceStateBinding.evaluated_at, NOW);
+  assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding), true);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding, lifecycle_state_digest: "f".repeat(64) }), false);
+});
+
+test("durable binding failure denies before Context Federation mutation", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
+  let federationCalls = 0;
+  const fixture = harness({ lifecycleBindingLedger: { verify() { return { valid: false }; }, read() { return []; }, append() { throw new Error("must not append"); } },
+    contextFederation: { issueReceipt() { federationCalls += 1; throw new Error("must not issue"); } } });
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_LEDGER");
+  assert.equal(federationCalls, 0);
 });
 
 test("timed-out issuance fence cannot invoke Context Federation later", async () => {
-  const issue = { document: { receipt_id: "receipt-1", project_id: "project-1", content_hash: "e".repeat(64) }, actorId: "actor",
+  const issue = { document: receiptDocument(), actorId: "actor",
     authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   let federationCalls = 0;
   let lateCallback;
@@ -280,7 +340,7 @@ test("timed-out issuance fence cannot invoke Context Federation later", async ()
 });
 
 test("a fence that stalls after its callback cannot turn an issued receipt into a timeout denial", async () => {
-  const issue = { document: { receipt_id: "receipt-1", project_id: "project-1", content_hash: "e".repeat(64) }, actorId: "actor",
+  const issue = { document: receiptDocument(), actorId: "actor",
     authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   let federationCalls = 0;
   let secondDisposition;
@@ -301,14 +361,33 @@ test("a fence that stalls after its callback cannot turn an issued receipt into 
   assert.equal(secondDisposition.code, "DENY_UNIFY_FENCE_CALLBACK");
 });
 
-test("real authority gateway, provider, and Context Federation compose under one trusted instant", async () => {
+test("clock movement after Context mutation cannot convert ISSUED into a freshness denial", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
+  let clockMs = Date.parse(NOW);
+  let federationCalls = 0;
+  const fixture = harness({ now: () => new Date(clockMs), contextFederation: { issueReceipt(request) {
+    federationCalls += 1;
+    clockMs += 3_600_000;
+    return { receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
+      boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false };
+  } } });
+  const issued = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(issued.state, "ISSUED");
+  assert.equal(federationCalls, 1);
+});
+
+test("real authority gateway, provider, Context Federation, and durable binding ledger compose with an advancing clock", async (t) => {
   const projectId = "project-1";
   const actorId = "engineer-1";
   const wpId = "wp-1";
   const baseline = "9".repeat(40);
-  const clock = () => new Date(NOW);
+  let nowMs = Date.parse(NOW);
+  const clock = () => new Date(nowMs++);
+  const dir = mkdtempSync(join(tmpdir(), "secb-unify-binding-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const lifecycleBindingLedger = new DurableLedger({ filePath: join(dir, "bindings.jsonl"), ledgerId: "memory-context-bindings" });
   const row = memory({ work_package_id: wpId, access_policy: "project-members" });
-  const rawGateway = { admit() {}, retrieve() { return { decision: "ALLOW", code: "RETRIEVED", retrieved_at: NOW,
+  const rawGateway = { admit() {}, retrieve() { return { decision: "ALLOW", code: "RETRIEVED", retrieved_at: clock().toISOString(),
     records: [{ data_untrusted: true, record: row }], next_cursor: null }; } };
   const authorityGateway = createMemoryAuthorityGateway({
     memoryGateway: rawGateway,
@@ -349,7 +428,7 @@ test("real authority gateway, provider, and Context Federation compose under one
       batch_fingerprint: canonicalFingerprint(request), decisions: request.records.map((item) => effectiveDecision(request, item)) }); }
   };
   const unified = createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: authorityGateway, lifecycleResolver,
-    memoryCandidateProvider: provider, contextFederation: federation, now: clock });
+    memoryCandidateProvider: provider, contextFederation: federation, lifecycleBindingLedger, now: clock });
   const projected = provider.toCandidateSources({ project_id: projectId, records: [row] });
   const candidates = normalizeCandidateSources(projected.sources).candidates;
   const minted = mintReceiptDocument({ receipt_id: "receipt-real-1", project_id: projectId, objective_id: "objective-real-1",
@@ -360,6 +439,9 @@ test("real authority gateway, provider, and Context Federation compose under one
     authorityRef: "grant-eng", baseline, idempotencyKey: "issue-real-receipt" } });
   assert.equal(issued.state, "ISSUED");
   assert.equal(issued.projectId, projectId);
-  assert.equal(issued.sourceStateBinding.evaluated_at, NOW);
+  assert.ok(Date.parse(issued.sourceStateBinding.evaluated_at) >= Date.parse(NOW));
   assert.match(issued.sourceStateBinding.lifecycle_state_digest, /^[a-f0-9]{64}$/);
+  assert.match(issued.sourceStateBinding.binding_fingerprint, /^[a-f0-9]{64}$/);
+  assert.match(issued.sourceStateBinding.ledger_record_hash, /^[a-f0-9]{64}$/);
+  assert.equal(lifecycleBindingLedger.verify().count, 1);
 });
