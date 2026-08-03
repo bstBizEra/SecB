@@ -134,6 +134,16 @@ export {
 } from "./services/sqlite-memory-record-store.mjs";
 
 export {
+  MemoryLifecycleLedger,
+  MEMORY_LIFECYCLE_EVENT_TYPES
+} from "./ledger/memory-lifecycle-ledger.mjs";
+
+export {
+  createMemoryLifecycleService,
+  MemoryLifecycleConfigurationError
+} from "./services/memory-lifecycle-service.mjs";
+
+export {
   DATA_CLASS_ORDER,
   RISK_ORDER,
   intersectWithParent,
