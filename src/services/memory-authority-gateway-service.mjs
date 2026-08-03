@@ -27,7 +27,13 @@ const RETRIEVAL_AUTHORITY_KEYS = Object.freeze(["decision", "decision_id", "acto
 const ADMIT_ALLOW_KEYS = Object.freeze(["decision", "code", "admitted_at", "record", "append"]);
 const RETRIEVE_ALLOW_KEYS = Object.freeze(["decision", "code", "retrieved_at", "records", "next_cursor"]);
 const RECORD_ENVELOPE_KEYS = Object.freeze(["data_untrusted", "record"]);
+const APPEND_KEYS = Object.freeze([
+  "status", "idempotency_key", "memory_record_id", "version", "content_hash",
+  "record_fingerprint", "created", "sequence"
+]);
+const REQUIRED_APPEND_KEYS = Object.freeze(APPEND_KEYS.filter((key) => key !== "sequence"));
 const MAX_LIMIT = 1_000;
+const DEFAULT_LIMIT = 100;
 const MAX_CURSOR_LENGTH = 2_048;
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -73,6 +79,24 @@ function hasExactKeys(value, keys) {
   return ownKeys.length === keys.length
     && ownKeys.every((key) => typeof key === "string" && keys.includes(key))
     && keys.every((key) => ownKeys.includes(key));
+}
+
+function appendReceiptIsBound(append, record, layer, admittedAt) {
+  if (!isPlainObject(append)) return false;
+  const keys = Reflect.ownKeys(append);
+  if (
+    keys.some((key) => typeof key !== "string" || !APPEND_KEYS.includes(key))
+    || REQUIRED_APPEND_KEYS.some((key) => !keys.includes(key))
+  ) return false;
+  const idempotencyKey = JSON.stringify([record.project_id, layer, record.memory_record_id, record.version]);
+  return append.status === "COMMITTED"
+    && append.idempotency_key === idempotencyKey
+    && append.memory_record_id === record.memory_record_id
+    && append.version === record.version
+    && append.content_hash === record.content_hash
+    && append.record_fingerprint === canonicalFingerprint({ ...record, layer, admitted_at: admittedAt })
+    && typeof append.created === "boolean"
+    && (append.sequence === undefined || (Number.isSafeInteger(append.sequence) && append.sequence > 0));
 }
 
 function deny(code, reason, stage, upstreamCode) {
@@ -202,6 +226,11 @@ export function createMemoryAuthorityGateway({
       || (authority.reviewer !== null && isBlank(authority.reviewer))
       || (authority.approver !== null && isBlank(authority.approver))
     ) return deny("DENY_MEMORY_ADMISSION_AUTHORITY", "Memory admission authority is not effective or is not exactly bound", "authority");
+    const authorityActors = [authority.producer, authority.reviewer, authority.approver].filter((actor) => actor !== null);
+    if (
+      new Set(authorityActors).size !== authorityActors.length
+      || (query.layer === "project" && authority.approver === null)
+    ) return deny("DENY_MEMORY_ADMISSION_SOD", "Memory admission authority violates separation of duties", "authority");
 
     let record;
     try {
@@ -245,7 +274,7 @@ export function createMemoryAuthorityGateway({
       !hasExactKeys(upstream, ADMIT_ALLOW_KEYS)
       || upstream.decision !== "ALLOW" || upstream.code !== "ADMITTED"
       || typeof upstream.admitted_at !== "string" || !Number.isFinite(Date.parse(upstream.admitted_at))
-      || !admittedRecordIsBound || !isPlainObject(upstream.append)
+      || !admittedRecordIsBound || !appendReceiptIsBound(upstream.append, record, query.layer, upstream.admitted_at)
     ) {
       return deny(
         "DENY_MEMORY_ADMISSION",
@@ -307,11 +336,22 @@ export function createMemoryAuthorityGateway({
     }
     let pageIsBound = false;
     try {
-      pageIsBound = Array.isArray(upstream?.records) && upstream.records.every((entry) => {
-        if (!hasExactKeys(entry, RECORD_ENVELOPE_KEYS) || entry.data_untrusted !== true) return false;
-        validateContract("memoryRecord", entry.record);
-        return entry.record.project_id === query.project_id && entry.record.layer === query.layer;
-      });
+      const retrievedMs = Date.parse(upstream?.retrieved_at);
+      const effectiveLimit = query.limit ?? DEFAULT_LIMIT;
+      pageIsBound = Array.isArray(upstream?.records)
+        && upstream.records.length <= effectiveLimit
+        && Number.isFinite(retrievedMs)
+        && upstream.records.every((entry) => {
+          if (!hasExactKeys(entry, RECORD_ENVELOPE_KEYS) || entry.data_untrusted !== true) return false;
+          validateContract("memoryRecord", entry.record);
+          const { admitted_at: admittedAt, content_hash: contentHash, ...hashBody } = entry.record;
+          void admittedAt;
+          return entry.record.project_id === query.project_id
+            && entry.record.layer === query.layer
+            && canonicalFingerprint(hashBody) === contentHash
+            && Date.parse(entry.record.valid_from) <= retrievedMs
+            && retrievedMs < Date.parse(entry.record.valid_until);
+        });
     } catch {
       pageIsBound = false;
     }

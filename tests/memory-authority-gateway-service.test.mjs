@@ -61,12 +61,23 @@ function fakeGateway() {
   const memoryGateway = {
     async admit(request) {
       calls.admit.push(request);
+      const admittedAt = NOW.toISOString();
+      const admittedRecord = { ...request.record, layer: request.layer, admitted_at: admittedAt };
       return {
         decision: "ALLOW",
         code: "ADMITTED",
-        admitted_at: NOW.toISOString(),
-        record: { ...request.record, layer: request.layer, admitted_at: NOW.toISOString() },
-        append: { status: "COMMITTED" }
+        admitted_at: admittedAt,
+        record: admittedRecord,
+        append: {
+          status: "COMMITTED",
+          idempotency_key: JSON.stringify([request.record.project_id, request.layer, request.record.memory_record_id, request.record.version]),
+          memory_record_id: request.record.memory_record_id,
+          version: request.record.version,
+          content_hash: request.record.content_hash,
+          record_fingerprint: canonicalFingerprint(admittedRecord),
+          created: true,
+          sequence: 1
+        }
       };
     },
     retrieve(request) {
@@ -183,6 +194,31 @@ test("identity, scope, and authority substitutions fail closed before gateway ac
   }
 });
 
+test("project admission enforces distinct producer, reviewer, and approver at the facade", async () => {
+  const cases = [
+    ["producer is approver", { producer: ACTOR, reviewer: null, approver: ACTOR }],
+    ["producer is reviewer", { producer: ACTOR, reviewer: ACTOR, approver: "human-memory-approver" }],
+    ["reviewer is approver", { producer: ACTOR, reviewer: "human-memory-approver", approver: "human-memory-approver" }],
+    ["missing approver", { producer: ACTOR, reviewer: null, approver: null }]
+  ];
+  for (const [label, roles] of cases) {
+    const { memoryGateway, calls } = fakeGateway();
+    const instance = facade(memoryGateway, {
+      admissionAuthorityResolver: ({ project_id, layer }) => ({
+        decision: "ALLOW",
+        decision_id: "admission-authority-1",
+        actor_id: ACTOR,
+        project_id,
+        layer,
+        ...roles
+      })
+    });
+    const result = await instance.admit({ layer: "project", record: callerRecord() });
+    assert.equal(result.code, "DENY_MEMORY_ADMISSION_SOD", label);
+    assert.equal(calls.admit.length, 0, label);
+  }
+});
+
 test("retrieval derives scope and carries all decision bindings", () => {
   const { memoryGateway, calls } = fakeGateway();
   const result = facade(memoryGateway).retrieve({ project_id: PROJECT, layer: "session", limit: 10 });
@@ -192,6 +228,45 @@ test("retrieval derives scope and carries all decision bindings", () => {
   assert.equal(result.scope_decision_id, "scope-1");
   assert.equal(result.authority_decision_id, "retrieval-authority-1");
   assert.deepEqual(calls.retrieve, [{ project_id: PROJECT, scope_project_id: PROJECT, layer: "session", limit: 10 }]);
+});
+
+test("fabricated expired, future-valid, hash-tampered, and over-limit retrieval pages deny", () => {
+  const admittedAt = "2026-07-20T09:30:00.000Z";
+  const memoryRecord = (overrides = {}) => {
+    const body = {
+      ...callerRecord(),
+      actor_id: ACTOR,
+      layer: "session",
+      admitted_at: admittedAt,
+      ...overrides
+    };
+    return { ...body, content_hash: canonicalFingerprint(Object.fromEntries(Object.entries(body).filter(([key]) => key !== "admitted_at"))) };
+  };
+  const pageGateway = (records) => ({
+    admit: async () => ({ decision: "DENY", code: "NOT_USED" }),
+    retrieve: () => ({
+      decision: "ALLOW",
+      code: "RETRIEVED",
+      retrieved_at: NOW.toISOString(),
+      records: records.map((record) => ({ data_untrusted: true, record })),
+      next_cursor: null
+    })
+  });
+  const expired = facade(pageGateway([memoryRecord({ valid_until: "2026-07-20T10:00:00.000Z" })]))
+    .retrieve({ project_id: PROJECT, layer: "session" });
+  assert.equal(expired.code, "DENY_MEMORY_RETRIEVAL");
+  const future = facade(pageGateway([memoryRecord({ valid_from: "2026-07-20T10:30:00.000Z", valid_until: "2026-07-20T11:30:00.000Z" })]))
+    .retrieve({ project_id: PROJECT, layer: "session" });
+  assert.equal(future.code, "DENY_MEMORY_RETRIEVAL");
+  const original = memoryRecord();
+  const hashTampered = facade(pageGateway([{ ...original, statement: "substituted after hashing" }]))
+    .retrieve({ project_id: PROJECT, layer: "session" });
+  assert.equal(hashTampered.code, "DENY_MEMORY_RETRIEVAL");
+  const first = memoryRecord();
+  const secondBody = memoryRecord({ memory_record_id: "memory-authority-2" });
+  const overLimit = facade(pageGateway([first, secondBody]))
+    .retrieve({ project_id: PROJECT, layer: "session", limit: 1 });
+  assert.equal(overLimit.code, "DENY_MEMORY_RETRIEVAL");
 });
 
 test("resolver failures and malformed upstream results are contained", async () => {
@@ -206,6 +281,46 @@ test("resolver failures and malformed upstream results are contained", async () 
   const deniedRetrieve = instance.retrieve({ project_id: PROJECT, layer: "session" });
   assert.equal(deniedRetrieve.code, "DENY_MEMORY_RETRIEVAL");
   assert.equal(deniedRetrieve.upstream_code, "DENY_STORE_UNAVAILABLE");
+});
+
+test("malformed, substituted, extra, and hostile append receipts cannot produce ALLOW", async () => {
+  const valid = fakeGateway();
+  const originalAdmit = valid.memoryGateway.admit.bind(valid.memoryGateway);
+  const cases = [
+    ["empty", () => ({})],
+    ["missing", (append) => { const { created, ...rest } = append; void created; return rest; }],
+    ["extra", (append) => ({ ...append, rogue: true })],
+    ["id substitution", (append) => ({ ...append, memory_record_id: "memory-other" })],
+    ["version substitution", (append) => ({ ...append, version: 2 })],
+    ["hash substitution", (append) => ({ ...append, content_hash: "f".repeat(64) })],
+    ["fingerprint substitution", (append) => ({ ...append, record_fingerprint: "f".repeat(64) })],
+    ["created malformed", (append) => ({ ...append, created: "true" })],
+    ["sequence malformed", (append) => ({ ...append, sequence: 0 })]
+  ];
+  for (const [label, mutate] of cases) {
+    const memoryGateway = {
+      async admit(request) {
+        const response = await originalAdmit(request);
+        return { ...response, append: mutate(response.append) };
+      },
+      retrieve: valid.memoryGateway.retrieve
+    };
+    const result = await facade(memoryGateway).admit({ layer: "session", record: callerRecord() });
+    assert.equal(result.code, "DENY_MEMORY_ADMISSION", label);
+  }
+
+  const hostileAppend = new Proxy({}, { ownKeys() { throw new Error("hostile receipt"); } });
+  const hostileGateway = {
+    async admit(request) {
+      const response = await originalAdmit(request);
+      return { ...response, append: hostileAppend };
+    },
+    retrieve: valid.memoryGateway.retrieve
+  };
+  assert.equal(
+    (await facade(hostileGateway).admit({ layer: "session", record: callerRecord() })).code,
+    "DENY_MEMORY_ADMISSION"
+  );
 });
 
 test("E2E: authority-bound facade admits and retrieves through the durable SQLite gateway", async (t) => {
