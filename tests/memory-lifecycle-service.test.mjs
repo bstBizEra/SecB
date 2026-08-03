@@ -16,6 +16,18 @@ const NOW = new Date("2026-08-03T12:00:00.000Z");
 const MANIFEST_HASH = "c".repeat(64);
 const INTEGRITY_KEY = Buffer.alloc(32, 7);
 
+function createHeadAnchor() {
+  let checkpoint = { count: 0, headHash: "0".repeat(64) };
+  return {
+    read() { return structuredClone(checkpoint); },
+    compareAndSet({ expected, next }) {
+      if (canonicalFingerprint(expected) !== canonicalFingerprint(checkpoint)) return false;
+      checkpoint = structuredClone(next);
+      return true;
+    }
+  };
+}
+
 function memory(overrides = {}) {
   const record = {
     memory_record_id: "mem-1",
@@ -109,7 +121,8 @@ function harness(t, overrides = {}) {
   const directory = mkdtempSync(join(tmpdir(), "secb-memory-lifecycle-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const filePath = join(directory, "lifecycle.jsonl");
-  const ledger = overrides.ledger ?? new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY });
+  const headAnchor = overrides.headAnchor ?? createHeadAnchor();
+  const ledger = overrides.ledger ?? new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor });
   let records = overrides.records ?? [memory()];
   const service = createMemoryLifecycleService({
     ledger,
@@ -130,7 +143,7 @@ function harness(t, overrides = {}) {
       retain_until: "2026-09-02T00:00:00.000Z"
     }))
   });
-  return { directory, filePath, ledger, service, setRecords(value) { records = value; } };
+  return { directory, filePath, headAnchor, ledger, service, setRecords(value) { records = value; } };
 }
 
 test("construction fails closed when lifecycle collaborators are absent", () => {
@@ -227,7 +240,7 @@ test("invalid and oversized lineage responses fail closed", async (t) => {
 });
 
 test("legal hold placement and release are append-only and durable across restart", async (t) => {
-  const { service, filePath } = harness(t);
+  const { service, filePath, headAnchor } = harness(t);
   const placed = await service.recordLifecycleEvent(mutation("LEGAL_HOLD_PLACED", { hold_id: "hold-1" }));
   assert.equal(placed.code, "MEMORY_LIFECYCLE_RECORDED");
   assert.equal((await service.resolve(resolution())).active_legal_hold_count, 1);
@@ -236,7 +249,7 @@ test("legal hold placement and release are append-only and durable across restar
   assert.equal(replay.receipt.replayed, true);
 
   const restarted = createMemoryLifecycleService({
-    ledger: new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY }),
+    ledger: new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor }),
     now: () => new Date(NOW),
     authorityResolver: async (expected) => authority(expected),
     recordResolver: async () => [memory()],
@@ -307,6 +320,7 @@ test("resolution denies when lifecycle head changes during the read", async (t) 
     appendLifecycleEvent() { throw new Error("unused"); },
     readLifecycleEvents() { return []; },
     readLifecycleEventByIdempotencyKey() { return null; },
+    validateLifecycleEvent(event) { return event; },
     verify() {
       verification += 1;
       return verification === 1
@@ -438,6 +452,7 @@ test("append without exact durable readback fails closed", async (t) => {
     appendLifecycleEvent() { return null; },
     readLifecycleEvents() { return []; },
     readLifecycleEventByIdempotencyKey() { return null; },
+    validateLifecycleEvent(event) { return event; },
     verify() { return { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: "0".repeat(64) }; }
   };
   const { service } = harness(t, { ledger });
@@ -449,6 +464,7 @@ test("malformed ledger output and dependency timeout are contained", async (t) =
     appendLifecycleEvent() { throw new Error("unused"); },
     readLifecycleEvents() { return {}; },
     readLifecycleEventByIdempotencyKey() { return null; },
+    validateLifecycleEvent(event) { return event; },
     verify() { return { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: "0".repeat(64) }; }
   };
   assert.equal((await harness(t, { ledger: malformedLedger }).service.resolve(resolution())).code, "DENY_LIFECYCLE_STORE_UNAVAILABLE");
@@ -494,7 +510,7 @@ test("authenticated lifecycle events reject malicious rewrite even after base ha
     entryHash: record.entryHash
   });
   writeFileSync(filePath, `${JSON.stringify(record)}\n`, "utf8");
-  assert.equal((await service.resolve(resolution())).code, "LIFECYCLE_EVENT_INTEGRITY_FAILURE");
+  assert.ok(["LIFECYCLE_EVENT_INTEGRITY_FAILURE", "LIFECYCLE_ROLLBACK_DETECTED"].includes((await service.resolve(resolution())).code));
 });
 
 test("integrity key and request resource bounds fail closed", async (t) => {
@@ -505,4 +521,122 @@ test("integrity key and request resource bounds fail closed", async (t) => {
   const { service, ledger } = harness(t);
   assert.equal((await service.recordLifecycleEvent(mutation("TOMBSTONED", { reason: "x".repeat(2_049) }))).code, "DENY_LIFECYCLE_REQUEST_MALFORMED");
   assert.equal(ledger.verify().count, 0);
+});
+
+test("lineage is revalidated after COMMIT authority for resolve and destructive mutation", async (t) => {
+  let resolveFixture;
+  resolveFixture = harness(t, {
+    authorityResolver: async (expected) => {
+      if (expected.phase === "COMMIT") resolveFixture.setRecords([memory(), memory({ memory_record_id: "mem-2", version: 2, supersedes: "mem-1", statement: "late successor" })]);
+      return authority(expected);
+    }
+  });
+  assert.ok(["DENY_LINEAGE_CHANGED", "DENY_MEMORY_SUPERSEDED"].includes((await resolveFixture.service.resolve(resolution())).code));
+
+  let mutationFixture;
+  mutationFixture = harness(t, {
+    authorityResolver: async (expected) => {
+      if (expected.phase === "COMMIT") mutationFixture.setRecords([memory(), memory({ memory_record_id: "mem-2", version: 2, supersedes: "mem-1", statement: "late successor" })]);
+      return authority(expected);
+    }
+  });
+  assert.ok(["DENY_LINEAGE_CHANGED", "DENY_MEMORY_SUPERSEDED"].includes((await mutationFixture.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code));
+  assert.equal(mutationFixture.ledger.verify().count, 0);
+});
+
+test("target drift during retention cannot inherit the old policy decision", async (t) => {
+  let fixture;
+  fixture = harness(t, {
+    retentionPolicyResolver: async (request) => {
+      fixture.setRecords([memory({ statement: "changed target", retention_policy: "retain-new" })]);
+      return { decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "old-policy", project_id: request.project_id,
+        memory_record_id: request.memory_record_id, memory_record_version: request.memory_record_version,
+        policy_id: request.policy_id, retain_until: null };
+    }
+  });
+  assert.equal((await fixture.service.resolve(resolution())).code, "DENY_LINEAGE_CHANGED");
+});
+
+test("evidence must remain accepted and unexpired at the commit instant", async (t) => {
+  let calls = 0;
+  const { service, ledger } = harness(t, {
+    now: () => new Date(calls++ === 0 ? "2026-08-03T12:00:00.000Z" : "2026-08-03T12:30:00.000Z"),
+    authorityResolver: async (expected) => authority(expected, { valid_until: "2026-08-03T14:00:00.000Z" }),
+    evidenceResolver: async (request) => evidence(request, { valid_until: "2026-08-03T12:15:00.000Z" })
+  });
+  assert.equal((await service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_EVIDENCE");
+  assert.equal(ledger.verify().count, 0);
+});
+
+test("all immutable authority provenance is stable across phases", async (t) => {
+  const { service, ledger } = harness(t, {
+    authorityResolver: async (expected) => authority(expected, expected.phase === "COMMIT"
+      ? { work_package_id: "substituted-wp", session_id: "substituted-session" }
+      : {})
+  });
+  assert.equal((await service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_AUTHORITY");
+  assert.equal(ledger.verify().count, 0);
+});
+
+test("replay requires fresh current authority and authenticated event validation", async (t) => {
+  const fixture = harness(t);
+  const request = mutation("TOMBSTONED");
+  assert.equal((await fixture.service.recordLifecycleEvent(request)).ok, true);
+  const denied = createMemoryLifecycleService({
+    ledger: fixture.ledger, now: () => new Date(NOW), authorityResolver: async () => ({ decision: "DENY" }),
+    recordResolver: async () => [memory()], retentionPolicyResolver: async () => ({ decision: "DENY" }),
+    evidenceResolver: async () => ({ decision: "DENY" }), sodRules: { checkPairwiseDistinct }
+  });
+  assert.equal((await denied.recordLifecycleEvent(request)).code, "DENY_LIFECYCLE_AUTHORITY");
+});
+
+test("post-append success requires ledger count and head to match durable readback", async (t) => {
+  let lookupCalls = 0;
+  let persistedEvent;
+  const ledger = {
+    appendLifecycleEvent(event) { persistedEvent = { ...event, event_mac: "9".repeat(64) }; return null; },
+    readLifecycleEvents() { return []; },
+    readLifecycleEventByIdempotencyKey() {
+      lookupCalls += 1;
+      if (lookupCalls === 1) return null;
+      return { sequence: 1, record_hash: "8".repeat(64), entry_hash: "7".repeat(64), idempotency_key: "idem-TOMBSTONED", event: persistedEvent };
+    },
+    validateLifecycleEvent(event) { return event; },
+    verify() { return { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: "0".repeat(64) }; }
+  };
+  assert.equal((await harness(t, { ledger }).service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_DURABILITY");
+});
+
+test("unknown lifecycle events and throwing SoD ports fail closed", async (t) => {
+  const base = memory();
+  const unknown = {
+    event_id: "1".repeat(64), event_version: 2, request_fingerprint: "2".repeat(64), parameters_hash: "3".repeat(64),
+    project_id: "project-1", work_package_id: "wp", session_id: "session", actor_id: "gov", authority_ref: "auth",
+    decision_id: "decision", producer_actor_id: "producer-1", reviewer_actor_id: "reviewer", approver_actor_id: "gov",
+    evidence_acceptor_actor_id: "acceptor", event_type: "UNKNOWN_EVENT", layer: "project", memory_record_id: "mem-1",
+    memory_record_version: 1, target_content_hash: base.content_hash, target_record_fingerprint: canonicalFingerprint(base),
+    evidence_id: "evidence", evidence_hash: "4".repeat(64), preservation_action: "NOT_APPLICABLE", reason: "unknown",
+    occurred_at: NOW.toISOString(), event_mac: "5".repeat(64)
+  };
+  const unknownLedger = {
+    appendLifecycleEvent() { throw new Error("unused"); }, readLifecycleEventByIdempotencyKey() { return null; },
+    validateLifecycleEvent(event) { return event; }, readLifecycleEvents() { return [{ sequence: 1, event: unknown }]; },
+    verify() { return { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 1, headHash: "6".repeat(64) }; }
+  };
+  assert.equal((await harness(t, { ledger: unknownLedger }).service.resolve(resolution())).code, "DENY_LIFECYCLE_STORE_UNAVAILABLE");
+  const hostileSod = harness(t, { sodRules: { checkPairwiseDistinct() { throw new Error("sod trap"); } } });
+  assert.equal((await hostileSod.service.resolve(resolution())).code, "DENY_LIFECYCLE_AUTHORITY");
+});
+
+test("canonical producer binding and monotonic head anchor prevent self-review and rollback", async (t) => {
+  const selfReview = harness(t, {
+    records: [memory({ actor_id: "actual-producer" })],
+    authorityResolver: async (expected) => authority(expected, { producer_actor_id: "declared-producer", reviewer_actor_id: "actual-producer" })
+  });
+  assert.equal((await selfReview.service.recordLifecycleEvent(mutation("TOMBSTONED"))).code, "DENY_LIFECYCLE_SOD");
+
+  const rollback = harness(t);
+  assert.equal((await rollback.service.recordLifecycleEvent(mutation("TOMBSTONED"))).ok, true);
+  writeFileSync(rollback.filePath, "", "utf8");
+  assert.equal((await rollback.service.resolve(resolution())).code, "LIFECYCLE_ROLLBACK_DETECTED");
 });

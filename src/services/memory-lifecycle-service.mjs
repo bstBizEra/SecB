@@ -25,6 +25,13 @@ const RETENTION_KEYS = Object.freeze([
 const VERIFY_KEYS = Object.freeze(["valid", "ledgerId", "count", "headHash"]);
 const EVENT_ROW_KEYS = Object.freeze(["sequence", "event"]);
 const IDEMPOTENCY_ROW_KEYS = Object.freeze(["sequence", "record_hash", "entry_hash", "idempotency_key", "event"]);
+const LIFECYCLE_EVENT_COMMON_KEYS = Object.freeze([
+  "event_id", "event_version", "request_fingerprint", "parameters_hash", "project_id", "work_package_id", "session_id",
+  "actor_id", "authority_ref", "decision_id", "producer_actor_id", "reviewer_actor_id", "approver_actor_id",
+  "evidence_acceptor_actor_id", "event_type", "layer", "memory_record_id", "memory_record_version", "target_content_hash",
+  "target_record_fingerprint", "evidence_id", "evidence_hash", "preservation_action", "reason", "occurred_at", "event_mac"
+]);
+const LIFECYCLE_EVENT_OPTIONAL_KEYS = Object.freeze(["hold_id", "redaction_manifest_hash"]);
 const MAX_LINEAGE_RECORDS = 10_000;
 const MAX_LINEAGE_BYTES = 4 * 1024 * 1024;
 const MAX_LIFECYCLE_EVENTS = 10_000;
@@ -103,12 +110,28 @@ function snapshotVerify(value) {
   return result;
 }
 
-function snapshotEventRows(value) {
+function snapshotAuthenticatedEvent(value, validateEvent) {
+  let authenticated;
+  try { authenticated = validateEvent(value); } catch { return null; }
+  const event = snapshotClosed(authenticated, [...LIFECYCLE_EVENT_COMMON_KEYS, ...LIFECYCLE_EVENT_OPTIONAL_KEYS], LIFECYCLE_EVENT_COMMON_KEYS);
+  if (event === null || event.event_version !== 2 || !MUTATION_TYPES.includes(event.event_type)
+    || !LAYERS.includes(event.layer) || !Number.isSafeInteger(event.memory_record_version) || event.memory_record_version < 1
+    || !["event_id", "request_fingerprint", "parameters_hash", "target_content_hash", "target_record_fingerprint", "evidence_hash", "event_mac"].every((key) => isSha256(event[key]))) return null;
+  const needsHold = ["LEGAL_HOLD_PLACED", "LEGAL_HOLD_RELEASED"].includes(event.event_type);
+  const needsManifest = event.event_type === "REDACTION_APPLIED";
+  if (needsHold !== Object.prototype.hasOwnProperty.call(event, "hold_id")
+    || needsManifest !== Object.prototype.hasOwnProperty.call(event, "redaction_manifest_hash")) return null;
+  return event;
+}
+
+function snapshotEventRows(value, validateEvent) {
   if (!Array.isArray(value) || value.length > MAX_LIFECYCLE_EVENTS) return null;
   try {
     const rows = structuredClone(value);
     for (const row of rows) {
       if (snapshotClosed(row, EVENT_ROW_KEYS) === null || !Number.isSafeInteger(row.sequence) || row.sequence < 1 || !isPlainObject(row.event)) return null;
+      row.event = snapshotAuthenticatedEvent(row.event, validateEvent);
+      if (row.event === null) return null;
     }
     return rows;
   } catch {
@@ -116,7 +139,7 @@ function snapshotEventRows(value) {
   }
 }
 
-function snapshotIdempotencyRow(value) {
+function snapshotIdempotencyRow(value, validateEvent) {
   if (value === null) return null;
   const row = snapshotClosed(value, IDEMPOTENCY_ROW_KEYS);
   if (
@@ -124,6 +147,8 @@ function snapshotIdempotencyRow(value) {
     || !isSha256(row.record_hash) || !isSha256(row.entry_hash)
     || !isBoundedString(row.idempotency_key, 512) || !isPlainObject(row.event)
   ) return undefined;
+  row.event = snapshotAuthenticatedEvent(row.event, validateEvent);
+  if (row.event === null) return undefined;
   return row;
 }
 
@@ -251,19 +276,21 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
   let readLifecycleEvents;
   let readByIdempotency;
   let verifyLedger;
+  let validateLifecycleEvent;
   let checkPairwiseDistinct;
   try {
     appendLifecycleEvent = ledger?.appendLifecycleEvent;
     readLifecycleEvents = ledger?.readLifecycleEvents;
     readByIdempotency = ledger?.readLifecycleEventByIdempotencyKey;
     verifyLedger = ledger?.verify;
+    validateLifecycleEvent = ledger?.validateLifecycleEvent;
     checkPairwiseDistinct = sodRules?.checkPairwiseDistinct;
   } catch {
     throw new MemoryLifecycleConfigurationError("INVALID_LIFECYCLE_DEPENDENCY", "lifecycle dependencies could not be inspected");
   }
   if (ledger === null || typeof ledger !== "object" || Array.isArray(ledger)
-    || [appendLifecycleEvent, readLifecycleEvents, readByIdempotency, verifyLedger].some((port) => typeof port !== "function")) {
-    throw new MemoryLifecycleConfigurationError("INVALID_LIFECYCLE_LEDGER", "ledger must expose append, read, idempotency lookup, and verify ports");
+    || [appendLifecycleEvent, readLifecycleEvents, readByIdempotency, verifyLedger, validateLifecycleEvent].some((port) => typeof port !== "function")) {
+    throw new MemoryLifecycleConfigurationError("INVALID_LIFECYCLE_LEDGER", "ledger must expose append, read, idempotency lookup, event validation, and verify ports");
   }
   if (typeof authorityResolver !== "function") throw new MemoryLifecycleConfigurationError("INVALID_AUTHORITY_RESOLVER", "authorityResolver is required");
   if (typeof recordResolver !== "function") throw new MemoryLifecycleConfigurationError("INVALID_RECORD_RESOLVER", "recordResolver is required");
@@ -286,6 +313,7 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
   const readEvents = Function.prototype.bind.call(readLifecycleEvents, ledger);
   const lookupIdempotency = Function.prototype.bind.call(readByIdempotency, ledger);
   const verify = Function.prototype.bind.call(verifyLedger, ledger);
+  const validateEvent = Function.prototype.bind.call(validateLifecycleEvent, ledger);
   const checkSod = Function.prototype.bind.call(checkPairwiseDistinct, sodRules);
 
   async function callPort(port, request, timeoutMs) {
@@ -307,7 +335,7 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
         layer: target.layer,
         memory_record_id: target.memory_record_id,
         memory_record_version: target.memory_record_version
-      }));
+      }), validateEvent);
       if (rows === null) return { failure: deny("DENY_LIFECYCLE_STORE_UNAVAILABLE", "lifecycle event rows were malformed") };
       const after = snapshotVerify(verify());
       if (after === null || before.count !== after.count || before.headHash !== after.headHash) return { changed: true };
@@ -353,12 +381,12 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
       || new Date(fromMs).toISOString() !== value.valid_from || new Date(untilMs).toISOString() !== value.valid_until
       || fromMs > instant.ms || instant.ms >= untilMs
     ) return null;
-    const distinct = checkSod([
+    const distinct = sodAllowed([
       { role: "PRODUCER", actorId: value.producer_actor_id },
       { role: "REV", actorId: value.reviewer_actor_id },
       { role: "GOV", actorId: value.approver_actor_id }
-    ], { code: "DENY_LIFECYCLE_SOD" });
-    return distinct?.ok === true ? value : null;
+    ]);
+    return distinct ? value : null;
   }
 
   async function authorize(expected, instant) {
@@ -366,8 +394,18 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     return raw === undefined ? null : snapshotAuthority(raw, expected, instant);
   }
 
+  function sodAllowed(parties) {
+    try {
+      const result = checkSod(parties, { code: "DENY_LIFECYCLE_SOD" });
+      return snapshotClosed(result, ["ok", "code", "message", "conflicts"], ["ok"])?.ok === true;
+    } catch {
+      return false;
+    }
+  }
+
   function sameAuthority(left, right) {
-    return ["decision_id", "actor_id", "producer_actor_id", "reviewer_actor_id", "approver_actor_id", "authority_ref"]
+    return ["decision", "code", "decision_id", "actor_id", "producer_actor_id", "reviewer_actor_id", "approver_actor_id",
+      "work_package_id", "session_id", "authority_ref", "valid_from", "valid_until"]
       .every((key) => left[key] === right[key]);
   }
 
@@ -403,10 +441,23 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     });
   }
 
+  function replayMatches(row, input, record, requestHash, parametersHash) {
+    const event = row.event;
+    return event.request_fingerprint === requestHash
+      && event.parameters_hash === parametersHash
+      && event.project_id === input.project_id && event.layer === input.layer
+      && event.memory_record_id === input.memory_record_id && event.memory_record_version === input.memory_record_version
+      && event.event_type === input.event_type && event.reason === input.reason
+      && event.target_content_hash === record.content_hash
+      && event.target_record_fingerprint === canonicalFingerprint(record)
+      && (event.hold_id ?? null) === (input.hold_id ?? null)
+      && (event.redaction_manifest_hash ?? null) === (input.redaction_manifest_hash ?? null);
+  }
+
   function lookupReplay(input, fingerprint) {
     try {
       const raw = lookupIdempotency(input.idempotency_key);
-      const row = snapshotIdempotencyRow(raw);
+      const row = snapshotIdempotencyRow(raw, validateEvent);
       if (row === undefined) return { error: deny("DENY_LIFECYCLE_STORE_UNAVAILABLE", "idempotency lookup was malformed") };
       if (row === null) return { row: null };
       if (row.event.request_fingerprint !== fingerprint) return { error: deny("DENY_IDEMPOTENCY_CONFLICT", "idempotency key is bound to a different lifecycle request") };
@@ -464,7 +515,7 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     const requestHash = requestFingerprint(input);
     const replay = lookupReplay(input, requestHash);
     if (replay.error) return replay.error;
-    if (replay.row !== null) return deepFreeze({ ok: true, code: "MEMORY_LIFECYCLE_RECORDED", event: replay.row.event, receipt: replayReceipt(replay.row, true) });
+    const replayRow = replay.row;
 
     const initialInstant = trustedInstant(now);
     if (initialInstant === null) return deny("DENY_CLOCK_UNAVAILABLE", "trusted lifecycle clock is unavailable");
@@ -477,6 +528,7 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     const initialChain = resolveSupersession(initialRecords, input);
     if (!initialChain.ok) return deny(initialChain.code, "memory supersession lineage is not resolvable");
     const target = initialChain.requested;
+    if (preliminary.producer_actor_id !== target.actor_id) return deny("DENY_LIFECYCLE_SOD", "authority producer does not match the canonical memory producer");
     const initialLedger = readLedgerState(input, target);
     if (initialLedger.failure) return initialLedger.failure;
     if (initialLedger.changed) return deny("DENY_LIFECYCLE_CHANGED", "lifecycle changed during resolution");
@@ -496,13 +548,13 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     const rawEvidence = await callPort(evidenceResolver, { ...evidenceExpected, active_legal_hold_count: initialLedger.state.activeHolds.size }, configuredTimeouts.evidence_ms);
     const evidence = rawEvidence === undefined ? null : snapshotEvidence(rawEvidence, evidenceExpected, initialInstant, initialLedger.state.activeHolds.size);
     if (evidence === null) return deny("DENY_LIFECYCLE_EVIDENCE", "independently accepted lifecycle evidence was not established");
-    const distinct = checkSod([
+    const distinct = sodAllowed([
       { role: "PRODUCER", actorId: preliminary.producer_actor_id },
       { role: "REV", actorId: preliminary.reviewer_actor_id },
       { role: "GOV", actorId: preliminary.approver_actor_id },
       { role: "EVIDENCE_ACCEPTOR", actorId: evidence.evidence_acceptor_actor_id }
-    ], { code: "DENY_LIFECYCLE_SOD" });
-    if (distinct?.ok !== true) return deny("DENY_LIFECYCLE_SOD", "lifecycle separation of duties was not established");
+    ]);
+    if (!distinct) return deny("DENY_LIFECYCLE_SOD", "lifecycle separation of duties was not established");
 
     const finalRecords = await loadLineage(input);
     if (finalRecords === null) return deny("DENY_LINEAGE_INVALID", "final memory lineage could not be established");
@@ -518,20 +570,63 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
 
     const instant = trustedInstant(now);
     if (instant === null || instant.ms < initialInstant.ms) return deny("DENY_CLOCK_UNAVAILABLE", "trusted lifecycle clock regressed or became unavailable");
+    const rawCommitEvidence = await callPort(evidenceResolver, { ...evidenceExpected, active_legal_hold_count: finalLedger.state.activeHolds.size }, configuredTimeouts.evidence_ms);
+    const commitEvidence = rawCommitEvidence === undefined ? null : snapshotEvidence(rawCommitEvidence, evidenceExpected, instant, finalLedger.state.activeHolds.size);
+    if (commitEvidence === null || canonicalFingerprint(commitEvidence) !== canonicalFingerprint(evidence)) {
+      return deny("DENY_LIFECYCLE_EVIDENCE", "lifecycle evidence expired, changed, or was revoked before commit");
+    }
     const stateFingerprint = canonicalFingerprint({
       lineage: lineageFingerprint(finalRecords), lifecycle_head_hash: finalLedger.head.headHash,
-      lifecycle_sequence: finalLedger.head.count, evidence_id: evidence.evidence_id, evidence_hash: evidence.evidence_hash
+      lifecycle_sequence: finalLedger.head.count, evidence_id: commitEvidence.evidence_id, evidence_hash: commitEvidence.evidence_hash
     });
-    const commitExpected = authorityExpected({ phase: "COMMIT", operation: "memory-lifecycle-mutate", input, record: target, parametersHash, stateFingerprint, evidence });
+    const commitExpected = authorityExpected({ phase: "COMMIT", operation: "memory-lifecycle-mutate", input, record: target, parametersHash, stateFingerprint, evidence: commitEvidence });
     const finalAuthority = await authorize(commitExpected, instant);
     if (finalAuthority === null || !sameAuthority(preliminary, finalAuthority)) {
       return deny("DENY_LIFECYCLE_AUTHORITY", "exact lifecycle authority was revoked, replaced, or not bound at commit");
+    }
+    const commitRecords = await loadLineage(input);
+    if (commitRecords === null) return deny("DENY_LINEAGE_INVALID", "write-boundary lineage could not be established");
+    const commitChain = resolveSupersession(commitRecords, input);
+    if (!commitChain.ok) return deny(commitChain.code, "write-boundary lineage is not resolvable");
+    if (lineageFingerprint(commitRecords) !== lineageFingerprint(finalRecords)
+      || canonicalFingerprint(commitChain.requested) !== canonicalFingerprint(target)) {
+      return deny("DENY_LINEAGE_CHANGED", "memory lineage changed during commit authority evaluation");
+    }
+    if (["REDACTION_APPLIED", "TOMBSTONED"].includes(input.event_type) && !commitChain.current) {
+      return deny("DENY_MEMORY_SUPERSEDED", "destructive lifecycle action requires the current chain head at write boundary");
+    }
+    const rawBoundaryEvidence = await callPort(evidenceResolver, { ...evidenceExpected, active_legal_hold_count: finalLedger.state.activeHolds.size }, configuredTimeouts.evidence_ms);
+    const writeRecords = await loadLineage(input);
+    if (writeRecords === null) return deny("DENY_LINEAGE_INVALID", "final write-boundary lineage could not be established");
+    const writeChain = resolveSupersession(writeRecords, input);
+    if (!writeChain.ok || lineageFingerprint(writeRecords) !== lineageFingerprint(commitRecords)
+      || canonicalFingerprint(writeChain.requested) !== canonicalFingerprint(target)) {
+      return deny(writeChain.ok ? "DENY_LINEAGE_CHANGED" : writeChain.code, "memory lineage changed at the final write boundary");
+    }
+    if (["REDACTION_APPLIED", "TOMBSTONED"].includes(input.event_type) && !writeChain.current) {
+      return deny("DENY_MEMORY_SUPERSEDED", "destructive lifecycle action requires the current chain head at final write boundary");
+    }
+    const writeInstant = trustedInstant(now);
+    const boundaryEvidence = rawBoundaryEvidence === undefined || writeInstant === null || writeInstant.ms < instant.ms
+      ? null
+      : snapshotEvidence(rawBoundaryEvidence, evidenceExpected, writeInstant, finalLedger.state.activeHolds.size);
+    if (boundaryEvidence === null || canonicalFingerprint(boundaryEvidence) !== canonicalFingerprint(commitEvidence)) {
+      return deny("DENY_LIFECYCLE_EVIDENCE", "lifecycle evidence expired, changed, or was revoked at the write boundary");
+    }
+    if (snapshotAuthority(finalAuthority, commitExpected, writeInstant) === null) {
+      return deny("DENY_LIFECYCLE_AUTHORITY", "commit authority expired before the write boundary");
     }
     const boundaryLedger = readLedgerState(input, target);
     if (
       boundaryLedger.failure || boundaryLedger.changed
       || boundaryLedger.head.headHash !== finalLedger.head.headHash || boundaryLedger.head.count !== finalLedger.head.count
     ) return deny("DENY_LIFECYCLE_CHANGED", "lifecycle changed at the write boundary");
+    if (replayRow !== null) {
+      if (!replayMatches(replayRow, input, target, requestHash, parametersHash)) {
+        return deny("DENY_IDEMPOTENCY_CONFLICT", "persisted replay event is not bound to the current lifecycle request and target");
+      }
+      return deepFreeze({ ok: true, code: "MEMORY_LIFECYCLE_RECORDED", event: replayRow.event, receipt: replayReceipt(replayRow, true) });
+    }
 
     const eventBody = {
       event_version: 2,
@@ -546,18 +641,18 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
       producer_actor_id: finalAuthority.producer_actor_id,
       reviewer_actor_id: finalAuthority.reviewer_actor_id,
       approver_actor_id: finalAuthority.approver_actor_id,
-      evidence_acceptor_actor_id: evidence.evidence_acceptor_actor_id,
+      evidence_acceptor_actor_id: boundaryEvidence.evidence_acceptor_actor_id,
       event_type: input.event_type,
       layer: input.layer,
       memory_record_id: input.memory_record_id,
       memory_record_version: input.memory_record_version,
       target_content_hash: target.content_hash,
       target_record_fingerprint: canonicalFingerprint(target),
-      evidence_id: evidence.evidence_id,
-      evidence_hash: evidence.evidence_hash,
-      preservation_action: evidence.preservation_action,
+      evidence_id: boundaryEvidence.evidence_id,
+      evidence_hash: boundaryEvidence.evidence_hash,
+      preservation_action: boundaryEvidence.preservation_action,
       reason: input.reason,
-      occurred_at: instant.iso,
+      occurred_at: writeInstant.iso,
       ...(needsHold ? { hold_id: input.hold_id } : {}),
       ...(needsManifest ? { redaction_manifest_hash: input.redaction_manifest_hash } : {})
     };
@@ -565,11 +660,15 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     try {
       const rawReceipt = appendEvent(event, { expectedSequence: boundaryLedger.head.count, idempotencyKey: input.idempotency_key });
       if (rawReceipt?.ok === false) return deepFreeze(rawReceipt);
-      const persisted = snapshotIdempotencyRow(lookupIdempotency(input.idempotency_key));
+      const persisted = snapshotIdempotencyRow(lookupIdempotency(input.idempotency_key), validateEvent);
       if (
         persisted === null || persisted === undefined || persisted.event.event_id !== event.event_id
         || persisted.event.request_fingerprint !== requestHash || persisted.sequence !== boundaryLedger.head.count + 1
       ) return deny("DENY_LIFECYCLE_DURABILITY", "lifecycle append was not proven by exact durable readback");
+      const postAppend = snapshotVerify(verify());
+      if (postAppend === null || postAppend.count !== persisted.sequence || postAppend.headHash !== persisted.record_hash) {
+        return deny("DENY_LIFECYCLE_DURABILITY", "lifecycle append did not advance the authenticated ledger head exactly");
+      }
       return deepFreeze({ ok: true, code: "MEMORY_LIFECYCLE_RECORDED", event: persisted.event, receipt: replayReceipt(persisted, false) });
     } catch (cause) {
       const recovered = lookupReplay(input, requestHash);
@@ -591,6 +690,7 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     if (initialRecords === null) return deny("DENY_LINEAGE_INVALID", "memory lineage could not be established");
     const initialChain = resolveSupersession(initialRecords, input);
     if (!initialChain.ok) return deny(initialChain.code, "memory supersession lineage is not resolvable");
+    if (preliminary.producer_actor_id !== initialChain.requested.actor_id) return deny("DENY_LIFECYCLE_SOD", "authority producer does not match the canonical memory producer");
     const initialLedger = readLedgerState(input, initialChain.requested);
     if (initialLedger.failure) return initialLedger.failure;
     if (initialLedger.changed) return deny("DENY_LIFECYCLE_CHANGED", "lifecycle changed during resolution");
@@ -609,6 +709,9 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     if (finalRecords === null) return deny("DENY_LINEAGE_INVALID", "final memory lineage could not be established");
     const chain = resolveSupersession(finalRecords, input);
     if (!chain.ok) return deny(chain.code, "final memory supersession lineage is not resolvable");
+    if (canonicalFingerprint(chain.requested) !== canonicalFingerprint(initialChain.requested)) {
+      return deny("DENY_LINEAGE_CHANGED", "memory target or retention policy changed during retention evaluation");
+    }
     const ledgerState = readLedgerState(input, chain.requested);
     if (ledgerState.failure) return ledgerState.failure;
     if (ledgerState.changed) return deny("DENY_LIFECYCLE_CHANGED", "lifecycle changed during final resolution");
@@ -638,6 +741,49 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
     if (finalAuthority === null || !sameAuthority(preliminary, finalAuthority)) {
       return deny("DENY_LIFECYCLE_AUTHORITY", "exact lifecycle authority was revoked, replaced, or not bound at return");
     }
+    const commitRecords = await loadLineage(input);
+    if (commitRecords === null) return deny("DENY_LINEAGE_INVALID", "return-boundary lineage could not be established");
+    const commitChain = resolveSupersession(commitRecords, input);
+    if (!commitChain.ok) return deny(commitChain.code, "return-boundary lineage is not resolvable");
+    if (lineageFingerprint(commitRecords) !== lineageFingerprint(finalRecords)
+      || canonicalFingerprint(commitChain.requested) !== canonicalFingerprint(chain.requested)) {
+      return deny("DENY_LINEAGE_CHANGED", "memory lineage changed during commit authority evaluation");
+    }
+    if (!commitChain.current) return deny("DENY_MEMORY_SUPERSEDED", "memory record ceased to be the current chain head at return boundary", {
+      chain_head_id: commitChain.head.memory_record_id, chain_head_version: commitChain.head.version, preservation_required: preservation
+    });
+    const rawBoundaryRetention = await callPort(retentionPolicyResolver, {
+      project_id: commitChain.requested.project_id,
+      memory_record_id: commitChain.requested.memory_record_id,
+      memory_record_version: commitChain.requested.version,
+      policy_id: commitChain.requested.retention_policy,
+      as_of: instant.iso
+    }, configuredTimeouts.retention_ms);
+    const boundaryRetention = rawBoundaryRetention === undefined ? null : snapshotRetention(rawBoundaryRetention, commitChain.requested);
+    if (boundaryRetention === null || canonicalFingerprint({ ...boundaryRetention, retainUntilMs: undefined })
+      !== canonicalFingerprint({ ...retention, retainUntilMs: undefined })) {
+      return deny("DENY_RETENTION_POLICY", "retention decision changed or was revoked at the return boundary");
+    }
+    const returnRecords = await loadLineage(input);
+    if (returnRecords === null) return deny("DENY_LINEAGE_INVALID", "final return-boundary lineage could not be established");
+    const returnChain = resolveSupersession(returnRecords, input);
+    if (!returnChain.ok || lineageFingerprint(returnRecords) !== lineageFingerprint(commitRecords)
+      || canonicalFingerprint(returnChain.requested) !== canonicalFingerprint(chain.requested)) {
+      return deny(returnChain.ok ? "DENY_LINEAGE_CHANGED" : returnChain.code, "memory lineage changed at the final return boundary");
+    }
+    if (!returnChain.current) return deny("DENY_MEMORY_SUPERSEDED", "memory record ceased to be current at final return boundary", {
+      chain_head_id: returnChain.head.memory_record_id, chain_head_version: returnChain.head.version, preservation_required: preservation
+    });
+    const returnInstant = trustedInstant(now);
+    if (returnInstant === null || returnInstant.ms < instant.ms || snapshotAuthority(finalAuthority, commitExpected, returnInstant) === null) {
+      return deny("DENY_LIFECYCLE_AUTHORITY", "commit authority expired before the final return boundary");
+    }
+    if (!(Date.parse(returnChain.requested.valid_from) <= returnInstant.ms && returnInstant.ms < Date.parse(returnChain.requested.valid_until))) {
+      return deny("DENY_MEMORY_NOT_TEMPORALLY_VALID", "memory record expired before the final return boundary", { preservation_required: preservation });
+    }
+    if (boundaryRetention.retainUntilMs !== null && returnInstant.ms >= boundaryRetention.retainUntilMs) {
+      return deny("DENY_RETENTION_EXPIRED", "memory retention expired before the final return boundary", { preservation_required: preservation });
+    }
     const boundaryLedger = readLedgerState(input, chain.requested);
     if (
       boundaryLedger.failure || boundaryLedger.changed
@@ -655,7 +801,7 @@ export function createMemoryLifecycleService({ ledger, authorityResolver, record
       target_record_fingerprint: canonicalFingerprint(chain.requested),
       authority_decision_id: finalAuthority.decision_id,
       state_fingerprint: stateFingerprint,
-      evaluated_at: instant.iso,
+      evaluated_at: returnInstant.iso,
       lifecycle_sequence: boundaryLedger.head.count,
       lifecycle_head_hash: boundaryLedger.head.headHash,
       active_legal_hold_count: boundaryLedger.state.activeHolds.size,

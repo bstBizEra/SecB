@@ -3,7 +3,7 @@ import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
-import { DurableLedger, LedgerError } from "./durable-ledger.mjs";
+import { DurableLedger, LedgerError, ZERO_HASH } from "./durable-ledger.mjs";
 
 export const MEMORY_LIFECYCLE_EVENT_TYPES = Object.freeze([
   "LEGAL_HOLD_PLACED",
@@ -136,8 +136,10 @@ function lifecycleEntry(event, idempotencyKey) {
 export class MemoryLifecycleLedger extends DurableLedger {
   #integrityKey;
   #filePath;
+  #readAnchor;
+  #advanceAnchor;
 
-  constructor({ filePath, integrityKey } = {}) {
+  constructor({ filePath, integrityKey, headAnchor } = {}) {
     super({ filePath, ledgerId: "secb-memory-lifecycle-ledger" });
     let key;
     try {
@@ -151,6 +153,36 @@ export class MemoryLifecycleLedger extends DurableLedger {
     }
     this.#integrityKey = key;
     this.#filePath = resolve(filePath);
+    let readAnchor;
+    let advanceAnchor;
+    try {
+      readAnchor = headAnchor?.read;
+      advanceAnchor = headAnchor?.compareAndSet;
+    } catch {
+      throw new LedgerError("INVALID_LIFECYCLE_HEAD_ANCHOR", "headAnchor could not be safely inspected");
+    }
+    if (typeof readAnchor !== "function" || typeof advanceAnchor !== "function") {
+      throw new LedgerError("INVALID_LIFECYCLE_HEAD_ANCHOR", "an independent monotonic headAnchor is required");
+    }
+    this.#readAnchor = Function.prototype.bind.call(readAnchor, headAnchor);
+    this.#advanceAnchor = Function.prototype.bind.call(advanceAnchor, headAnchor);
+  }
+
+  #anchor() {
+    let value;
+    try { value = structuredClone(this.#readAnchor()); } catch { throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle head anchor could not be read"); }
+    if (!isPlainObject(value) || Reflect.ownKeys(value).length !== 2
+      || !Number.isSafeInteger(value.count) || value.count < 0 || !isSha256(value.headHash)) {
+      throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle head anchor returned malformed state");
+    }
+    return value;
+  }
+
+  #verifyAnchor(result) {
+    const anchor = this.#anchor();
+    if (anchor.count !== result.count || anchor.headHash !== result.headHash) {
+      throw new LedgerError("LIFECYCLE_ROLLBACK_DETECTED", "lifecycle ledger does not match its independent monotonic head anchor");
+    }
   }
 
   #assertFileBounded(additionalBytes = 0) {
@@ -164,24 +196,27 @@ export class MemoryLifecycleLedger extends DurableLedger {
     this.#assertFileBounded();
     const result = super.verify();
     if (result.count > MAX_LIFECYCLE_EVENTS) throw new LedgerError("LIFECYCLE_LEDGER_RESOURCE_LIMIT", "memory lifecycle event limit exceeded");
+    this.#verifyAnchor(result);
     return result;
   }
 
   read() {
     this.#assertFileBounded();
+    const verified = this.verify();
     const records = super.read();
-    if (records.length > MAX_LIFECYCLE_EVENTS) throw new LedgerError("LIFECYCLE_LEDGER_RESOURCE_LIMIT", "memory lifecycle event limit exceeded");
+    if (records.length > MAX_LIFECYCLE_EVENTS || records.length !== verified.count) throw new LedgerError("LIFECYCLE_LEDGER_RESOURCE_LIMIT", "memory lifecycle event limit exceeded or changed during read");
     return records;
   }
 
   appendLifecycleEvent(event, { expectedSequence, idempotencyKey } = {}) {
+    const anchoredBefore = this.verify();
     const unsigned = snapshotEvent(event, { integrityKey: this.#integrityKey, requireMac: false });
     if (!isBoundedString(idempotencyKey, 512)) {
       throw new LedgerError("DENY_MISSING_ENTRY_FIELDS", "a bounded idempotencyKey is required for memory lifecycle append");
     }
     const signed = deepFreeze({ ...unsigned, event_mac: macFor(this.#integrityKey, unsigned) });
     this.#assertFileBounded(Buffer.byteLength(JSON.stringify(lifecycleEntry(signed, idempotencyKey)), "utf8") * 4 + 4_096);
-    return this.append(lifecycleEntry(signed, idempotencyKey), {
+    const receipt = this.append(lifecycleEntry(signed, idempotencyKey), {
       expectedSequence,
       preWriteCheck: (records) => {
         if (records.length >= MAX_LIFECYCLE_EVENTS) {
@@ -221,6 +256,28 @@ export class MemoryLifecycleLedger extends DurableLedger {
         return null;
       }
     });
+    if (receipt?.ok === false) return receipt;
+    if (receipt.replayed !== true) {
+      let advanced;
+      try {
+        advanced = this.#advanceAnchor({
+          expected: { count: anchoredBefore.count, headHash: anchoredBefore.headHash },
+          next: { count: receipt.sequence, headHash: receipt.recordHash }
+        });
+      } catch {
+        throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle head anchor update failed after append; reconciliation is required");
+      }
+      if (advanced !== true) throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "lifecycle head anchor rejected the append; reconciliation is required");
+    }
+    const verified = this.verify();
+    if (verified.count !== receipt.sequence || verified.headHash !== receipt.recordHash) {
+      throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "lifecycle append did not converge with its independent head anchor");
+    }
+    return receipt;
+  }
+
+  validateLifecycleEvent(event) {
+    return snapshotEvent(event, { integrityKey: this.#integrityKey, requireMac: true });
   }
 
   #validatedRecords() {
