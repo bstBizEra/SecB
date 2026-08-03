@@ -1,7 +1,7 @@
 # Capability intake — `graphify`, filed as a capability rather than a skill
 
 **Document ID:** `SECB-CAPABILITY-INTAKE-GRAPHIFY-001`
-**Status:** `PREPARED — INCOMPLETE BY DESIGN. Two required fields cannot be filled honestly from the installed artefact; see §4.`
+**Status:** `PREPARED — COMPLETE. The two fields §4 could not fill from the installed artefact were obtained from the index and the upstream repository on 2026-08-03; the record now validates.`
 **Prepared by:** Claude Code (worker agent)
 **Prepared at:** 2026-08-03, baseline `cfb4573`
 **Contract:** `contracts/capability-record.schema.json`
@@ -39,11 +39,13 @@ Read from the installed distribution, not from its documentation.
 | RECORD digest | `c770dd090059d36abb091bf5146cc20f8b2a8ada5fb6c7cbe68e3968f1c2e950` | sha256 of `RECORD`, computed here |
 
 **The distribution name and the import name differ.** `graphifyy` installs as
-`graphify`. This is common and usually benign — `pyyaml` imports as `yaml`, and a
-doubled letter most often means the plain name was already taken on PyPI. It is
-recorded because a distribution/import mismatch is also the shape a typosquat
-takes, and the cost of confirming it against the named repository is one lookup.
-**This is a thing to check, not an accusation.**
+`graphify`. This was recorded as a thing to check rather than an accusation,
+because a distribution/import mismatch is usually benign — `pyyaml` imports as
+`yaml` — and is also the shape a typosquat takes.
+
+**CHECKED, 2026-08-03: benign.** The repository named in METADATA exists, is not
+a fork, is not archived, carries the Apache-2.0 licence the package declares, and
+carries the exact tag `v0.9.25` whose commit now pins this record. See §4.
 
 ## 3. The draft record
 
@@ -63,8 +65,8 @@ takes, and the cost of confirming it against the named repository is one lookup.
   },
 
   "immutable_version": {
-    "commit": "<CANNOT BE FILLED — see §4>",
-    "tag_or_digest": "<CANNOT BE FILLED — see §4>"
+    "commit": "2fa6cd3d5548577f8c5f591b713f0bf80c1af183",
+    "tag_or_digest": "sha256:e902205873d129e9c76c11fea4268480042603590290ed600707354e74314c0c"
   },
 
   "integrity": {
@@ -135,9 +137,40 @@ gap into a false assurance.
 3. A vendored copy under `repo_sources/`, per the operator's own standing rule
    that runtime production code is never taken from an unvendored source.
 
-**Until 1 and 2 exist this record cannot be completed, and that is the finding.**
-A tool whose provenance cannot be pinned should not be promoted past CANDIDATE,
-and the contract surfaced that without anyone having to think of it.
+### RESOLVED, 2026-08-03
+
+Both were obtained, and the record now validates — `capabilityRecord` returns
+`valid: true`, verified by running the validator rather than by inspection.
+
+| Field | Value | Source |
+|---|---|---|
+| `commit` | `2fa6cd3d5548577f8c5f591b713f0bf80c1af183` | tag `v0.9.25`, `Graphify-Labs/graphify` |
+| `tag_or_digest` | `sha256:e902205873d129e9c76c11fea4268480042603590290ed600707354e74314c0c` | PyPI wheel `graphifyy-0.9.25-py3-none-any.whl` |
+
+The lookup also settles §2's naming question and adds three facts worth having.
+
+**The repository named in METADATA is real, active and consistent.** It exists,
+is not a fork, is not archived, carries Apache-2.0 as the package claims, was
+pushed to on 2026-08-01, and carries the exact tag `v0.9.25`. The distribution is
+`graphifyy` because the project is `graphify` and the plain name was evidently
+taken — the ordinary explanation, now confirmed rather than assumed.
+
+**The installed version is eight releases behind.** 0.9.25 was published
+2026-07-22; the tag list runs through v0.9.32 to **v1.0.0**. The record pins what
+is installed, which is correct, but a capability pinned eight releases behind its
+upstream is a maintenance fact the approver should see, not a detail.
+
+**`author` and `maintainer` are both null on the index.** The organisation is
+named and the repository is real, so provenance resolves — but no natural person
+or entity is declared anywhere in the package metadata. Recorded because
+`source_identity.maintainer` now says "Graphify-Labs", and that value comes from
+a URL rather than from an authorship claim.
+
+**What the gap was worth.** The record was blocked for one reason: a PyPI wheel
+does not carry the source revision it was built from. Two lookups closed it. The
+contract did its job — it refused a record that could not say where its artefact
+came from, and the refusal was cheap to satisfy honestly and would have been just
+as cheap to satisfy dishonestly with a placeholder.
 
 ## 5. What this record does NOT claim
 
@@ -168,7 +201,8 @@ and the contract surfaced that without anyone having to think of it.
 ```
 Accept this capability record as CANDIDATE:   [ ] yes   [ ] no
 
-immutable_version:  [ ] obtain the wheel digest and upstream commit
+immutable_version:  [x] obtained 2026-08-03 — commit 2fa6cd3d, wheel sha256 e9022058
+                    [ ] vendor under repo_sources/ as well
                     [ ] vendor under repo_sources/ instead
                     [ ] accept as permanently unpinnable, with reason: ____________
 
