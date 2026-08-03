@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
+import { validateContract } from "../src/contracts/contract-validator.mjs";
 import {
   createMemoryAuthorityGateway,
   MemoryAuthorityGatewayConfigurationError
@@ -233,7 +234,7 @@ test("retrieval derives scope and carries all decision bindings", () => {
   assert.equal(result.identity_decision_id, "identity-1");
   assert.equal(result.scope_decision_id, "scope-1");
   assert.equal(result.authority_decision_id, "retrieval-authority-1");
-  assert.deepEqual(calls.retrieve, [{ project_id: PROJECT, scope_project_id: PROJECT, layer: "session", limit: 10 }]);
+  assert.deepEqual(calls.retrieve, [{ project_id: PROJECT, scope_project_id: PROJECT, layer: "session", limit: 1 }]);
 });
 
 test("fabricated expired, future-valid, hash-tampered, and over-limit retrieval pages deny", () => {
@@ -297,13 +298,16 @@ test("retrieval returns only records within server clearance and permitted acces
   ];
   const memoryGateway = {
     admit: async () => ({ decision: "DENY", code: "NOT_USED" }),
-    retrieve: () => ({
-      decision: "ALLOW",
-      code: "RETRIEVED",
-      retrieved_at: NOW.toISOString(),
-      records: records.map((record) => ({ data_untrusted: true, record })),
-      next_cursor: null
-    })
+    retrieve: ({ cursor }) => {
+      const index = cursor === undefined ? 0 : Number(cursor.slice(1));
+      return {
+        decision: "ALLOW",
+        code: "RETRIEVED",
+        retrieved_at: NOW.toISOString(),
+        records: [{ data_untrusted: true, record: records[index] }],
+        next_cursor: index + 1 < records.length ? `p${index + 1}` : null
+      };
+    }
   };
   const result = facade(memoryGateway, {
     retrievalAuthorityResolver: ({ project_id, layer }) => ({
@@ -319,6 +323,53 @@ test("retrieval returns only records within server clearance and permitted acces
   assert.equal(result.decision, "ALLOW");
   assert.equal(result.authority_decision_id, "access-decision-1");
   assert.deepEqual(result.records.map((entry) => entry.record.memory_record_id), ["memory-public"]);
+  assert.equal(result.next_cursor, null);
+});
+
+test("hidden-only upstream pages do not expose their cursor boundaries", () => {
+  const makeRecord = (id) => {
+    const body = {
+      ...callerRecord({ memory_record_id: id, classification: "RESTRICTED" }),
+      actor_id: ACTOR,
+      layer: "session",
+      access_policy: "restricted-team",
+      admitted_at: "2026-07-20T09:30:00.000Z"
+    };
+    const { admitted_at, ...hashBody } = body;
+    void admitted_at;
+    return { ...body, content_hash: canonicalFingerprint(hashBody) };
+  };
+  const hidden = [makeRecord("hidden-1"), makeRecord("hidden-2")];
+  let calls = 0;
+  const memoryGateway = {
+    admit: async () => ({ decision: "DENY", code: "NOT_USED" }),
+    retrieve: ({ cursor }) => {
+      calls += 1;
+      const index = cursor === undefined ? 0 : Number(cursor.slice(1));
+      return {
+        decision: "ALLOW",
+        code: "RETRIEVED",
+        retrieved_at: NOW.toISOString(),
+        records: [{ data_untrusted: true, record: hidden[index] }],
+        next_cursor: index + 1 < hidden.length ? `h${index + 1}` : null
+      };
+    }
+  };
+  const result = facade(memoryGateway, {
+    retrievalAuthorityResolver: ({ project_id, layer }) => ({
+      decision: "ALLOW",
+      decision_id: "access-decision-low",
+      actor_id: ACTOR,
+      project_id,
+      layer,
+      classification_clearance: "INTERNAL",
+      permitted_access_policies: ["project-members"]
+    })
+  }).retrieve({ project_id: PROJECT, layer: "session", limit: 1 });
+  assert.equal(result.decision, "ALLOW");
+  assert.deepEqual(result.records, []);
+  assert.equal(result.next_cursor, null);
+  assert.equal(calls, 2);
 });
 
 test("malformed clearance and policy grants deny before Memory retrieval", () => {
@@ -327,6 +378,7 @@ test("malformed clearance and policy grants deny before Memory retrieval", () =>
     ["empty policies", "INTERNAL", []],
     ["duplicate policies", "INTERNAL", ["project-members", "project-members"]],
     ["blank policy", "INTERNAL", [""]],
+    ["whitespace policy", "INTERNAL", ["   "]],
     ["non-array", "INTERNAL", "project-members"]
   ];
   for (const [label, classificationClearance, permittedAccessPolicies] of cases) {
@@ -345,6 +397,60 @@ test("malformed clearance and policy grants deny before Memory retrieval", () =>
     assert.equal(instance.retrieve({ project_id: PROJECT, layer: "session" }).code, "DENY_MEMORY_RETRIEVAL_AUTHORITY", label);
     assert.equal(calls.retrieve.length, 0, label);
   }
+});
+
+test("sparse and extended policy arrays deny before Memory retrieval", () => {
+  const sparse = ["project-members"];
+  sparse.length = 2;
+  const extended = ["project-members"];
+  extended.extra = "smuggled";
+  for (const [label, policies] of [["sparse", sparse], ["extended", extended]]) {
+    const { memoryGateway, calls } = fakeGateway();
+    const instance = facade(memoryGateway, {
+      retrievalAuthorityResolver: ({ project_id, layer }) => ({
+        decision: "ALLOW",
+        decision_id: "access-decision-1",
+        actor_id: ACTOR,
+        project_id,
+        layer,
+        classification_clearance: "INTERNAL",
+        permitted_access_policies: policies
+      })
+    });
+    assert.equal(instance.retrieve({ project_id: PROJECT, layer: "session" }).code, "DENY_MEMORY_RETRIEVAL_AUTHORITY", label);
+    assert.equal(calls.retrieve.length, 0, label);
+  }
+});
+
+test("contract and raw gateway reject whitespace-only access policy", async () => {
+  const record = callerRecord();
+  const invalidRecord = {
+    ...record,
+    actor_id: ACTOR,
+    layer: "session",
+    access_policy: "   ",
+    admitted_at: NOW.toISOString()
+  };
+  const { admitted_at, ...hashBody } = invalidRecord;
+  void admitted_at;
+  invalidRecord.content_hash = canonicalFingerprint(hashBody);
+  assert.throws(() => validateContract("memoryRecord", invalidRecord));
+  const { memoryGateway, calls } = fakeGateway();
+  const instance = facade(memoryGateway, {
+    admissionAuthorityResolver: ({ project_id, layer }) => ({
+      decision: "ALLOW",
+      decision_id: "admission-authority-1",
+      actor_id: ACTOR,
+      project_id,
+      layer,
+      producer: ACTOR,
+      reviewer: null,
+      approver: null,
+      access_policy: "   "
+    })
+  });
+  assert.equal((await instance.admit({ layer: "session", record })).code, "DENY_MEMORY_ADMISSION_AUTHORITY");
+  assert.equal(calls.admit.length, 0);
 });
 
 test("resolver failures and malformed upstream results are contained", async () => {

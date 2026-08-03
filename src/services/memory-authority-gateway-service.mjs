@@ -37,7 +37,9 @@ const APPEND_KEYS = Object.freeze([
 const REQUIRED_APPEND_KEYS = Object.freeze(APPEND_KEYS.filter((key) => key !== "sequence"));
 const MAX_LIMIT = 1_000;
 const DEFAULT_LIMIT = 100;
+const MAX_ACCESS_SCAN = 10_000;
 const MAX_CURSOR_LENGTH = 2_048;
+const POLICY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBlank = (value) => typeof value !== "string" || value.trim() === "";
@@ -71,6 +73,26 @@ function snapshotClosed(value, allowedKeys, requiredKeys = allowedKeys) {
 function detached(value) {
   try {
     return structuredClone(value);
+  } catch {
+    return null;
+  }
+}
+
+function snapshotPolicyIds(value) {
+  try {
+    if (!Array.isArray(value)) return null;
+    const length = value.length;
+    if (!Number.isSafeInteger(length) || length < 1 || length > 1_000) return null;
+    const ownKeys = Reflect.ownKeys(value);
+    const expectedKeys = new Set(["length", ...Array.from({ length }, (_, index) => String(index))]);
+    if (ownKeys.length !== expectedKeys.size || ownKeys.some((key) => typeof key !== "string" || !expectedKeys.has(key))) return null;
+    const out = [];
+    for (let index = 0; index < length; index += 1) {
+      const policy = value[index];
+      if (typeof policy !== "string" || !POLICY_ID_RE.test(policy)) return null;
+      out.push(policy);
+    }
+    return new Set(out).size === out.length ? out : null;
   } catch {
     return null;
   }
@@ -231,7 +253,7 @@ export function createMemoryAuthorityGateway({
       || authority.layer !== query.layer || authority.producer !== bindings.identity.actor_id
       || (authority.reviewer !== null && isBlank(authority.reviewer))
       || (authority.approver !== null && isBlank(authority.approver))
-      || isBlank(authority.access_policy)
+      || typeof authority.access_policy !== "string" || !POLICY_ID_RE.test(authority.access_policy)
     ) return deny("DENY_MEMORY_ADMISSION_AUTHORITY", "Memory admission authority is not effective or is not exactly bound", "authority");
     const authorityActors = [authority.producer, authority.reviewer, authority.approver].filter((actor) => actor !== null);
     if (
@@ -324,75 +346,119 @@ export function createMemoryAuthorityGateway({
     } catch {
       authority = null;
     }
-    const permittedPolicies = authority === null ? null : detached(authority.permitted_access_policies);
+    const permittedPolicies = authority === null ? null : snapshotPolicyIds(authority.permitted_access_policies);
     if (
       authority === null || authority.decision !== "ALLOW" || isBlank(authority.decision_id)
       || authority.actor_id !== bindings.identity.actor_id || authority.project_id !== query.project_id
       || authority.layer !== query.layer
       || !CLASSIFICATIONS.includes(authority.classification_clearance)
-      || !Array.isArray(permittedPolicies) || permittedPolicies.length < 1 || permittedPolicies.length > 1_000
-      || permittedPolicies.some((policy) => isBlank(policy))
-      || new Set(permittedPolicies).size !== permittedPolicies.length
+      || permittedPolicies === null
     ) return deny("DENY_MEMORY_RETRIEVAL_AUTHORITY", "Memory retrieval authority is not effective or is not exactly bound", "authority");
 
-    let upstream;
-    try {
-      upstream = detached(retrieveMemory({
-        project_id: query.project_id,
-        scope_project_id: bindings.scope.project_id,
-        layer: query.layer,
-        ...(query.limit === undefined ? {} : { limit: query.limit }),
-        ...(query.cursor === undefined ? {} : { cursor: query.cursor })
-      }));
-    } catch {
-      upstream = null;
-    }
-    let pageIsBound = false;
-    try {
-      const retrievedMs = Date.parse(upstream?.retrieved_at);
-      const effectiveLimit = query.limit ?? DEFAULT_LIMIT;
-      pageIsBound = Array.isArray(upstream?.records)
-        && upstream.records.length <= effectiveLimit
-        && Number.isFinite(retrievedMs)
-        && upstream.records.every((entry) => {
-          if (!hasExactKeys(entry, RECORD_ENVELOPE_KEYS) || entry.data_untrusted !== true) return false;
-          validateContract("memoryRecord", entry.record);
-          const { admitted_at: admittedAt, content_hash: contentHash, ...hashBody } = entry.record;
-          void admittedAt;
-          return entry.record.project_id === query.project_id
-            && entry.record.layer === query.layer
-            && canonicalFingerprint(hashBody) === contentHash
-            && Date.parse(entry.record.valid_from) <= retrievedMs
-            && retrievedMs < Date.parse(entry.record.valid_until);
-        });
-    } catch {
-      pageIsBound = false;
-    }
-    if (
-      !hasExactKeys(upstream, RETRIEVE_ALLOW_KEYS)
-      || upstream.decision !== "ALLOW" || upstream.code !== "RETRIEVED"
-      || typeof upstream.retrieved_at !== "string" || !Number.isFinite(Date.parse(upstream.retrieved_at))
-      || !pageIsBound
-      || (upstream.next_cursor !== null && (
-        typeof upstream.next_cursor !== "string" || upstream.next_cursor.length < 1
-        || upstream.next_cursor.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(upstream.next_cursor)
-      ))
-    ) {
-      return deny(
-        "DENY_MEMORY_RETRIEVAL",
-        "Memory gateway did not return an authority-bound page",
-        "gateway",
-        isPlainObject(upstream) && typeof upstream.code === "string" ? upstream.code : undefined
-      );
-    }
     const clearanceRank = CLASSIFICATIONS.indexOf(authority.classification_clearance);
-    const authorizedRecords = upstream.records.filter((entry) => (
+    const canRead = (entry) => (
       CLASSIFICATIONS.indexOf(entry.record.classification) <= clearanceRank
       && permittedPolicies.includes(entry.record.access_policy)
-    ));
+    );
+    const seenCursors = new Set();
+    let scanned = 0;
+    let scanCursor = query.cursor ?? null;
+    let lastRetrievedAt = null;
+
+    function fetchOne(cursor) {
+      if (scanned >= MAX_ACCESS_SCAN) return { ok: false, reason: "access scan limit exceeded" };
+      const cursorIdentity = cursor ?? "<start>";
+      if (seenCursors.has(cursorIdentity)) return { ok: false, reason: "non-progressing access scan" };
+      seenCursors.add(cursorIdentity);
+      scanned += 1;
+      let page;
+      try {
+        page = detached(retrieveMemory({
+          project_id: query.project_id,
+          scope_project_id: bindings.scope.project_id,
+          layer: query.layer,
+          limit: 1,
+          ...(cursor === null ? {} : { cursor })
+        }));
+      } catch {
+        page = null;
+      }
+      let pageIsBound = false;
+      try {
+        const retrievedMs = Date.parse(page?.retrieved_at);
+        pageIsBound = Array.isArray(page?.records)
+          && page.records.length <= 1
+          && Number.isFinite(retrievedMs)
+          && page.records.every((entry) => {
+            if (!hasExactKeys(entry, RECORD_ENVELOPE_KEYS) || entry.data_untrusted !== true) return false;
+            validateContract("memoryRecord", entry.record);
+            const { admitted_at: admittedAt, content_hash: contentHash, ...hashBody } = entry.record;
+            void admittedAt;
+            return entry.record.project_id === query.project_id
+              && entry.record.layer === query.layer
+              && canonicalFingerprint(hashBody) === contentHash
+              && Date.parse(entry.record.valid_from) <= retrievedMs
+              && retrievedMs < Date.parse(entry.record.valid_until);
+          });
+      } catch {
+        pageIsBound = false;
+      }
+      if (
+        !hasExactKeys(page, RETRIEVE_ALLOW_KEYS)
+        || page.decision !== "ALLOW" || page.code !== "RETRIEVED"
+        || typeof page.retrieved_at !== "string" || !Number.isFinite(Date.parse(page.retrieved_at))
+        || !pageIsBound
+        || (page.next_cursor !== null && (
+          typeof page.next_cursor !== "string" || page.next_cursor.length < 1
+          || page.next_cursor.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(page.next_cursor)
+          || page.next_cursor === cursor
+        ))
+      ) return { ok: false, upstreamCode: isPlainObject(page) && typeof page.code === "string" ? page.code : undefined };
+      return { ok: true, page };
+    }
+
+    const requestedLimit = query.limit ?? DEFAULT_LIMIT;
+    const authorizedRecords = [];
+    while ((authorizedRecords.length < requestedLimit && scanCursor !== null) || (scanned === 0 && scanCursor === null)) {
+      const fetched = fetchOne(scanCursor);
+      if (!fetched.ok) {
+        return deny("DENY_MEMORY_RETRIEVAL", "Memory access-aware scan failed closed", "gateway", fetched.upstreamCode);
+      }
+      lastRetrievedAt = fetched.page.retrieved_at;
+      for (const entry of fetched.page.records) if (canRead(entry)) authorizedRecords.push(entry);
+      scanCursor = fetched.page.next_cursor;
+      if (scanCursor === null) break;
+    }
+
+    let nextCursor = null;
+    while (authorizedRecords.length === requestedLimit && scanCursor !== null) {
+      const candidateCursor = scanCursor;
+      const fetched = fetchOne(scanCursor);
+      if (!fetched.ok) {
+        return deny("DENY_MEMORY_RETRIEVAL", "Memory access-aware lookahead failed closed", "gateway", fetched.upstreamCode);
+      }
+      lastRetrievedAt = fetched.page.retrieved_at;
+      if (fetched.page.records.some(canRead)) {
+        nextCursor = candidateCursor;
+        break;
+      }
+      scanCursor = fetched.page.next_cursor;
+    }
+    const finalRetrievedMs = Date.parse(lastRetrievedAt);
+    if (
+      !Number.isFinite(finalRetrievedMs)
+      || authorizedRecords.some((entry) => !(
+        Date.parse(entry.record.valid_from) <= finalRetrievedMs
+        && finalRetrievedMs < Date.parse(entry.record.valid_until)
+      ))
+    ) return deny("DENY_MEMORY_RETRIEVAL", "Memory records changed temporal status during access scan", "gateway");
+
     return deepFreeze({
-      ...upstream,
+      decision: "ALLOW",
+      code: "RETRIEVED",
+      retrieved_at: lastRetrievedAt,
       records: authorizedRecords,
+      next_cursor: nextCursor,
       actor_id: bindings.identity.actor_id,
       identity_decision_id: bindings.identity.decision_id,
       scope_decision_id: bindings.scope.decision_id,
