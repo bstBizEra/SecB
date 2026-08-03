@@ -69,7 +69,23 @@ export const MUTATIONS = Object.freeze([
     arm: "detection",
     targets: "governance.ungoverned-package",
     applicable: (p) => p.governed,
-    apply: (p) => clonePackage(p, { manifestText: null, manifest: null, manifestPath: null, governed: false })
+    // The manifest FILE must go too. The first version cleared the parsed
+    // manifest and left manifest.yaml in the file list, producing a package that
+    // no real defect could produce: full six-file governed layout, manifest.yaml
+    // present, governed:false.
+    //
+    // Found by the sibling lens during the AC-AUDIT-03 prototype, which flagged
+    // it as the sharpest anomaly in the corpus for exactly that reason — it
+    // detected the planted item through an artefact of the planting rather than
+    // through the defect. A mutation that is detectable because it is
+    // unrealistic inflates the detection rate and measures the harness.
+    apply: (p) => clonePackage(p, {
+      manifestText: null,
+      manifest: null,
+      manifestPath: null,
+      governed: false,
+      files: p.files.filter((f) => !f.rel.endsWith("/manifest.yaml"))
+    })
   },
   {
     id: "collide-skill-id",
