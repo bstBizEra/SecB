@@ -100,6 +100,11 @@ export {
   ContextFederationError,
   ContextFederationService
 } from "./services/context-federation-service.mjs";
+
+export {
+  DurableContextReplayAdapter,
+  DurableContextReplayError
+} from "./services/durable-context-replay-adapter.mjs";
 // note: ContextFederationService exposes verifyReceipt (read-only) and
 // consumeReceipt (ledgers a CONSUME); composing services use verifyReceipt
 // for offer-time provenance gates.
