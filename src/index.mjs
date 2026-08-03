@@ -33,6 +33,11 @@ export {
 } from "./ledger/durable-ledger.mjs";
 
 export {
+  DurableHeadAnchor,
+  DurableHeadAnchorError
+} from "./ledger/durable-head-anchor.mjs";
+
+export {
   EventLedger,
   EvidenceLedger
 } from "./ledger/governed-ledgers.mjs";

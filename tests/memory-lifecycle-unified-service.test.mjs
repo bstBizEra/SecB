@@ -11,6 +11,7 @@ import { createMemoryAuthorityGateway } from "../src/services/memory-authority-g
 import { createMemoryCandidateProvider } from "../src/services/memory-candidate-provider.mjs";
 import { normalizeCandidateSources } from "../src/services/candidate-source-port.mjs";
 import { ContextFederationService, mintReceiptDocument } from "../src/services/context-federation-service.mjs";
+import { DurableContextReplayAdapter } from "../src/services/durable-context-replay-adapter.mjs";
 import { WorkPackageContractService } from "../src/services/work-package-service.mjs";
 import { DurableLedger } from "../src/ledger/durable-ledger.mjs";
 
@@ -671,7 +672,7 @@ test("clock movement after Context mutation cannot convert ISSUED into a freshne
   assert.equal(federationCalls, 1);
 });
 
-test("real authority gateway, provider, Context Federation, and durable binding ledger compose with an advancing clock", async (t) => {
+test("real authority gateway, provider, durable replay adapter, Context Federation, and binding ledger compose", async (t) => {
   const projectId = "project-1";
   const actorId = "engineer-1";
   const wpId = "wp-1";
@@ -714,6 +715,7 @@ test("real authority gateway, provider, Context Federation, and durable binding 
   ]) wp.submitTransition({ projectId, workPackageId: wpId, version: 1, requestedState, actorId: transitionActor,
     authorityRef, policyDecision: "ALLOW", evidence: [{ ref: `evidence-${requestedState}` }], idempotencyKey, reasonCode: "UNIFY_TEST" });
   const federation = new ContextFederationService({ workPackageService: wp, now: clock });
+  const durableReplay = new DurableContextReplayAdapter({ filePath: join(dir, "context-replay.ndjson"), contextFederation: federation });
   const lifecycleResolver = {
     async resolveBatch(request) { return { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id,
       layer: request.layer, evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
@@ -723,7 +725,7 @@ test("real authority gateway, provider, Context Federation, and durable binding 
       batch_fingerprint: canonicalFingerprint(request), decisions: request.records.map((item) => effectiveDecision(request, item)) }); }
   };
   const unified = createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: authorityGateway, lifecycleResolver,
-    memoryCandidateProvider: provider, contextFederation: federation, lifecycleBindingLedger, now: clock });
+    memoryCandidateProvider: provider, contextFederation: durableReplay, lifecycleBindingLedger, now: clock });
   const projected = provider.toCandidateSources({ project_id: projectId, records: [row] });
   const candidates = normalizeCandidateSources(projected.sources).candidates;
   const minted = mintReceiptDocument({ receipt_id: "receipt-real-1", project_id: projectId, objective_id: "objective-real-1",
@@ -738,6 +740,7 @@ test("real authority gateway, provider, Context Federation, and durable binding 
   assert.match(issued.sourceStateBinding.lifecycle_state_digest, /^[a-f0-9]{64}$/);
   assert.match(issued.sourceStateBinding.binding_fingerprint, /^[a-f0-9]{64}$/);
   assert.match(issued.sourceStateBinding.ledger_record_hash, /^[a-f0-9]{64}$/);
+  assert.equal(durableReplay.verify().count, 1);
   const realAnchor = trustedAnchor(lifecycleBindingLedger);
   assert.equal(realAnchor.count, 2);
   assert.equal(verifyMemoryContextLifecycleBinding(issued.sourceStateBinding,

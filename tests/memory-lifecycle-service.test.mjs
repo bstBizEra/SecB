@@ -9,6 +9,7 @@ import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
 import {
   MemoryLifecycleConfigurationError,
   MemoryLifecycleLedger,
+  DurableHeadAnchor,
   createMemoryLifecycleService
 } from "../src/index.mjs";
 
@@ -670,6 +671,24 @@ test("canonical producer binding and monotonic head anchor prevent self-review a
   assert.equal((await rollback.service.recordLifecycleEvent(mutation("TOMBSTONED"))).ok, true);
   writeFileSync(rollback.filePath, "", "utf8");
   assert.equal((await rollback.service.resolve(resolution())).code, "LIFECYCLE_ROLLBACK_DETECTED");
+});
+
+test("durable trusted head anchor survives restart and detects stale ledger rollback", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-durable-anchor-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const filePath = join(directory, "lifecycle.jsonl");
+  const anchorPath = join(directory, "lifecycle-head.json");
+  const headAnchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: Buffer.alloc(32, 0x31) });
+  const fixture = harness(t, { ledger: new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor }) });
+  assert.equal((await fixture.service.recordLifecycleEvent(mutation("TOMBSTONED"))).ok, true);
+
+  const restartedAnchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: Buffer.alloc(32, 0x31) });
+  const restartedLedger = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: restartedAnchor });
+  assert.equal(restartedLedger.verify().count, 1);
+  writeFileSync(filePath, "", "utf8");
+  assert.throws(() => restartedLedger.verify(), (error) => error.code === "LIFECYCLE_ROLLBACK_DETECTED");
 });
 
 test("exception recovery rejects an authenticated competing event bound to another target", async (t) => {
