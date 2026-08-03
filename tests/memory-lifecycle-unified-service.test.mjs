@@ -426,6 +426,19 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
     ledger_record_hash: conflictingCommitted[1].recordHash }, conflictingCommitted, conflictingAnchor), false);
   assert.equal(verifyMemoryContextLifecycleBinding({ ...bindingB, binding_status: "COMMITTED", ledger_sequence: 4,
     ledger_record_hash: conflictingCommitted[3].recordHash, replayed: false }, conflictingCommitted, conflictingAnchor), false);
+  const launderedReservation = structuredClone(bindingEvidence.records);
+  const preparedB = structuredClone(conflictingCommitted[2]);
+  const abortedB = structuredClone(preparedB);
+  abortedB.entry.type = "MEMORY_CONTEXT_LIFECYCLE_BINDING_ABORTED";
+  abortedB.entry.payload = { binding: structuredClone(bindingB), status: "ABORTED", reason: "LAUNDER_RESERVATION" };
+  abortedB.entry.entryId = canonicalFingerprint({ binding_fingerprint: bindingB.binding_fingerprint, status: "ABORTED" });
+  abortedB.entry.idempotencyKey = JSON.stringify([abortedB.entry.projectId, issue.document.receipt_id,
+    bindingB.binding_fingerprint, "ABORTED"]);
+  launderedReservation.push(preparedB, abortedB);
+  rehashChain(launderedReservation);
+  assert.equal(verifyMemoryContextLifecycleBinding({ ...good.sourceStateBinding,
+    ledger_record_hash: launderedReservation[1].recordHash }, launderedReservation,
+  { ledgerId: launderedReservation[0].ledgerId, count: 4, headHash: launderedReservation[3].recordHash }), false);
   assert.equal(verifyMemoryContextLifecycleBinding(good.sourceStateBinding, bindingEvidence.records,
     { ...anchor, headHash: "f".repeat(64) }), false);
   const preparedEntry = bindingEvidence.records[0].entry;

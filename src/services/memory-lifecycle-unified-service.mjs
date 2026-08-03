@@ -257,13 +257,26 @@ function bindingLedgerSemantics(records) {
     }
     result.set(fingerprint, { events, prepared, committed, aborted, contextIssueRequest });
   }
-  const reservations = new Set();
-  for (const group of result.values()) {
-    if (group.committed === undefined && group.aborted !== undefined) continue;
+  const reservations = new Map();
+  for (const record of records) {
+    if (typeof record.entry?.type !== "string" || !record.entry.type.startsWith("MEMORY_CONTEXT_LIFECYCLE_BINDING_")) continue;
+    const core = bindingCore(record.entry.payload.binding);
+    const group = core === null ? null : result.get(core.binding_fingerprint);
+    if (group === null || group === undefined) return null;
     const key = JSON.stringify([group.prepared.entry.projectId, group.contextIssueRequest.document.receipt_id,
       group.prepared.core.context_idempotency_key_fingerprint]);
-    if (reservations.has(key)) return null;
-    reservations.add(key);
+    const status = record.entry.payload.status;
+    const reservation = reservations.get(key);
+    if (status === "PREPARED") {
+      if (reservation !== undefined) return null;
+      reservations.set(key, { bindingFingerprint: core.binding_fingerprint, committed: false });
+    } else if (status === "COMMITTED") {
+      if (reservation?.bindingFingerprint !== core.binding_fingerprint || reservation.committed) return null;
+      reservations.set(key, { bindingFingerprint: core.binding_fingerprint, committed: true });
+    } else if (status === "ABORTED") {
+      if (reservation?.bindingFingerprint !== core.binding_fingerprint || reservation.committed) return null;
+      reservations.delete(key);
+    }
   }
   return result;
 }
