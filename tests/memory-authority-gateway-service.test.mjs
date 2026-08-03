@@ -438,6 +438,53 @@ test("access cursor is HMAC-bound to the exact actor and authority profile", () 
   );
 });
 
+test("raw upstream cursor boundary is self-consistent before access wrapping", () => {
+  const makeRecord = (id) => {
+    const body = {
+      ...callerRecord({ memory_record_id: id }),
+      actor_id: ACTOR,
+      layer: "session",
+      access_policy: "project-members",
+      admitted_at: "2026-07-20T09:30:00.000Z"
+    };
+    const { admitted_at, ...hashBody } = body;
+    void admitted_at;
+    return { ...body, content_hash: canonicalFingerprint(hashBody) };
+  };
+  const records = [makeRecord("cursor-boundary-1"), makeRecord("cursor-boundary-2")];
+  for (const [length, expectedDecision] of [[2_048, "ALLOW"], [2_049, "DENY"]]) {
+    const rawCursor = "a".repeat(length);
+    let calls = 0;
+    const memoryGateway = {
+      admit: async () => ({ decision: "DENY", code: "NOT_USED" }),
+      retrieve: ({ cursor }) => {
+        calls += 1;
+        return {
+          decision: "ALLOW",
+          code: "RETRIEVED",
+          retrieved_at: NOW.toISOString(),
+          records: [{ data_untrusted: true, record: cursor === undefined ? records[0] : records[1] }],
+          next_cursor: cursor === undefined ? rawCursor : null
+        };
+      }
+    };
+    const first = facade(memoryGateway).retrieve({ project_id: PROJECT, layer: "session", limit: 1 });
+    assert.equal(first.decision, expectedDecision, `raw cursor length ${length}`);
+    if (length === 2_048) {
+      assert.notEqual(first.next_cursor, null);
+      const second = facade(memoryGateway).retrieve({
+        project_id: PROJECT,
+        layer: "session",
+        limit: 1,
+        cursor: first.next_cursor
+      });
+      assert.equal(second.decision, "ALLOW");
+      assert.equal(second.next_cursor, null);
+      assert.equal(calls, 3);
+    }
+  }
+});
+
 test("malformed clearance and policy grants deny before Memory retrieval", () => {
   const cases = [
     ["unknown clearance", "TOP_SECRET", ["project-members"]],

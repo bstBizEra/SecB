@@ -40,6 +40,7 @@ const MAX_LIMIT = 1_000;
 const DEFAULT_LIMIT = 100;
 const MAX_ACCESS_SCAN = 10_000;
 const MAX_CURSOR_LENGTH = 4_096;
+const MAX_UPSTREAM_CURSOR_LENGTH = 2_048;
 const MIN_CURSOR_MAC_KEY_BYTES = 32;
 const POLICY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const ACCESS_CURSOR_KEYS = Object.freeze(["v", "scope_hash", "upstream_cursor", "mac"]);
@@ -118,6 +119,10 @@ function accessScopeHash({ actorId, projectId, layer, authorityDecisionId, class
 
 function encodeAccessCursor(key, upstreamCursor, bindings) {
   try {
+    if (
+      typeof upstreamCursor !== "string" || upstreamCursor.length < 1
+      || upstreamCursor.length > MAX_UPSTREAM_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(upstreamCursor)
+    ) return null;
     const payload = { v: 1, scope_hash: accessScopeHash(bindings), upstream_cursor: upstreamCursor };
     const envelope = { ...payload, mac: cursorMac(key, payload) };
     const token = Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
@@ -139,7 +144,7 @@ function decodeAccessCursor(key, token, bindings) {
       payload.v !== 1
       || payload.scope_hash !== accessScopeHash(bindings)
       || typeof payload.upstream_cursor !== "string" || payload.upstream_cursor.length < 1
-      || payload.upstream_cursor.length > 2_048 || !/^[A-Za-z0-9_-]+$/.test(payload.upstream_cursor)
+      || payload.upstream_cursor.length > MAX_UPSTREAM_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(payload.upstream_cursor)
       || typeof mac !== "string" || !/^[a-f0-9]{64}$/.test(mac)
       || !timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expectedMac, "hex"))
     ) return null;
@@ -482,7 +487,7 @@ export function createMemoryAuthorityGateway({
         || !pageIsBound
         || (page.next_cursor !== null && (
           typeof page.next_cursor !== "string" || page.next_cursor.length < 1
-          || page.next_cursor.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(page.next_cursor)
+          || page.next_cursor.length > MAX_UPSTREAM_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(page.next_cursor)
           || page.next_cursor === cursor
         ))
       ) return { ok: false, upstreamCode: isPlainObject(page) && typeof page.code === "string" ? page.code : undefined };
