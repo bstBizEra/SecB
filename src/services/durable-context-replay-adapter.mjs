@@ -94,28 +94,65 @@ export class DurableContextReplayAdapter {
   #ledger;
   #issue;
   #replay;
+  #readAnchor;
+  #advanceAnchor;
 
-  constructor({ filePath, contextFederation } = {}) {
+  constructor({ filePath, contextFederation, headAnchor } = {}) {
     let issue;
     let replay;
+    let readAnchor;
+    let advanceAnchor;
     try {
       issue = contextFederation?.issueReceipt;
       replay = contextFederation?.replayReceipt;
+      readAnchor = headAnchor?.read;
+      advanceAnchor = headAnchor?.compareAndSet;
     } catch {
       throw new DurableContextReplayError("INVALID_REPLAY_PROVIDER", "Context provider could not be inspected");
     }
     if (typeof issue !== "function" || typeof replay !== "function") {
       throw new DurableContextReplayError("INVALID_REPLAY_PROVIDER", "issueReceipt and replayReceipt are required");
     }
+    if (typeof readAnchor !== "function" || typeof advanceAnchor !== "function") {
+      throw new DurableContextReplayError("INVALID_REPLAY_HEAD_ANCHOR", "an independent monotonic headAnchor is required");
+    }
     this.#ledger = new DurableLedger({ filePath, ledgerId: LEDGER_ID });
     this.#issue = Function.prototype.bind.call(issue, contextFederation);
     this.#replay = Function.prototype.bind.call(replay, contextFederation);
+    this.#readAnchor = Function.prototype.bind.call(readAnchor, headAnchor);
+    this.#advanceAnchor = Function.prototype.bind.call(advanceAnchor, headAnchor);
+  }
+
+  #verifiedHead() {
+    let verified;
+    let anchor;
+    try {
+      verified = this.#ledger.verify();
+      anchor = safeSnapshot(this.#readAnchor(), "replay head anchor");
+    } catch (cause) {
+      if (cause instanceof DurableContextReplayError) throw cause;
+      throw new DurableContextReplayError(cause?.code ?? "REPLAY_LEDGER_UNAVAILABLE", "durable replay evidence is unavailable");
+    }
+    if (!isPlainObject(anchor) || Reflect.ownKeys(anchor).length !== 2
+      || !Number.isSafeInteger(anchor.count) || anchor.count < 0 || !isHash(anchor.headHash)
+      || anchor.count !== verified.count || anchor.headHash !== verified.headHash) {
+      throw new DurableContextReplayError("REPLAY_LEDGER_ROLLBACK_DETECTED", "replay ledger does not match its trusted head anchor");
+    }
+    return verified;
   }
 
   #lookup(request) {
     const identity = requestIdentity(request);
     let records;
-    try { records = this.#ledger.read(); } catch (cause) {
+    try {
+      const before = this.#verifiedHead();
+      records = this.#ledger.read();
+      const after = this.#verifiedHead();
+      if (before.count !== after.count || before.headHash !== after.headHash || records.length !== after.count) {
+        throw new DurableContextReplayError("REPLAY_LEDGER_CHANGED", "replay ledger changed during exact lookup");
+      }
+    } catch (cause) {
+      if (cause instanceof DurableContextReplayError) throw cause;
       throw new DurableContextReplayError(cause?.code ?? "REPLAY_LEDGER_UNAVAILABLE", "durable replay ledger is unavailable");
     }
     const matches = records.filter((record) => record.entry?.entryId === identity);
@@ -145,9 +182,18 @@ export class DurableContextReplayAdapter {
     };
     for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
       try {
-        const expectedSequence = this.#ledger.verify().count;
-        const appended = this.#ledger.append(entry, { expectedSequence });
+        const anchoredBefore = this.#verifiedHead();
+        const appended = this.#ledger.append(entry, { expectedSequence: anchoredBefore.count });
         validateStored(appended, lookup.identity);
+        if (appended.replayed !== true) {
+          const advanced = this.#advanceAnchor({ expected: { count: anchoredBefore.count, headHash: anchoredBefore.headHash },
+            next: { count: appended.sequence, headHash: appended.recordHash } });
+          if (advanced !== true) throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "trusted replay head rejected the append");
+        }
+        const anchoredAfter = this.#verifiedHead();
+        if (anchoredAfter.count !== appended.sequence || anchoredAfter.headHash !== appended.recordHash) {
+          throw new DurableContextReplayError("REPLAY_HEAD_ANCHOR_CONFLICT", "replay evidence did not converge with its trusted head");
+        }
         return;
       } catch (cause) {
         if (cause instanceof LedgerError && (cause.code === "DENY_SEQUENCE_CONFLICT" || cause.code === "LEDGER_BUSY")) continue;
@@ -178,7 +224,7 @@ export class DurableContextReplayAdapter {
   }
 
   verify() {
-    const verified = this.#ledger.verify();
+    const verified = this.#verifiedHead();
     return deepFreeze({ ...verified, headHash: verified.headHash ?? ZERO_HASH });
   }
 }

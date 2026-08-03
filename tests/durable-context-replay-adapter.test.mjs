@@ -6,6 +6,15 @@ import test from "node:test";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { DurableContextReplayAdapter, DurableContextReplayError } from "../src/services/durable-context-replay-adapter.mjs";
+import { DurableHeadAnchor } from "../src/ledger/durable-head-anchor.mjs";
+
+const ANCHOR_KEY = Buffer.alloc(32, 0x43);
+
+function adapter(filePath, contextFederation) {
+  const headAnchor = new DurableHeadAnchor({ filePath: `${filePath}.head`, ledgerId: "secb-context-replay-ledger",
+    integrityKey: ANCHOR_KEY });
+  return new DurableContextReplayAdapter({ filePath, contextFederation, headAnchor });
+}
 
 const withTemp = (run) => {
   const directory = mkdtempSync(join(tmpdir(), "secb-context-replay-"));
@@ -56,7 +65,7 @@ function provider() {
 test("durable replay survives adapter restart without invoking the provider", () => withTemp((directory) => {
   const filePath = join(directory, "replay.ndjson");
   const firstProvider = provider();
-  const first = new DurableContextReplayAdapter({ filePath, contextFederation: firstProvider });
+  const first = adapter(filePath, firstProvider);
   const issued = first.issueReceipt(request());
   assert.equal(issued.replayed, false);
   assert.equal(first.verify().count, 1);
@@ -65,7 +74,7 @@ test("durable replay survives adapter restart without invoking the provider", ()
     issueReceipt() { throw new Error("provider unavailable"); },
     replayReceipt() { throw new Error("provider unavailable"); }
   };
-  const restarted = new DurableContextReplayAdapter({ filePath, contextFederation: unavailable });
+  const restarted = adapter(filePath, unavailable);
   const replayed = restarted.replayReceipt(request());
   assert.equal(replayed.replayed, true);
   assert.equal(replayed.receiptId, issued.receiptId);
@@ -75,22 +84,22 @@ test("durable replay survives adapter restart without invoking the provider", ()
 test("replay-only miss never persists and can recover a provider issuance without mutating the ledger", () => withTemp((directory) => {
   const filePath = join(directory, "replay.ndjson");
   const context = provider();
-  const adapter = new DurableContextReplayAdapter({ filePath, contextFederation: context });
-  assert.throws(() => adapter.replayReceipt(request()), (error) => error.code === "DENY_CONTEXT_REPLAY_MISS");
-  assert.equal(adapter.verify().count, 0);
+  const replayAdapter = adapter(filePath, context);
+  assert.throws(() => replayAdapter.replayReceipt(request()), (error) => error.code === "DENY_CONTEXT_REPLAY_MISS");
+  assert.equal(replayAdapter.verify().count, 0);
 
   const original = context.issueReceipt(request()); // models a crash after Context issuance and before adapter persistence
-  const recovered = adapter.replayReceipt(request());
+  const recovered = replayAdapter.replayReceipt(request());
   assert.equal(recovered.receiptId, original.receiptId);
   assert.equal(recovered.replayed, true);
-  assert.equal(adapter.verify().count, 0);
+  assert.equal(replayAdapter.verify().count, 0);
 }));
 
 test("exact durable identity rejects request drift and competing instances converge", () => withTemp((directory) => {
   const filePath = join(directory, "replay.ndjson");
   const context = provider();
-  const left = new DurableContextReplayAdapter({ filePath, contextFederation: context });
-  const right = new DurableContextReplayAdapter({ filePath, contextFederation: context });
+  const left = adapter(filePath, context);
+  const right = adapter(filePath, context);
   left.issueReceipt(request());
   assert.equal(right.issueReceipt(request()).replayed, true);
   assert.equal(right.verify().count, 1);
@@ -100,19 +109,36 @@ test("exact durable identity rejects request drift and competing instances conve
 
 test("tampered durable replay evidence fails closed", () => withTemp((directory) => {
   const filePath = join(directory, "replay.ndjson");
-  const adapter = new DurableContextReplayAdapter({ filePath, contextFederation: provider() });
-  adapter.issueReceipt(request());
+  const replayAdapter = adapter(filePath, provider());
+  replayAdapter.issueReceipt(request());
   const record = JSON.parse(readFileSync(filePath, "utf8").trim());
   record.entry.payload.result.receiptId = "forged";
   writeFileSync(filePath, `${JSON.stringify(record)}\n`);
-  assert.throws(() => adapter.replayReceipt(request()), (error) => error.code === "LEDGER_INTEGRITY_FAILURE");
+  assert.throws(() => replayAdapter.replayReceipt(request()), (error) => error.code === "LEDGER_INTEGRITY_FAILURE");
+}));
+
+test("trusted head rejects a valid old replay-ledger prefix after rollback", () => withTemp((directory) => {
+  const filePath = join(directory, "replay.ndjson");
+  const replayAdapter = adapter(filePath, provider());
+  replayAdapter.issueReceipt(request());
+  replayAdapter.issueReceipt(request({ document: { receipt_id: "receipt-2" }, idempotencyKey: "context-issue-2" }));
+  const [oldPrefix] = readFileSync(filePath, "utf8").trim().split(/\r?\n/);
+  writeFileSync(filePath, `${oldPrefix}\n`);
+  assert.throws(() => replayAdapter.replayReceipt(request()),
+    (error) => error.code === "REPLAY_LEDGER_ROLLBACK_DETECTED");
+}));
+
+test("construction requires the trusted head collaborator", () => withTemp((directory) => {
+  assert.throws(() => new DurableContextReplayAdapter({ filePath: join(directory, "replay.ndjson"),
+    contextFederation: provider() }),
+  (error) => error instanceof DurableContextReplayError && error.code === "INVALID_REPLAY_HEAD_ANCHOR");
 }));
 
 test("unsafe request graphs are denied before either provider operation", () => withTemp((directory) => {
   const context = provider();
-  const adapter = new DurableContextReplayAdapter({ filePath: join(directory, "replay.ndjson"), contextFederation: context });
+  const replayAdapter = adapter(join(directory, "replay.ndjson"), context);
   const hostile = request();
   Object.defineProperty(hostile, "baseline", { enumerable: true, get() { throw new Error("getter ran"); } });
-  assert.throws(() => adapter.issueReceipt(hostile), (error) => error.code === "DENY_REPLAY_MALFORMED");
+  assert.throws(() => replayAdapter.issueReceipt(hostile), (error) => error.code === "DENY_REPLAY_MALFORMED");
   assert.deepEqual(context.calls, { issue: 0, replay: 0 });
 }));

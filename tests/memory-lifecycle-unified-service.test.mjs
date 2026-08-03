@@ -14,6 +14,7 @@ import { ContextFederationService, mintReceiptDocument } from "../src/services/c
 import { DurableContextReplayAdapter } from "../src/services/durable-context-replay-adapter.mjs";
 import { WorkPackageContractService } from "../src/services/work-package-service.mjs";
 import { DurableLedger } from "../src/ledger/durable-ledger.mjs";
+import { DurableHeadAnchor } from "../src/ledger/durable-head-anchor.mjs";
 
 const NOW = "2026-08-03T12:00:00.000Z";
 
@@ -715,7 +716,10 @@ test("real authority gateway, provider, durable replay adapter, Context Federati
   ]) wp.submitTransition({ projectId, workPackageId: wpId, version: 1, requestedState, actorId: transitionActor,
     authorityRef, policyDecision: "ALLOW", evidence: [{ ref: `evidence-${requestedState}` }], idempotencyKey, reasonCode: "UNIFY_TEST" });
   const federation = new ContextFederationService({ workPackageService: wp, now: clock });
-  const durableReplay = new DurableContextReplayAdapter({ filePath: join(dir, "context-replay.ndjson"), contextFederation: federation });
+  const replayHeadAnchor = new DurableHeadAnchor({ filePath: join(dir, "context-replay-head.json"),
+    ledgerId: "secb-context-replay-ledger", integrityKey: Buffer.alloc(32, 0x52) });
+  const durableReplay = new DurableContextReplayAdapter({ filePath: join(dir, "context-replay.ndjson"),
+    contextFederation: federation, headAnchor: replayHeadAnchor });
   const lifecycleResolver = {
     async resolveBatch(request) { return { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id,
       layer: request.layer, evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
