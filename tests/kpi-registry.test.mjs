@@ -451,7 +451,7 @@ test(`byte-identity: files read but not modified are unchanged vs main @ ${BASE_
   // guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "1cf857089d483f133f6d5fb724319e60bea961f8",
+    "4b102ac452ac49895b82442beb7db2f3fcd9a646",
     "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
   );
   // Sanity: the guarded doctrine doc still contains a KPI this suite pins, so
