@@ -499,6 +499,7 @@ export function createMemoryLifecycleUnifiedService({
     let callbackActive = true;
     let callbackResult = null;
     let pendingReplay = null;
+    let pendingReplayMiss = false;
     const callback = (rawBatch) => {
       if (!callbackActive || callbackInvoked) return recoveryRequired("recovery fence callback is unavailable");
       callbackInvoked = true;
@@ -513,10 +514,8 @@ export function createMemoryLifecycleUnifiedService({
       const rawIssued = syncCall(() => replayContextReceipt(deepFreeze(structuredClone(contextIssueRequest))));
       const issued = rawIssued.ok ? snapshotIssued(rawIssued.value, retrieval.project_id, issueInput.document.receipt_id) : null;
       if (issued === null) {
-        const aborted = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
-          status: "ABORTED", extra: { reason: "RECOVERY_REPLAY_MISS" } });
-        callbackResult = aborted === null ? recoveryRequired("failed recovery remains an unresolved PREPARED binding")
-          : deny("DENY_UNIFY_CONTEXT_NOT_ISSUED", "replay-only Context recovery found no prior issuance; fresh lifecycle evaluation is required", "binding-recovery");
+        pendingReplayMiss = true;
+        callbackResult = deepFreeze({ decision: "ALLOW", code: "MEMORY_CONTEXT_RECOVERY_MISS_PENDING" });
         return callbackResult;
       }
       if (issued.replayed !== true) {
@@ -540,6 +539,17 @@ export function createMemoryLifecycleUnifiedService({
       return recoveryRequired("prepared binding recovery fence did not complete authoritatively");
     }
     if (callbackResult.decision === "DENY") return callbackResult;
+    if (pendingReplayMiss) {
+      const fencedMiss = exactSnapshot(fenceOutcome.value, ["decision", "code"]);
+      if (fencedMiss === null || fencedMiss.decision !== "ALLOW" || fencedMiss.code !== "MEMORY_CONTEXT_RECOVERY_MISS_PENDING"
+        || canonicalFingerprint(fencedMiss) !== canonicalFingerprint(callbackResult)) {
+        return recoveryRequired("prepared binding recovery-miss fence returned an invalid disposition");
+      }
+      const aborted = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
+        status: "ABORTED", extra: { reason: "RECOVERY_REPLAY_MISS" } });
+      return aborted === null ? recoveryRequired("failed recovery remains an unresolved PREPARED binding")
+        : deny("DENY_UNIFY_CONTEXT_NOT_ISSUED", "replay-only Context recovery found no prior issuance; fresh lifecycle evaluation is required", "binding-recovery");
+    }
     const fenced = exactSnapshot(fenceOutcome.value, ["decision", "code", "context_result_fingerprint"]);
     if (fenced === null || fenced.decision !== "ALLOW" || fenced.code !== "MEMORY_CONTEXT_RECOVERY_PENDING"
       || pendingReplay === null || canonicalFingerprint(fenced) !== canonicalFingerprint(callbackResult)) {

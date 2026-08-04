@@ -730,6 +730,32 @@ test("failed post-fence ABORT persistence cannot recover PREPARED without a fres
   assert.deepEqual({ fenceCalls, issueCalls, replayCalls }, { fenceCalls: 2, issueCalls: 1, replayCalls: 1 });
 });
 
+test("a rejected recovery-miss fence cannot release its PREPARED reservation", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor",
+    authorityRef: "auth", baseline: "base", idempotencyKey: "idem-recovery-miss-fence" };
+  let failAbort = true;
+  const binding = bindingLedgerFixture({ onAppend(entry) {
+    if (entry.payload.status === "ABORTED" && failAbort) { failAbort = false; throw new Error("simulated initial abort failure"); }
+  } });
+  let fenceCalls = 0;
+  const lifecycleResolver = { async withIssuanceFence(request, callback) {
+    fenceCalls += 1;
+    const batch = { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
+      evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(),
+      decisions: request.records.map((item) => effectiveDecision(request, item)) };
+    const result = callback(batch);
+    if (fenceCalls === 2) throw Object.assign(new Error("recovery fence rejected"), { code: "MEMORY_BOUNDARY_HEAD_CHANGED" });
+    return result;
+  } };
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger, lifecycleResolver,
+    contextFederation: { issueReceipt() { return { decision: "DENY" }; },
+      replayReceipt() { return { decision: "DENY", code: "DENY_CONTEXT_REPLAY_MISS" }; } } });
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.equal(fenceCalls, 2);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED"]);
+});
+
 test("clock movement after Context mutation cannot convert ISSUED into a freshness denial", async () => {
   const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   let clockMs = Date.parse(NOW);

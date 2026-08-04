@@ -69,3 +69,26 @@ test("head-read failure releases coordinator ownership for a later retry", async
   await assert.rejects(coordinator.withIssuanceFence({}, async () => "never"), /unavailable/);
   assert.equal(await coordinator.withIssuanceFence({}, async () => "retried"), "retried");
 });
+
+test("a late async descendant cannot reuse a completed coordinator lease", async () => {
+  const { coordinator } = fixture();
+  let releaseLate;
+  let lateTask;
+  await coordinator.withIssuanceFence({}, async () => {
+    const gate = new Promise((resolve) => { releaseLate = resolve; });
+    lateTask = (async () => {
+      await gate;
+      try {
+        return coordinator.withMutationFence({ input: {}, evidence_expected: {}, authority_expected: {},
+          active_legal_hold_count: 0 }, () => "UNEXPECTED_MUTATION");
+      } catch (error) { return error.code; }
+    })();
+  });
+  let releaseOwner;
+  const owner = coordinator.withIssuanceFence({}, async () => new Promise((resolve) => { releaseOwner = resolve; }));
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseLate();
+  assert.equal(await lateTask, "MEMORY_BOUNDARY_BUSY");
+  releaseOwner("done");
+  assert.equal(await owner, "done");
+});

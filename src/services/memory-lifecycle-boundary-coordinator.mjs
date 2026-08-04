@@ -52,13 +52,16 @@ export function createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger, reco
 
   const enterSync = (operation, requireStable) => {
     const active = context.getStore();
-    if (active !== undefined) return operation(active);
+    if (active?.active === true) return operation(active.fence);
     if (locked) throw new MemoryLifecycleBoundaryError("MEMORY_BOUNDARY_BUSY", "lifecycle boundary is owned by another operation");
     locked = true;
     try {
       const before = head();
       const token = tokenFor(before);
-      const result = context.run(token, () => operation(token));
+      const lease = { fence: token, active: true };
+      let result;
+      try { result = context.run(lease, () => operation(token)); }
+      finally { lease.active = false; }
       if (requireStable && !sameHead(before, head())) {
         throw new MemoryLifecycleBoundaryError("MEMORY_BOUNDARY_HEAD_CHANGED", "lifecycle head changed inside boundary");
       }
@@ -69,7 +72,7 @@ export function createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger, reco
 
   async function withIssuanceFence(request, callback) {
     if (typeof callback !== "function") throw new MemoryLifecycleBoundaryError("MEMORY_BOUNDARY_REQUEST_INVALID", "issuance callback is required");
-    if (context.getStore() !== undefined || locked) {
+    if (context.getStore()?.active === true || locked) {
       throw new MemoryLifecycleBoundaryError("MEMORY_BOUNDARY_BUSY", "issuance fence cannot be nested or overlap another owner");
     }
     clone(request, "issuance request");
@@ -78,7 +81,10 @@ export function createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger, reco
       return await runBoundaryLease(async () => {
         const before = head();
         const token = tokenFor(before);
-        const result = await context.run(token, () => callback(token));
+        const lease = { fence: token, active: true };
+        let result;
+        try { result = await context.run(lease, () => callback(token)); }
+        finally { lease.active = false; }
         const after = head();
         if (!sameHead(before, after)) throw new MemoryLifecycleBoundaryError("MEMORY_BOUNDARY_HEAD_CHANGED", "lifecycle head changed inside issuance fence");
         return result;
