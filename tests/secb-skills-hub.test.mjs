@@ -336,3 +336,71 @@ describe('SecBSkillsHub against the governed SkillResolver', () => {
     assert.ok(result.withheld_count >= 1);
   });
 });
+
+/**
+ * Which corpus was read is part of the answer.
+ *
+ * `indexLocalSkills` resolved a path, silently fell back to a SIBLING
+ * REPOSITORY's corpus when the requested one was missing, and then discarded
+ * the path. Reproduced: requesting a non-existent root from this repository
+ * indexes 134 packages out of `C:\laragon\www\ruflo\.agents\skills` instead of
+ * the 25 here — a corpus five times the size, from another project, with no
+ * signal anywhere in the result.
+ *
+ * The fallback is deliberately NOT removed here. Removing it changes behaviour
+ * and that is a decision. Making it visible is not.
+ */
+describe('SkillsHub — the corpus is reported, not assumed', () => {
+  const CTX = { projectId: 'PRJ-SECB', runtime: 'node', dataClassification: 'INTERNAL' };
+  const hub = () => new SecBSkillsHub({
+    services: { skillResolver: { resolveSkill: () => ({ skill: null, code: 'DENY_UNKNOWN_SKILL' }) } }
+  });
+
+  it('names the root and the count for a corpus that exists', () => {
+    const h = hub();
+    h.indexLocalSkills();
+    const r = h.searchSkills('', CTX);
+    assert.equal(r.corpus.origin, 'requested');
+    assert.ok(r.corpus.indexed > 0, 'this repository has a corpus; if this is 0 the test is measuring nothing');
+    assert.ok(r.corpus.root.endsWith(join('.agents', 'skills')), r.corpus.root);
+  });
+
+  it('reports a FALLBACK to another root as a fallback, naming both', () => {
+    const h = hub();
+    h.indexLocalSkills('this-root-does-not-exist');
+    const r = h.searchSkills('', CTX);
+    // Either the sibling corpus exists on this machine and was used, or it does
+    // not and nothing was indexed. Both are acceptable; silently pretending the
+    // requested root was read is not.
+    assert.notEqual(r.corpus.origin, 'requested',
+      'a missing requested root must never report as if it were the corpus that was read');
+    assert.ok(['fallback', 'absent'].includes(r.corpus.origin), r.corpus.origin);
+    assert.ok(r.corpus.requested.endsWith('this-root-does-not-exist'));
+    if (r.corpus.origin === 'fallback') {
+      assert.notEqual(r.corpus.root, r.corpus.requested,
+        'a fallback whose root equals the request is not a fallback');
+    }
+  });
+
+  it('a zero from an empty hub is distinguishable from a zero from denial', () => {
+    // This is the distinction the CLI header claimed to provide and did not:
+    // the withheld block only printed when something was withheld, so the one
+    // case it was written for printed nothing at all.
+    const empty = hub();
+    empty.indexLocalSkills('this-root-does-not-exist-either');
+    const e = empty.searchSkills('', CTX);
+
+    const full = hub();
+    full.indexLocalSkills();
+    const f = full.searchSkills('', CTX);
+
+    assert.equal(f.count, 0, 'nothing is authorized in either case');
+    assert.equal(e.count, 0);
+    // Same visible count, different facts, and the result must say which.
+    assert.ok(f.withheld_count > 0 && f.corpus.indexed > 0, 'denial: packages existed and were withheld');
+    if (e.corpus.origin === 'absent') {
+      assert.equal(e.corpus.indexed, 0, 'empty: nothing was there to withhold');
+      assert.equal(e.withheld_count, 0);
+    }
+  });
+});

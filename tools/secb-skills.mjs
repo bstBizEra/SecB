@@ -43,6 +43,26 @@ export function runSecbSkillsCLI(query = "", context = {}) {
     console.log("");
   }
 
+  /**
+   * The header of this file claims withheld counts stop an empty result being
+   * mistaken for an empty hub. The block above only prints when something was
+   * withheld, so in the one case the claim is about — nothing indexed — it
+   * printed nothing, and `0 authorized` looked identical either way.
+   *
+   * The corpus line is therefore unconditional. It also names the root, which
+   * matters because the hub falls back to a sibling repository's corpus when
+   * the local one is missing.
+   */
+  const c = result.corpus ?? { origin: "unreported", indexed: 0, root: null };
+  console.log(`Corpus: ${c.indexed} package(s) indexed from ${c.root ?? "(none)"} [${c.origin}]`);
+  if (c.origin === "fallback") {
+    console.log(`  NOTE: the requested root ${c.requested} does not exist; this is a FALLBACK corpus.`);
+  }
+  if (c.indexed === 0) {
+    console.log(`  NOTE: nothing was indexed, so "0 authorized" reflects an empty hub, not a denial.`);
+  }
+  console.log("");
+
   return result;
 }
 

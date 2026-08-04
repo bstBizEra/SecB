@@ -332,17 +332,42 @@ export class SecBSkillsHub {
    * SKILL.md frontmatter and, when present, the package manifest.yaml.
    */
   indexLocalSkills(skillsDir = ".agents/skills") {
-    let fullPath = resolve(process.cwd(), skillsDir ?? ".agents/skills");
+    const requested = resolve(process.cwd(), skillsDir ?? ".agents/skills");
+    let fullPath = requested;
+
+    /**
+     * WHICH CORPUS WAS READ IS PART OF THE ANSWER, NOT AN IMPLEMENTATION
+     * DETAIL. This path was resolved and then discarded, so nothing downstream
+     * could tell a local corpus from the sibling-repository fallback below —
+     * two corpora that differ by a factor of five, 25 packages against 134.
+     *
+     * The fallback itself is left in place. Removing it changes behaviour and
+     * that is a decision, not a cleanup. Making it VISIBLE is not.
+     */
+    this.corpusOrigin = "requested";
     if (!existsSync(fullPath)) {
       fullPath = resolve(process.cwd(), "..", "ruflo", ".agents", "skills");
+      this.corpusOrigin = "fallback";
     }
-    if (!existsSync(fullPath)) return;
+    this.corpusRoot = fullPath;
+    this.corpusRequested = requested;
+    this.indexedCount = 0;
+
+    if (!existsSync(fullPath)) {
+      this.corpusOrigin = "absent";
+      this.corpusRoot = null;
+      return;
+    }
 
     let entries;
     try {
       entries = readdirSync(fullPath, { withFileTypes: true });
     } catch (_err) {
-      return; // unreadable root indexes to nothing, which denies everything
+      // An unreadable root indexes to nothing, which denies everything. Say so
+      // rather than leaving it indistinguishable from a corpus that is simply
+      // empty.
+      this.corpusOrigin = "unreadable";
+      return;
     }
 
     for (const entry of entries) {
@@ -355,6 +380,7 @@ export class SecBSkillsHub {
         const { data, body } = parseFrontmatter(raw);
         const manifest = this.#readPackageManifest(join(fullPath, entry.name, "manifest.yaml"));
 
+        this.indexedCount += 1;
         this.#skillsIndex.set(entry.name, {
           name: data.name ?? entry.name,
           // Filesystem-derived, NOT content-derived. The frontmatter `name`
@@ -508,7 +534,19 @@ export class SecBSkillsHub {
       count: results.length,
       skills: results,
       withheld_count: Object.values(sortedWithheld).reduce((sum, n) => sum + n, 0),
-      withheld_reasons: sortedWithheld
+      withheld_reasons: sortedWithheld,
+      /**
+       * WHERE THE ZERO CAME FROM. `count: 0` with 25 withheld and `count: 0`
+       * with nothing indexed are different facts and were previously reported
+       * identically. A caller cannot act on the first without knowing it is not
+       * the second.
+       */
+      corpus: {
+        root: this.corpusRoot ?? null,
+        requested: this.corpusRequested ?? null,
+        origin: this.corpusOrigin ?? "not-indexed",
+        indexed: this.indexedCount ?? 0
+      }
     };
   }
 
