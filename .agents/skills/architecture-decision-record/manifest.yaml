@@ -23,7 +23,7 @@ inputs:
   - options analysis
   - evidence
   - decision-owner identity and authority evidence
-  - requested disposition and effectiveness status
+  - requested disposition; effectiveness fixed to NOT_EFFECTIVE
 outputs:
   required:
   - versioned ADR
@@ -36,7 +36,7 @@ controls:
   repository_mutation: prohibited
   external_facts: citation-required
   secret_handling: prohibited
-  approval_claims: bounded-with-verified-authority
+  approval_claims: prohibited
 evaluation:
   suite: evals/cases.yaml
   cross_harness:

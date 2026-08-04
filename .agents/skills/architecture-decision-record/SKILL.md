@@ -1,6 +1,6 @@
 ---
 name: architecture-decision-record
-description: Creates or updates an Architecture Decision Record and can issue a bounded architecture disposition when current, non-self-issued decision authority is verified. Use for significant design choices that require options, consequences, target binding, and a traceable decision; fall back to advisory mode when authority is absent or incomplete.
+description: Creates or updates an Architecture Decision Record and can select a bounded architecture decision candidate when current, non-self-issued A2 authority evidence is independently verifiable. Use for significant design choices requiring options, consequences, exact target binding, and traceable disposition; every output remains candidate and not effective.
 ---
 
 # Architecture Decision Record
@@ -9,12 +9,13 @@ description: Creates or updates an Architecture Decision Record and can issue a 
 
 Resolve one mode before selecting an option:
 
-- **Advisory:** Use when decision authority is absent, stale, ambiguous, self-issued, out of scope, or above the skill's A2 ceiling. Produce a recommendation with `ADVISORY_ONLY` status.
-- **Decision-capable:** Use only when direct evidence identifies the decision owner, actor, project, decision type, scope, exact target/baseline, validity window, and permitted status. Produce the bounded disposition the evidence authorizes.
+- **Advisory:** Use when no decision is requested and authority evidence is absent. Produce a recommendation with `ADVISORY_ONLY`.
+- **Decision-candidate:** Use only when direct, externally issued evidence identifies the decision owner, actor, project, decision type, scope, exact target/baseline, validity window, revocation state, and permission to select a candidate. Produce `DECISION_CANDIDATE` with `NOT_EFFECTIVE`.
+- **Deny:** Use when a decision is requested but authority is stale, ambiguous, self-issued, unverifiable, consumed, revoked, out of scope, or above A2. Produce `DENY_AUTHORITY_UNVERIFIED`.
 
 An explicit instruction from an owner counts only when repository policy recognizes that owner and decision channel. Never infer authority from repository access, a runtime name, authentication alone, prior decisions, or the skill invocation itself.
 
-This skill may record `DECIDED_NOT_EFFECTIVE`. It may record an effective A2 technical decision only when effectiveness is explicitly delegated and no higher gate applies. It may not accept risk or evidence, change authority or separation of duties, approve its own output, release, deploy, or activate a system.
+Every artifact produced by this skill remains `CANDIDATE / NOT_EFFECTIVE`, including `DECISION_CANDIDATE`. This skill may not accept risk or evidence, change authority or separation of duties, approve its own output, release, deploy, or activate a system.
 
 Repository mutation requires separate implementation authority. A decision does not grant mutation authority by itself.
 
@@ -24,8 +25,8 @@ Repository mutation requires separate implementation authority. A decision does 
 - architecture baseline
 - options and trade-offs
 - evidence and known limitations
-- decision-owner identity and authority evidence
-- requested disposition and effectiveness status
+- decision-owner identity and immutable authority-evidence references
+- requested disposition; effectiveness is fixed to `NOT_EFFECTIVE`
 
 ## Workflow
 
@@ -33,9 +34,9 @@ Repository mutation requires separate implementation authority. A decision does 
 2. Verify authority evidence independently of the proposed decision.
 3. Resolve `ADVISORY` or `DECISION_CAPABLE`; fail closed on ambiguity.
 4. State context, scope, drivers, options, consequences, risks, and reversibility.
-5. Select an option and issue only the status permitted by the resolved mode.
+5. Select an option only in decision-candidate mode; otherwise recommend or deny deterministically.
 6. Record a reason code, authority reference, evidence references, limitations, effective window, review triggers, and supersession rules.
-7. Route higher-risk, authority-affecting, evidence-acceptance, release, or activation decisions to the responsible human role.
+7. Unconditionally route higher-risk, authority-affecting, evidence-acceptance, release, memory/knowledge/skill promotion, and activation decisions to the responsible human role.
 
 ## Required outputs
 
@@ -53,7 +54,7 @@ Separate verified facts, reported facts, assumptions, inferences, recommendation
 
 ## Completion gate
 
-Confirm that the target and authority remain current, the disposition stays within A2 and the granted scope, required evidence is traceable, no reserved gate was crossed, limitations are visible, and the next responsible role is named.
+Confirm that the target and authority evidence remain current, the disposition stays within A2 and the granted scope, the artifact is explicitly not effective, required evidence is traceable, no reserved gate was crossed, limitations are visible, and the next responsible role is named.
 
 ## Supporting files
 

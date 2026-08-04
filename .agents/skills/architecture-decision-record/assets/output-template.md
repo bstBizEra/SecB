@@ -8,9 +8,11 @@
 
 **Exact target / baseline:**
 
-**Decision mode:** `ADVISORY | DECISION_CAPABLE`
+**Decision mode:** `ADVISORY | DECISION_CANDIDATE | DENY`
 
-**Disposition:** `ADVISORY_ONLY | DECIDED_NOT_EFFECTIVE | DECIDED_EFFECTIVE_A2 | DENY_AUTHORITY_UNVERIFIED`
+**Disposition:** `ADVISORY_ONLY | DECISION_CANDIDATE | DENY_AUTHORITY_UNVERIFIED`
+
+**Effective status:** `NOT_EFFECTIVE`
 
 **Reason code:**
 
@@ -19,8 +21,9 @@
 - Decision owner:
 - Authority reference:
 - Scope and ceiling:
-- Effective window:
-- Freshness/revocation check:
+- Evidence issuer and immutable reference:
+- Validity window:
+- Freshness/revocation/consumption check:
 
 ## Context and decision drivers
 
