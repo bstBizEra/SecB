@@ -1,9 +1,9 @@
 decision_id: ADR-...
 title: ...
-status: review-required
-decision_mode: advisory
+status: proposed
+decision_mode: ADVISORY
 disposition: ADVISORY_ONLY
-effective_status: not-effective
+effective_status: NOT_EFFECTIVE
 reason_code: ADVISORY_NO_DECISION_REQUESTED
 exact_target:
   id: target-id

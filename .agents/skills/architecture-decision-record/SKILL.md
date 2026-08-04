@@ -32,11 +32,12 @@ Repository mutation requires separate implementation authority. A decision does 
 
 1. Assign or confirm an immutable decision ID and exact target/baseline.
 2. Verify authority evidence independently of the proposed decision.
-3. Resolve `ADVISORY` or `DECISION_CAPABLE`; fail closed on ambiguity.
+3. Resolve `ADVISORY`, `DECISION_CANDIDATE`, or `DENY`; fail closed on ambiguity.
 4. State context, scope, drivers, options, consequences, risks, and reversibility.
-5. Select an option only in decision-candidate mode; otherwise recommend or deny deterministically.
-6. Record a reason code, authority reference, evidence references, limitations, effective window, review triggers, and supersession rules.
-7. Unconditionally route higher-risk, authority-affecting, evidence-acceptance, release, memory/knowledge/skill promotion, and activation decisions to the responsible human role.
+5. Select an option only in `DECISION_CANDIDATE` mode; otherwise recommend or deny deterministically.
+6. Keep control disposition separate from the selected option: `disposition` must be one canonical disposition token; put the chosen option only in `decision` or `selected_option`.
+7. Record a reason code, authority reference, evidence references, limitations, effective window, review triggers, and supersession rules.
+8. Unconditionally route higher-risk, authority-affecting, evidence-acceptance, release, memory/knowledge/skill promotion, and activation decisions to the responsible human role.
 
 ## Required outputs
 

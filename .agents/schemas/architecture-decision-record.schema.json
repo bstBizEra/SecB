@@ -27,9 +27,9 @@
     "decision_id": { "type": "string", "minLength": 1 },
     "title": { "type": "string", "minLength": 1 },
     "status": { "enum": ["proposed", "review-required", "rejected", "deprecated", "superseded"] },
-    "decision_mode": { "enum": ["advisory", "decision-candidate", "deny"] },
+    "decision_mode": { "enum": ["ADVISORY", "DECISION_CANDIDATE", "DENY"] },
     "disposition": { "enum": ["ADVISORY_ONLY", "DECISION_CANDIDATE", "DENY_AUTHORITY_UNVERIFIED"] },
-    "effective_status": { "const": "not-effective" },
+    "effective_status": { "const": "NOT_EFFECTIVE" },
     "reason_code": { "type": "string", "minLength": 1 },
     "exact_target": { "$ref": "#/$defs/binding" },
     "baseline": { "$ref": "#/$defs/binding" },
@@ -73,7 +73,7 @@
       "if": { "properties": { "disposition": { "const": "DECISION_CANDIDATE" } }, "required": ["disposition"] },
       "then": {
         "properties": {
-          "decision_mode": { "const": "decision-candidate" },
+          "decision_mode": { "const": "DECISION_CANDIDATE" },
           "status": { "const": "review-required" },
           "authority_evidence_refs": { "minItems": 1 }
         }
@@ -81,7 +81,17 @@
     },
     {
       "if": { "properties": { "disposition": { "const": "DENY_AUTHORITY_UNVERIFIED" } }, "required": ["disposition"] },
-      "then": { "properties": { "decision_mode": { "const": "deny" }, "status": { "const": "review-required" } } }
+      "then": { "properties": { "decision_mode": { "const": "DENY" }, "status": { "const": "review-required" } } }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "ADVISORY_ONLY" } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "decision_mode": { "const": "ADVISORY" },
+          "status": { "const": "proposed" },
+          "authority_evidence_refs": { "maxItems": 0 }
+        }
+      }
     }
   ]
 }

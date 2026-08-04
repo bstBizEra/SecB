@@ -60,9 +60,26 @@ for f in ROOT.rglob('*.json'):
 try:
     adr_schema=json.loads((ROOT/'schemas'/'architecture-decision-record.schema.json').read_text(encoding='utf-8'))
     adr_template=yaml.safe_load((ROOT/'templates'/'architecture-decision-record.yaml').read_text(encoding='utf-8'))
-    for error in Draft202012Validator(adr_schema).iter_errors(adr_template):
+    adr_validator=Draft202012Validator(adr_schema)
+    for error in adr_validator.iter_errors(adr_template):
         location='.'.join(str(part) for part in error.path) or '<root>'
         errors.append(f'architecture decision template schema:{location}: {error.message}')
+    canonical_pairs={
+        'ADVISORY':'ADVISORY_ONLY',
+        'DECISION_CANDIDATE':'DECISION_CANDIDATE',
+        'DENY':'DENY_AUTHORITY_UNVERIFIED'
+    }
+    for mode in canonical_pairs:
+        for disposition in canonical_pairs.values():
+            probe=dict(adr_template)
+            probe['decision_mode']=mode
+            probe['disposition']=disposition
+            probe['status']='proposed' if mode=='ADVISORY' else 'review-required'
+            probe['authority_evidence_refs']=['gov://fixture/grant'] if mode=='DECISION_CANDIDATE' else []
+            valid=not list(adr_validator.iter_errors(probe))
+            expected=canonical_pairs[mode]==disposition
+            if valid!=expected:
+                errors.append(f'architecture decision mode/disposition invariant: {mode}+{disposition}: expected {expected}, got {valid}')
 except Exception as e:
     errors.append(f'architecture decision template validation: {e}')
 

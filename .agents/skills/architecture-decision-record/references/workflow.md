@@ -2,7 +2,7 @@
 
 ## Authority resolution
 
-Verify all of the following before entering decision-capable mode:
+Verify all of the following before entering `DECISION_CANDIDATE` mode:
 
 - actor and decision-owner identity;
 - recognized authority source and decision channel;
@@ -24,12 +24,13 @@ requested. Advisory mode is only for analysis where no decision is requested.
 3. Compare at least two viable options, including doing nothing when relevant.
 4. Record positive and negative consequences, reversibility, migration, and operational impact.
 5. Select the option only after authority mode is resolved.
-6. Emit one disposition, always with `effective_status: not-effective`:
+6. Emit one disposition, always with `effective_status: NOT_EFFECTIVE`:
    - `ADVISORY_ONLY`;
    - `DECISION_CANDIDATE`; or
    - `DENY_AUTHORITY_UNVERIFIED`.
-7. Record reason code, authority reference, effective window, review triggers, supersession, and next-role action.
-8. Re-check target and authority immediately before returning a decision-capable disposition.
+7. Never place an option name or decision text in `disposition`; record the chosen option in `decision` or `selected_option`.
+8. Record reason code, authority reference, effective window, review triggers, supersession, and next-role action.
+9. Re-check target and authority immediately before returning a `DECISION_CANDIDATE` disposition.
 
 ## Reserved gates
 
