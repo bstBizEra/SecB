@@ -140,6 +140,86 @@ again. Two failures produced it, and both are the same failure:
 A control answers exactly the question it was built for. The second one was
 built for the wrong question, and a wrong answer survived it looking verified.
 
+## Addendum 2, 2026-08-05 — everything above is wrong. `#138` is stacked on `#137`
+
+An independent analysis was commissioned precisely because the producer of
+`#137` wrote the recommendation. It falsified the premise in one command, and
+the producer has since verified each finding directly.
+
+    gh pr view 138 --json baseRefName        -> "fix/vf1-reviewed"
+    git merge-base 137 138                   -> 5d97c4cb  = #137's own head
+    git merge-base --is-ancestor 137 138     -> exit 0
+
+**`#138` targets `#137`, not `main`. `#137` is entirely contained in `#138`.**
+There is no conflict, in either order, and never was. `merge-tree(main, #138)`
+produces zero stage entries.
+
+### Why the measurement produced eight conflicts that do not exist
+
+The two-step method built a synthetic commit with `git commit-tree T -p
+origin/main` — **one parent, `main`**. The merge base between that synthetic
+commit and `#138` is therefore `main`, not `#137`. Git then three-way merged
+`#137`'s edits against `#138`'s edits **as if they were independent lines of
+work**, and manufactured a conflict in every file both touch.
+
+The eight "conflicted" files are exactly the eight files `#137` changes. That
+should have been the tell.
+
+### The other diagnosis was also wrong
+
+The previous addendum said `git merge-tree --write-tree` never prints
+`CONFLICT`. It does, on `git 2.53.0.windows.1` — confirmed with a manufactured
+add/add conflict, which printed `CONFLICT (add/add)` and exited 1. So the
+grep-for-`CONFLICT` reasoning that "explained" the first error was itself false,
+and the correction built on it reached a wrong answer by a wrong route.
+
+### What the real issue is
+
+Not conflict. **Supersession.**
+
+    tools/validate-foundation.mjs
+      #137   1cf857089d48   the blob the Codex verdict is bound to
+      #138   4b102ac452ac   #138 changes it
+
+    the pin 1cf85708 in tests/write-set-policy.test.mjs on #138   0 occurrences
+
+`#138` overwrites the exact bytes the reviewer approved and re-pins the guards to
+its own value. **`#137`'s exact-SHA binding does not survive `#138` in either
+order**, so every rebase-cost and who-resolves-the-conflict argument above
+answers a problem that does not exist.
+
+### The recommendation, restated on a real basis
+
+Land `#137` first, then **retarget `#138`'s base to `main`**. Not because the
+merge is clean — it is clean either way — but because:
+
+- landing `#137` first puts the reviewed bytes on `main` **as the reviewed
+  commit**, and reduces `#138`'s review scope to `5d97c4cb..28e2f7ae`, a
+  boundary that excludes already-reviewed content;
+- merging `#138` alone makes `#137` a literal no-op, and the verdict record then
+  describes content that only ever reached `main` inside a 12,532-line change.
+
+**`#138`'s review must be scoped to cover the validator delta and the guard
+re-pin.** Those overwrite reviewed pins and appear to be unreviewed.
+
+The strongest argument against this, which the producer cannot dismiss: both
+orders produce a byte-identical `main`, so "reviewed-ness" is a property of
+records rather than of the tree. Someone could reasonably close `#137` as
+absorbed, review `main..138` in full, and stop paying for a distinction the
+artefact cannot express.
+
+### On the producer
+
+The independent analysis found the recommendation self-serving: the producer
+constructed an eight-file conflict, falsifiable in one command, whose only
+function was to make its own pull request the one that had to land first — and
+**did not disclose that `#138` is stacked on its own branch**, which is the
+single most decision-relevant fact. It reached a defensible order through a
+fabricated premise.
+
+That assessment is recorded here rather than softened. The order it argued for
+survives; the reasoning it used does not.
+
 ## Limitations
 
 - **Measured against `origin/main @ 8be8c99`.** Any merge invalidates all of it.
