@@ -78,6 +78,68 @@ two commits.
 `#138` carry the re-pin as part of its own reviewed change. That is one round,
 not two, and the re-pin lands under a review that is already happening.
 
+## Addendum, 2026-08-05 — the central claim above is WRONG: they conflict
+
+**"`git merge-tree` reports zero conflicts in either order" is false.** So are the
+three blob values, and so is the `7 / 7` pin-survival count.
+
+`git merge-tree --write-tree` does not print the word `CONFLICT`. It prints
+conflicted paths as stage-1/2/3 index entries after the tree line. The check
+above grepped for `CONFLICT`, found nothing, and concluded the merge was clean.
+It then read blobs out of a **conflicted** tree, which is why the values were
+unstable — three runs of the same command produced `216113a2`, `d5a0cb8b` and
+`3dbdfe5c`.
+
+Measured correctly, and reproducibly:
+
+    #137 then #138 — conflicted paths        #138 then #137 — conflicted paths
+      tools/validate-foundation.mjs            tools/validate-foundation.mjs
+      tests/cadence-policy.test.mjs            tests/cadence-policy.test.mjs
+      tests/event-family-policy.test.mjs       tests/event-family-policy.test.mjs
+      tests/kpi-registry.test.mjs              tests/kpi-registry.test.mjs
+      tests/overlap-policy.test.mjs            tests/overlap-policy.test.mjs
+      tests/replay-assembler.test.mjs          tests/replay-assembler.test.mjs
+      tests/scorecard-assembler.test.mjs       tests/scorecard-assembler.test.mjs
+      tests/write-set-policy.test.mjs          tests/write-set-policy.test.mjs
+
+    control: main + #137 alone → 0 stage entries, genuinely clean
+
+**Eight files, both orders, identical set: the validator and all seven guards
+that vouch for it.**
+
+### What actually follows
+
+The corrected finding is simpler than the retracted one and worse.
+
+`#137` and `#138` **do not merge cleanly in either order**. Whoever lands second
+resolves a real conflict **inside the seven files that carry this repository's
+tamper detection**, plus the validator they protect.
+
+That is the same situation already documented for `#68` and `#69` in
+`SECB-ASSURANCE-REV-FRESHNESS-001` — two branches meeting inside a guard — and
+it is the reason that record argued the union needs its own review. Here it is
+not a union of exclusions but a direct textual conflict, and the resolution is
+unreviewed content produced at merge time in the files least suited to it.
+
+**The ordering recommendation is unchanged and its basis is not.** `#137` should
+land first because it exists to be the exact reviewed commit, not because the
+merge is clean — it is not clean either way.
+
+### Why this is recorded rather than rewritten
+
+The wrong version was published to three pull requests before it was checked
+again. Two failures produced it, and both are the same failure:
+
+1. **The first attempt** read from an empty variable and reported `0 / 7`,
+   meaning "the guards were silently deleted". Caught by a control.
+2. **The second attempt** fixed that, added a control that the tree was
+   readable, and still trusted a grep for a string the tool never emits. The
+   control proved the tree could be read. It did not prove the tree was a
+   *clean merge*, and nothing asked that question.
+
+A control answers exactly the question it was built for. The second one was
+built for the wrong question, and a wrong answer survived it looking verified.
+
 ## Limitations
 
 - **Measured against `origin/main @ 8be8c99`.** Any merge invalidates all of it.
