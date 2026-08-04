@@ -5,7 +5,7 @@ import { join, relative, resolve, sep } from "node:path";
 import test from "node:test";
 
 import { CORPUS_ROOT, VERDICT, loadCorpus, readShallowYaml } from "../src/audit/corpus.mjs";
-import { independentCounts } from "../src/audit/corpus-expectation.mjs";
+import { EXPECTED_CORPUS, independentCounts } from "../src/audit/corpus-expectation.mjs";
 import {
   CHECKS,
   casesYaml,
@@ -270,9 +270,14 @@ test("evals.undecidable-expectation: ordinary prose is not mistaken for an ident
   assert.equal(isMechanicallyUndecidable("the run returns exit code 0 and is correct"), false);
 });
 
-test("evals.missing-eval-coverage: 22 manifests claim a suite that resolves to nothing", () => {
+test("evals.missing-eval-coverage: every governed manifest claims a suite that resolves to nothing", () => {
   const v = of("evals.missing-eval-coverage").filter((f) => f.verdict === VERDICT.VIOLATION);
-  assert.equal(v.length, 22);
+  // The finding is that this is UNIVERSAL among governed packages, not that it
+  // happens 22 times. Stated as a bare 22 it was both unportable and weaker: a
+  // corpus where one package fixed its suite path and another broke would still
+  // total 22 and the assertion would notice nothing.
+  assert.equal(v.length, corpus.counts.governed,
+    "every governed package is expected to carry this defect; a bare count would hide one being fixed while another broke");
   for (const f of v) {
     assert.match(f.file, /\/manifest\.yaml$/);
     assert.equal(f.evidence.declaredSuite, `evals/${f.pkg}`);
@@ -285,11 +290,12 @@ test("evals.missing-eval-coverage: 22 manifests claim a suite that resolves to n
     assert.match(manifest[f.line - 1], /^\s+suite:/, `${f.file}:${f.line} should be the suite: line`);
   }
 
-  // The three unmanifested packages are NO_EVIDENCE, never VIOLATION: absence of
-  // evals contradicts no declaration.
+  // Unmanifested packages are NO_EVIDENCE, never VIOLATION: absence of evals
+  // contradicts no declaration. Named rather than counted, and taken from the
+  // recorded expectation so this holds on a corpus with none — on main the list
+  // is empty, and asserting the emptiness is the point rather than an omission.
   const ne = of("evals.missing-eval-coverage").filter((f) => f.verdict === VERDICT.NO_EVIDENCE);
-  assert.equal(ne.length, 3);
-  assert.deepEqual(ne.map((f) => f.pkg).sort(), ["graphify", "secb-project-registry", "worktree"]);
+  assert.deepEqual(ne.map((f) => f.pkg).sort(), [...EXPECTED_CORPUS.ungovernedNames].sort());
   for (const f of ne) {
     assert.equal(f.evidence.governed, false);
     assert.equal(f.evidence.declaredSuite, null);

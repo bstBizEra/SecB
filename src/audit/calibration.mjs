@@ -115,7 +115,10 @@ export const MUTATIONS = Object.freeze([
     arm: "detection",
     targets: "governance.identity-fields",
     applicable: (p) => p.governed && /^version:/m.test(p.manifestText),
-    apply: (p) => reparse(p, p.manifestText.replace(/^version:.*\n/m, ""))
+    // \r?\n, not \n. In JavaScript `.` does not match `\r`, so on a CRLF
+    // checkout `^version:.*\n` never matches and this mutation silently did
+    // nothing — see the no-op guard in plant() for how that surfaced.
+    apply: (p) => reparse(p, p.manifestText.replace(/^version:.*\r?\n/m, ""))
   },
   {
     id: "inject-depth-three",
@@ -235,7 +238,51 @@ export function plant(corpus, { seed, count = 6 } = {}) {
       !key.some((k) => k.package === p.name));         // one mutation per package
     if (candidates.length === 0) continue;
     const target = pick(candidates, next);
-    byName.set(target.name, mutation.apply(target, ctx));
+    const seeded = mutation.apply(target, ctx);
+
+    /**
+     * A MUTATION THAT CHANGED NOTHING IS NOT A MUTATION.
+     *
+     * Without this, a no-op apply is planted, keyed, and then scored as "the
+     * check failed to detect it" — reporting a class as UNCOVERED when what
+     * actually happened is that nothing was ever planted. The audit then
+     * strikes a check that works fine, which is a false negative dressed as
+     * rigour.
+     *
+     * This is not hypothetical. `drop-identity-field` used `/^version:.*\n/m`,
+     * which cannot match on a CRLF checkout because `.` does not match `\r`.
+     * On a branch carrying .gitattributes the corpus is LF and the mutation
+     * worked; on `main`, which has no .gitattributes, it silently did nothing
+     * and `governance.identity-fields` was struck as uncovered on every seed
+     * tried. The check was never at fault.
+     *
+     * Failing loudly here is the same rule the audit applies to everything
+     * else: a control that cannot fire is not evidence.
+     */
+    /**
+     * Compare everything a mutation is able to write, not just the two obvious
+     * fields. The first version of this guard checked manifestText and skillText
+     * only, and immediately reported `repair-expectation-uniqueness` as a no-op
+     * on a corpus where it works fine — that mutation writes an in-memory
+     * override into `files[].text`, which the guard could not see. A guard that
+     * misses the thing it is guarding is worse than none, because it fails
+     * loudly in the wrong place.
+     */
+    const shapeOf = (p) => JSON.stringify([
+      p.manifestText ?? null,
+      p.skillText ?? null,
+      (p.files ?? []).map((f) => [f.rel, f.text ?? null])
+    ]);
+
+    if (shapeOf(seeded) === shapeOf(target)) {
+      throw new Error(
+        `calibration mutation "${mutation.id}" applied to "${target.name}" changed nothing. ` +
+        "A no-op seed scores as an undetected class and would strike a working check. " +
+        "Fix the mutation rather than the score — check line endings first."
+      );
+    }
+
+    byName.set(target.name, seeded);
     key.push({
       mutation: mutation.id,
       arm: mutation.arm,

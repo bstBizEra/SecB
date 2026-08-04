@@ -22,6 +22,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 import { VERDICT, loadCorpus } from "../src/audit/corpus.mjs";
+import { EXPECTED_CORPUS } from "../src/audit/corpus-expectation.mjs";
 import { CHECKS, synthCorpus } from "../src/audit/checks-governance.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -201,19 +202,35 @@ test("UNDECIDABLE and NO_EVIDENCE are distinct verdicts, and UNDECIDABLE is reac
 // Ground truth against the real corpus
 // ---------------------------------------------------------------------------
 
-test("the real corpus is the shape WP-SK-AUDIT-01 recorded at baseline", () => {
-  assert.equal(realCorpus.counts.packages, 25);
-  assert.equal(realCorpus.counts.governed, 22);
-  assert.equal(realCorpus.counts.ungoverned, 3);
+test("the real corpus is the shape recorded in corpus-expectation.mjs", () => {
+  // Was a hardcoded 25/22/3, which is true here and false on main, where the
+  // corpus is 22/22/0. The expectation now travels with the corpus so this
+  // suite can run wherever the audit is extracted to.
+  assert.deepEqual(
+    {
+      packages: realCorpus.counts.packages,
+      governed: realCorpus.counts.governed,
+      ungoverned: realCorpus.counts.ungoverned
+    },
+    {
+      packages: EXPECTED_CORPUS.packages,
+      governed: EXPECTED_CORPUS.governed,
+      ungoverned: EXPECTED_CORPUS.ungoverned
+    },
+    "corpus moved off the recorded expectation — update src/audit/corpus-expectation.mjs deliberately, in the same commit as the corpus change"
+  );
 });
 
-test("governance.ungoverned-package finds exactly the 3 the runtime denies", () => {
+test("governance.ungoverned-package finds exactly the packages that lack a manifest", () => {
   const found = violations("governance.ungoverned-package");
-  // Matches DENY_UNGOVERNED_PACKAGE: 3 exactly. Two independent mechanisms
-  // reaching the same tally is the point — a different number here would mean
-  // one of them is wrong, and the check would be telling us which.
-  assert.equal(found.length, 3);
-  assert.deepEqual(found.map((f) => f.pkg).sort(), ["graphify", "secb-project-registry", "worktree"]);
+  // Two independent mechanisms reaching the same answer is the point: the check
+  // walks the corpus, EXPECTED_CORPUS is maintained by hand. A disagreement
+  // means one of them is wrong and the check is telling us which.
+  //
+  // Compared by NAME, not by count. A corpus that swapped one ungoverned
+  // package for another keeps every count identical, and on main this list is
+  // empty — which is why the emptiness is asserted rather than assumed.
+  assert.deepEqual(found.map((f) => f.pkg).sort(), [...EXPECTED_CORPUS.ungovernedNames].sort());
   for (const f of found) {
     // A directory has no line. The finding must cite the directory in the
     // observation and leave file/line null rather than invent a line.
