@@ -1,11 +1,17 @@
 # Architecture Decision Record Skill v0.2.0 — Independent SEC Review
 
-**Artifact ID:** `SECB-ADR-SKILL-V0.2.0-SEC-REVIEW-001`  
-**Status:** `DRAFT / NOT EFFECTIVE`  
-**Truth status:** `VERIFIED_TRUE` for the exact candidate and commands recorded below  
-**Authority status:** `ADVISORY_ONLY`  
-**Risk class:** `R3` because the candidate defines how agents may represent architecture decisions while preserving reserved human authority  
-**Reviewed at:** `2026-08-05T03:22:12.8580945+07:00` (`Asia/Vientiane`)  
+**Artifact ID:** `SECB-ADR-SKILL-V0.2.0-SEC-REVIEW-001`
+
+**Status:** `DRAFT / NOT EFFECTIVE`
+
+**Truth status:** `VERIFIED_TRUE` for the exact candidate and commands recorded below
+
+**Authority status:** `ADVISORY_ONLY`
+
+**Risk class:** `R3` because the candidate defines how agents may represent architecture decisions while preserving reserved human authority
+
+**Reviewed at:** `2026-08-05T03:22:12.8580945+07:00` (`Asia/Vientiane`)
+
 **Review triggers:** any candidate commit/tree change; any schema, workflow, prompt, evaluator, validator, authority-reference, risk-gate, or serialization change; any request to merge, promote, publish, or activate this skill
 
 ## 1. Reviewer identity and independence
