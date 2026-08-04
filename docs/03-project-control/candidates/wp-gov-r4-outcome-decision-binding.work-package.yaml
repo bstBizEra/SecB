@@ -1,0 +1,201 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_gov_r4_outcome_decision_binding_v1_candidate"
+  record_status: "AWAITING_GOV_AUTHORIZATION"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  prepared_as: "SARCHI — architecture and design. SARCHI does not authorize; GOV does."
+  source: >-
+    Named as out of scope in WP-SK-R1: "DEF-R4 - OutcomeLedger.appendOutcome has
+    the identical unbound shape ... It is NOT skill-scoped and needs its own
+    item. Named here so closing DEF-R1 is not mistaken for closing the class."
+    Opened on operator instruction, 2026-08-04.
+  limitations:
+    - "Producer prepared this and may not accept its own evidence."
+    - "NO CODE HAS BEEN WRITTEN. The last time this producer shipped a fix before authorization it became WP-SK-R2, which is still awaiting a signature. The reproduction below writes only to a temp directory and leaves no state."
+
+work_package_id: "WP-GOV-R4"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-GOV"
+title: "Bind an outcome receipt to the scope its decision actually covers (DEF-R4)"
+
+objective: >-
+  Make OutcomeLedger.appendOutcome refuse an outcome whose project or work
+  package is not the one its cited decision was made for.
+
+problem_statement: >-
+  Reproduced by running, 2026-08-04, against this branch unchanged:
+
+    the outcome the decision covers                -> ALLOW
+    a DIFFERENT project cites the same decision    -> ALLOW
+    a DIFFERENT work package, same decision        -> ALLOW
+    both differ, same decision                     -> ALLOW
+
+    control: a decision that does not exist        -> DENY_UNKNOWN_DECISION
+    control: INVALIDATED without reversion_required -> DENY_INCONSISTENT_REVERSION
+
+  The controls matter. The chain is otherwise sound - a receipt cannot cite a
+  decision that does not exist, and the reversion obligation is enforced. What is
+  missing is any requirement that the decision COVERS the outcome being claimed.
+
+  The mechanism is the same one DEF-R1 had, in src/ledger/temporal-ledgers.mjs:
+
+    const decision = this.#decisionLookup(outcome.decision_ref);
+    if (!decision) throw DENY_UNKNOWN_DECISION;
+    const decisionId = decision.entry?.entryId ?? decision.decision_id;
+    if (decisionId !== outcome.decision_ref) throw DENY_UNKNOWN_DECISION;
+
+  That compares the looked-up decision's id against outcome.decision_ref - THE
+  CALLER'S OWN CLAIM. It detects a miswired lookup. It cannot detect an outcome
+  attributing itself to a decision that never covered it.
+
+  A first attempt at this reproduction returned DENY_INVALID_EXPECTED_SEQUENCE
+  for all four cases because the harness omitted expectedSequence. Every line
+  denied, which reads as a system behaving safely. That run is recorded here
+  because a reproduction where nothing gets through proves nothing, and reporting
+  it as "DEF-R4 appears closed" was one step away.
+
+design: >-
+  Compare the outcome's scope against the decision's, at the ledger, using
+  fields BOTH CONTRACTS ALREADY REQUIRE.
+
+    outcome-receipt required:  ... project_id, work_package_id ...
+    decision-record required:  ... project_id, work_package_id ...
+
+  NO SCHEMA CHANGE. This differs from DEF-R1, which needed a new `subject` field
+  because a decision could not name a skill at all. Here both sides already carry
+  the scope; nothing compares them.
+
+  New deny code: DENY_DECISION_SCOPE_MISMATCH, distinct from DENY_UNKNOWN_DECISION
+  so a scope violation is not reported as a missing record.
+
+open_design_question: >-
+  STRICT EQUALITY IS THE PROPOSAL, NOT A CONCLUSION. It assumes an outcome is
+  always observed inside the same work package that took the decision.
+
+  A plausible counter-case: a decision taken in WP-A whose consequence is
+  observed while working in WP-B. If that is legitimate in this project, strict
+  equality is wrong and will block real work.
+
+  The producer does not know whether that case exists here, and says so rather
+  than picking. Two escapes if it does:
+
+    - decision-record already carries `subject` (added by WP-SK-R1). A decision
+      whose effects legitimately span work packages could say so there, and the
+      comparison would read the declared scope instead of the decision's own
+      work_package_id.
+    - project_id equality alone, with work_package_id compared only when the
+      decision does not declare a wider scope.
+
+  This is the one question in this package the producer wants answered before
+  code, because both alternatives are cheap NOW and expensive after a comparison
+  ships and records depend on it.
+
+risk_class: "R3"
+mutation_class: "M2"
+status: "AWAITING_GOV_AUTHORIZATION"
+
+baseline:
+  target_branch: "feat/secb-ruflo-command-center"
+  baseline_commit: "efe19ce"
+  blast_radius: >-
+    Measured, not estimated:
+      .ndjson ledger files anywhere in the tree      0
+      callers of appendOutcome in src/ or tools/     0
+      callers in tests/                              2
+        tests/conformance-stubs.test.mjs
+        tests/temporal-ledgers.test.mjs
+
+    NO EXISTING OUTCOME RECORD CAN BE INVALIDATED, because none exists. That is
+    the same "UNWIRED" condition that made DEF-R1 cheap to close, and it is the
+    argument for closing DEF-R4 now rather than after something writes receipts.
+
+scope:
+  - "src/ledger/temporal-ledgers.mjs - compare outcome scope against decision scope in appendOutcome; add DENY_DECISION_SCOPE_MISMATCH."
+  - "tests/temporal-ledgers.test.mjs - both arms for every case."
+  - "docs/04-assurance/ - the before/after evidence record, in the shape of skillshub-walking-skeleton-001.md."
+
+non_scope:
+  - "NO schema change. Both contracts already require the fields being compared."
+  - "NO wiring. appendOutcome has zero production callers and gains none here."
+  - "NO change to DecisionLedger or ClaimLedger."
+  - "NO revisiting of DEF-R1. Its fix stands; this closes the sibling case in the same class, which is why WP-SK-R1 named it explicitly rather than letting the class look closed."
+
+acceptance_criteria:
+  - id: "AC-R4-01"
+    statement: "An outcome inside the decision's scope still appends."
+    verification: >-
+      The positive arm. A fail-closed change can be made to pass by denying
+      everything; this is what makes the denials mean anything. Its absence is
+      how the first reproduction attempt produced four denials that looked like
+      safety.
+  - id: "AC-R4-02"
+    statement: "THE THREE REPRODUCED CASES NOW DENY."
+    verification: >-
+      Re-run the reproduction unchanged. A different project, a different work
+      package, and both differing must return DENY_DECISION_SCOPE_MISMATCH where
+      they returned ALLOW. Record before and after codes.
+  - id: "AC-R4-03"
+    statement: "Each scope dimension is refused ON ITS OWN."
+    verification: >-
+      project_id differing alone, and work_package_id differing alone, each in
+      its own ledger. WP-SK-R1's equivalent test initially varied two dimensions
+      at once, so one comparison was never exercised and deleting it left the
+      suite green. Do not repeat that.
+  - id: "AC-R4-04"
+    statement: "The existing controls still fire and are not replaced."
+    verification: >-
+      DENY_UNKNOWN_DECISION for a decision that does not exist, and
+      DENY_INCONSISTENT_REVERSION for an INVALIDATED outcome without
+      reversion_required. A scope check that swallowed either would be a
+      regression disguised as a fix.
+  - id: "AC-R4-05"
+    statement: "The new code is distinguishable from the old one."
+    verification: >-
+      DENY_DECISION_SCOPE_MISMATCH must not be reported as DENY_UNKNOWN_DECISION.
+      A caller cannot fix a scope error it is told is a missing record.
+  - id: "AC-R4-06"
+    statement: "Every check is shown failing when it should."
+    verification: >-
+      Sabotage matrix with raw exit codes and a control column proving the NEW
+      comparison is what catches each mutation - not an existing check that
+      happened to fire first. WP-GOV-VF1's review found exactly that kind of
+      false evidence in this producer's own probe list.
+
+roles:
+  ENGIN: "unassigned — producer prepared this and may not accept its own evidence"
+  REV: "unassigned — must not be the producer"
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted. An outcome receipt is what marks a decision validated or invalidated; an unbound one lets any actor attribute a validation to a decision that never covered their work."
+  GOV: "authorizes, and should answer open_design_question before code."
+
+allowed_paths:
+  - "src/ledger/temporal-ledgers.mjs"
+  - "tests/temporal-ledgers.test.mjs"
+  - "docs/04-assurance/outcome-decision-binding-001.md"
+
+prohibited_paths:
+  - "contracts/**"
+  - "src/mcp/**"
+  - ".agents/**"
+  - "MANIFEST.json"
+  - "tools/validate-foundation.mjs"
+
+evidence_obligations:
+  - "The AC-R4-02 before/after table against the reproduction recorded in problem_statement."
+  - "The AC-R4-03 per-dimension isolation, each in its own ledger."
+  - "The AC-R4-06 sabotage matrix with its control column."
+  - "A count of outcome records invalidated. Expected: zero, because zero exist. Any other number stops the work."
+
+valid_until: "2026-11-04T00:00:00Z"
+
+authority_note: >-
+  R3 because it changes what a governed ledger accepts, on the receipt that marks
+  a decision validated or invalidated. M2 because no contract and no schema
+  changes, and there is nothing to migrate.
+
+  What makes it small is the same property that made DEF-R1 small: nothing is
+  wired, so nothing breaks. What makes it worth doing now is that this property
+  expires. The moment anything writes outcome receipts, closing this stops being
+  a comparison and starts being a migration.
