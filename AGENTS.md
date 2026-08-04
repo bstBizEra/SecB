@@ -120,3 +120,38 @@ stakeholder-capability-mapping · system-context-boundaries
    `skill-revocation-ledger`) remain the eventual runtime registry; this
    file-based registry is the bootstrap surface until those are wired
    (SEC/GOV-gated).
+
+## Scoped integration-principal amendment — 2026-08-05
+
+**Amendment ID:** SECB-AGENTS-AMD-003  
+**Requested by:** Human operator, 2026-08-05  
+**Status:** DRAFT until independently reviewed and merged to `main` by a human
+operator under the rules effective before this amendment  
+**Scope:** Prospective repository integration only; no retroactive authority
+
+Once effective, a non-human integration principal may push, create or update a
+pull request, merge to `main`, or execute a separately authorized activation
+only when every condition below is satisfied:
+
+1. The principal has a server-derived identity mapped to the integration role.
+2. A current, scoped, expiring and revocable operator grant names the repository,
+   action, exact candidate commit, target branch and validity window.
+3. Required independent REV, QA and SEC records are durable and bind the exact
+   candidate commit and tree; the producer may not transcribe them.
+4. Evidence acceptance, GOV disposition, integration and activation remain
+   separate records and actions. Authority for one does not imply another.
+5. Immediately before mutation, the principal verifies grant freshness,
+   candidate identity, target-branch freshness, required checks and branch
+   protection. Unknown or changed state fails closed.
+6. Merge uses exact-head protection and preserves the reviewed commit as an
+   ancestor. Squash or rebase is prohibited when assurance binds the original
+   commit.
+7. Every remote mutation emits an auditable receipt containing actor, grant,
+   repository, action, before/after refs, candidate commit, result and time.
+8. No principal may issue or approve its own grant, accept its own evidence,
+   waive findings, alter separation of duties, or declare production status.
+
+This amendment does not authorize its own review, merge or effectiveness. It
+does not make any current skill effective and does not authorize PR #140 or any
+other existing candidate retroactively. The retained human bootstrap gate
+remains controlling until this amendment is effective.
