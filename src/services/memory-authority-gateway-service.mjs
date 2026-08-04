@@ -1,0 +1,551 @@
+// Governed, UNWIRED authority facade for the Memory Gateway.
+//
+// Caller input never owns actor identity, project scope, admission roles, or
+// authority decisions. Those values are resolved through captured server-side
+// ports which default to DENY. The facade narrows the existing gateway; it does
+// not alter Memory admission policy or activate a runtime path.
+
+import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
+import { validateContract } from "../contracts/contract-validator.mjs";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const OPERATIONS = Object.freeze({ ADMIT: "memory-admit", RETRIEVE: "memory-retrieve" });
+const LAYERS = Object.freeze(["session", "work", "project"]);
+const CLASSIFICATIONS = Object.freeze(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]);
+const ADMIT_REQUEST_KEYS = Object.freeze(["layer", "record"]);
+const RETRIEVE_REQUEST_KEYS = Object.freeze(["project_id", "layer", "limit", "cursor"]);
+const CALLER_RECORD_KEYS = Object.freeze([
+  "memory_record_id", "version", "project_id", "work_package_id", "session_id",
+  "source", "statement", "classification", "confidence", "provenance",
+  "valid_from", "valid_until", "retention_policy", "supersedes"
+]);
+const REQUIRED_CALLER_RECORD_KEYS = Object.freeze(CALLER_RECORD_KEYS.filter((key) => key !== "supersedes"));
+const IDENTITY_KEYS = Object.freeze(["decision", "decision_id", "actor_id"]);
+const SCOPE_KEYS = Object.freeze(["decision", "decision_id", "actor_id", "project_id"]);
+const ADMISSION_AUTHORITY_KEYS = Object.freeze([
+  "decision", "decision_id", "actor_id", "project_id", "layer", "producer", "reviewer", "approver", "access_policy"
+]);
+const RETRIEVAL_AUTHORITY_KEYS = Object.freeze([
+  "decision", "decision_id", "actor_id", "project_id", "layer", "classification_clearance", "permitted_access_policies"
+]);
+const ADMIT_ALLOW_KEYS = Object.freeze(["decision", "code", "admitted_at", "record", "append"]);
+const RETRIEVE_ALLOW_KEYS = Object.freeze(["decision", "code", "retrieved_at", "records", "next_cursor"]);
+const RECORD_ENVELOPE_KEYS = Object.freeze(["data_untrusted", "record"]);
+const APPEND_KEYS = Object.freeze([
+  "status", "idempotency_key", "memory_record_id", "version", "content_hash",
+  "record_fingerprint", "created", "sequence"
+]);
+const REQUIRED_APPEND_KEYS = Object.freeze(APPEND_KEYS.filter((key) => key !== "sequence"));
+const MAX_LIMIT = 1_000;
+const DEFAULT_LIMIT = 100;
+const MAX_ACCESS_SCAN = 10_000;
+const MAX_CURSOR_LENGTH = 4_096;
+const MAX_UPSTREAM_CURSOR_LENGTH = 2_048;
+const MIN_CURSOR_MAC_KEY_BYTES = 32;
+const POLICY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const ACCESS_CURSOR_KEYS = Object.freeze(["v", "scope_hash", "upstream_cursor", "mac"]);
+
+const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const isBlank = (value) => typeof value !== "string" || value.trim() === "";
+
+function deepFreeze(value, seen = new WeakSet()) {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    if (seen.has(value)) return value;
+    seen.add(value);
+    Object.freeze(value);
+    for (const nested of Object.values(value)) deepFreeze(nested, seen);
+  }
+  return value;
+}
+
+function snapshotClosed(value, allowedKeys, requiredKeys = allowedKeys) {
+  try {
+    if (!isPlainObject(value)) return null;
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return null;
+    const ownKeys = Reflect.ownKeys(value);
+    if (ownKeys.some((key) => typeof key !== "string" || !allowedKeys.includes(key))) return null;
+    if (requiredKeys.some((key) => !ownKeys.includes(key))) return null;
+    const out = { __proto__: null };
+    for (const key of allowedKeys) if (ownKeys.includes(key)) out[key] = value[key];
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function detached(value) {
+  try {
+    return structuredClone(value);
+  } catch {
+    return null;
+  }
+}
+
+function snapshotPolicyIds(value) {
+  try {
+    if (!Array.isArray(value)) return null;
+    const length = value.length;
+    if (!Number.isSafeInteger(length) || length < 1 || length > 1_000) return null;
+    const ownKeys = Reflect.ownKeys(value);
+    const expectedKeys = new Set(["length", ...Array.from({ length }, (_, index) => String(index))]);
+    if (ownKeys.length !== expectedKeys.size || ownKeys.some((key) => typeof key !== "string" || !expectedKeys.has(key))) return null;
+    const out = [];
+    for (let index = 0; index < length; index += 1) {
+      const policy = value[index];
+      if (typeof policy !== "string" || !POLICY_ID_RE.test(policy)) return null;
+      out.push(policy);
+    }
+    return new Set(out).size === out.length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function cursorMac(key, payload) {
+  return createHmac("sha256", key).update(JSON.stringify(payload), "utf8").digest("hex");
+}
+
+function accessScopeHash({ actorId, projectId, layer, authorityDecisionId, classificationClearance, permittedPolicies }) {
+  return canonicalFingerprint({
+    actor_id: actorId,
+    project_id: projectId,
+    layer,
+    authority_decision_id: authorityDecisionId,
+    classification_clearance: classificationClearance,
+    permitted_access_policies: [...permittedPolicies].sort()
+  });
+}
+
+function encodeAccessCursor(key, upstreamCursor, bindings) {
+  try {
+    if (
+      typeof upstreamCursor !== "string" || upstreamCursor.length < 1
+      || upstreamCursor.length > MAX_UPSTREAM_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(upstreamCursor)
+    ) return null;
+    const payload = { v: 1, scope_hash: accessScopeHash(bindings), upstream_cursor: upstreamCursor };
+    const envelope = { ...payload, mac: cursorMac(key, payload) };
+    const token = Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+    return token.length <= MAX_CURSOR_LENGTH ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeAccessCursor(key, token, bindings) {
+  try {
+    const decoded = Buffer.from(token, "base64url");
+    if (decoded.toString("base64url") !== token) return null;
+    const envelope = JSON.parse(decoded.toString("utf8"));
+    if (!hasExactKeys(envelope, ACCESS_CURSOR_KEYS)) return null;
+    const { mac, ...payload } = envelope;
+    const expectedMac = cursorMac(key, payload);
+    if (
+      payload.v !== 1
+      || payload.scope_hash !== accessScopeHash(bindings)
+      || typeof payload.upstream_cursor !== "string" || payload.upstream_cursor.length < 1
+      || payload.upstream_cursor.length > MAX_UPSTREAM_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(payload.upstream_cursor)
+      || typeof mac !== "string" || !/^[a-f0-9]{64}$/.test(mac)
+      || !timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expectedMac, "hex"))
+    ) return null;
+    return payload.upstream_cursor;
+  } catch {
+    return null;
+  }
+}
+
+function hasExactKeys(value, keys) {
+  if (!isPlainObject(value)) return false;
+  const ownKeys = Reflect.ownKeys(value);
+  return ownKeys.length === keys.length
+    && ownKeys.every((key) => typeof key === "string" && keys.includes(key))
+    && keys.every((key) => ownKeys.includes(key));
+}
+
+function appendReceiptIsBound(append, record, layer, admittedAt) {
+  if (!isPlainObject(append)) return false;
+  const keys = Reflect.ownKeys(append);
+  if (
+    keys.some((key) => typeof key !== "string" || !APPEND_KEYS.includes(key))
+    || REQUIRED_APPEND_KEYS.some((key) => !keys.includes(key))
+  ) return false;
+  const idempotencyKey = JSON.stringify([record.project_id, layer, record.memory_record_id, record.version]);
+  return append.status === "COMMITTED"
+    && append.idempotency_key === idempotencyKey
+    && append.memory_record_id === record.memory_record_id
+    && append.version === record.version
+    && append.content_hash === record.content_hash
+    && append.record_fingerprint === canonicalFingerprint({ ...record, layer, admitted_at: admittedAt })
+    && typeof append.created === "boolean"
+    && (append.sequence === undefined || (Number.isSafeInteger(append.sequence) && append.sequence > 0));
+}
+
+function deny(code, reason, stage, upstreamCode) {
+  return deepFreeze({
+    decision: "DENY",
+    code,
+    reason,
+    stage,
+    ...(upstreamCode === undefined ? {} : { upstream_code: upstreamCode })
+  });
+}
+
+function defaultIdentity() {
+  return { decision: "DENY", decision_id: "default-deny", actor_id: "" };
+}
+
+function defaultScope() {
+  return { decision: "DENY", decision_id: "default-deny", actor_id: "", project_id: "" };
+}
+
+function defaultAdmissionAuthority() {
+  return {
+    decision: "DENY", decision_id: "default-deny", actor_id: "", project_id: "", layer: "",
+    producer: "", reviewer: null, approver: null, access_policy: ""
+  };
+}
+
+function defaultRetrievalAuthority() {
+  return {
+    decision: "DENY", decision_id: "default-deny", actor_id: "", project_id: "", layer: "",
+    classification_clearance: "", permitted_access_policies: []
+  };
+}
+
+export class MemoryAuthorityGatewayConfigurationError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "MemoryAuthorityGatewayConfigurationError";
+    this.code = code;
+  }
+}
+
+export function createMemoryAuthorityGateway({
+  memoryGateway,
+  identityResolver,
+  scopeResolver,
+  admissionAuthorityResolver,
+  retrievalAuthorityResolver,
+  cursorMacKey
+} = {}) {
+  let gatewayAdmit;
+  let gatewayRetrieve;
+  try {
+    gatewayAdmit = memoryGateway?.admit;
+    gatewayRetrieve = memoryGateway?.retrieve;
+  } catch {
+    throw new MemoryAuthorityGatewayConfigurationError("INVALID_MEMORY_GATEWAY", "Memory gateway ports could not be inspected safely");
+  }
+  if (!isPlainObject(memoryGateway) || typeof gatewayAdmit !== "function" || typeof gatewayRetrieve !== "function") {
+    throw new MemoryAuthorityGatewayConfigurationError("INVALID_MEMORY_GATEWAY", "memoryGateway must expose admit() and retrieve()");
+  }
+  for (const [name, resolver] of Object.entries({ identityResolver, scopeResolver, admissionAuthorityResolver, retrievalAuthorityResolver })) {
+    if (resolver !== undefined && typeof resolver !== "function") {
+      throw new MemoryAuthorityGatewayConfigurationError("INVALID_AUTHORITY_RESOLVER", `${name} must be a function when provided`);
+    }
+  }
+  let cursorMacKeySnapshot;
+  try {
+    if (!(cursorMacKey instanceof Uint8Array) || cursorMacKey.byteLength < MIN_CURSOR_MAC_KEY_BYTES) throw new Error("weak key");
+    cursorMacKeySnapshot = Buffer.from(cursorMacKey);
+  } catch {
+    throw new MemoryAuthorityGatewayConfigurationError("INVALID_CURSOR_MAC_KEY", "cursorMacKey must contain at least 32 bytes");
+  }
+
+  const admitMemory = Function.prototype.bind.call(gatewayAdmit, memoryGateway);
+  const retrieveMemory = Function.prototype.bind.call(gatewayRetrieve, memoryGateway);
+  const resolveIdentity = identityResolver ?? defaultIdentity;
+  const resolveScope = scopeResolver ?? defaultScope;
+  const resolveAdmissionAuthority = admissionAuthorityResolver ?? defaultAdmissionAuthority;
+  const resolveRetrievalAuthority = retrievalAuthorityResolver ?? defaultRetrievalAuthority;
+
+  function resolveBindings(operation, projectId, layer) {
+    const base = deepFreeze({ operation, project_id: projectId, layer });
+    let identity;
+    try {
+      identity = snapshotClosed(resolveIdentity(base), IDENTITY_KEYS);
+    } catch {
+      identity = null;
+    }
+    if (identity === null || identity.decision !== "ALLOW" || isBlank(identity.decision_id) || isBlank(identity.actor_id)) {
+      return { denial: deny("DENY_MEMORY_IDENTITY", "Server-derived caller identity is not effective", "identity") };
+    }
+
+    const scopeRequest = deepFreeze({ ...base, actor_id: identity.actor_id, identity_decision_id: identity.decision_id });
+    let scope;
+    try {
+      scope = snapshotClosed(resolveScope(scopeRequest), SCOPE_KEYS);
+    } catch {
+      scope = null;
+    }
+    if (
+      scope === null || scope.decision !== "ALLOW" || isBlank(scope.decision_id)
+      || scope.actor_id !== identity.actor_id || scope.project_id !== projectId
+    ) return { denial: deny("DENY_MEMORY_SCOPE", "Server-derived Memory scope is not effective for this actor and project", "scope") };
+
+    return { identity, scope, base };
+  }
+
+  async function admit(request) {
+    const query = snapshotClosed(request, ADMIT_REQUEST_KEYS);
+    if (query === null || !LAYERS.includes(query.layer)) {
+      return deny("DENY_MALFORMED_REQUEST", "Memory admission request is not a closed valid object", "request");
+    }
+    const recordSnapshot = snapshotClosed(query.record, CALLER_RECORD_KEYS, REQUIRED_CALLER_RECORD_KEYS);
+    const callerRecord = recordSnapshot === null ? null : detached(recordSnapshot);
+    if (callerRecord === null || isBlank(callerRecord.project_id)) {
+      return deny("DENY_MALFORMED_REQUEST", "Memory admission record is not a closed safe object", "request");
+    }
+
+    const bindings = resolveBindings(OPERATIONS.ADMIT, callerRecord.project_id, query.layer);
+    if (bindings.denial) return bindings.denial;
+    const authorityRequest = deepFreeze({
+      ...bindings.base,
+      actor_id: bindings.identity.actor_id,
+      identity_decision_id: bindings.identity.decision_id,
+      scope_decision_id: bindings.scope.decision_id
+    });
+    let authority;
+    try {
+      authority = snapshotClosed(resolveAdmissionAuthority(authorityRequest), ADMISSION_AUTHORITY_KEYS);
+    } catch {
+      authority = null;
+    }
+    if (
+      authority === null || authority.decision !== "ALLOW" || isBlank(authority.decision_id)
+      || authority.actor_id !== bindings.identity.actor_id || authority.project_id !== callerRecord.project_id
+      || authority.layer !== query.layer || authority.producer !== bindings.identity.actor_id
+      || (authority.reviewer !== null && isBlank(authority.reviewer))
+      || (authority.approver !== null && isBlank(authority.approver))
+      || typeof authority.access_policy !== "string" || !POLICY_ID_RE.test(authority.access_policy)
+    ) return deny("DENY_MEMORY_ADMISSION_AUTHORITY", "Memory admission authority is not effective or is not exactly bound", "authority");
+    const authorityActors = [authority.producer, authority.reviewer, authority.approver].filter((actor) => actor !== null);
+    if (
+      new Set(authorityActors).size !== authorityActors.length
+      || (query.layer === "project" && authority.approver === null)
+    ) return deny("DENY_MEMORY_ADMISSION_SOD", "Memory admission authority violates separation of duties", "authority");
+
+    let record;
+    try {
+      record = {
+        ...callerRecord,
+        actor_id: bindings.identity.actor_id,
+        access_policy: authority.access_policy
+      };
+      record.content_hash = canonicalFingerprint({ ...record, layer: query.layer });
+    } catch {
+      return deny("DENY_MALFORMED_REQUEST", "Memory admission record cannot be fingerprinted safely", "request");
+    }
+    let upstream;
+    try {
+      upstream = detached(await admitMemory({
+        layer: query.layer,
+        record,
+        admission: {
+          producer: authority.producer,
+          ...(authority.reviewer === null ? {} : { reviewer: authority.reviewer }),
+          ...(authority.approver === null ? {} : { approver: authority.approver })
+        }
+      }));
+    } catch {
+      upstream = null;
+    }
+    let admittedRecordIsBound = false;
+    try {
+      validateContract("memoryRecord", upstream?.record);
+      admittedRecordIsBound = (
+        upstream.admitted_at === upstream.record.admitted_at
+        && canonicalFingerprint(upstream.record) === canonicalFingerprint({
+          ...record,
+          layer: query.layer,
+          admitted_at: upstream.admitted_at
+        })
+      );
+    } catch {
+      admittedRecordIsBound = false;
+    }
+    if (
+      !hasExactKeys(upstream, ADMIT_ALLOW_KEYS)
+      || upstream.decision !== "ALLOW" || upstream.code !== "ADMITTED"
+      || typeof upstream.admitted_at !== "string" || !Number.isFinite(Date.parse(upstream.admitted_at))
+      || !admittedRecordIsBound || !appendReceiptIsBound(upstream.append, record, query.layer, upstream.admitted_at)
+    ) {
+      return deny(
+        "DENY_MEMORY_ADMISSION",
+        "Memory gateway did not admit the authority-bound record",
+        "gateway",
+        isPlainObject(upstream) && typeof upstream.code === "string" ? upstream.code : undefined
+      );
+    }
+    return deepFreeze({
+      ...upstream,
+      identity_decision_id: bindings.identity.decision_id,
+      scope_decision_id: bindings.scope.decision_id,
+      authority_decision_id: authority.decision_id
+    });
+  }
+
+  function retrieve(request) {
+    const query = snapshotClosed(request, RETRIEVE_REQUEST_KEYS, ["project_id", "layer"]);
+    if (
+      query === null || isBlank(query.project_id) || !LAYERS.includes(query.layer)
+      || (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > MAX_LIMIT))
+      || (query.cursor !== undefined && (
+        typeof query.cursor !== "string" || query.cursor.length < 1 || query.cursor.length > MAX_CURSOR_LENGTH
+        || !/^[A-Za-z0-9_-]+$/.test(query.cursor)
+      ))
+    ) return deny("DENY_MALFORMED_REQUEST", "Memory retrieval request is not a closed valid object", "request");
+
+    const bindings = resolveBindings(OPERATIONS.RETRIEVE, query.project_id, query.layer);
+    if (bindings.denial) return bindings.denial;
+    const authorityRequest = deepFreeze({
+      ...bindings.base,
+      actor_id: bindings.identity.actor_id,
+      identity_decision_id: bindings.identity.decision_id,
+      scope_decision_id: bindings.scope.decision_id
+    });
+    let authority;
+    try {
+      authority = snapshotClosed(resolveRetrievalAuthority(authorityRequest), RETRIEVAL_AUTHORITY_KEYS);
+    } catch {
+      authority = null;
+    }
+    const permittedPolicies = authority === null ? null : snapshotPolicyIds(authority.permitted_access_policies);
+    if (
+      authority === null || authority.decision !== "ALLOW" || isBlank(authority.decision_id)
+      || authority.actor_id !== bindings.identity.actor_id || authority.project_id !== query.project_id
+      || authority.layer !== query.layer
+      || !CLASSIFICATIONS.includes(authority.classification_clearance)
+      || permittedPolicies === null
+    ) return deny("DENY_MEMORY_RETRIEVAL_AUTHORITY", "Memory retrieval authority is not effective or is not exactly bound", "authority");
+
+    const cursorBindings = {
+      actorId: bindings.identity.actor_id,
+      projectId: query.project_id,
+      layer: query.layer,
+      authorityDecisionId: authority.decision_id,
+      classificationClearance: authority.classification_clearance,
+      permittedPolicies
+    };
+    const clearanceRank = CLASSIFICATIONS.indexOf(authority.classification_clearance);
+    const canRead = (entry) => (
+      CLASSIFICATIONS.indexOf(entry.record.classification) <= clearanceRank
+      && permittedPolicies.includes(entry.record.access_policy)
+    );
+    const seenCursors = new Set();
+    let scanned = 0;
+    let scanCursor = query.cursor === undefined
+      ? null
+      : decodeAccessCursor(cursorMacKeySnapshot, query.cursor, cursorBindings);
+    if (query.cursor !== undefined && scanCursor === null) {
+      return deny("DENY_MALFORMED_REQUEST", "Memory access cursor is invalid for the current authority profile", "request");
+    }
+    let lastRetrievedAt = null;
+
+    function fetchOne(cursor) {
+      if (scanned >= MAX_ACCESS_SCAN) return { ok: false, reason: "access scan limit exceeded" };
+      const cursorIdentity = cursor ?? "<start>";
+      if (seenCursors.has(cursorIdentity)) return { ok: false, reason: "non-progressing access scan" };
+      seenCursors.add(cursorIdentity);
+      scanned += 1;
+      let page;
+      try {
+        page = detached(retrieveMemory({
+          project_id: query.project_id,
+          scope_project_id: bindings.scope.project_id,
+          layer: query.layer,
+          limit: 1,
+          ...(cursor === null ? {} : { cursor })
+        }));
+      } catch {
+        page = null;
+      }
+      let pageIsBound = false;
+      try {
+        const retrievedMs = Date.parse(page?.retrieved_at);
+        pageIsBound = Array.isArray(page?.records)
+          && page.records.length <= 1
+          && Number.isFinite(retrievedMs)
+          && page.records.every((entry) => {
+            if (!hasExactKeys(entry, RECORD_ENVELOPE_KEYS) || entry.data_untrusted !== true) return false;
+            validateContract("memoryRecord", entry.record);
+            const { admitted_at: admittedAt, content_hash: contentHash, ...hashBody } = entry.record;
+            void admittedAt;
+            return entry.record.project_id === query.project_id
+              && entry.record.layer === query.layer
+              && canonicalFingerprint(hashBody) === contentHash
+              && Date.parse(entry.record.valid_from) <= retrievedMs
+              && retrievedMs < Date.parse(entry.record.valid_until);
+          });
+      } catch {
+        pageIsBound = false;
+      }
+      if (
+        !hasExactKeys(page, RETRIEVE_ALLOW_KEYS)
+        || page.decision !== "ALLOW" || page.code !== "RETRIEVED"
+        || typeof page.retrieved_at !== "string" || !Number.isFinite(Date.parse(page.retrieved_at))
+        || !pageIsBound
+        || (page.next_cursor !== null && (
+          typeof page.next_cursor !== "string" || page.next_cursor.length < 1
+          || page.next_cursor.length > MAX_UPSTREAM_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(page.next_cursor)
+          || page.next_cursor === cursor
+        ))
+      ) return { ok: false, upstreamCode: isPlainObject(page) && typeof page.code === "string" ? page.code : undefined };
+      return { ok: true, page };
+    }
+
+    const requestedLimit = query.limit ?? DEFAULT_LIMIT;
+    const authorizedRecords = [];
+    while ((authorizedRecords.length < requestedLimit && scanCursor !== null) || (scanned === 0 && scanCursor === null)) {
+      const fetched = fetchOne(scanCursor);
+      if (!fetched.ok) {
+        return deny("DENY_MEMORY_RETRIEVAL", "Memory access-aware scan failed closed", "gateway", fetched.upstreamCode);
+      }
+      lastRetrievedAt = fetched.page.retrieved_at;
+      for (const entry of fetched.page.records) if (canRead(entry)) authorizedRecords.push(entry);
+      scanCursor = fetched.page.next_cursor;
+      if (scanCursor === null) break;
+    }
+
+    let nextCursor = null;
+    while (authorizedRecords.length === requestedLimit && scanCursor !== null) {
+      const candidateCursor = scanCursor;
+      const fetched = fetchOne(scanCursor);
+      if (!fetched.ok) {
+        return deny("DENY_MEMORY_RETRIEVAL", "Memory access-aware lookahead failed closed", "gateway", fetched.upstreamCode);
+      }
+      lastRetrievedAt = fetched.page.retrieved_at;
+      if (fetched.page.records.some(canRead)) {
+        nextCursor = candidateCursor;
+        break;
+      }
+      scanCursor = fetched.page.next_cursor;
+    }
+    const finalRetrievedMs = Date.parse(lastRetrievedAt);
+    if (
+      !Number.isFinite(finalRetrievedMs)
+      || authorizedRecords.some((entry) => !(
+        Date.parse(entry.record.valid_from) <= finalRetrievedMs
+        && finalRetrievedMs < Date.parse(entry.record.valid_until)
+      ))
+    ) return deny("DENY_MEMORY_RETRIEVAL", "Memory records changed temporal status during access scan", "gateway");
+
+    const outwardCursor = nextCursor === null ? null : encodeAccessCursor(cursorMacKeySnapshot, nextCursor, cursorBindings);
+    if (nextCursor !== null && outwardCursor === null) {
+      return deny("DENY_MEMORY_RETRIEVAL", "Memory access cursor could not be bound safely", "gateway");
+    }
+    return deepFreeze({
+      decision: "ALLOW",
+      code: "RETRIEVED",
+      retrieved_at: lastRetrievedAt,
+      records: authorizedRecords,
+      next_cursor: outwardCursor,
+      actor_id: bindings.identity.actor_id,
+      identity_decision_id: bindings.identity.decision_id,
+      scope_decision_id: bindings.scope.decision_id,
+      authority_decision_id: authority.decision_id
+    });
+  }
+
+  return Object.freeze({ admit, retrieve });
+}

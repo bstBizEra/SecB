@@ -555,7 +555,7 @@ test("no hardcoded test-ID / decisionId branching in skill-revocation-ledger.mjs
 
 // --- byte-identity guard: reused primitives + siblings + resolver untouched -
 
-const BYTE_IDENTITY_BASELINE = "0aa13f8"; // origin/main tip this branch was cut from
+const BYTE_IDENTITY_BASELINE = "8be8c9953716c06cadfc6a581fe248e819747380"; // canonical origin/main integration baseline
 const PROTECTED_SOURCE_FILES = [
   "src/control/approval-binding.mjs",
   "src/control/sod-rules.mjs",

@@ -19,6 +19,7 @@
     "provenance",
     "valid_from",
     "valid_until",
+    "access_policy",
     "retention_policy",
     "admitted_at",
     "content_hash"
@@ -46,6 +47,7 @@
     },
     "valid_from": {"type": "string", "format": "date-time"},
     "valid_until": {"type": "string", "format": "date-time"},
+    "access_policy": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
     "retention_policy": {"type": "string", "minLength": 1},
     "admitted_at": {"type": "string", "format": "date-time"},
     "supersedes": {"type": "string", "minLength": 1},

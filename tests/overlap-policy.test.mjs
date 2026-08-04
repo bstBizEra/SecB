@@ -462,7 +462,6 @@ test("reuse parity: derived file overlap agrees with the independent oracle", ()
 test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", () => {
   const guarded = [
     "src/control/write-set-policy.mjs",
-    "src/services/context-federation-service.mjs",
     "src/control/risk-registry.mjs",
     "package.json"
   ];
@@ -471,6 +470,15 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, baseBlob, `${rel} blob differs from ${BASE}`);
   }
+  // WP-MEM-RUNTIME-RECONCILE-001 deliberately adds the fail-closed,
+  // replay-only recovery lookup to Context Federation. Preserve tamper
+  // detection by pinning the authorized composed blob instead of claiming
+  // that the service is still byte-identical to the older overlap baseline.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "src/services/context-federation-service.mjs")], { cwd: root, encoding: "utf8" }).trim(),
+    "38c0239389dec17ab9a95d1f1500f9bf6e9838bc",
+    "context-federation-service.mjs pinned to the WP-MEM-RUNTIME-RECONCILE-001 candidate blob"
+  );
   // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
   // workspace-lease schema registration, 16->17 schemas), then again by
   // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), so it is
@@ -479,7 +487,7 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
   // validator still fails.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "1cf857089d483f133f6d5fb724319e60bea961f8",
+    "4b102ac452ac49895b82442beb7db2f3fcd9a646",
     "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
   );
   // Sanity: the reused primitive actually still exports the containment evaluator

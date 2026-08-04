@@ -33,6 +33,11 @@ export {
 } from "./ledger/durable-ledger.mjs";
 
 export {
+  DurableHeadAnchor,
+  DurableHeadAnchorError
+} from "./ledger/durable-head-anchor.mjs";
+
+export {
   EventLedger,
   EvidenceLedger
 } from "./ledger/governed-ledgers.mjs";
@@ -100,6 +105,11 @@ export {
   ContextFederationError,
   ContextFederationService
 } from "./services/context-federation-service.mjs";
+
+export {
+  DurableContextReplayAdapter,
+  DurableContextReplayError
+} from "./services/durable-context-replay-adapter.mjs";
 // note: ContextFederationService exposes verifyReceipt (read-only) and
 // consumeReceipt (ledgers a CONSUME); composing services use verifyReceipt
 // for offer-time provenance gates.
@@ -107,6 +117,62 @@ export {
 export {
   runRetrieval
 } from "./services/context-retrieval-policy.mjs";
+
+export {
+  createMemoryContextSourceService,
+  MemoryContextSourceConfigurationError
+} from "./services/memory-context-source-service.mjs";
+
+export {
+  createMemoryGateway,
+  MemoryGatewayConfigurationError
+} from "./services/memory-gateway-service.mjs";
+
+export {
+  createMemoryAuthorityGateway,
+  MemoryAuthorityGatewayConfigurationError
+} from "./services/memory-authority-gateway-service.mjs";
+
+export {
+  createMemoryCandidateProvider,
+  MemoryCandidateProviderConfigurationError
+} from "./services/memory-candidate-provider.mjs";
+
+export {
+  createSqliteMemoryRecordStore,
+  SqliteMemoryStoreError
+} from "./services/sqlite-memory-record-store.mjs";
+
+export {
+  MemoryLifecycleLedger,
+  MEMORY_LIFECYCLE_EVENT_TYPES
+} from "./ledger/memory-lifecycle-ledger.mjs";
+
+export { DurableAnchoredLedger } from "./ledger/durable-anchored-ledger.mjs";
+
+export {
+  createMemoryLifecycleService,
+  MemoryLifecycleConfigurationError
+} from "./services/memory-lifecycle-service.mjs";
+
+export {
+  createMemoryLifecycleBatchResolver,
+  MemoryLifecycleBatchResolverConfigurationError,
+  MemoryLifecycleBatchResolverError
+} from "./services/memory-lifecycle-batch-resolver.mjs";
+
+export {
+  createMemoryLifecycleBoundaryCoordinator,
+  MemoryLifecycleBoundaryError
+} from "./services/memory-lifecycle-boundary-coordinator.mjs";
+
+export {
+  createMemoryLifecycleUnifiedService,
+  MemoryLifecycleUnifiedConfigurationError,
+  verifyMemoryContextLifecycleBinding
+} from "./services/memory-lifecycle-unified-service.mjs";
+
+export { createMemoryLifecycleRuntimeComposition } from "./services/memory-lifecycle-runtime-composition.mjs";
 
 export {
   DATA_CLASS_ORDER,

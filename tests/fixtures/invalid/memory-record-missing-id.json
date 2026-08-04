@@ -15,6 +15,7 @@
   },
   "valid_from": "2026-07-21T10:00:00Z",
   "valid_until": "2026-10-01T00:00:00Z",
+  "access_policy": "project-members",
   "retention_policy": "retain-12-months",
   "admitted_at": "2026-07-21T10:00:05Z",
   "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

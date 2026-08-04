@@ -175,6 +175,21 @@ export class ContextFederationService {
     return frozenClone({ ...structuredClone(prior.result), replayed: true });
   }
 
+  // Replay-only issuance lookup for recovery callers. This method shares the
+  // exact ISSUE fingerprint and idempotency record used by issueReceipt but
+  // has no fall-through issuance path: a miss denies and mutates nothing.
+  replayReceipt(request) {
+    if (!request || typeof request !== "object" || Array.isArray(request)) {
+      deny("DENY_MALFORMED_REQUEST", "Replay request must be an object");
+    }
+    const unknown = Object.keys(request).filter((field) => !ISSUE_KEYS.includes(field));
+    if (unknown.length) deny("DENY_MALFORMED_REQUEST", `Unknown replay fields: ${unknown.join(", ")}`);
+    const fp = fingerprint({ op: "ISSUE", request: { ...request, idempotencyKey: undefined } });
+    const replay = this.#checkIdempotency(request.idempotencyKey, fp);
+    if (replay === null) deny("DENY_CONTEXT_REPLAY_MISS", "No prior Context issuance matches this idempotency identity");
+    return replay;
+  }
+
   issueReceipt(request) {
     if (!request || typeof request !== "object" || Array.isArray(request)) deny("DENY_MALFORMED_REQUEST", "Issue request must be an object");
     const unknown = Object.keys(request).filter((k) => !ISSUE_KEYS.includes(k));
