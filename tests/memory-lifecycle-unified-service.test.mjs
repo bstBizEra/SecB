@@ -554,7 +554,8 @@ test("crash after Context issuance recovers original binding before any new life
   assert.equal(recovered.replayed, true);
   assert.equal(recovered.sourceStateBinding.binding_status, "COMMITTED");
   assert.equal(recovered.sourceStateBinding.binding_fingerprint, bindingA);
-  assert.deepEqual(fixture.calls, callsBeforeRecovery);
+  const callsAfterRecovery = { ...callsBeforeRecovery, fence: callsBeforeRecovery.fence + 1 };
+  assert.deepEqual(fixture.calls, callsAfterRecovery);
   assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "COMMITTED"]);
   assert.equal(verifyMemoryContextLifecycleBinding(recovered.sourceStateBinding,
     binding.records, trustedAnchor(binding.ledger)), true);
@@ -562,7 +563,7 @@ test("crash after Context issuance recovers original binding before any new life
   const replay = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
   assert.equal(replay.replayed, true);
   assert.deepEqual(replay.sourceStateBinding, recovered.sourceStateBinding);
-  assert.deepEqual(fixture.calls, callsBeforeRecovery);
+  assert.deepEqual(fixture.calls, callsAfterRecovery);
   assert.equal(binding.records.length, 2);
   assert.equal(contextCalls, 3);
 });
@@ -602,7 +603,7 @@ test("pre-Context crash aborts A read-only and requires fresh lifecycle evaluati
 
   const reconciled = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
   assert.equal(reconciled.code, "DENY_UNIFY_CONTEXT_NOT_ISSUED");
-  assert.deepEqual(fixture.calls, callsAfterFirst);
+  assert.deepEqual(fixture.calls, { ...callsAfterFirst, fence: callsAfterFirst.fence + 1 });
   assert.equal(contextCalls, 1);
 
   const issued = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
@@ -694,6 +695,39 @@ test("a post-callback lifecycle fence rejection never exposes the issued receipt
   assert.equal(quarantined.recovery_required, true);
   assert.equal(federationCalls, 1);
   assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "ABORTED"]);
+});
+
+test("failed post-fence ABORT persistence cannot recover PREPARED without a fresh authoritative fence", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor",
+    authorityRef: "auth", baseline: "base", idempotencyKey: "idem-post-fence-abort-fail" };
+  let fenceCalls = 0;
+  let issueCalls = 0;
+  let replayCalls = 0;
+  const binding = bindingLedgerFixture({ onAppend(entry) {
+    if (entry.payload.status === "ABORTED") throw new Error("simulated quarantine persistence failure");
+  } });
+  const lifecycleResolver = { async withIssuanceFence(request, callback) {
+    fenceCalls += 1;
+    const batch = { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
+      evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(),
+      decisions: request.records.map((item) => effectiveDecision(request, item)) };
+    callback(batch);
+    throw Object.assign(new Error("final lifecycle fence rejected"), { code: "MEMORY_BOUNDARY_HEAD_CHANGED" });
+  } };
+  const contextFederation = {
+    issueReceipt(request) { issueCalls += 1; return { receiptId: request.document.receipt_id,
+      projectId: request.document.project_id, version: 1, state: "ISSUED", boundWpVersion: 1,
+      expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false }; },
+    replayReceipt(request) { replayCalls += 1; return { receiptId: request.document.receipt_id,
+      projectId: request.document.project_id, version: 1, state: "ISSUED", boundWpVersion: 1,
+      expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: true }; }
+  };
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger, lifecycleResolver, contextFederation });
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED"]);
+  assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED"]);
+  assert.deepEqual({ fenceCalls, issueCalls, replayCalls }, { fenceCalls: 2, issueCalls: 1, replayCalls: 1 });
 });
 
 test("clock movement after Context mutation cannot convert ISSUED into a freshness denial", async () => {

@@ -191,18 +191,26 @@ export class MemoryLifecycleLedger extends DurableLedger {
 
   #acquireBoundary() {
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      const candidatePath = `${this.#boundaryPath}.candidate-${process.pid}-${randomUUID()}`;
       try {
-        mkdirSync(this.#boundaryPath);
-        writeFileSync(`${this.#boundaryPath}/owner.json`, JSON.stringify({ pid: process.pid, nonce: randomUUID() }), { flag: "wx" });
+        mkdirSync(candidatePath);
+        writeFileSync(`${candidatePath}/owner.json`, JSON.stringify({ pid: process.pid, nonce: randomUUID() }), { flag: "wx" });
+        renameSync(candidatePath, this.#boundaryPath);
         return;
       } catch (cause) {
-        if (cause?.code !== "EEXIST") {
-          rmSync(this.#boundaryPath, { recursive: true, force: true });
+        rmSync(candidatePath, { recursive: true, force: true });
+        if (!existsSync(this.#boundaryPath)) {
           throw new LedgerError(cause?.code ?? "LIFECYCLE_BOUNDARY_UNAVAILABLE", "memory lifecycle boundary could not be acquired");
         }
         let owner;
-        try { owner = JSON.parse(readFileSync(`${this.#boundaryPath}/owner.json`, "utf8")); } catch {
-          throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary ownership is not yet readable");
+        try { owner = JSON.parse(readFileSync(`${this.#boundaryPath}/owner.json`, "utf8")); }
+        catch (ownerCause) {
+          if (ownerCause?.code !== "ENOENT") {
+            throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary ownership is malformed or unreadable");
+          }
+          const ownerlessPath = `${this.#boundaryPath}.ownerless-${process.pid}-${randomUUID()}`;
+          try { renameSync(this.#boundaryPath, ownerlessPath); rmSync(ownerlessPath, { recursive: true, force: true }); continue; }
+          catch { throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "ownerless lifecycle boundary could not be reclaimed atomically"); }
         }
         if (!Number.isSafeInteger(owner?.pid) || owner.pid < 1) {
           throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary ownership is malformed");

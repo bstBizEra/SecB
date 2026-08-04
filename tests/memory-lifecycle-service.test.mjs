@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -262,6 +262,18 @@ test("a late async descendant cannot reuse a revoked lifecycle boundary token", 
     assert.equal(await lateTask, "LIFECYCLE_BOUNDARY_BUSY");
     assert.equal(ledger.verify().count, 0);
   });
+});
+
+test("an ownerless legacy boundary is reclaimed before a new atomic lease", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-ownerless-boundary-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const filePath = join(directory, "lifecycle.jsonl");
+  const anchorPath = join(directory, "lifecycle-head.json");
+  const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: INTEGRITY_KEY, initialize: true });
+  const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: anchor });
+  mkdirSync(`${filePath}.boundary.lock`);
+  assert.equal(await ledger.withBoundaryLease(async () => "RECOVERED"), "RECOVERED");
 });
 
 function resolution(overrides = {}) {

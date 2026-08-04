@@ -234,15 +234,19 @@ function bindingLedgerSemantics(records) {
     const prepared = preparedEvents[0];
     const committed = committedEvents[0];
     const aborted = abortedEvents[0];
-    const preparedPayload = exactSnapshot(prepared.payload, ["binding", "status", "context_issue_request"]);
+    const preparedPayload = exactSnapshot(prepared.payload, ["binding", "status", "context_issue_request", "lifecycle_batch_request"]);
     const committedPayload = committed === undefined ? null
       : exactSnapshot(committed.payload, ["binding", "status", "context_result_fingerprint"]);
     const abortedPayload = aborted === undefined ? null : exactSnapshot(aborted.payload, ["binding", "status", "reason"]);
     const contextIssueRequest = preparedPayload === null ? null : exactSnapshot(preparedPayload.context_issue_request,
       [...ISSUE_KEYS, "candidateSources"], ["document", "actorId", "authorityRef", "baseline", "idempotencyKey", "candidateSources"]);
+    const lifecycleBatchRequest = preparedPayload === null ? null : exactSnapshot(preparedPayload.lifecycle_batch_request,
+      ["project_id", "layer", "as_of", "prior_batch_fingerprint", "prior_state_digest", "records"]);
     const issueInput = contextIssueRequest === null ? null
       : Object.fromEntries(ISSUE_KEYS.filter((key) => Object.hasOwn(contextIssueRequest, key)).map((key) => [key, contextIssueRequest[key]]));
-    if (contextIssueRequest === null || !isPlainObject(contextIssueRequest.document)
+    if (contextIssueRequest === null || lifecycleBatchRequest === null || !Array.isArray(lifecycleBatchRequest.records)
+      || canonicalFingerprint(lifecycleBatchRequest) !== prepared.core.lifecycle_batch_fingerprint
+      || !isPlainObject(contextIssueRequest.document)
       || prepared.core.context_receipt_fingerprint !== contextIssueRequest.document.content_hash
       || prepared.core.context_intent_fingerprint !== canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: issueInput })
       || prepared.core.context_issue_fingerprint !== canonicalFingerprint({ op: "ISSUE",
@@ -263,7 +267,7 @@ function bindingLedgerSemantics(records) {
         || event.entry.idempotencyKey !== JSON.stringify([event.entry.projectId, contextIssueRequest.document.receipt_id,
           fingerprint, event.payload.status])) return null;
     }
-    result.set(fingerprint, { events, prepared, committed, aborted, contextIssueRequest });
+    result.set(fingerprint, { events, prepared, committed, aborted, contextIssueRequest, lifecycleBatchRequest });
   }
   const reservations = new Map();
   for (const record of records) {
@@ -447,7 +451,7 @@ export function createMemoryLifecycleUnifiedService({
       ledger_record_hash: committed.recordHash, replayed: false });
   }
 
-  function reconcileExistingBinding(retrieval, issueInput) {
+  async function reconcileExistingBinding(retrieval, issueInput) {
     const records = readVerifiedLedger();
     if (records === null) return recoveryRequired("binding ledger chain evidence is invalid or unavailable");
     const intentFingerprint = canonicalFingerprint({ op: "UNIFY_CONTEXT_INTENT", request: issueInput });
@@ -464,7 +468,7 @@ export function createMemoryLifecycleUnifiedService({
     }
     if (active.length === 0) return null;
     if (active.length !== 1) return recoveryRequired("multiple lifecycle bindings claim the exact Context issuance identity");
-    const { prepared, committed, contextIssueRequest } = active[0];
+    const { prepared, committed, contextIssueRequest, lifecycleBatchRequest } = active[0];
     if (prepared.core.context_intent_fingerprint !== intentFingerprint) {
       return recoveryRequired("the reserved Context receipt/idempotency identity conflicts with this issuance intent");
     }
@@ -474,18 +478,12 @@ export function createMemoryLifecycleUnifiedService({
       || canonicalFingerprint({ op: "ISSUE", request: { ...contextIssueRequest, idempotencyKey: undefined } }) !== binding.context_issue_fingerprint) {
       return recoveryRequired("prepared binding does not contain its exact original Context request");
     }
-    const rawIssued = syncCall(() => replayContextReceipt(deepFreeze(structuredClone(contextIssueRequest))));
-    const issued = rawIssued.ok ? snapshotIssued(rawIssued.value, retrieval.project_id, issueInput.document.receipt_id) : null;
-    if (issued === null) {
-      if (committed !== undefined) return recoveryRequired("committed binding could not replay its original Context receipt");
-      const aborted = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
-        status: "ABORTED", extra: { reason: "RECOVERY_REPLAY_MISS" } });
-      return aborted === null ? recoveryRequired("failed recovery remains an unresolved PREPARED binding")
-        : deny("DENY_UNIFY_CONTEXT_NOT_ISSUED", "replay-only Context recovery found no prior issuance; fresh lifecycle evaluation is required", "binding-recovery");
-    }
-    const resultFingerprint = normalizedContextResultFingerprint(issued);
-    if (issued.replayed !== true) return recoveryRequired("recovery operation was not a replay-only Context result");
     if (committed !== undefined) {
+      const rawIssued = syncCall(() => replayContextReceipt(deepFreeze(structuredClone(contextIssueRequest))));
+      const issued = rawIssued.ok ? snapshotIssued(rawIssued.value, retrieval.project_id, issueInput.document.receipt_id) : null;
+      if (issued === null) return recoveryRequired("committed binding could not replay its original Context receipt");
+      const resultFingerprint = normalizedContextResultFingerprint(issued);
+      if (issued.replayed !== true) return recoveryRequired("recovery operation was not a replay-only Context result");
       const committedPayload = exactSnapshot(committed.payload, ["binding", "status", "context_result_fingerprint"]);
       if (committedPayload === null || committedPayload.status !== "COMMITTED"
         || committedPayload.context_result_fingerprint !== resultFingerprint) {
@@ -493,10 +491,64 @@ export function createMemoryLifecycleUnifiedService({
       }
       return deepFreeze({ ...issued, sourceStateBinding: makeSourceStateBinding(binding, committed.record) });
     }
+
+    const recoveryStart = trustedInstant(now);
+    if (recoveryStart === null) return recoveryRequired("trusted recovery fence instant is unavailable");
+    const recoveryBatchRequest = { ...lifecycleBatchRequest, as_of: recoveryStart.iso };
+    let callbackInvoked = false;
+    let callbackActive = true;
+    let callbackResult = null;
+    let pendingReplay = null;
+    const callback = (rawBatch) => {
+      if (!callbackActive || callbackInvoked) return recoveryRequired("recovery fence callback is unavailable");
+      callbackInvoked = true;
+      const observed = trustedInstant(now);
+      const recoveredBatch = observed === null ? null : snapshotEffectiveBatch(rawBatch, recoveryBatchRequest,
+        recoveryBatchRequest.records, recoveryStart.ms, observed.ms, freshnessMs);
+      if (recoveredBatch === null || lifecycleStateDigest({ ...recoveredBatch,
+        batch_fingerprint: binding.lifecycle_batch_fingerprint, evaluated_at: binding.evaluated_at }) !== binding.lifecycle_state_digest) {
+        callbackResult = recoveryRequired("prepared binding lifecycle state is no longer exact under the recovery fence");
+        return callbackResult;
+      }
+      const rawIssued = syncCall(() => replayContextReceipt(deepFreeze(structuredClone(contextIssueRequest))));
+      const issued = rawIssued.ok ? snapshotIssued(rawIssued.value, retrieval.project_id, issueInput.document.receipt_id) : null;
+      if (issued === null) {
+        const aborted = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
+          status: "ABORTED", extra: { reason: "RECOVERY_REPLAY_MISS" } });
+        callbackResult = aborted === null ? recoveryRequired("failed recovery remains an unresolved PREPARED binding")
+          : deny("DENY_UNIFY_CONTEXT_NOT_ISSUED", "replay-only Context recovery found no prior issuance; fresh lifecycle evaluation is required", "binding-recovery");
+        return callbackResult;
+      }
+      if (issued.replayed !== true) {
+        callbackResult = recoveryRequired("recovery operation was not a replay-only Context result");
+        return callbackResult;
+      }
+      pendingReplay = { issued, resultFingerprint: normalizedContextResultFingerprint(issued) };
+      callbackResult = deepFreeze({ decision: "ALLOW", code: "MEMORY_CONTEXT_RECOVERY_PENDING",
+        context_result_fingerprint: pendingReplay.resultFingerprint });
+      return callbackResult;
+    };
+    let timer;
+    const fenceReturn = Promise.resolve()
+      .then(() => runIssuanceFence(deepFreeze(structuredClone(recoveryBatchRequest)), callback))
+      .then((value) => ({ kind: "return", value }), () => ({ kind: "failure" }));
+    const fenceOutcome = await Promise.race([fenceReturn,
+      new Promise((resolve) => { timer = setTimeout(() => resolve({ kind: "timeout" }), timeoutMs); })]);
+    clearTimeout(timer);
+    callbackActive = false;
+    if (fenceOutcome.kind !== "return" || callbackInvoked !== true || callbackResult === null) {
+      return recoveryRequired("prepared binding recovery fence did not complete authoritatively");
+    }
+    if (callbackResult.decision === "DENY") return callbackResult;
+    const fenced = exactSnapshot(fenceOutcome.value, ["decision", "code", "context_result_fingerprint"]);
+    if (fenced === null || fenced.decision !== "ALLOW" || fenced.code !== "MEMORY_CONTEXT_RECOVERY_PENDING"
+      || pendingReplay === null || canonicalFingerprint(fenced) !== canonicalFingerprint(callbackResult)) {
+      return recoveryRequired("prepared binding recovery fence returned an invalid disposition");
+    }
     const committedReceipt = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
-      status: "COMMITTED", extra: { context_result_fingerprint: resultFingerprint } });
+      status: "COMMITTED", extra: { context_result_fingerprint: pendingReplay.resultFingerprint } });
     if (committedReceipt === null) return recoveryRequired("replayed Context receipt remains quarantined until its binding is independently COMMITTED");
-    return deepFreeze({ ...issued, sourceStateBinding: makeSourceStateBinding(binding, committedReceipt) });
+    return deepFreeze({ ...pendingReplay.issued, sourceStateBinding: makeSourceStateBinding(binding, committedReceipt) });
   }
 
   async function retrieveCandidateSources(request) {
@@ -696,7 +748,7 @@ export function createMemoryLifecycleUnifiedService({
       return deny("DENY_UNIFY_ISSUE_REQUEST", "Context Receipt contract or seal is invalid", "request");
     }
     let recovered;
-    try { recovered = reconcileExistingBinding(retrieval, issueInput); }
+    try { recovered = await reconcileExistingBinding(retrieval, issueInput); }
     catch { return recoveryRequired("binding recovery evidence could not be safely evaluated"); }
     if (recovered !== null) return recovered;
     const unified = await retrieveCandidateSources(retrieval);
@@ -748,7 +800,7 @@ export function createMemoryLifecycleUnifiedService({
       };
       binding.binding_fingerprint = canonicalFingerprint(binding);
       const persist = (status, extra = {}) => persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval, status, extra });
-      const prepared = persist("PREPARED");
+      const prepared = persist("PREPARED", { lifecycle_batch_request: finalBatchRequest });
       if (prepared === null) {
         callbackResult = deny("DENY_UNIFY_BINDING_LEDGER", "durable lifecycle binding preparation failed", "binding-ledger");
         return callbackResult;
