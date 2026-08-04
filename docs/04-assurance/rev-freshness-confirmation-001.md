@@ -123,6 +123,42 @@ because `#137` is subject to it.
 a named subset.** The starting position was ten pull requests presenting as an
 unreviewed backlog.
 
+## Addendum, 2026-08-04 — `#60` measured, and the earlier characterisation corrected
+
+This record called `#60` *"the weakest row in the table, not the mildest"* and
+`"43 lines of different work that no located verdict covers"`. That was counted,
+not measured, and the implication was wrong.
+
+Stripping comments and string literals from all three files it proposes:
+
+    logic identical   raw-identical: no    src/live/event-family-policy.mjs
+    logic identical   raw-identical: no    tests/p0-19-self-pilot.test.mjs
+    logic identical   raw-identical: no    tests/replay-assembler.test.mjs
+    control - stripper detects a logic change: FIRES
+
+**`#60` changes no executable logic against `main`.** Its 34-line source delta is
+a disclosure comment recording `N4` — a Proxy `getOwnPropertyDescriptor` forge
+one structural layer below the `N3` fix, which reading N named properties off an
+adversarial Proxy can never be made atomic against. The two test files are the
+re-pins that comment forces.
+
+The comment cites, by filename, the very review that is `#60`'s verdict as having
+found `N4`. **Like `#69`, the post-verdict work exists because of the review**,
+and the operator already dispositioned `N4` on `main` at `abb6e83`.
+
+Corrected status: `FRESH_IN_CODE`. `#60` does not need re-scoping and does not
+need a review. What remains true is narrower and still worth stating: its verdict
+names `5b93086`, which is an ancestor of `main`, so an approver reading the record
+should understand it as approving work that already merged, with the open
+remainder being that verdict's own disclosure comment.
+
+Revised totals: **five of nine need no reviewer attention** — `#60`, `#69`, `#73`,
+`#88`, `#110`. Three need a named subset — `#68`, `#91`, `#94`. One is `#137`.
+
+The error is left visible above rather than edited away. Counting a diff is not
+measuring it, and this record spent a section telling reviewers not to trust
+counts before doing exactly that.
+
 ## Limitations
 
 - **`FRESH` means the proposal is unchanged, not that the change is correct.**
