@@ -159,6 +159,95 @@ The error is left visible above rather than edited away. Counting a diff is not
 measuring it, and this record spent a section telling reviewers not to trust
 counts before doing exactly that.
 
+## Addendum 2, 2026-08-04 — mergeability was never checked, and two of these cannot merge
+
+This record recommended `#88`, `#110`, `#73`, `#69` and `#60` be merged on their
+existing verdicts. **It never checked whether they can merge.** Two cannot:
+
+    #60   MERGEABLE    CLEAN
+    #68   CONFLICTING  DIRTY
+    #69   CONFLICTING  DIRTY
+    #73   MERGEABLE    CLEAN
+    #88   MERGEABLE    CLEAN
+    #91   MERGEABLE    CLEAN
+    #94   MERGEABLE    CLEAN
+    #110  MERGEABLE    CLEAN
+    #137  MERGEABLE    CLEAN
+
+**That data was collected in this session's first scan, printed as `DIRTY` for
+both, and then not carried into any conclusion.** Freshness and mergeability are
+different questions and only one of them was answered.
+
+### What the two conflicts are
+
+Both conflict in exactly one file, and it is the same file: `tests/approval-binding.test.mjs`.
+
+`#68`:
+
+    <<<<<<< origin/main
+    // src/control/sod-rules.mjs is intentionally EXCLUDED here by
+    // mod-gov-s1-sod-rules-hardening-fix-001 ...
+    =======
+    // src/control/policy-decision-point.mjs is intentionally EXCLUDED here by
+    // mod-gov-s3-pdp-grant-shape-fix-001 ...
+    >>>>>>>
+
+**Two branches each removing a different file from the same byte-identity
+guard.** `main` already landed one exclusion; `#68` adds a second at the same
+place. `#69`'s conflict is the same shape, against a disclosed-divergence
+assertion `main` gained separately.
+
+`tests/approval-binding.test.mjs` is inside BOTH pull requests' reviewed
+proposals — checked, not assumed. So resolving these conflicts is not
+housekeeping outside the reviewed delta; **the resolution lands inside reviewed
+territory and is itself unreviewed content.** That is the freshness problem
+again, one level down, and it is why step 5 below says the resolution needs to
+be checked against the reviewed delta rather than merely made to compile.
+
+### The thing worth noticing while it is still small
+
+Every one of these exclusions is individually correct, individually disclosed,
+and individually approved. **Nobody reviews the total.** Each reviewer sees one
+branch removing one file; the guard that reaches `main` carries the union.
+
+Measured rather than feared:
+
+    exclusions in tests/approval-binding.test.mjs on main       1
+    ... after #68 merges                                        2
+    guards on main carrying at least one exclusion              5, one each
+
+One per guard today. The conflicts in `#68` and `#69` are the first time two
+exclusions have met, which makes now the moment to decide whether the union
+needs its own review — not after the number is large. This is the same question
+already asked about `#91` and `#94` in `HANDOFF-POST-VERDICT-DELTA-001`, and it
+should be asked cumulatively rather than once per branch.
+
+### Recomputing after `main` moves
+
+Everything above is bound to `origin/main @ 8be8c99`. Merging anything
+invalidates it. The recompute:
+
+    git fetch origin
+    gh pr list --json number,mergeable,mergeStateStatus,headRefOid
+    node tools/secb-reviews.mjs <branch>          # evidence and freshness per branch
+    git merge-tree --write-tree origin/main <branch>   # conflicts, without touching the tree
+
+`git merge-tree` is the non-destructive way to see a conflict; nothing above
+required checking anything out.
+
+### Corrected sequence
+
+1. The operator merges `#137`.
+2. `git fetch origin`.
+3. Recompute mergeability AND freshness for all eight, using the commands above.
+   Both, not either.
+4. Merge whatever is still fresh and still clean.
+5. `#68` and `#69`: resolve the guard conflict, and check the resolution against
+   the reviewed delta rather than against whether it compiles — the conflicting
+   file is inside both reviewed proposals.
+6. `#68`, `#91`, `#94`: wait for the verdicts requested in
+   `HANDOFF-POST-VERDICT-DELTA-001`.
+
 ## Limitations
 
 - **`FRESH` means the proposal is unchanged, not that the change is correct.**
