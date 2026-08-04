@@ -188,9 +188,10 @@ export class DurableContextReplayAdapter {
     const snapshotValid = isPlainObject(snapshot) && Reflect.ownKeys(snapshot).length === 3 && isHash(snapshot.revision)
       && isPlainObject(current) && Reflect.ownKeys(current).length === 2
       && Number.isSafeInteger(current.count) && current.count >= 0 && isHash(current.headHash)
-      && (pending === null || (isPlainObject(pending) && Reflect.ownKeys(pending).length === 4
+      && (pending === null || (isPlainObject(pending) && [4, 5].includes(Reflect.ownKeys(pending).length)
         && Number.isSafeInteger(pending.count) && pending.count === current.count + 1
-        && isHash(pending.headHash) && isHash(pending.commitment) && ["PREPARED", "DURABLE"].includes(pending.phase)));
+        && isHash(pending.headHash) && isHash(pending.commitment) && ["PREPARED", "DURABLE"].includes(pending.phase)
+        && (!Object.hasOwn(pending, "metadata") || (isPlainObject(pending.metadata) && Reflect.ownKeys(pending.metadata).length === 0))));
     const currentMatch = snapshotValid && current.count === verified.count && current.headHash === verified.headHash;
     const pendingMatch = snapshotValid && pending !== null && pending.count === verified.count && pending.headHash === verified.headHash
       && pending.commitment === this.#transactionCommitment(verified);

@@ -9,12 +9,16 @@ import { createMemoryLifecycleUnifiedService, MemoryLifecycleUnifiedConfiguratio
   verifyMemoryContextLifecycleBinding } from "../src/index.mjs";
 import { createMemoryAuthorityGateway } from "../src/services/memory-authority-gateway-service.mjs";
 import { createMemoryCandidateProvider } from "../src/services/memory-candidate-provider.mjs";
+import { createMemoryLifecycleBatchResolver } from "../src/services/memory-lifecycle-batch-resolver.mjs";
+import { createMemoryLifecycleService } from "../src/services/memory-lifecycle-service.mjs";
 import { normalizeCandidateSources } from "../src/services/candidate-source-port.mjs";
 import { ContextFederationService, mintReceiptDocument } from "../src/services/context-federation-service.mjs";
 import { DurableContextReplayAdapter } from "../src/services/durable-context-replay-adapter.mjs";
 import { WorkPackageContractService } from "../src/services/work-package-service.mjs";
-import { DurableLedger } from "../src/ledger/durable-ledger.mjs";
+import { DurableAnchoredLedger } from "../src/ledger/durable-anchored-ledger.mjs";
 import { DurableHeadAnchor } from "../src/ledger/durable-head-anchor.mjs";
+import { MemoryLifecycleLedger } from "../src/ledger/memory-lifecycle-ledger.mjs";
+import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
 
 const NOW = "2026-08-03T12:00:00.000Z";
 
@@ -65,7 +69,7 @@ function bindingLedgerFixture({ onAppend = () => {} } = {}) {
   return {
     records,
     ledger: {
-      verify() { return { valid: true, ledgerId: "memory-context-binding-test", count: records.length, headHash: records.at(-1)?.recordHash ?? "0".repeat(64) }; },
+      verifyTrusted() { return { valid: true, ledgerId: "memory-context-binding-test", count: records.length, headHash: records.at(-1)?.recordHash ?? "0".repeat(64) }; },
       read() { return structuredClone(records); },
       append(entry, { expectedSequence, preWriteCheck } = {}) {
         onAppend(entry);
@@ -90,7 +94,7 @@ function bindingLedgerFixture({ onAppend = () => {} } = {}) {
 }
 
 const trustedAnchor = (ledger) => {
-  const { ledgerId, count, headHash } = ledger.verify();
+  const { ledgerId, count, headHash } = ledger.verifyTrusted();
   return { ledgerId, count, headHash };
 };
 
@@ -148,17 +152,17 @@ test("construction requires trusted clock, atomic batch resolver, issuance fence
   for (const missing of ["memoryAuthorityGateway", "lifecycleResolver", "memoryCandidateProvider", "contextFederation", "lifecycleBindingLedger"]) {
     const ports = { memoryAuthorityGateway: { retrieve() {} }, lifecycleResolver: { resolveBatch() {}, withIssuanceFence() {} },
       memoryCandidateProvider: { toCandidateSources() {} }, contextFederation: { issueReceipt() {}, replayReceipt() {} },
-      lifecycleBindingLedger: { append() {}, read() {}, verify() {} }, now() { return new Date(NOW); } };
+      lifecycleBindingLedger: { append() {}, read() {}, verifyTrusted() {} }, now() { return new Date(NOW); } };
     delete ports[missing];
     assert.throws(() => createMemoryLifecycleUnifiedService(ports), MemoryLifecycleUnifiedConfigurationError);
   }
   assert.throws(() => createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: { retrieve() {} },
     lifecycleResolver: { resolveBatch() {} }, memoryCandidateProvider: { toCandidateSources() {} },
-    contextFederation: { issueReceipt() {}, replayReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verify() {} },
+    contextFederation: { issueReceipt() {}, replayReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verifyTrusted() {} },
     now() { return new Date(NOW); } }), MemoryLifecycleUnifiedConfigurationError);
   assert.throws(() => createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: { retrieve() {} },
     lifecycleResolver: { resolveBatch() {}, withIssuanceFence() {} }, memoryCandidateProvider: { toCandidateSources() {} },
-    contextFederation: { issueReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verify() {} },
+    contextFederation: { issueReceipt() {} }, lifecycleBindingLedger: { append() {}, read() {}, verifyTrusted() {} },
     now() { return new Date(NOW); } }), (error) => error.code === "INVALID_CONTEXT_RECOVERY");
 });
 
@@ -461,7 +465,7 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
 test("durable binding failure denies before Context Federation mutation", async () => {
   const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   let federationCalls = 0;
-  const fixture = harness({ lifecycleBindingLedger: { verify() { return { valid: false }; }, read() { return []; }, append() { throw new Error("must not append"); } },
+  const fixture = harness({ lifecycleBindingLedger: { verifyTrusted() { return { valid: false }; }, read() { return []; }, append() { throw new Error("must not append"); } },
     contextFederation: { issueReceipt() { federationCalls += 1; throw new Error("must not issue"); } } });
   assert.equal((await fixture.service.issueReceipt({ retrieval: retrieval(), issue })).code, "DENY_UNIFY_BINDING_RECOVERY");
   assert.equal(federationCalls, 0);
@@ -520,10 +524,10 @@ test("crash after Context issuance recovers original binding before any new life
       boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: contextCalls > 1 };
   } } });
   const first = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
-  assert.equal(first.state, "ISSUED");
-  assert.equal(first.sourceStateBinding.binding_status, "RECOVERY_REQUIRED");
+  assert.equal(first.code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.equal(first.recovery_required, true);
   assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED"]);
-  const bindingA = first.sourceStateBinding.binding_fingerprint;
+  const bindingA = binding.records[0].entry.payload.binding.binding_fingerprint;
   const callsBeforeRecovery = structuredClone(fixture.calls);
   nowMs += 3_600_000;
 
@@ -682,7 +686,10 @@ test("real authority gateway, provider, durable replay adapter, Context Federati
   const clock = () => new Date(nowMs++);
   const dir = mkdtempSync(join(tmpdir(), "secb-unify-binding-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const lifecycleBindingLedger = new DurableLedger({ filePath: join(dir, "bindings.jsonl"), ledgerId: "memory-context-bindings" });
+  const bindingHeadAnchor = new DurableHeadAnchor({ filePath: join(dir, "bindings-head.json"),
+    ledgerId: "memory-context-bindings", integrityKey: Buffer.alloc(32, 0x53), initialize: true });
+  const lifecycleBindingLedger = new DurableAnchoredLedger({ filePath: join(dir, "bindings.jsonl"),
+    ledgerId: "memory-context-bindings", headAnchor: bindingHeadAnchor });
   const row = memory({ work_package_id: wpId, access_policy: "project-members" });
   const rawGateway = { admit() {}, retrieve() { return { decision: "ALLOW", code: "RETRIEVED", retrieved_at: clock().toISOString(),
     records: [{ data_untrusted: true, record: row }], next_cursor: null }; } };
@@ -720,14 +727,47 @@ test("real authority gateway, provider, durable replay adapter, Context Federati
     ledgerId: "secb-context-replay-ledger", integrityKey: Buffer.alloc(32, 0x52), initialize: true });
   const durableReplay = new DurableContextReplayAdapter({ filePath: join(dir, "context-replay.ndjson"),
     contextFederation: federation, headAnchor: replayHeadAnchor });
-  const lifecycleResolver = {
-    async resolveBatch(request) { return { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id,
-      layer: request.layer, evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
-      decisions: request.records.map((item) => effectiveDecision(request, item)) }; },
-    async withIssuanceFence(request, callback) { return callback({ ok: true, code: "MEMORY_BATCH_RESOLVED",
-      project_id: request.project_id, layer: request.layer, evaluated_at: request.as_of,
-      batch_fingerprint: canonicalFingerprint(request), decisions: request.records.map((item) => effectiveDecision(request, item)) }); }
+  const lifecycleHead = new DurableHeadAnchor({ filePath: join(dir, "lifecycle-head.json"),
+    ledgerId: "secb-memory-lifecycle-ledger", integrityKey: Buffer.alloc(32, 0x54), initialize: true });
+  const lifecycleLedger = new MemoryLifecycleLedger({ filePath: join(dir, "lifecycle.jsonl"),
+    integrityKey: Buffer.alloc(32, 0x55), headAnchor: lifecycleHead });
+  let issuanceFenceActive = false;
+  const lifecycleAuthority = (expected) => ({ decision: "ALLOW", code: "ALLOW_MEMORY_LIFECYCLE", ...expected,
+    decision_id: "lifecycle-real-1", actor_id: "governor-1", producer_actor_id: row.actor_id,
+    reviewer_actor_id: "reviewer-1", approver_actor_id: "governor-1", work_package_id: wpId,
+    session_id: "session-real-1", authority_ref: "authority:lifecycle-real",
+    valid_from: "2026-08-01T00:00:00.000Z", valid_until: "2026-09-01T00:00:00.000Z" });
+  const retention = (request) => ({ decision: "ALLOW", code: "ALLOW_RETENTION", decision_id: "retention-real-1",
+    project_id: request.project_id, memory_record_id: request.memory_record_id,
+    memory_record_version: request.memory_record_version, policy_id: request.policy_id,
+    retain_until: "2026-09-01T00:00:00.000Z" });
+  const lifecycleBoundary = {
+    withMutationFence(request, callback) { return callback({ records: [row], evidence: null,
+      authority: lifecycleAuthority(request.authority_expected) }); },
+    withResolutionFence(request, callback) {
+      assert.equal(issuanceFenceActive, true, "real lifecycle resolution must remain inside the shared issuance fence");
+      return callback({ records: [row], retention: retention(request.retention_request),
+        authority: lifecycleAuthority(request.authority_expected) });
+    }
   };
+  const lifecycleService = createMemoryLifecycleService({ ledger: lifecycleLedger,
+    authorityResolver: async (expected) => lifecycleAuthority(expected),
+    recordResolver: async () => { assert.equal(issuanceFenceActive, true); return [row]; },
+    retentionPolicyResolver: async (request) => retention(request), evidenceResolver: async () => null,
+    boundaryCoordinator: lifecycleBoundary, sodRules: { checkPairwiseDistinct }, now: clock });
+  const lifecycleResolver = createMemoryLifecycleBatchResolver({ lifecycleService, now: clock,
+    issuanceCoordinator: { async withIssuanceFence(request, callback) {
+      assert.equal(issuanceFenceActive, false, `nested issuance fence for ${request.project_id}`);
+      issuanceFenceActive = true;
+      try { return await callback({ revision: canonicalFingerprint(request) }); }
+      finally { issuanceFenceActive = false; }
+    } } });
+  const lifecycleProbeRequest = { project_id: projectId, layer: "project", gateway_retrieved_at: NOW,
+    gateway_authority_decision_id: "retrieval-real-1", as_of: NOW,
+    records: [{ request_index: 0, memory_record_id: row.memory_record_id, memory_record_version: row.version,
+      content_hash: row.content_hash, target_record_fingerprint: canonicalFingerprint(row) }] };
+  const lifecycleProbe = await lifecycleResolver.resolveBatch(lifecycleProbeRequest);
+  assert.equal(lifecycleProbe.decisions[0]?.ok, true, JSON.stringify(lifecycleProbe));
   const unified = createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: authorityGateway, lifecycleResolver,
     memoryCandidateProvider: provider, contextFederation: durableReplay, lifecycleBindingLedger, now: clock });
   const projected = provider.toCandidateSources({ project_id: projectId, records: [row] });

@@ -148,10 +148,17 @@ export {
   MEMORY_LIFECYCLE_EVENT_TYPES
 } from "./ledger/memory-lifecycle-ledger.mjs";
 
+export { DurableAnchoredLedger } from "./ledger/durable-anchored-ledger.mjs";
+
 export {
   createMemoryLifecycleService,
   MemoryLifecycleConfigurationError
 } from "./services/memory-lifecycle-service.mjs";
+
+export {
+  createMemoryLifecycleBatchResolver,
+  MemoryLifecycleBatchResolverConfigurationError
+} from "./services/memory-lifecycle-batch-resolver.mjs";
 
 export {
   createMemoryLifecycleUnifiedService,

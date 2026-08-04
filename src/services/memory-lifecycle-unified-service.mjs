@@ -327,7 +327,7 @@ export function createMemoryLifecycleUnifiedService({
   let replayReceipt;
   let appendBinding;
   let readBindings;
-  let verifyBindings;
+  let verifyTrustedBindings;
   try {
     retrieve = memoryAuthorityGateway?.retrieve;
     resolveBatch = lifecycleResolver?.resolveBatch;
@@ -337,7 +337,7 @@ export function createMemoryLifecycleUnifiedService({
     replayReceipt = contextFederation?.replayReceipt;
     appendBinding = lifecycleBindingLedger?.append;
     readBindings = lifecycleBindingLedger?.read;
-    verifyBindings = lifecycleBindingLedger?.verify;
+    verifyTrustedBindings = lifecycleBindingLedger?.verifyTrusted;
   } catch {
     throw new MemoryLifecycleUnifiedConfigurationError("INVALID_UNIFY_DEPENDENCY", "unify dependencies could not be safely inspected");
   }
@@ -347,8 +347,8 @@ export function createMemoryLifecycleUnifiedService({
   if (typeof project !== "function") throw new MemoryLifecycleUnifiedConfigurationError("INVALID_MEMORY_PROVIDER", "memoryCandidateProvider.toCandidateSources is required");
   if (typeof issue !== "function") throw new MemoryLifecycleUnifiedConfigurationError("INVALID_CONTEXT_FEDERATION", "contextFederation.issueReceipt is required");
   if (typeof replayReceipt !== "function") throw new MemoryLifecycleUnifiedConfigurationError("INVALID_CONTEXT_RECOVERY", "contextFederation.replayReceipt is required for non-mutating recovery");
-  if (typeof appendBinding !== "function" || typeof readBindings !== "function" || typeof verifyBindings !== "function") {
-    throw new MemoryLifecycleUnifiedConfigurationError("INVALID_BINDING_LEDGER", "a durable lifecycle binding ledger with append(), read(), and verify() is required");
+  if (typeof appendBinding !== "function" || typeof readBindings !== "function" || typeof verifyTrustedBindings !== "function") {
+    throw new MemoryLifecycleUnifiedConfigurationError("INVALID_BINDING_LEDGER", "an authenticated transactional binding ledger with append(), read(), and verifyTrusted() is required");
   }
   if (typeof now !== "function") throw new MemoryLifecycleUnifiedConfigurationError("INVALID_CLOCK", "a trusted shared now() clock is required");
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) {
@@ -365,7 +365,7 @@ export function createMemoryLifecycleUnifiedService({
   const replayContextReceipt = Function.prototype.bind.call(replayReceipt, contextFederation);
   const appendLifecycleBinding = Function.prototype.bind.call(appendBinding, lifecycleBindingLedger);
   const readLifecycleBindings = Function.prototype.bind.call(readBindings, lifecycleBindingLedger);
-  const verifyLifecycleBindings = Function.prototype.bind.call(verifyBindings, lifecycleBindingLedger);
+  const verifyLifecycleBindings = Function.prototype.bind.call(verifyTrustedBindings, lifecycleBindingLedger);
 
   const normalizedContextResultFingerprint = (issued) => {
     const { replayed: ignoredReplay, ...stableResult } = issued; void ignoredReplay;
@@ -484,9 +484,7 @@ export function createMemoryLifecycleUnifiedService({
     }
     const committedReceipt = persistBindingEvent({ binding, contextIssueRequest, issueInput, retrieval,
       status: "COMMITTED", extra: { context_result_fingerprint: resultFingerprint } });
-    if (committedReceipt === null) return deepFreeze({ ...issued, sourceStateBinding: deepFreeze({ ...binding,
-      binding_status: "RECOVERY_REQUIRED", ledger_sequence: prepared.record.sequence,
-      ledger_record_hash: prepared.record.recordHash, replayed: false }) });
+    if (committedReceipt === null) return recoveryRequired("replayed Context receipt remains quarantined until its binding is independently COMMITTED");
     return deepFreeze({ ...issued, sourceStateBinding: makeSourceStateBinding(binding, committedReceipt) });
   }
 
@@ -765,10 +763,12 @@ export function createMemoryLifecycleUnifiedService({
         return callbackResult;
       }
       const committed = persist("COMMITTED", { context_result_fingerprint: normalizedContextResultFingerprint(issued) });
-      const sourceStateBinding = committed === null
-        ? deepFreeze({ ...binding, binding_status: "RECOVERY_REQUIRED", ledger_sequence: prepared.sequence,
-          ledger_record_hash: prepared.recordHash, replayed: false })
-        : makeSourceStateBinding(binding, committed);
+      if (committed === null) {
+        callbackResult = recoveryRequired("Context was issued but its lifecycle binding is not yet independently COMMITTED");
+        settleCallback({ kind: "callback", value: callbackResult });
+        return callbackResult;
+      }
+      const sourceStateBinding = makeSourceStateBinding(binding, committed);
       callbackResult = deepFreeze({ decision: "ALLOW", code: "MEMORY_CONTEXT_ISSUED",
         issued: { ...issued, sourceStateBinding } });
       settleCallback({ kind: "callback", value: callbackResult });
