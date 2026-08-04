@@ -1,0 +1,110 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_wp_sk_audit_01_extraction_rev_request_001_v1_candidate"
+  record_status: "DRAFT_CANDIDATE"
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: >-
+    Second extraction under SARCHI decision SECB-SARCHI-BRANCH-INTEGRATION-001.
+    The first was WP-GOV-VF1, reviewed and open as PR #137.
+  producer_runtime: "Claude Code"
+  limitations:
+    - "The producer wrote the audit, the calibration harness, and the guard that says the calibration works. That is the specific thing an independent reader is here to break."
+    - "Review scope is FROZEN at the pinned tip. The producer moved a frozen target once already, on PR #136, and #137 exists because of it."
+
+handoff:
+  handoff_id: "HANDOFF-WP-SK-AUDIT-01-EXTRACTION-001"
+  sequence: 1
+  source_agent_instance_id: "claude-code-secb-session-2026-08-03"
+  source_session_id: "bfb2c907-d860-4d79-a475-042b1ebdf7ee"
+  destination_role: "REV (Codex identity per docs/03-project-control/candidates/agents/, distinct from producer)"
+  project_id: "prj_secb_local"
+  work_package_id: "WP-SK-AUDIT-01"
+
+  objective: >-
+    Independent review of PR #139 — a read-only audit of .agents/skills,
+    extracted to main, plus the calibration-harness defect that extracting it
+    exposed.
+
+  authorized_scope:
+    - "PR #139, branch feat/skill-audit-extraction, PINNED at 83b27f80e60a22d7d9ae632e5c63046e22e97e3c."
+    - "Base: origin/main at 8be8c9953716c06cadfc6a581fe248e819747380."
+    - "18 files, +6058/-0. All additive: no file on main is modified."
+    - "Read-only review. Findings as records."
+
+  what_this_is: >-
+    The audit computes and never judges. Three-valued verdicts with no `pass`
+    anywhere; every finding that cites a file must resolve to a real 1-indexed
+    line; and a check reporting zero violations may only publish that zero
+    alongside its positive control firing.
+
+  the_defect_extraction_found: >-
+    THIS IS THE PART WORTH THE REVIEWER'S TIME. The audit passed on its home
+    branch and failed 7 tests against main. The gap was not portability noise.
+
+    drop-identity-field used /^version:.*\n/m. In JavaScript `.` does not match
+    \r, so on a CRLF checkout that regex never matches and THE MUTATION SILENTLY
+    DID NOTHING. The home branch carries .gitattributes and is LF, so it worked
+    there. main has none, so governance.identity-fields was struck as uncovered
+    on all ten seeds tried. The check was never at fault - nothing was ever
+    planted in it.
+
+    The regex is the symptom. plant() never verified that its own mutation
+    changed anything, so a no-op was planted, keyed, and then scored as "the
+    check failed to detect it" - a false negative produced by the one component
+    whose entire job is proving the checks can fire. plant() now throws on a
+    no-op seed.
+
+    THE FIRST VERSION OF THAT GUARD WAS ITSELF WRONG. It compared manifestText
+    and skillText only and immediately flagged repair-expectation-uniqueness,
+    which writes into files[].text. It now compares everything a mutation can
+    write. A guard that misses what it guards fails loudly in the wrong place,
+    which is worse than not having one.
+
+  checks:
+    - "npm run validate                          # expect 0"
+    - "node --test tests/skill-audit-*.test.mjs  # expect 85/85"
+    - "node --test tests/*.test.mjs              # expect ONE failure, pre-existing; see limitations"
+    - "Sabotage: revert plant()'s no-op guard, then run the audit suite. governance.identity-fields must be struck as uncovered. That is the defect this PR fixes, reproduced."
+    - "Sabotage: change /^version:.*\\r?\\n/m back to /^version:.*\\n/m on a CRLF checkout. The no-op guard must throw rather than let the class score 0%."
+    - "Sabotage: edit src/audit/corpus-expectation.mjs to a wrong count. The corpus-shape test must fail and name the file to update."
+
+  limitations:
+    - "RUN IN A CHECKOUT THAT HAS node_modules. A fresh worktree without it fails for unrelated reasons; the producer reported that false baseline four times in this session before catching it."
+    - "One test on main is ALREADY RED and is not from this PR: `byte-identity: reused primitives, the S1/S2 siblings, and skill-resolver.mjs are byte-identical to origin/main @ 0aa13f8`. Verified with a CONTROL WORKTREE at origin/main carrying none of these files: 1346 tests, 1342 pass, 1 fail. With this PR: 1431 tests, 1427 pass, 1 fail. Same test."
+    - "CRLF matters for this review. main has no .gitattributes, so a checkout on Windows is CRLF and that is the condition under which the defect above appears. A reviewer on LF will not reproduce it."
+
+  unresolved_findings:
+    - "THE CORPUS EXPECTATION IS MAINTAINED BY HAND. src/audit/corpus-expectation.mjs records 22/22/0 for main. If someone updates it to clear a failure rather than to record a change, the tripwire is gone and nothing notices. This PR cannot enforce that; it can only make the update visible in a diff."
+    - "THE NO-OP GUARD IS NEW AND WAS WRONG ONCE. Its second version passes on both a CRLF and an LF corpus. 'Passes on two corpora' is not 'correct on all', and the producer has no third corpus to try."
+    - "assert.equal(cases, 88) survives as a bare number. It holds on both corpora and the producer left it rather than inventing a relationship it had not measured. If a reviewer can name the relationship, it should replace the constant."
+    - "The audit reads .agents/ and .agents/ is in this work package's prohibited_paths. The producer asserts it opens files read-only. AC-AUDIT-07 exists to prove that; a reviewer should re-run it rather than accept the assertion."
+
+  risks:
+    - >-
+      THE PRODUCER BUILT THE THING AND THE THING THAT CHECKS IT. The calibration
+      harness exists to prove the checks can fire, and the producer wrote both.
+      This session already produced one case where a harness silently reported a
+      working check as broken. The reviewer should assume there is another.
+    - >-
+      If the sabotage runs are not performed independently, this PR lands a
+      correctness claim whose only evidence came from the party it vouches for.
+
+  recommended_next_action: >-
+    Re-run the three sabotages rather than reading their recorded outcomes, on a
+    CRLF checkout, and then attack the direction the producer did not: not
+    "does a planted mutation get caught" but "can a mutation be planted that
+    LOOKS caught while the check is blind". The no-op guard closes one shape of
+    that; the producer does not claim it closes the class.
+
+    Return a verdict as a record, filed where a reader of the pull request can
+    find it. Nine of ten open pull requests in this repository carry verdicts
+    that could not be located from the pull request, and one existed only on a
+    local ref until 2026-08-04.
+
+  context_delta: >-
+    PR #137 is the first extraction and is still open, reviewed and unmerged.
+    PR #138 (memory runtime, +12,532) modifies tools/validate-foundation.mjs and
+    all seven guards that #137 re-pinned; merging both in either order fails
+    those guards and needs a re-pin round. That is recorded in
+    docs/04-assurance/merge-order-137-138-001.md and does NOT affect this PR,
+    which is purely additive and touches none of those files.
