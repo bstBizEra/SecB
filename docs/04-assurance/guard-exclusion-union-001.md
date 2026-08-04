@@ -170,6 +170,62 @@ and it was right for a method that could not have stayed right.
 Filed as `WP-GOV-UC1`, which carries both corrections as acceptance criteria so
 a future implementation cannot quietly revert to either.
 
+## Addendum 3, 2026-08-04 — "re-pin instead of exclude" does not work on these two guards
+
+This record recommended that `#94` re-pin `src/control/overlap-policy.mjs`
+rather than exclude it, and the operator endorsed that recommendation.
+**Checked against the guards, it is not available.**
+
+The two guards `#94` touches do not store a per-file pin. They compare every
+guarded file against a single baseline commit:
+
+    const guarded = ["src/control/overlap-policy.mjs", ...];
+    const baseBlob     = git rev-parse `${BASE_COMMIT}:${rel}`
+    const worktreeBlob = git hash-object <rel>
+    assert.equal(worktreeBlob, baseBlob)
+
+    tests/integration-collision-forecast.test.mjs   BASE_COMMIT
+    tests/integration-queue-ledger.test.mjs         BASE = "385ac65"
+
+**There is no per-file value to update.** One baseline governs the whole set, so
+"re-pin this one file" would mean advancing `BASE` for every file in the guard —
+which silently re-baselines the others, the opposite of what was intended.
+
+This is a different mechanism from the one `WP-GOV-VF1` re-pinned, where an
+explicit `path -> blob` map exists and a single entry can be changed. Both styles
+are in this repository, and the recommendation was written from the second while
+`#94` sits on the first.
+
+### What is actually available
+
+The relevant blobs:
+
+    src/control/overlap-policy.mjs
+      at BASE 385ac65   5cb2f200a9ebce8f901ed1ebb760d6b7f8a9499a
+      at origin/main    5cb2f200a9ebce8f901ed1ebb760d6b7f8a9499a
+      at #94's head     1f67573d48f5e003039faf404e7becffbfa1bf16
+
+Three options, in increasing cost:
+
+**Relocate the pin.** Keep the exclusion from the set-based guard, and add one
+assertion pinning the file to `1f67573d…` explicitly. Detection is preserved at
+a named value rather than dropped; the cost is one test and it does not touch
+either guard's mechanism. `#69` already does something of this shape on its own
+branch, asserting a file *differs* from baseline — asserting equality to a named
+blob is the stronger form.
+
+**Add a per-file override to both guards.** Introduce a `path -> expected blob`
+map that takes precedence over the baseline comparison. This is the design the
+recommendation assumed already existed. It is a mechanism change to two guards,
+so it needs its own review, and it invalidates nothing.
+
+**Accept the gap with a recorded decision.** Legitimate if someone decides
+byte-identity coverage of that file is not worth the cost — but it should be a
+decision in a record, not the side effect of an exclusion.
+
+The producer has no recommendation between these. It made one already, from an
+assumption it had not checked, and the operator endorsed it on that basis.
+
 ## Limitations
 
 - **Exclusions are found by comment shape** — a comment naming a `src/**.mjs`
