@@ -128,6 +128,48 @@ when the count reaches zero. That turns this record into something that cannot
 silently stop being true — which is the difference between the two conflicts in
 `#68`/`#69` being noticed now and being noticed at nine exclusions instead of two.
 
+## Addendum, 2026-08-04 — reproduced without reading a single comment
+
+The operator rejected the method above, not the finding: **a check must read the
+executable or machine-readable protected-file declarations, not comments, because
+comment wording changes and the check silently stops working.** That is correct,
+and this record's own limitations section conceded the counts were a floor for
+exactly that reason.
+
+Re-derived on the other side of that constraint. **The exclusion never needs to
+be parsed at all — only the coverage does.** A file is covered by a guard if and
+only if the guard names it as a protected file; removing it drops the coverage
+whether the removal carries a comment, a different comment, or none. That is
+strictly stronger than comment scanning, because it also catches a silent
+removal, which comment scanning cannot see by construction.
+
+Two corrections were only visible by running it:
+
+**Compare the merge result, not the branch.** Branch-versus-main reported 27
+files reaching zero coverage. Nearly all were branches that predate a guard on
+`main` rather than branches that removed anything — an artefact that disappears
+on merge. `git merge-tree --write-tree` computes the merge result without
+checking anything out.
+
+**A named path only counts if it is a real file.** Of 70 paths named inside
+guards on `main`, only **43 exist**; `src/moduleA/a.mjs` and `src/x.mjs` are test
+fixtures that look like source paths.
+
+With both corrections the 27 collapse to 1:
+
+    #60   0     #73   0     #88   0     #91   0     #110  0
+    #68   conflicting — merge result not computable
+    #69   conflicting — merge result not computable
+    #94   1     src/control/overlap-policy.mjs   2 -> 0
+
+    control: main merged with itself — 0 gaps
+
+**The same file, by an independent route.** The comment-based finding was right,
+and it was right for a method that could not have stayed right.
+
+Filed as `WP-GOV-UC1`, which carries both corrections as acceptance criteria so
+a future implementation cannot quietly revert to either.
+
 ## Limitations
 
 - **Exclusions are found by comment shape** — a comment naming a `src/**.mjs`
