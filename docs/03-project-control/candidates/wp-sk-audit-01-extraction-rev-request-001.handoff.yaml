@@ -103,8 +103,20 @@ handoff:
 
   context_delta: >-
     PR #137 is the first extraction and is still open, reviewed and unmerged.
-    PR #138 (memory runtime, +12,532) modifies tools/validate-foundation.mjs and
-    all seven guards that #137 re-pinned; merging both in either order fails
-    those guards and needs a re-pin round. That is recorded in
-    docs/04-assurance/merge-order-137-138-001.md and does NOT affect this PR,
-    which is purely additive and touches none of those files.
+
+    CORRECTED 2026-08-05. An earlier version of this packet said PR #138 and
+    #137 conflict and need a re-pin round. THAT WAS FALSE. #138 targets #137,
+    not main - #137's head is their merge base - so #137 is contained in #138
+    and there is no conflict in either order. The producer's measurement built a
+    synthetic commit parented on main, which made git merge two stacked branches
+    as if they were independent and manufactured a conflict in every file #137
+    touches.
+
+    The real issue is supersession: #138 changes tools/validate-foundation.mjs
+    from 1cf85708 - the blob the Codex verdict on #137 is bound to - to
+    4b102ac4, and re-pins the guards to its own value. #137's exact-SHA binding
+    does not survive #138 in either order.
+
+    Both the false claim and its correction are in
+    docs/04-assurance/merge-order-137-138-001.md. NEITHER AFFECTS THIS PR, which
+    is purely additive and touches none of those files.
