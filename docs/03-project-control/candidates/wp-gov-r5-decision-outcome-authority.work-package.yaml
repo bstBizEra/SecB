@@ -1,0 +1,211 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_gov_r5_decision_outcome_authority_v1_candidate"
+  record_status: "AWAITING_GOV_AUTHORIZATION"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  prepared_as: "SARCHI — architecture and design. SARCHI does not authorize; GOV does."
+  source: >-
+    DEF-R5, found by an adversarial review commissioned before writing a wiring
+    work package, reproduced by running, and recorded at
+    docs/04-assurance/skillshub-wiring-refusal-001.md.
+  limitations:
+    - "Producer prepared this and may not accept its own evidence."
+    - "NO CODE WRITTEN. The reproduction writes only to a temp directory and leaves no state."
+    - "The producer raised that the operator queue already holds five unsigned records and that a sixth is document production rather than progress. The operator reaffirmed the instruction. Recorded that way - flagged, reaffirmed, proceeded - because the sequence is what a later reader needs."
+
+work_package_id: "WP-GOV-R5"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-GOV"
+title: "Make a governance decision able to refuse (DEF-R5)"
+
+objective: >-
+  Make it possible to record a decision ABOUT a skill version that does not
+  authorize it, and make the resolver honour the difference.
+
+problem_statement: >-
+  Reproduced by running, 2026-08-05, with controls first:
+
+    CONTROL a correct promotion                 -> ALLOW
+    CONTROL a subject naming another skill      -> DENY_SUBJECT_MISMATCH
+
+    outcome REJECTED, subject matches           -> ALLOW
+    outcome REVOKE_SKILL, subject matches       -> ALLOW
+    outcome DENY, subject matches               -> ALLOW
+
+  The controls matter: the harness can both allow and deny, so those three
+  ALLOWs are the resolver's answer.
+
+  A decision recording outcome "REJECTED" with rationale "Do NOT promote: failed
+  security review" authorizes the promotion. src/registry/skill-resolver.mjs
+  contains zero references to `.outcome`, and "decision.outcome" appears nowhere
+  in src/.
+
+  DEF-R1 asked which skill a decision authorizes. DEF-R5 asks whether it
+  authorizes anything at all, and nothing answers it.
+
+why_this_is_not_a_resolver_fix: >-
+  The obvious patch - require outcome === "PROMOTE_SKILL" - does not work.
+
+    contracts/decision-record.schema.json
+      outcome           { "type": "string", "minLength": 1 }   free text, no enum
+      subject.allOf[0]  if kind == SKILL_VERSION
+                        then required: ["version", "grant"]
+
+  There is no vocabulary to check against: the only outcome value in this
+  repository's fixtures is "ACCEPT", while the walking skeleton used
+  "PROMOTE_SKILL".
+
+  And the contract makes `grant` MANDATORY for every skill-version subject, so a
+  decision that names a skill version cannot be written without granting it.
+  "We considered this skill and refused it" is not expressible.
+
+  The resolver faithfully implements a contract in which refusal has no
+  representation. That is where the defect lives.
+
+design: >-
+  MAKE `grant` OPTIONAL, AND MAKE ITS PRESENCE THE AUTHORIZATION.
+
+    subject.allOf[0].then.required   ["version", "grant"]  ->  ["version"]
+
+  A subject that names a skill version and carries a grant authorizes it. A
+  subject that names one and carries no grant is a record about that skill that
+  grants nothing - which is what a refusal is.
+
+  THE RESOLVER ALREADY IMPLEMENTS THIS HALF. src/registry/skill-resolver.mjs:64
+
+    const grant = subject.grant;
+    if (!grant) return "DENY_SUBJECT_MISMATCH";
+
+  So a grantless subject already denies. The contract is what forbids writing
+  one. This is a one-line contract change plus a deny code that says what it
+  means.
+
+  Deny code: DENY_SUBJECT_MISMATCH is wrong here. A refusal is not a mismatch,
+  and a reader told "mismatch" will look for the wrong bug. Introduce
+  DENY_NO_GRANT, distinct, and keep DENY_SUBJECT_MISMATCH for a subject that
+  names a different skill.
+
+open_design_question: >-
+  THIS CLOSES "REFUSAL CANNOT BE EXPRESSED". IT DOES NOT CLOSE "A CONTRADICTORY
+  RECORD IS ACCEPTED".
+
+  A decision with outcome "REJECTED" AND a grant would still authorize. Under
+  the proposal that record is self-contradictory, but nothing refuses it.
+
+  Three ways to handle it, and the producer does not choose:
+
+    - Leave it. The grant is the operative field; `outcome` becomes prose. Cheap,
+      and it means a record can read as a refusal while acting as a grant, which
+      is the defect wearing different clothes.
+    - Constrain `outcome` with an enum and have appendDecision refuse the
+      combination. Correct, and it is a migration: `outcome` is free text today
+      and existing records use at least "ACCEPT".
+    - Add an explicit boolean to subject. Unambiguous, and a third field that
+      can disagree with the other two.
+
+  The producer wants this answered BEFORE code, because all three are cheap now
+  and only the first is cheap later.
+
+risk_class: "R3"
+mutation_class: "M3"
+status: "AWAITING_GOV_AUTHORIZATION"
+
+baseline:
+  target_branch: "feat/secb-ruflo-command-center"
+  baseline_commit: "1849b04"
+  contract_state: "decision-record.schema.json: subject.allOf[0].then.required = [version, grant]"
+  blast_radius: >-
+    Measured:
+      decision records in tests/fixtures/valid/ carrying a subject   0
+      .ndjson ledger files anywhere in the tree                      0
+      callers of SkillResolver.registerSkill in src/ or tools/       0
+
+    NO EXISTING RECORD CAN BE INVALIDATED. The change RELAXES a required field,
+    so every record valid today stays valid - the direction that cannot break a
+    reader. The producer notes this cuts both ways: a relaxation is also the
+    direction that cannot be detected by a consumer expecting the old shape.
+
+scope:
+  - "contracts/decision-record.schema.json - remove `grant` from the SKILL_VERSION conditional required."
+  - "src/registry/skill-resolver.mjs - replace the grantless DENY_SUBJECT_MISMATCH with DENY_NO_GRANT."
+  - "src/skills/skills-hub-service.mjs - add DENY_NO_GRANT to DENY_CODES so it keeps its type through the withheld tally."
+  - "tools/validate-foundation.mjs - the exact-set pins will fail the moment the contract changes. Updating them is the pin doing its job."
+  - "tests - both arms for every case."
+
+non_scope:
+  - "NO wiring. The wiring proposal was withdrawn at docs/04-assurance/skillshub-wiring-refusal-001.md and this package does not revive it."
+  - "NO separation of duties. That gap is real, larger, and needs its own package."
+  - "NO enum on `outcome` unless the authorizer picks option two above."
+  - "DEF-R4 is a different ledger and stays in WP-GOV-R4."
+
+acceptance_criteria:
+  - id: "AC-R5-01"
+    statement: "A decision that names a skill version WITHOUT a grant is now writable, and denies."
+    verification: "validateContract accepts it; the resolver returns DENY_NO_GRANT. Both, because the first without the second means refusal is expressible and ignored."
+  - id: "AC-R5-02"
+    statement: "A decision WITH a matching grant still promotes."
+    verification: "The positive arm. A fail-closed change can be made to pass by denying everything; this is what makes the denial mean anything."
+  - id: "AC-R5-03"
+    statement: "DENY_NO_GRANT is distinguishable from DENY_SUBJECT_MISMATCH."
+    verification: >-
+      A grantless subject returns DENY_NO_GRANT; a subject naming a different
+      skill still returns DENY_SUBJECT_MISMATCH. A refusal reported as a mismatch
+      sends a reader after the wrong bug.
+  - id: "AC-R5-04"
+    statement: "No existing decision record is invalidated."
+    verification: "Every fixture under tests/fixtures/valid/ still validates. Expected count invalidated: zero. Any other number stops the work."
+  - id: "AC-R5-05"
+    statement: "The exact-set pin catches the contract change."
+    verification: >-
+      Before updating it, confirm npm run validate exits 1 naming
+      decision-record.schema.json. Then update and confirm exit 0. The failure is
+      free evidence the pin works and skipping the observation wastes it.
+  - id: "AC-R5-06"
+    statement: "Every check is shown failing when it should."
+    verification: "Sabotage matrix with raw exit codes and a control column proving the NEW comparison catches each mutation, not an existing check firing first."
+
+roles:
+  ENGIN: "unassigned — producer may not accept its own evidence"
+  REV: "unassigned — must not be the producer"
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted. This decides whether a governance record can say no."
+  GOV: "authorizes, and should answer open_design_question before code."
+
+allowed_paths:
+  - "contracts/decision-record.schema.json"
+  - "src/registry/skill-resolver.mjs"
+  - "src/skills/skills-hub-service.mjs"
+  - "tools/validate-foundation.mjs"
+  - "tests/skill-decision-subject*.test.mjs"
+  - "tests/fixtures/valid/decision-record-*.json"
+  - "tests/fixtures/invalid/decision-record-*.json"
+
+prohibited_paths:
+  - "src/ledger/**"
+  - "src/mcp/**"
+  - ".agents/**"
+  - "MANIFEST.json"
+  - "tools/secb-skills.mjs"
+  - "tools/secb-mcp-server-wiring.mjs"
+
+evidence_obligations:
+  - "The AC-R5-01/02 pair with raw codes, against the reproduction in problem_statement."
+  - "The AC-R5-05 two-step: validate exit 1 before the pin update, exit 0 after."
+  - "The AC-R5-06 sabotage matrix with its control column."
+  - "A count of decision records invalidated. Expected: zero."
+
+valid_until: "2026-11-05T00:00:00Z"
+
+authority_note: >-
+  R3 because it changes contracts/decision-record.schema.json, which nearly
+  every governed act flows through, and it changes what the resolver will
+  accept. M3 for the same reason.
+
+  What makes it small is that it RELAXES a requirement, so nothing existing
+  breaks, and the resolver already denies the case being made expressible.
+
+  What makes it worth doing is that a governance system whose records cannot say
+  no is not a governance system. Today every decision that mentions a skill
+  version grants it, including the ones written to refuse it.
