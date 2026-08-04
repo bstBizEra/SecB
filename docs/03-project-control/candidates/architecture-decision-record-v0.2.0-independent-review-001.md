@@ -1,12 +1,12 @@
 # Architecture Decision Record Skill v0.2.0 - Independent Review 001
 
-**Record ID:** SECB-ADR-SKILL-V020-REV-001  
-**Status:** DRAFT / NOT EFFECTIVE - REV PASS, CANDIDATE ONLY  
-**Owner:** REV  
-**Approval state:** ADVISORY; QA, SEC, GOV, merge, promotion, publication, and activation remain separate  
-**Last updated:** 2026-08-05T03:21:31+07:00  
-**Review session:** `codex-rev-adr-skill-ef3aa9b-20260805T032131+0700`  
-**Reviewer identity:** OpenAI Codex subagent `/root/adr_skill_rev`, acting only in the independent REV role  
+**Record ID:** SECB-ADR-SKILL-V020-REV-001
+**Status:** DRAFT / NOT EFFECTIVE - REV PASS, CANDIDATE ONLY
+**Owner:** REV
+**Approval state:** ADVISORY; QA, SEC, GOV, merge, promotion, publication, and activation remain separate
+**Last updated:** 2026-08-05T03:21:31+07:00
+**Review session:** `codex-rev-adr-skill-ef3aa9b-20260805T032131+0700`
+**Reviewer identity:** OpenAI Codex subagent `/root/adr_skill_rev`, acting only in the independent REV role
 **Reviewer model:** GPT-5 family; the exact serving revision of this reviewer session was not exposed. The independent Codex behavior probe explicitly used `gpt-5.6-sol`.
 
 ## 1. Authority and independence statement
