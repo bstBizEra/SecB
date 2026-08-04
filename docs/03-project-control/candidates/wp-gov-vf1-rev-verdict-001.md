@@ -112,6 +112,21 @@ merge_authority:       NOT granted
 The producer wrote both the change and the pins that vouch for it, and does not
 merge it.
 
+### The merge command, and why the obvious one is wrong
+
+    gh pr merge 137 --merge --match-head-commit 5d97c4cb66547b08fcc811cae08aae8a6c905f50
+
+**Not `--squash`.** The producer recommended `--squash` three times in session
+and it would have destroyed the only property this pull request exists to have.
+`#137` was created so that the merged artefact IS the commit the reviewer
+examined; squashing rewrites those commits into a new one, and the exact-SHA
+ancestry binding between verdict and merged content is gone. The verdict would
+then name a commit that is on no branch.
+
+`--match-head-commit` makes the merge fail closed if the head has moved since
+this record was written, which is the same frozen-target rule that made `#136`
+unmergeable.
+
 ## Disposition of `REV-VF1-N02`, 2026-08-04
 
 The correction at `7a975f0` is **withdrawn from review** and pull request `#136`
