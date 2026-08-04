@@ -1,7 +1,14 @@
 schema_version: "0.1"
 record_metadata:
   record_id: "wp_gov_uc1_union_coverage_check_v1_candidate"
-  record_status: "AWAITING_GOV_AUTHORIZATION"
+  record_status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
+  implementation_note: >-
+    Built 2026-08-04 on the operator's instruction to proceed through the
+    sequence, whose step 5 is this check. Authority basis stated plainly so a
+    reader can disagree with it: AGENTS.md line 54 pre-authorizes bounded slices
+    under tools/** and tests/**, and this touches only those two paths. GOV
+    acceptance of the EVIDENCE is still outstanding and the producer cannot
+    grant it.
   source_template: "docs/templates/work-package.yaml"
   producer_runtime: "Claude Code"
   source: >-
@@ -80,7 +87,32 @@ design_evidence: >-
 
 risk_class: "R2"
 mutation_class: "M2"
-status: "AWAITING_GOV_AUTHORIZATION"
+status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
+
+evidence:
+  built:
+    - "tools/secb-guard-coverage.mjs"
+    - "tests/secb-guard-coverage.test.mjs"
+  cli_exit_codes: >-
+    Distinct and load-bearing, run against real merge results:
+      #94  exit 1  src/control/overlap-policy.mjs  2 -> 0
+      #91  exit 0  no file loses all coverage
+      #88  exit 0  no file loses all coverage
+      #68  exit 3  CONFLICTING - merge result not computable, and it says so
+                   rather than measuring the branch and calling it the same
+  sabotage_matrix: >-
+    Each mutation asserted to have landed before the suite ran; a sabotage that
+    silently fails to apply produces a green run that looks like proof.
+
+      baseline                                    13 pass   0 fail
+      stop filtering fixture paths                11 pass   2 fail
+      fire on ANY drop, not only reaching zero    12 pass   1 fail
+      stop stripping comments                     12 pass   1 fail
+      restored                                    13 pass   0 fail
+  suite: "validate exit 0; full suite 1100 tests, 1093 pass, 0 fail, 7 skipped."
+  not_done:
+    - "AC-UC1-05's silent-removal case is proven hermetically, not against a real branch. No branch in this repository has yet removed a protected file WITHOUT a comment, which is precisely why that case needed constructing rather than observing."
+    - "The check is not wired into anything. It is a command someone must run. Wiring it is a separate decision and this package explicitly refuses to claim a CI gate that does not exist - see non_scope and DEF-M3."
 
 baseline:
   target_branch: "to be decided by the authorizer - main, or the working branch"
