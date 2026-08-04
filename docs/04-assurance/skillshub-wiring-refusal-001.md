@@ -122,6 +122,60 @@ hazard and revealed two more underneath it.**
 The honest next steps are `DEF-R5` and `DEF-R6`, which are small, and then the
 separation-of-duties question, which is not.
 
+## Addendum, 2026-08-05 — reproduced. `DEF-R5` confirmed, `DEF-R6` refuted, and `DEF-R5` is bigger than described
+
+Both defects above were confirmed by reading, which this record flagged as below
+standard. Reproduced by running, in a temp directory, with controls first:
+
+    CONTROL a correct promotion                    -> ALLOW
+    CONTROL a subject naming another skill         -> DENY_SUBJECT_MISMATCH
+
+    outcome REJECTED, subject matches              -> ALLOW
+    outcome REVOKE_SKILL, subject matches          -> ALLOW
+    outcome DENY, subject matches                  -> ALLOW
+
+    grant is {}                                    -> DENY_CONTRACT_INVALID
+
+**`DEF-R5` is real.** A decision whose recorded outcome is `REJECTED`,
+`REVOKE_SKILL` or `DENY` authorizes the promotion. The controls prove the
+harness can both allow and deny, so those three ALLOWs are the resolver's
+answer and not a broken probe.
+
+**`DEF-R6` is refuted.** `grant: {}` returns `DENY_CONTRACT_INVALID`, a typed
+denial, not a `TypeError`. `contracts/decision-record.schema.json` requires
+`project_scopes`, `supported_runtimes` and `max_data_classification` inside
+`grant`, so an empty grant is refused at contract validation and never reaches
+`subjectDenial`. **The reviewer read the resolver in isolation and missed that
+the contract validates first, and the producer recorded it on the strength of
+that reading.** Both errors are the same one.
+
+### `DEF-R5` cannot be fixed at the resolver
+
+The obvious patch — require `outcome === "PROMOTE_SKILL"` — does not work:
+
+    contracts/decision-record.schema.json
+      outcome              { "type": "string", "minLength": 1 }    free text, no enum
+      subject.allOf[0]     if kind == SKILL_VERSION
+                           then required: ["version", "grant"]
+
+`outcome` is an unconstrained string, so the resolver has no vocabulary to check
+against; the only value in the repository's fixtures is `ACCEPT`, while the
+walking skeleton used `PROMOTE_SKILL`.
+
+And the deeper problem: **the contract makes `grant` mandatory for every
+skill-version subject.** A decision that names a skill version cannot be written
+without also granting it. *"We considered this skill and refused it"* is not
+expressible.
+
+So `DEF-R5` is not a missing `if` in the resolver. **It is a contract that can
+only say yes**, and the resolver faithfully implements a contract in which
+refusal has no representation. Closing it is a contract change with a migration
+question, in the same family as `WP-SK-R1` and larger.
+
+That reframing raises the cost and does not change the conclusion: **still do
+not wire.** It moves `DEF-R5` from "small, do it first" to "the second design
+gap alongside separation of duties", and both now sit ahead of any wiring.
+
 ## Limitations
 
 - **`DEF-R5` and `DEF-R6` were confirmed by reading the code, not by a running
