@@ -213,6 +213,28 @@ function childResult(child) {
   });
 }
 
+test("one durable boundary lease blocks a second lifecycle-ledger instance", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-boundary-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const filePath = join(directory, "lifecycle.jsonl");
+  const anchorPath = join(directory, "lifecycle-head.json");
+  const firstAnchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: INTEGRITY_KEY, initialize: true });
+  const secondAnchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: INTEGRITY_KEY });
+  const first = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: firstAnchor });
+  const second = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: secondAnchor });
+  await first.withBoundaryLease(async () => {
+    assert.throws(() => second.appendLifecycleEvent(directLifecycleEvent(), {
+      expectedSequence: 0, idempotencyKey: "idem-boundary-overlap"
+    }), (error) => error.code === "LIFECYCLE_BOUNDARY_BUSY");
+  });
+  const receipt = second.appendLifecycleEvent(directLifecycleEvent(), {
+    expectedSequence: 0, idempotencyKey: "idem-boundary-overlap"
+  });
+  assert.equal(receipt.sequence, 1);
+});
+
 function resolution(overrides = {}) {
   return {
     project_id: "project-1",
@@ -841,6 +863,36 @@ test("real process termination recovers the exact authenticated PREPARED lifecyc
     assert.equal(ledger.verify().count, 1);
     assert.equal(anchor.snapshot().pending, null);
   }
+});
+
+test("an OS-process lifecycle mutation cannot cross an active issuance lease", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-process-boundary-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const filePath = join(directory, "lifecycle.jsonl");
+  const anchorPath = join(directory, "lifecycle-head.json");
+  const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: Buffer.alloc(32, 0x63), initialize: true });
+  const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: anchor });
+  const moduleUrl = pathToFileURL(join(process.cwd(), "src/index.mjs")).href;
+  const script = `
+    import { DurableHeadAnchor, MemoryLifecycleLedger } from ${JSON.stringify(moduleUrl)};
+    const [filePath, anchorPath, eventJson] = process.argv.slice(1);
+    const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+      integrityKey: Buffer.alloc(32, 0x63) });
+    const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: Buffer.alloc(32, 7), headAnchor: anchor });
+    try {
+      ledger.appendLifecycleEvent(JSON.parse(eventJson), { expectedSequence: 0, idempotencyKey: "idem-child-boundary" });
+      console.log(JSON.stringify({ code: "UNEXPECTED_APPEND" }));
+    } catch (error) { console.log(JSON.stringify({ code: error.code })); }
+  `;
+  await ledger.withBoundaryLease(async () => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", script,
+      filePath, anchorPath, JSON.stringify(directLifecycleEvent())], { stdio: ["ignore", "pipe", "pipe"] });
+    const result = await childResult(child);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).code, "LIFECYCLE_BOUNDARY_BUSY");
+    assert.equal(ledger.verify().count, 0);
+  });
 });
 
 test("concurrent OS processes converge on one lifecycle record for one exact identity", async (t) => {

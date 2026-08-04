@@ -29,6 +29,9 @@ const DECISION_KEYS = Object.freeze([
 const ISSUE_RESULT_KEYS = Object.freeze(["receiptId", "projectId", "version", "state", "boundWpVersion", "expiresAt", "exclusions", "replayed"]);
 const MAX_BATCH = 1_000;
 const MAX_BATCH_BYTES = 4 * 1024 * 1024;
+// Leaves at least 1 MiB for the authenticated head-anchor envelope, JSON framing,
+// MAC material, and future bounded metadata below the 8 MiB anchor ceiling.
+const MAX_BINDING_ENTRY_BYTES = 7 * 1024 * 1024;
 const MAX_CURSOR = 2_048;
 const DEFAULT_TIMEOUT_MS = 500;
 const MAX_TIMEOUT_MS = 30_000;
@@ -407,6 +410,9 @@ export function createMemoryLifecycleUnifiedService({
       timestamp: binding.evaluated_at,
       idempotencyKey: JSON.stringify([retrieval.project_id, issueInput.document.receipt_id, binding.binding_fingerprint, status])
     };
+    try {
+      if (Buffer.byteLength(JSON.stringify(entry), "utf8") > MAX_BINDING_ENTRY_BYTES) return null;
+    } catch { return null; }
     const preWriteCheck = status !== "PREPARED" ? undefined : (lockedRecords) => {
       const chain = verifiedLedgerChain(lockedRecords);
       const semantics = chain === null ? null : bindingLedgerSemantics(chain);
@@ -711,8 +717,8 @@ export function createMemoryLifecycleUnifiedService({
     let fenceActive = true;
     let callbackInvoked = false;
     let callbackResult = null;
-    let settleCallback;
-    const callbackCompletion = new Promise((resolve) => { settleCallback = resolve; });
+    let contextMutated = false;
+    let pendingIssuance = null;
     const callback = (rawBatch) => {
       if (!fenceActive || callbackInvoked) return deny("DENY_UNIFY_FENCE_CALLBACK", "issuance fence callback is unavailable", "lifecycle-fence");
       callbackInvoked = true;
@@ -722,14 +728,12 @@ export function createMemoryLifecycleUnifiedService({
       );
       if (finalBatch === null) {
         callbackResult = deny("DENY_UNIFY_FINAL_LIFECYCLE", "final lifecycle batch is stale, terminal, or unbound", "lifecycle-fence");
-        settleCallback({ kind: "callback", value: callbackResult });
         return callbackResult;
       }
       const contextIssueRequest = { ...issueInput, candidateSources: unified.sources };
       const bindingHead = readVerifiedLedger();
       if (bindingHead === null) {
         callbackResult = deny("DENY_UNIFY_BINDING_LEDGER", "binding ledger head is unavailable", "binding-ledger");
-        settleCallback({ kind: "callback", value: callbackResult });
         return callbackResult;
       }
       const binding = {
@@ -747,7 +751,6 @@ export function createMemoryLifecycleUnifiedService({
       const prepared = persist("PREPARED");
       if (prepared === null) {
         callbackResult = deny("DENY_UNIFY_BINDING_LEDGER", "durable lifecycle binding preparation failed", "binding-ledger");
-        settleCallback({ kind: "callback", value: callbackResult });
         return callbackResult;
       }
       const preMutationInstant = trustedInstant(now);
@@ -756,7 +759,6 @@ export function createMemoryLifecycleUnifiedService({
         const aborted = persist("ABORTED", { reason: "STALE_BEFORE_CONTEXT" });
         callbackResult = aborted === null ? recoveryRequired("stale preparation could not be durably aborted")
           : deny("DENY_UNIFY_FRESHNESS", "lifecycle binding became stale before Context mutation", "clock");
-        settleCallback({ kind: "callback", value: callbackResult });
         return callbackResult;
       }
       const rawIssued = syncCall(() => issueContext(contextIssueRequest));
@@ -765,19 +767,11 @@ export function createMemoryLifecycleUnifiedService({
         const aborted = persist("ABORTED", { reason: "CONTEXT_DENIED" });
         callbackResult = aborted === null ? recoveryRequired("Context denial could not durably abort its prepared binding")
           : deny("DENY_UNIFY_CONTEXT", "Context Federation returned an unbound issuance result", "context-federation");
-        settleCallback({ kind: "callback", value: callbackResult });
         return callbackResult;
       }
-      const committed = persist("COMMITTED", { context_result_fingerprint: normalizedContextResultFingerprint(issued) });
-      if (committed === null) {
-        callbackResult = recoveryRequired("Context was issued but its lifecycle binding is not yet independently COMMITTED");
-        settleCallback({ kind: "callback", value: callbackResult });
-        return callbackResult;
-      }
-      const sourceStateBinding = makeSourceStateBinding(binding, committed);
-      callbackResult = deepFreeze({ decision: "ALLOW", code: "MEMORY_CONTEXT_ISSUED",
-        issued: { ...issued, sourceStateBinding } });
-      settleCallback({ kind: "callback", value: callbackResult });
+      contextMutated = true;
+      pendingIssuance = { issued, binding, persist };
+      callbackResult = deepFreeze({ decision: "ALLOW", code: "MEMORY_CONTEXT_PENDING_FENCE", issued });
       return callbackResult;
     };
     let timer;
@@ -785,21 +779,33 @@ export function createMemoryLifecycleUnifiedService({
       .then(() => runIssuanceFence(deepFreeze(structuredClone(finalBatchRequest)), callback))
       .then((value) => ({ kind: "return", value }), () => ({ kind: "failure" }));
     const fenceOutcome = await Promise.race([
-      callbackCompletion,
       fenceReturn,
       new Promise((resolve) => { timer = setTimeout(() => resolve({ kind: "timeout" }), timeoutMs); })
     ]);
     clearTimeout(timer);
     fenceActive = false;
-    if (fenceOutcome.kind !== "callback" || callbackResult === null || callbackInvoked !== true) {
+    if (fenceOutcome.kind !== "return" || callbackResult === null || callbackInvoked !== true) {
+      if (contextMutated) {
+        pendingIssuance?.persist("ABORTED", { reason: "POST_CONTEXT_FENCE_FAILED" });
+        return recoveryRequired("Context was issued but final lifecycle fence validation did not complete; its provisional binding is quarantined");
+      }
       return deny("DENY_UNIFY_ISSUANCE_FENCE", "issuance fence did not invoke its single callback in time", "lifecycle-fence");
     }
     if (callbackResult.decision === "DENY") return callbackResult;
     const fenced = exactSnapshot(fenceOutcome.value, ["decision", "code", "issued"]);
-    if (fenced === null || fenced.decision !== "ALLOW" || fenced.code !== "MEMORY_CONTEXT_ISSUED") {
-      return deny("DENY_UNIFY_ISSUANCE_FENCE", "issuance fence returned a malformed callback disposition", "lifecycle-fence");
+    if (fenced === null || fenced.decision !== "ALLOW" || fenced.code !== "MEMORY_CONTEXT_PENDING_FENCE"
+      || pendingIssuance === null || canonicalFingerprint(fenced) !== canonicalFingerprint(callbackResult)) {
+      pendingIssuance?.persist("ABORTED", { reason: "POST_CONTEXT_FENCE_FAILED" });
+      return recoveryRequired("Context was issued but the final lifecycle fence returned an invalid disposition; its provisional binding is quarantined");
     }
-    return deepFreeze(fenced.issued);
+    const committed = pendingIssuance.persist("COMMITTED", {
+      context_result_fingerprint: normalizedContextResultFingerprint(pendingIssuance.issued)
+    });
+    if (committed === null) {
+      return recoveryRequired("Context was issued after final fence validation but its lifecycle binding is not yet independently COMMITTED");
+    }
+    return deepFreeze({ ...pendingIssuance.issued,
+      sourceStateBinding: makeSourceStateBinding(pendingIssuance.binding, committed) });
   }
 
   return Object.freeze({ retrieveCandidateSources, issueReceipt });

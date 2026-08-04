@@ -5,13 +5,10 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
-import { createMemoryLifecycleUnifiedService, MemoryLifecycleUnifiedConfigurationError,
+import { createMemoryLifecycleRuntimeComposition, createMemoryLifecycleUnifiedService, MemoryLifecycleUnifiedConfigurationError,
   verifyMemoryContextLifecycleBinding } from "../src/index.mjs";
 import { createMemoryAuthorityGateway } from "../src/services/memory-authority-gateway-service.mjs";
 import { createMemoryCandidateProvider } from "../src/services/memory-candidate-provider.mjs";
-import { createMemoryLifecycleBatchResolver } from "../src/services/memory-lifecycle-batch-resolver.mjs";
-import { createMemoryLifecycleBoundaryCoordinator } from "../src/services/memory-lifecycle-boundary-coordinator.mjs";
-import { createMemoryLifecycleService } from "../src/services/memory-lifecycle-service.mjs";
 import { normalizeCandidateSources } from "../src/services/candidate-source-port.mjs";
 import { ContextFederationService, mintReceiptDocument } from "../src/services/context-federation-service.mjs";
 import { DurableContextReplayAdapter } from "../src/services/durable-context-replay-adapter.mjs";
@@ -473,6 +470,17 @@ test("durable binding failure denies before Context Federation mutation", async 
   assert.equal(federationCalls, 0);
 });
 
+test("complete PREPARED entry is bounded below head-anchor capacity", async () => {
+  const binding = bindingLedgerFixture();
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger });
+  const issue = { document: receiptDocument({ acceptance_criteria: ["x".repeat(7 * 1024 * 1024)] }),
+    actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem-large-prepared" };
+  const denied = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(denied.code, "DENY_UNIFY_BINDING_LEDGER");
+  assert.equal(fixture.calls.federation, 0);
+  assert.equal(binding.records.length, 0);
+});
+
 test("binding-ledger delay is rechecked immediately before Context mutation", async () => {
   const issue = { document: receiptDocument(), actorId: "actor", authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   let clockMs = Date.parse(NOW);
@@ -642,7 +650,7 @@ test("timed-out issuance fence cannot invoke Context Federation later", async ()
   assert.equal(federationCalls, 0);
 });
 
-test("a fence that stalls after its callback cannot turn an issued receipt into a timeout denial", async () => {
+test("a fence that stalls after Context mutation quarantines the provisional receipt", async () => {
   const issue = { document: receiptDocument(), actorId: "actor",
     authorityRef: "auth", baseline: "base", idempotencyKey: "idem" };
   let federationCalls = 0;
@@ -658,10 +666,34 @@ test("a fence that stalls after its callback cannot turn an issued receipt into 
     receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
     boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false
   }; } } });
-  const issued = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
-  assert.equal(issued.state, "ISSUED");
+  const quarantined = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(quarantined.code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.equal(quarantined.recovery_required, true);
   assert.equal(federationCalls, 1);
   assert.equal(secondDisposition.code, "DENY_UNIFY_FENCE_CALLBACK");
+});
+
+test("a post-callback lifecycle fence rejection never exposes the issued receipt", async () => {
+  const issue = { document: receiptDocument(), actorId: "actor",
+    authorityRef: "auth", baseline: "base", idempotencyKey: "idem-post-fence" };
+  let federationCalls = 0;
+  const binding = bindingLedgerFixture();
+  const fixture = harness({ lifecycleBindingLedger: binding.ledger,
+    lifecycleResolver: { async withIssuanceFence(request, callback) {
+      const batch = { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
+        evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(),
+        decisions: request.records.map((item) => effectiveDecision(request, item)) };
+      callback(batch);
+      throw Object.assign(new Error("lifecycle head changed after callback"), { code: "MEMORY_BOUNDARY_HEAD_CHANGED" });
+    } }, contextFederation: { issueReceipt(request) { federationCalls += 1; return {
+      receiptId: request.document.receipt_id, projectId: request.document.project_id, version: 1, state: "ISSUED",
+      boundWpVersion: 1, expiresAt: "2026-08-04T12:00:00.000Z", exclusions: [], replayed: false
+    }; } } });
+  const quarantined = await fixture.service.issueReceipt({ retrieval: retrieval(), issue });
+  assert.equal(quarantined.code, "DENY_UNIFY_BINDING_RECOVERY");
+  assert.equal(quarantined.recovery_required, true);
+  assert.equal(federationCalls, 1);
+  assert.deepEqual(binding.records.map((record) => record.entry.payload.status), ["PREPARED", "ABORTED"]);
 });
 
 test("clock movement after Context mutation cannot convert ISSUED into a freshness denial", async () => {
@@ -742,23 +774,17 @@ test("real authority gateway, provider, durable replay adapter, Context Federati
     project_id: request.project_id, memory_record_id: request.memory_record_id,
     memory_record_version: request.memory_record_version, policy_id: request.policy_id,
     retain_until: "2026-09-01T00:00:00.000Z" });
-  const lifecycleBoundary = createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger,
+  const composition = createMemoryLifecycleRuntimeComposition({ lifecycleLedger, lifecycleBindingLedger,
+    memoryAuthorityGateway: authorityGateway, memoryCandidateProvider: provider, contextFederation: durableReplay,
     recordSource: () => [row], authoritySource: lifecycleAuthority, retentionSource: retention,
-    evidenceSource: () => null });
-  const lifecycleService = createMemoryLifecycleService({ ledger: lifecycleLedger,
-    authorityResolver: lifecycleBoundary.resolveAuthority, recordResolver: lifecycleBoundary.resolveRecords,
-    retentionPolicyResolver: lifecycleBoundary.resolveRetention, evidenceResolver: lifecycleBoundary.resolveEvidence,
-    boundaryCoordinator: lifecycleBoundary, sodRules: { checkPairwiseDistinct }, now: clock });
-  const lifecycleResolver = createMemoryLifecycleBatchResolver({ lifecycleService, now: clock,
-    issuanceCoordinator: lifecycleBoundary });
+    evidenceSource: () => null, sodRules: { checkPairwiseDistinct }, now: clock });
+  const { lifecycleResolver, unifiedService: unified } = composition;
   const lifecycleProbeRequest = { project_id: projectId, layer: "project", gateway_retrieved_at: NOW,
     gateway_authority_decision_id: "retrieval-real-1", as_of: NOW,
     records: [{ request_index: 0, memory_record_id: row.memory_record_id, memory_record_version: row.version,
       content_hash: row.content_hash, target_record_fingerprint: canonicalFingerprint(row) }] };
   const lifecycleProbe = await lifecycleResolver.resolveBatch(lifecycleProbeRequest);
   assert.equal(lifecycleProbe.decisions[0]?.ok, true, JSON.stringify(lifecycleProbe));
-  const unified = createMemoryLifecycleUnifiedService({ memoryAuthorityGateway: authorityGateway, lifecycleResolver,
-    memoryCandidateProvider: provider, contextFederation: durableReplay, lifecycleBindingLedger, now: clock });
   const projected = provider.toCandidateSources({ project_id: projectId, records: [row] });
   const candidates = normalizeCandidateSources(projected.sources).candidates;
   const minted = mintReceiptDocument({ receipt_id: "receipt-real-1", project_id: projectId, objective_id: "objective-real-1",

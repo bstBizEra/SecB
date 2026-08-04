@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { closeSync, existsSync, fsyncSync, openSync, statSync } from "node:fs";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
@@ -148,6 +149,8 @@ export class MemoryLifecycleLedger extends DurableLedger {
   #prepareAnchor;
   #markAnchorDurable;
   #finalizeAnchor;
+  #boundaryPath;
+  #boundaryContext = new AsyncLocalStorage();
 
   constructor({ filePath, integrityKey, headAnchor } = {}) {
     super({ filePath, ledgerId: LEDGER_ID });
@@ -163,6 +166,7 @@ export class MemoryLifecycleLedger extends DurableLedger {
     }
     this.#integrityKey = key;
     this.#filePath = resolve(filePath);
+    this.#boundaryPath = `${this.#filePath}.boundary.lock`;
     let snapshotAnchor;
     let prepareAnchor;
     let markAnchorDurable;
@@ -182,6 +186,64 @@ export class MemoryLifecycleLedger extends DurableLedger {
     this.#prepareAnchor = Function.prototype.bind.call(prepareAnchor, headAnchor);
     this.#markAnchorDurable = Function.prototype.bind.call(markAnchorDurable, headAnchor);
     this.#finalizeAnchor = Function.prototype.bind.call(finalizeAnchor, headAnchor);
+  }
+
+  #acquireBoundary() {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        mkdirSync(this.#boundaryPath);
+        writeFileSync(`${this.#boundaryPath}/owner.json`, JSON.stringify({ pid: process.pid, nonce: randomUUID() }), { flag: "wx" });
+        return;
+      } catch (cause) {
+        if (cause?.code !== "EEXIST") {
+          rmSync(this.#boundaryPath, { recursive: true, force: true });
+          throw new LedgerError(cause?.code ?? "LIFECYCLE_BOUNDARY_UNAVAILABLE", "memory lifecycle boundary could not be acquired");
+        }
+        let owner;
+        try { owner = JSON.parse(readFileSync(`${this.#boundaryPath}/owner.json`, "utf8")); } catch {
+          throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary ownership is not yet readable");
+        }
+        if (!Number.isSafeInteger(owner?.pid) || owner.pid < 1) {
+          throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary ownership is malformed");
+        }
+        try { process.kill(owner.pid, 0); throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary is owned by a live process"); }
+        catch (probe) {
+          if (probe instanceof LedgerError || probe?.code !== "ESRCH") {
+            throw probe instanceof LedgerError ? probe
+              : new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary owner could not be disproved");
+          }
+        }
+        const stalePath = `${this.#boundaryPath}.stale-${process.pid}-${randomUUID()}`;
+        try { renameSync(this.#boundaryPath, stalePath); rmSync(stalePath, { recursive: true, force: true }); }
+        catch { throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "stale lifecycle boundary could not be reclaimed atomically"); }
+      }
+    }
+    throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary could not be acquired");
+  }
+
+  #withBoundarySync(operation) {
+    if (this.#boundaryContext.getStore() !== undefined) return operation();
+    for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
+      try {
+        this.#acquireBoundary();
+        const token = Object.freeze({ owner: Symbol("memory-lifecycle-boundary") });
+        try { return this.#boundaryContext.run(token, operation); }
+        finally { rmSync(this.#boundaryPath, { recursive: true, force: true }); }
+      } catch (cause) {
+        if (cause?.code !== "LIFECYCLE_BOUNDARY_BUSY") throw cause;
+        boundedBackoff(attempt);
+      }
+    }
+    throw new LedgerError("LIFECYCLE_BOUNDARY_BUSY", "memory lifecycle boundary remained busy past its bounded retry deadline");
+  }
+
+  async withBoundaryLease(operation) {
+    if (typeof operation !== "function") throw new LedgerError("LIFECYCLE_BOUNDARY_REQUEST_INVALID", "boundary operation is required");
+    if (this.#boundaryContext.getStore() !== undefined) return operation();
+    this.#acquireBoundary();
+    const token = Object.freeze({ owner: Symbol("memory-lifecycle-boundary") });
+    try { return await this.#boundaryContext.run(token, operation); }
+    finally { rmSync(this.#boundaryPath, { recursive: true, force: true }); }
   }
 
   #anchorSnapshot() {
@@ -365,7 +427,11 @@ export class MemoryLifecycleLedger extends DurableLedger {
     return null;
   }
 
-  appendLifecycleEvent(event, { expectedSequence, idempotencyKey } = {}) {
+  appendLifecycleEvent(event, options = {}) {
+    return this.#withBoundarySync(() => this.#appendLifecycleEventOwned(event, options));
+  }
+
+  #appendLifecycleEventOwned(event, { expectedSequence, idempotencyKey } = {}) {
     const unsigned = snapshotEvent(event, { integrityKey: this.#integrityKey, requireMac: false });
     if (!isBoundedString(idempotencyKey, 512)) {
       throw new LedgerError("DENY_MISSING_ENTRY_FIELDS", "a bounded idempotencyKey is required for memory lifecycle append");

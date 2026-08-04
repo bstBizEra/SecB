@@ -172,6 +172,8 @@ export {
   verifyMemoryContextLifecycleBinding
 } from "./services/memory-lifecycle-unified-service.mjs";
 
+export { createMemoryLifecycleRuntimeComposition } from "./services/memory-lifecycle-runtime-composition.mjs";
+
 export {
   DATA_CLASS_ORDER,
   RISK_ORDER,

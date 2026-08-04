@@ -7,7 +7,9 @@ const ZERO = "0".repeat(64);
 
 function fixture() {
   let head = { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: ZERO };
-  const coordinator = createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger: { verify: () => ({ ...head }) },
+  const coordinator = createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger: {
+    verify: () => ({ ...head }), withBoundaryLease: (operation) => operation()
+  },
     recordSource: (request) => [{ memory_record_id: request.memory_record_id }],
     authoritySource: (request) => ({ decision: "ALLOW", ...request }),
     retentionSource: (request) => ({ decision: "ALLOW", ...request }),
@@ -62,7 +64,8 @@ test("head-read failure releases coordinator ownership for a later retry", async
   const coordinator = createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger: { verify() {
     if (fail) { fail = false; throw new Error("head unavailable"); }
     return { valid: true, ledgerId: "secb-memory-lifecycle-ledger", count: 0, headHash: ZERO };
-  } }, recordSource: () => [], authoritySource: () => ({}), retentionSource: () => ({}), evidenceSource: () => ({}) });
+  }, withBoundaryLease: (operation) => operation() }, recordSource: () => [], authoritySource: () => ({}),
+  retentionSource: () => ({}), evidenceSource: () => ({}) });
   await assert.rejects(coordinator.withIssuanceFence({}, async () => "never"), /unavailable/);
   assert.equal(await coordinator.withIssuanceFence({}, async () => "retried"), "retried");
 });

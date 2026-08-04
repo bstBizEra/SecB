@@ -18,14 +18,17 @@ export class MemoryLifecycleBoundaryError extends Error {
 export function createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger, recordSource,
   authoritySource, retentionSource, evidenceSource } = {}) {
   let verify;
-  try { verify = lifecycleLedger?.verify; } catch {
+  let withBoundaryLease;
+  try { verify = lifecycleLedger?.verify; withBoundaryLease = lifecycleLedger?.withBoundaryLease; } catch {
     throw new MemoryLifecycleBoundaryError("INVALID_MEMORY_BOUNDARY_LEDGER", "lifecycle ledger could not be inspected");
   }
   if (typeof verify !== "function") throw new MemoryLifecycleBoundaryError("INVALID_MEMORY_BOUNDARY_LEDGER", "lifecycleLedger.verify is required");
+  if (typeof withBoundaryLease !== "function") throw new MemoryLifecycleBoundaryError("INVALID_MEMORY_BOUNDARY_LEDGER", "lifecycleLedger.withBoundaryLease is required");
   for (const [name, operation] of Object.entries({ recordSource, authoritySource, retentionSource, evidenceSource })) {
     if (typeof operation !== "function") throw new MemoryLifecycleBoundaryError("INVALID_MEMORY_BOUNDARY_SOURCE", `${name} is required`);
   }
   const verifyLifecycle = Function.prototype.bind.call(verify, lifecycleLedger);
+  const runBoundaryLease = Function.prototype.bind.call(withBoundaryLease, lifecycleLedger);
   const context = new AsyncLocalStorage();
   let locked = false;
 
@@ -72,12 +75,14 @@ export function createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger, reco
     clone(request, "issuance request");
     locked = true;
     try {
-      const before = head();
-      const token = tokenFor(before);
-      const result = await context.run(token, () => callback(token));
-      const after = head();
-      if (!sameHead(before, after)) throw new MemoryLifecycleBoundaryError("MEMORY_BOUNDARY_HEAD_CHANGED", "lifecycle head changed inside issuance fence");
-      return result;
+      return await runBoundaryLease(async () => {
+        const before = head();
+        const token = tokenFor(before);
+        const result = await context.run(token, () => callback(token));
+        const after = head();
+        if (!sameHead(before, after)) throw new MemoryLifecycleBoundaryError("MEMORY_BOUNDARY_HEAD_CHANGED", "lifecycle head changed inside issuance fence");
+        return result;
+      });
     } finally { locked = false; }
   }
 
