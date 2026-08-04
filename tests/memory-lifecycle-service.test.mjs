@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { canonicalFingerprint } from "../src/contracts/canonical-fingerprint.mjs";
 import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
@@ -18,12 +20,30 @@ const MANIFEST_HASH = "c".repeat(64);
 const INTEGRITY_KEY = Buffer.alloc(32, 7);
 
 function createHeadAnchor() {
-  let checkpoint = { count: 0, headHash: "0".repeat(64) };
+  let current = { count: 0, headHash: "0".repeat(64) };
+  let pending = null;
+  const same = (left, right) => canonicalFingerprint(left) === canonicalFingerprint(right);
   return {
-    read() { return structuredClone(checkpoint); },
-    compareAndSet({ expected, next }) {
-      if (canonicalFingerprint(expected) !== canonicalFingerprint(checkpoint)) return false;
-      checkpoint = structuredClone(next);
+    snapshot() {
+      return structuredClone({ current, pending, revision: canonicalFingerprint({ current, pending }) });
+    },
+    prepare({ expected, next, commitment, metadata }) {
+      if (!same(expected, current)) return false;
+      if (pending !== null) return same(pending, { ...next, commitment, phase: pending.phase, metadata });
+      pending = { ...structuredClone(next), commitment, phase: "PREPARED", metadata: structuredClone(metadata) };
+      return true;
+    },
+    markDurable({ expected, next, commitment }) {
+      if (!same(expected, current) || pending === null
+        || !same(pending, { ...next, commitment, phase: pending.phase, metadata: pending.metadata })) return false;
+      pending = { ...pending, phase: "DURABLE" };
+      return true;
+    },
+    finalize({ expected, next, commitment }) {
+      if (same(current, next) && pending === null) return true;
+      if (!same(expected, current) || !same(pending, { ...next, commitment, phase: "DURABLE", metadata: pending?.metadata })) return false;
+      current = structuredClone(next);
+      pending = null;
       return true;
     }
   };
@@ -129,6 +149,68 @@ function mutation(eventType, overrides = {}) {
     idempotency_key: `idem-${eventType}`,
     ...overrides
   };
+}
+
+function directLifecycleEvent(overrides = {}) {
+  const body = {
+    event_version: 2,
+    request_fingerprint: "1".repeat(64),
+    parameters_hash: "2".repeat(64),
+    project_id: "project-1",
+    work_package_id: "wp-lifecycle",
+    session_id: "session-lifecycle",
+    actor_id: "governor-1",
+    authority_ref: "authority:memory-lifecycle",
+    decision_id: "decision-memory-lifecycle-1",
+    producer_actor_id: "producer-1",
+    reviewer_actor_id: "reviewer-1",
+    approver_actor_id: "governor-1",
+    evidence_acceptor_actor_id: "evidence-acceptor-1",
+    event_type: "TOMBSTONED",
+    layer: "project",
+    memory_record_id: "mem-1",
+    memory_record_version: 1,
+    target_content_hash: "3".repeat(64),
+    target_record_fingerprint: "4".repeat(64),
+    evidence_id: "evidence-lifecycle-1",
+    evidence_hash: "5".repeat(64),
+    preservation_action: "NOT_APPLICABLE",
+    reason: "transaction recovery probe",
+    occurred_at: NOW.toISOString(),
+    ...overrides
+  };
+  return { event_id: canonicalFingerprint(body), ...body };
+}
+
+function crashAnchor(anchor, method, timing) {
+  let armed = true;
+  const wrapper = {};
+  for (const name of ["snapshot", "prepare", "markDurable", "finalize"]) {
+    wrapper[name] = (input) => {
+      if (name === method && armed && timing === "before") {
+        armed = false;
+        throw Object.assign(new Error(`simulated crash before ${name}`), { code: "SIMULATED_CRASH" });
+      }
+      const result = anchor[name](input);
+      if (name === method && armed && timing === "after") {
+        armed = false;
+        throw Object.assign(new Error(`simulated crash after ${name}`), { code: "SIMULATED_CRASH" });
+      }
+      return result;
+    };
+  }
+  return wrapper;
+}
+
+function childResult(child) {
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout: stdout.trim(), stderr: stderr.trim() }));
+  });
 }
 
 function resolution(overrides = {}) {
@@ -689,6 +771,106 @@ test("durable trusted head anchor survives restart and detects stale ledger roll
   assert.equal(restartedLedger.verify().count, 1);
   writeFileSync(filePath, "", "utf8");
   assert.throws(() => restartedLedger.verify(), (error) => error.code === "LIFECYCLE_ROLLBACK_DETECTED");
+});
+
+test("transactional lifecycle head deterministically recovers every persisted crash phase", (t) => {
+  const phases = [
+    ["prepare", "after", true],
+    ["markDurable", "before", true],
+    ["markDurable", "after", true],
+    ["finalize", "after", true]
+  ];
+  for (const [method, timing, expectedReplay] of phases) {
+    const directory = mkdtempSync(join(tmpdir(), `secb-memory-lifecycle-${method}-${timing}-`));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    const filePath = join(directory, "lifecycle.jsonl");
+    const anchorPath = join(directory, "lifecycle-head.json");
+    const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+      integrityKey: Buffer.alloc(32, 0x41), initialize: true });
+    const crashing = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY,
+      headAnchor: crashAnchor(anchor, method, timing) });
+    const event = directLifecycleEvent();
+    assert.throws(() => crashing.appendLifecycleEvent(event, { expectedSequence: 0, idempotencyKey: "idem-crash" }),
+      (error) => error.code === "SIMULATED_CRASH", `${method}/${timing} must expose the simulated process boundary`);
+
+    const restartedAnchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+      integrityKey: Buffer.alloc(32, 0x41) });
+    const restarted = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: restartedAnchor });
+    const recovered = restarted.appendLifecycleEvent(event, { expectedSequence: 0, idempotencyKey: "idem-crash" });
+    assert.equal(recovered.replayed, expectedReplay, `${method}/${timing} replay classification`);
+    assert.equal(restarted.verify().count, 1);
+    assert.deepEqual(restartedAnchor.snapshot().pending, null);
+    assert.equal(restartedAnchor.snapshot().current.count, 1);
+  }
+});
+
+test("real process termination recovers the exact authenticated PREPARED lifecycle entry", async (t) => {
+  const phases = [["prepare", "after"], ["markDurable", "before"], ["markDurable", "after"], ["finalize", "after"]];
+  const moduleUrl = pathToFileURL(join(process.cwd(), "src/index.mjs")).href;
+  const event = directLifecycleEvent();
+  const script = `
+    import { DurableHeadAnchor, MemoryLifecycleLedger } from ${JSON.stringify(moduleUrl)};
+    const [filePath, anchorPath, eventJson, method, timing] = process.argv.slice(1);
+    const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+      integrityKey: Buffer.alloc(32, 0x61), initialize: true });
+    const wrapper = {};
+    for (const name of ["snapshot", "prepare", "markDurable", "finalize"]) wrapper[name] = (input) => {
+      if (name === method && timing === "before") process.exit(91);
+      const result = anchor[name](input);
+      if (name === method && timing === "after") process.exit(91);
+      return result;
+    };
+    const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: Buffer.alloc(32, 7), headAnchor: wrapper });
+    ledger.appendLifecycleEvent(JSON.parse(eventJson), { expectedSequence: 0, idempotencyKey: "idem-process-crash" });
+    process.exit(92);
+  `;
+  for (const [method, timing] of phases) {
+    const directory = mkdtempSync(join(tmpdir(), `secb-memory-process-${method}-${timing}-`));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    const filePath = join(directory, "lifecycle.jsonl");
+    const anchorPath = join(directory, "lifecycle-head.json");
+    const child = spawn(process.execPath, ["--input-type=module", "-e", script,
+      filePath, anchorPath, JSON.stringify(event), method, timing], { stdio: ["ignore", "pipe", "pipe"] });
+    const exited = await childResult(child);
+    assert.equal(exited.code, 91, `${method}/${timing}: ${exited.stderr}`);
+    const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+      integrityKey: Buffer.alloc(32, 0x61) });
+    const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: anchor });
+    const recovered = ledger.appendLifecycleEvent(event, { expectedSequence: 0, idempotencyKey: "idem-process-crash" });
+    assert.equal(recovered.replayed, true);
+    assert.equal(ledger.verify().count, 1);
+    assert.equal(anchor.snapshot().pending, null);
+  }
+});
+
+test("concurrent OS processes converge on one lifecycle record for one exact identity", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-process-concurrency-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const filePath = join(directory, "lifecycle.jsonl");
+  const anchorPath = join(directory, "lifecycle-head.json");
+  new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: Buffer.alloc(32, 0x62), initialize: true });
+  const moduleUrl = pathToFileURL(join(process.cwd(), "src/index.mjs")).href;
+  const event = directLifecycleEvent();
+  const script = `
+    import { DurableHeadAnchor, MemoryLifecycleLedger } from ${JSON.stringify(moduleUrl)};
+    const [filePath, anchorPath, eventJson] = process.argv.slice(1);
+    const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+      integrityKey: Buffer.alloc(32, 0x62) });
+    const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: Buffer.alloc(32, 7), headAnchor: anchor });
+    const receipt = ledger.appendLifecycleEvent(JSON.parse(eventJson), { expectedSequence: 0, idempotencyKey: "idem-concurrent" });
+    console.log(JSON.stringify({ sequence: receipt.sequence, replayed: receipt.replayed }));
+  `;
+  const launch = () => spawn(process.execPath, ["--input-type=module", "-e", script,
+    filePath, anchorPath, JSON.stringify(event)], { stdio: ["ignore", "pipe", "pipe"] });
+  const results = await Promise.all([childResult(launch()), childResult(launch())]);
+  assert.deepEqual(results.map((result) => result.code), [0, 0], results.map((result) => result.stderr).join("\n"));
+  assert.deepEqual(results.map((result) => JSON.parse(result.stdout).sequence), [1, 1]);
+  const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: Buffer.alloc(32, 0x62) });
+  const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: anchor });
+  assert.equal(ledger.verify().count, 1);
+  assert.equal(ledger.read().length, 1);
 });
 
 test("exception recovery rejects an authenticated competing event bound to another target", async (t) => {

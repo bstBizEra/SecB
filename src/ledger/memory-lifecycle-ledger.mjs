@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { closeSync, existsSync, fsyncSync, openSync, statSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import { canonicalFingerprint } from "../contracts/canonical-fingerprint.mjs";
 import { DurableLedger, LedgerError, ZERO_HASH } from "./durable-ledger.mjs";
@@ -29,6 +29,9 @@ const MAX_REASON_LENGTH = 2_048;
 const MAX_LIFECYCLE_EVENTS = 10_000;
 const MAX_LEDGER_BYTES = 16 * 1024 * 1024;
 const MIN_INTEGRITY_KEY_BYTES = 32;
+const LEDGER_ID = "secb-memory-lifecycle-ledger";
+const MAX_APPEND_ATTEMPTS = 64;
+const MAX_RETRY_DELAY_MS = 16;
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const isBoundedString = (value, max = MAX_ID_LENGTH) => typeof value === "string" && value.trim() !== "" && value.length <= max;
@@ -40,6 +43,11 @@ function deepFreeze(value) {
     for (const child of Object.values(value)) deepFreeze(child);
   }
   return value;
+}
+
+function boundedBackoff(attempt) {
+  const delayMs = Math.min(2 ** Math.min(attempt, 4), MAX_RETRY_DELAY_MS);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
 }
 
 function macFor(key, event) {
@@ -136,11 +144,13 @@ function lifecycleEntry(event, idempotencyKey) {
 export class MemoryLifecycleLedger extends DurableLedger {
   #integrityKey;
   #filePath;
-  #readAnchor;
-  #advanceAnchor;
+  #snapshotAnchor;
+  #prepareAnchor;
+  #markAnchorDurable;
+  #finalizeAnchor;
 
   constructor({ filePath, integrityKey, headAnchor } = {}) {
-    super({ filePath, ledgerId: "secb-memory-lifecycle-ledger" });
+    super({ filePath, ledgerId: LEDGER_ID });
     let key;
     try {
       if (!(integrityKey instanceof Uint8Array)) throw new Error("not bytes");
@@ -153,36 +163,146 @@ export class MemoryLifecycleLedger extends DurableLedger {
     }
     this.#integrityKey = key;
     this.#filePath = resolve(filePath);
-    let readAnchor;
-    let advanceAnchor;
+    let snapshotAnchor;
+    let prepareAnchor;
+    let markAnchorDurable;
+    let finalizeAnchor;
     try {
-      readAnchor = headAnchor?.read;
-      advanceAnchor = headAnchor?.compareAndSet;
+      snapshotAnchor = headAnchor?.snapshot;
+      prepareAnchor = headAnchor?.prepare;
+      markAnchorDurable = headAnchor?.markDurable;
+      finalizeAnchor = headAnchor?.finalize;
     } catch {
       throw new LedgerError("INVALID_LIFECYCLE_HEAD_ANCHOR", "headAnchor could not be safely inspected");
     }
-    if (typeof readAnchor !== "function" || typeof advanceAnchor !== "function") {
-      throw new LedgerError("INVALID_LIFECYCLE_HEAD_ANCHOR", "an independent monotonic headAnchor is required");
+    if ([snapshotAnchor, prepareAnchor, markAnchorDurable, finalizeAnchor].some((operation) => typeof operation !== "function")) {
+      throw new LedgerError("INVALID_LIFECYCLE_HEAD_ANCHOR", "a transactional independent monotonic headAnchor is required");
     }
-    this.#readAnchor = Function.prototype.bind.call(readAnchor, headAnchor);
-    this.#advanceAnchor = Function.prototype.bind.call(advanceAnchor, headAnchor);
+    this.#snapshotAnchor = Function.prototype.bind.call(snapshotAnchor, headAnchor);
+    this.#prepareAnchor = Function.prototype.bind.call(prepareAnchor, headAnchor);
+    this.#markAnchorDurable = Function.prototype.bind.call(markAnchorDurable, headAnchor);
+    this.#finalizeAnchor = Function.prototype.bind.call(finalizeAnchor, headAnchor);
   }
 
-  #anchor() {
+  #anchorSnapshot() {
     let value;
-    try { value = structuredClone(this.#readAnchor()); } catch { throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle head anchor could not be read"); }
-    if (!isPlainObject(value) || Reflect.ownKeys(value).length !== 2
-      || !Number.isSafeInteger(value.count) || value.count < 0 || !isSha256(value.headHash)) {
-      throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle head anchor returned malformed state");
+    try { value = structuredClone(this.#snapshotAnchor()); } catch {
+      throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle transactional head anchor could not be read");
+    }
+    const current = value?.current;
+    const pending = value?.pending;
+    const currentValid = isPlainObject(current) && Reflect.ownKeys(current).length === 2
+      && Number.isSafeInteger(current.count) && current.count >= 0 && isSha256(current.headHash);
+    const pendingValid = pending === null || (isPlainObject(pending) && Reflect.ownKeys(pending).length === 5
+      && Number.isSafeInteger(pending.count) && currentValid && pending.count === current.count + 1
+      && isSha256(pending.headHash) && isSha256(pending.commitment)
+      && isPlainObject(pending.metadata) && Reflect.ownKeys(pending.metadata).length === 1
+      && isPlainObject(pending.metadata.entry)
+      && ["PREPARED", "DURABLE"].includes(pending.phase));
+    if (!isPlainObject(value) || Reflect.ownKeys(value).length !== 3 || !currentValid || !pendingValid || !isSha256(value.revision)) {
+      throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle transactional head anchor returned malformed state");
     }
     return value;
   }
 
-  #verifyAnchor(result) {
-    const anchor = this.#anchor();
-    if (anchor.count !== result.count || anchor.headHash !== result.headHash) {
-      throw new LedgerError("LIFECYCLE_ROLLBACK_DETECTED", "lifecycle ledger does not match its independent monotonic head anchor");
+  #transactionCommitment(head) {
+    return canonicalFingerprint({ ledgerId: head.ledgerId, count: head.count, headHash: head.headHash });
+  }
+
+  #verifiedState() {
+    for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
+      let before;
+      let verified;
+      let after;
+      try {
+        before = this.#anchorSnapshot();
+        verified = super.verify();
+        after = this.#anchorSnapshot();
+      } catch (cause) {
+        if (["HEAD_ANCHOR_BUSY", "EBUSY", "EPERM"].includes(cause?.code)) {
+          boundedBackoff(attempt);
+          continue;
+        }
+        if (cause instanceof LedgerError) throw cause;
+        throw new LedgerError(cause?.code ?? "LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle evidence could not be verified");
+      }
+      if (before.revision !== after.revision) {
+        boundedBackoff(attempt);
+        continue;
+      }
+      const { current, pending } = after;
+      const currentMatch = verified.count === current.count && verified.headHash === current.headHash;
+      const pendingMatch = pending !== null && verified.count === pending.count && verified.headHash === pending.headHash
+        && pending.commitment === this.#transactionCommitment(verified);
+      if (currentMatch && pending?.phase === "DURABLE") {
+        throw new LedgerError("LIFECYCLE_ROLLBACK_DETECTED", "durable lifecycle head is missing from the ledger");
+      }
+      if (!currentMatch && !pendingMatch) {
+        throw new LedgerError("LIFECYCLE_ROLLBACK_DETECTED", "lifecycle ledger does not match its transactional monotonic head anchor");
+      }
+      const trusted = pendingMatch && pending.phase === "DURABLE" ? verified
+        : { ...verified, count: current.count, headHash: current.headHash };
+      return { verified, trusted, snapshot: after };
     }
+    throw new LedgerError("LIFECYCLE_LEDGER_CHANGED", "lifecycle evidence did not stabilize");
+  }
+
+  #syncLedger() {
+    let handle;
+    try {
+      handle = openSync(this.#filePath, "r+");
+      fsyncSync(handle);
+      closeSync(handle);
+      handle = undefined;
+      try {
+        const directoryHandle = openSync(dirname(this.#filePath), "r");
+        try { fsyncSync(directoryHandle); } finally { closeSync(directoryHandle); }
+      } catch { /* directory fsync is unavailable on some Windows filesystems */ }
+    } catch (cause) {
+      throw new LedgerError("LIFECYCLE_LEDGER_DURABILITY_FAILURE", `lifecycle ledger fsync failed: ${cause.message}`);
+    } finally {
+      if (handle !== undefined) closeSync(handle);
+    }
+  }
+
+  #recoverPendingForWrite() {
+    const state = this.#verifiedState();
+    const { current, pending } = state.snapshot;
+    if (pending === null) {
+      return state.trusted;
+    }
+    const expected = current;
+    const next = { count: pending.count, headHash: pending.headHash };
+    if (state.verified.count === current.count && state.verified.headHash === current.headHash) {
+      const entry = structuredClone(pending.metadata.entry);
+      const entryHash = canonicalFingerprint(entry);
+      const predictedHead = canonicalFingerprint({ ledgerId: LEDGER_ID, sequence: next.count,
+        previousHash: current.headHash, entryHash });
+      if (next.count !== current.count + 1 || next.headHash !== predictedHead
+        || pending.commitment !== this.#transactionCommitment({ ledgerId: LEDGER_ID, count: next.count, headHash: next.headHash })) {
+        throw new LedgerError("LIFECYCLE_TRANSACTION_INVARIANT", "prepared lifecycle metadata does not match its authenticated commitment");
+      }
+      snapshotEvent(entry.payload, { integrityKey: this.#integrityKey, requireMac: true });
+      const receipt = super.append(entry, { expectedSequence: current.count,
+        preWriteCheck: (records) => this.#lifecycleVeto(records, entry.payload) });
+      if (receipt?.ok === false || receipt.sequence !== next.count || receipt.recordHash !== next.headHash) {
+        throw new LedgerError("LIFECYCLE_TRANSACTION_INVARIANT", "prepared lifecycle entry could not be recovered exactly");
+      }
+    }
+    if (pending.phase === "PREPARED") {
+      this.#syncLedger();
+      let durable;
+      try { durable = this.#markAnchorDurable({ expected, next, commitment: pending.commitment }); } catch (cause) {
+        throw new LedgerError(cause?.code ?? "LIFECYCLE_ANCHOR_UNAVAILABLE", "pending lifecycle head could not become durable");
+      }
+      if (durable !== true) throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "pending lifecycle head could not become durable");
+    }
+    let finalized;
+    try { finalized = this.#finalizeAnchor({ expected, next, commitment: pending.commitment }); } catch (cause) {
+      throw new LedgerError(cause?.code ?? "LIFECYCLE_ANCHOR_UNAVAILABLE", "pending lifecycle head could not be finalized");
+    }
+    if (finalized !== true) throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "pending lifecycle head could not be finalized");
+    return this.#verifiedState().trusted;
   }
 
   #assertFileBounded(additionalBytes = 0) {
@@ -194,9 +314,8 @@ export class MemoryLifecycleLedger extends DurableLedger {
 
   verify() {
     this.#assertFileBounded();
-    const result = super.verify();
+    const result = this.#verifiedState().trusted;
     if (result.count > MAX_LIFECYCLE_EVENTS) throw new LedgerError("LIFECYCLE_LEDGER_RESOURCE_LIMIT", "memory lifecycle event limit exceeded");
-    this.#verifyAnchor(result);
     return result;
   }
 
@@ -204,76 +323,115 @@ export class MemoryLifecycleLedger extends DurableLedger {
     this.#assertFileBounded();
     const verified = this.verify();
     const records = super.read();
-    if (records.length > MAX_LIFECYCLE_EVENTS || records.length !== verified.count) throw new LedgerError("LIFECYCLE_LEDGER_RESOURCE_LIMIT", "memory lifecycle event limit exceeded or changed during read");
-    return records;
+    if (records.length > MAX_LIFECYCLE_EVENTS || records.length < verified.count) throw new LedgerError("LIFECYCLE_LEDGER_RESOURCE_LIMIT", "memory lifecycle event limit exceeded or changed during read");
+    return records.slice(0, verified.count);
+  }
+
+  #lifecycleVeto(records, signed) {
+    if (records.length >= MAX_LIFECYCLE_EVENTS) {
+      return deepFreeze({ ok: false, code: "LIFECYCLE_LEDGER_RESOURCE_LIMIT", message: "memory lifecycle event limit reached" });
+    }
+    const prior = [];
+    for (const record of records) {
+      let candidate;
+      try {
+        candidate = snapshotEvent(record?.entry?.payload, { integrityKey: this.#integrityKey, requireMac: true });
+      } catch (cause) {
+        throw new LedgerError(cause?.code ?? "LIFECYCLE_LEDGER_CONTRACT_FAILURE", "stored lifecycle event failed authenticity or contract validation");
+      }
+      if (sameTarget(candidate, signed)) prior.push(candidate);
+    }
+    if (prior.some((candidate) => (
+      candidate.target_content_hash !== signed.target_content_hash
+      || candidate.target_record_fingerprint !== signed.target_record_fingerprint
+    ))) return deepFreeze({ ok: false, code: "DENY_LIFECYCLE_TARGET_DRIFT", message: "lifecycle target fingerprint changed" });
+
+    const activeHolds = new Set();
+    let terminal = null;
+    for (const candidate of prior) {
+      if (candidate.event_type === "LEGAL_HOLD_PLACED") activeHolds.add(candidate.hold_id);
+      if (candidate.event_type === "LEGAL_HOLD_RELEASED") activeHolds.delete(candidate.hold_id);
+      if (candidate.event_type === "REDACTION_APPLIED" || candidate.event_type === "TOMBSTONED") terminal = candidate.event_type;
+    }
+    if (signed.event_type === "LEGAL_HOLD_PLACED" && activeHolds.has(signed.hold_id)) {
+      return deepFreeze({ ok: false, code: "DENY_LEGAL_HOLD_ALREADY_ACTIVE", message: "legal hold is already active" });
+    }
+    if (signed.event_type === "LEGAL_HOLD_RELEASED" && !activeHolds.has(signed.hold_id)) {
+      return deepFreeze({ ok: false, code: "DENY_LEGAL_HOLD_NOT_ACTIVE", message: "legal hold is not active" });
+    }
+    if ((signed.event_type === "REDACTION_APPLIED" || signed.event_type === "TOMBSTONED") && terminal !== null) {
+      return deepFreeze({ ok: false, code: "DENY_LIFECYCLE_TERMINAL", message: `record already has terminal lifecycle state ${terminal}` });
+    }
+    return null;
   }
 
   appendLifecycleEvent(event, { expectedSequence, idempotencyKey } = {}) {
-    const anchoredBefore = this.verify();
     const unsigned = snapshotEvent(event, { integrityKey: this.#integrityKey, requireMac: false });
     if (!isBoundedString(idempotencyKey, 512)) {
       throw new LedgerError("DENY_MISSING_ENTRY_FIELDS", "a bounded idempotencyKey is required for memory lifecycle append");
     }
     const signed = deepFreeze({ ...unsigned, event_mac: macFor(this.#integrityKey, unsigned) });
-    this.#assertFileBounded(Buffer.byteLength(JSON.stringify(lifecycleEntry(signed, idempotencyKey)), "utf8") * 4 + 4_096);
-    const receipt = this.append(lifecycleEntry(signed, idempotencyKey), {
-      expectedSequence,
-      preWriteCheck: (records) => {
-        if (records.length >= MAX_LIFECYCLE_EVENTS) {
-          return deepFreeze({ ok: false, code: "LIFECYCLE_LEDGER_RESOURCE_LIMIT", message: "memory lifecycle event limit reached" });
-        }
-        const prior = [];
-        for (const record of records) {
-          let candidate;
-          try {
-            candidate = snapshotEvent(record?.entry?.payload, { integrityKey: this.#integrityKey, requireMac: true });
-          } catch (cause) {
-            throw new LedgerError(cause?.code ?? "LIFECYCLE_LEDGER_CONTRACT_FAILURE", "stored lifecycle event failed authenticity or contract validation");
-          }
-          if (sameTarget(candidate, signed)) prior.push(candidate);
-        }
-        if (prior.some((candidate) => (
-          candidate.target_content_hash !== signed.target_content_hash
-          || candidate.target_record_fingerprint !== signed.target_record_fingerprint
-        ))) return deepFreeze({ ok: false, code: "DENY_LIFECYCLE_TARGET_DRIFT", message: "lifecycle target fingerprint changed" });
+    const entry = lifecycleEntry(signed, idempotencyKey);
+    this.#assertFileBounded(Buffer.byteLength(JSON.stringify(entry), "utf8") * 4 + 4_096);
 
-        const activeHolds = new Set();
-        let terminal = null;
-        for (const candidate of prior) {
-          if (candidate.event_type === "LEGAL_HOLD_PLACED") activeHolds.add(candidate.hold_id);
-          if (candidate.event_type === "LEGAL_HOLD_RELEASED") activeHolds.delete(candidate.hold_id);
-          if (candidate.event_type === "REDACTION_APPLIED" || candidate.event_type === "TOMBSTONED") terminal = candidate.event_type;
-        }
-        if (signed.event_type === "LEGAL_HOLD_PLACED" && activeHolds.has(signed.hold_id)) {
-          return deepFreeze({ ok: false, code: "DENY_LEGAL_HOLD_ALREADY_ACTIVE", message: "legal hold is already active" });
-        }
-        if (signed.event_type === "LEGAL_HOLD_RELEASED" && !activeHolds.has(signed.hold_id)) {
-          return deepFreeze({ ok: false, code: "DENY_LEGAL_HOLD_NOT_ACTIVE", message: "legal hold is not active" });
-        }
-        if ((signed.event_type === "REDACTION_APPLIED" || signed.event_type === "TOMBSTONED") && terminal !== null) {
-          return deepFreeze({ ok: false, code: "DENY_LIFECYCLE_TERMINAL", message: `record already has terminal lifecycle state ${terminal}` });
-        }
-        return null;
-      }
-    });
-    if (receipt?.ok === false) return receipt;
-    if (receipt.replayed !== true) {
-      let advanced;
+    for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
       try {
-        advanced = this.#advanceAnchor({
-          expected: { count: anchoredBefore.count, headHash: anchoredBefore.headHash },
-          next: { count: receipt.sequence, headHash: receipt.recordHash }
+        const anchoredBefore = this.#recoverPendingForWrite();
+        const trustedRecords = super.read().slice(0, anchoredBefore.count);
+        const entryHash = canonicalFingerprint(entry);
+        const replay = trustedRecords.find((record) => record.entry.idempotencyKey === idempotencyKey);
+        if (replay !== undefined) {
+          if (replay.entryHash !== entryHash) throw new LedgerError("DENY_IDEMPOTENCY_CONFLICT", "Idempotency key was reused for different lifecycle content");
+          return { ...structuredClone(replay), replayed: true };
+        }
+        const veto = this.#lifecycleVeto(trustedRecords, signed);
+        if (veto !== null) return veto;
+        if (expectedSequence !== anchoredBefore.count) {
+          throw new LedgerError("DENY_SEQUENCE_CONFLICT", `Expected sequence ${expectedSequence}, observed ${anchoredBefore.count}`);
+        }
+
+        const predicted = { ledgerId: LEDGER_ID, count: anchoredBefore.count + 1,
+          headHash: canonicalFingerprint({ ledgerId: LEDGER_ID, sequence: anchoredBefore.count + 1,
+            previousHash: anchoredBefore.headHash, entryHash }) };
+        const expected = { count: anchoredBefore.count, headHash: anchoredBefore.headHash };
+        const next = { count: predicted.count, headHash: predicted.headHash };
+        const commitment = this.#transactionCommitment(predicted);
+        const prepared = this.#prepareAnchor({ expected, next, commitment, metadata: { entry } });
+        if (prepared !== true) {
+          boundedBackoff(attempt);
+          continue;
+        }
+        const receipt = this.append(entry, {
+          expectedSequence: anchoredBefore.count,
+          preWriteCheck: (records) => this.#lifecycleVeto(records, signed)
         });
-      } catch {
-        throw new LedgerError("LIFECYCLE_ANCHOR_UNAVAILABLE", "lifecycle head anchor update failed after append; reconciliation is required");
+        if (receipt?.ok === false) {
+          throw new LedgerError("LIFECYCLE_TRANSACTION_INVARIANT", "lifecycle preflight changed after transactional head preparation");
+        }
+        if (receipt.sequence !== predicted.count || receipt.recordHash !== predicted.headHash) {
+          throw new LedgerError("LIFECYCLE_LEDGER_CONTRACT_FAILURE", "persisted lifecycle record differs from its prepared commitment");
+        }
+        this.#syncLedger();
+        const durable = this.#markAnchorDurable({ expected, next, commitment });
+        if (durable !== true) throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "transactional lifecycle head rejected durable phase");
+        const finalized = this.#finalizeAnchor({ expected, next, commitment });
+        if (finalized !== true) throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "transactional lifecycle head rejected finalize");
+        const verified = this.verify();
+        if (verified.count !== receipt.sequence || verified.headHash !== receipt.recordHash) {
+          throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "lifecycle append did not converge with its transactional head anchor");
+        }
+        return receipt;
+      } catch (cause) {
+        if ((cause instanceof LedgerError && ["DENY_SEQUENCE_CONFLICT", "LEDGER_BUSY"].includes(cause.code))
+          || ["HEAD_ANCHOR_BUSY", "EBUSY", "EPERM"].includes(cause?.code)) {
+          boundedBackoff(attempt);
+          continue;
+        }
+        if (cause instanceof LedgerError) throw cause;
+        throw new LedgerError(cause?.code ?? "LIFECYCLE_PERSISTENCE_FAILURE", "memory lifecycle event could not be persisted transactionally");
       }
-      if (advanced !== true) throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "lifecycle head anchor rejected the append; reconciliation is required");
     }
-    const verified = this.verify();
-    if (verified.count !== receipt.sequence || verified.headHash !== receipt.recordHash) {
-      throw new LedgerError("LIFECYCLE_ANCHOR_CONFLICT", "lifecycle append did not converge with its independent head anchor");
-    }
-    return receipt;
+    throw new LedgerError("LIFECYCLE_APPEND_RETRYABLE", "memory lifecycle append did not converge before the bounded retry deadline");
   }
 
   validateLifecycleEvent(event) {
