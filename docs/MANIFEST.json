@@ -3,7 +3,7 @@
   "version": "1.0.0-draft",
   "status": "DRAFT_NOT_EFFECTIVE",
   "generated_at": "2026-07-17",
-  "file_count_excluding_manifests": 63,
+  "file_count_excluding_manifests": 64,
   "files": [
     "AGENTS.md",
     "docs/00-governance/authority-and-risk-model.md",
@@ -27,6 +27,7 @@
     "docs/03-project-control/candidates/wp-p0-15a-runtime-registry-core.work-package.yaml",
     "docs/03-project-control/candidates/wp-p0-19-read-only-self-pilot.work-package.yaml",
     "docs/03-project-control/candidates/om-v0.1-doctrine-rev-001.md",
+    "docs/03-project-control/candidates/architecture-decision-record-v0.2.0-independent-review-001.md",
     "docs/03-project-control/candidates/context-receipt-shape-convergence-001.md",
     "docs/03-project-control/candidates/mod-context-completion-rev-001.md",
     "docs/03-project-control/candidates/mod-know-s2-rev-001.md",
