@@ -123,10 +123,13 @@ stakeholder-capability-mapping · system-context-boundaries
 
 ## Scoped integration-principal amendment — 2026-08-05
 
-**Amendment ID:** SECB-AGENTS-AMD-003  
-**Requested by:** Human operator, 2026-08-05  
+**Amendment ID:** SECB-AGENTS-AMD-003
+
+**Requested by:** Human operator, 2026-08-05
+
 **Status:** DRAFT until independently reviewed and merged to `main` by a human
-operator under the rules effective before this amendment  
+operator under the rules effective before this amendment
+
 **Scope:** Prospective repository integration only; no retroactive authority
 
 Once effective, a non-human integration principal may push, create or update a
