@@ -109,13 +109,13 @@ Not authority, and the producer's stake is unchanged from the predecessors.
 **Publish the ten, then the eleven.** Additive, touches no branch and no pull
 request, reversible by deleting the remote refs:
 
-```bash
-git for-each-ref --format='%(refname)' \
-  refs/reviews refs/review refs/bst-review refs/bst-sa-review \
-  refs/bst-sa/reviews refs/candidates refs/immune-review \
-  refs/rev-archive refs/review-candidates |
-  while read r; do git push origin "$r:$r"; done
-```
+    git for-each-ref --format='%(refname)' \
+      refs/reviews refs/review refs/bst-review refs/bst-sa-review \
+      refs/bst-sa/reviews refs/candidates refs/immune-review \
+      refs/rev-archive refs/review-candidates |
+      while read r; do git push origin "$r:$r"; done
+
+**Done on operator instruction, 2026-08-04 — see the addendum below.**
 
 This is the operator's call, not the producer's: it publishes other agents'
 records to a shared remote, and the producer should not decide unilaterally that
@@ -127,6 +127,59 @@ config, or a `docs/` path, matters less than there being one.
 
 **Update `#69`'s row.** It is not `REVIEW_EVIDENCE_UNKNOWN`. It is
 `FRESH_IN_CODE` with a comment-only post-verdict delta, and needs no new review.
+
+## Addendum, 2026-08-04 — published on operator instruction
+
+The operator directed publication. All twenty-one refs were pushed to `origin`
+under their existing names, without `--force` in any case.
+
+Verified from the remote side rather than from the push command's own output:
+
+    review refs on origin, before   0
+    review refs on origin, after   21
+    the ten at-risk, checked individually against git ls-remote   10/10 present
+    control: an unpushed local commit reports absent   FIRES
+
+**The ten no longer exist on one machine only.** That was the whole risk and it
+is closed.
+
+### Publication is not yet retrieval
+
+A ref on `origin` outside `refs/heads` is durable but still not fetched by
+default. Confirmed against a genuinely fresh `git clone` of `origin`:
+
+    fresh clone, no refspec        21 review refs on the remote, none fetched
+    after adding the refspecs      21 fetched
+    reading #69's verdict from that clone   APPROVE_WITH_NOTES, target e880edb
+
+The refspec each clone needs:
+
+    for ns in reviews review bst-review bst-sa-review bst-sa/reviews \
+              candidates immune-review rev-archive review-candidates; do
+      git config --add remote.origin.fetch "+refs/$ns/*:refs/$ns/*"
+    done
+
+Nine lines of per-clone configuration is the cost of nine namespaces, and it is
+the argument for consolidating to one. **Durability is now solved; discovery is
+not.** Anyone who does not know these namespaces exist still cannot find them,
+and this record is currently the only thing that names them.
+
+### A mistake made while verifying this
+
+The first attempt at the fresh-clone test cloned to a path that did not exist.
+The `cd` into it failed, and every subsequent command in that block ran against
+**this repository** instead — including two `git config --add
+remote.origin.fetch` lines, which were written into the real clone's config. The
+numbers that run reported were therefore this repository's, not a fresh clone's,
+and would have been reported as proof that retrieval works.
+
+Both config lines were removed and `remote.origin.fetch` verified back to its
+single original entry. The test was then redone against a real clone of
+`origin`, which is the run quoted above.
+
+It is recorded because a verification step that silently measures the wrong
+subject is the same failure this whole reconciliation exists to catch, and the
+producer committed it while documenting it.
 
 ## Limitations
 
