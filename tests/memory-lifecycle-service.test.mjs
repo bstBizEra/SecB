@@ -235,6 +235,35 @@ test("one durable boundary lease blocks a second lifecycle-ledger instance", asy
   assert.equal(receipt.sequence, 1);
 });
 
+test("a late async descendant cannot reuse a revoked lifecycle boundary token", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "secb-memory-boundary-generation-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const filePath = join(directory, "lifecycle.jsonl");
+  const anchorPath = join(directory, "lifecycle-head.json");
+  const anchor = new DurableHeadAnchor({ filePath: anchorPath, ledgerId: "secb-memory-lifecycle-ledger",
+    integrityKey: INTEGRITY_KEY, initialize: true });
+  const ledger = new MemoryLifecycleLedger({ filePath, integrityKey: INTEGRITY_KEY, headAnchor: anchor });
+  let releaseLate;
+  let lateTask;
+  await ledger.withBoundaryLease(async () => {
+    const gate = new Promise((resolve) => { releaseLate = resolve; });
+    lateTask = (async () => {
+      await gate;
+      try {
+        ledger.appendLifecycleEvent(directLifecycleEvent(), {
+          expectedSequence: 0, idempotencyKey: "idem-late-descendant"
+        });
+        return "UNEXPECTED_APPEND";
+      } catch (error) { return error.code; }
+    })();
+  });
+  await ledger.withBoundaryLease(async () => {
+    releaseLate();
+    assert.equal(await lateTask, "LIFECYCLE_BOUNDARY_BUSY");
+    assert.equal(ledger.verify().count, 0);
+  });
+});
+
 function resolution(overrides = {}) {
   return {
     project_id: "project-1",

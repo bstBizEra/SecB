@@ -151,6 +151,7 @@ export class MemoryLifecycleLedger extends DurableLedger {
   #finalizeAnchor;
   #boundaryPath;
   #boundaryContext = new AsyncLocalStorage();
+  #boundaryInstance = Symbol("memory-lifecycle-ledger-instance");
 
   constructor({ filePath, integrityKey, headAnchor } = {}) {
     super({ filePath, ledgerId: LEDGER_ID });
@@ -222,13 +223,14 @@ export class MemoryLifecycleLedger extends DurableLedger {
   }
 
   #withBoundarySync(operation) {
-    if (this.#boundaryContext.getStore() !== undefined) return operation();
+    const inherited = this.#boundaryContext.getStore();
+    if (inherited?.instance === this.#boundaryInstance && inherited.active === true) return operation();
     for (let attempt = 0; attempt < MAX_APPEND_ATTEMPTS; attempt += 1) {
       try {
         this.#acquireBoundary();
-        const token = Object.freeze({ owner: Symbol("memory-lifecycle-boundary") });
+        const token = { instance: this.#boundaryInstance, active: true };
         try { return this.#boundaryContext.run(token, operation); }
-        finally { rmSync(this.#boundaryPath, { recursive: true, force: true }); }
+        finally { token.active = false; rmSync(this.#boundaryPath, { recursive: true, force: true }); }
       } catch (cause) {
         if (cause?.code !== "LIFECYCLE_BOUNDARY_BUSY") throw cause;
         boundedBackoff(attempt);
@@ -239,11 +241,12 @@ export class MemoryLifecycleLedger extends DurableLedger {
 
   async withBoundaryLease(operation) {
     if (typeof operation !== "function") throw new LedgerError("LIFECYCLE_BOUNDARY_REQUEST_INVALID", "boundary operation is required");
-    if (this.#boundaryContext.getStore() !== undefined) return operation();
+    const inherited = this.#boundaryContext.getStore();
+    if (inherited?.instance === this.#boundaryInstance && inherited.active === true) return operation();
     this.#acquireBoundary();
-    const token = Object.freeze({ owner: Symbol("memory-lifecycle-boundary") });
+    const token = { instance: this.#boundaryInstance, active: true };
     try { return await this.#boundaryContext.run(token, operation); }
-    finally { rmSync(this.#boundaryPath, { recursive: true, force: true }); }
+    finally { token.active = false; rmSync(this.#boundaryPath, { recursive: true, force: true }); }
   }
 
   #anchorSnapshot() {
