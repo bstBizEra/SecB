@@ -86,6 +86,64 @@ Concretely, for this producer:
   failure. The measurement was correct, printed, and then ignored. No amount of
   additional instrumentation fixes that.
 
+## Addendum, 2026-08-05 — the conclusion above is too generous, and the counter-example is a day old
+
+This record concluded that **measurement claims are self-certifiable because
+they carry a firing control**. Within a day that was falsified on a single
+question, three times.
+
+The question was whether `#137` and `#138` conflict.
+
+| attempt | method | result published | why it was wrong |
+|---|---|---|---|
+| 1 | read blobs from a merge tree | `0 / 7` — "the guards were silently deleted" | the tree variable was empty; every read failed, every zero was a failed read |
+| 2 | added a control proving the tree was readable, grepped for `CONFLICT` | "zero conflicts, eight blob values" | `merge-tree` **does** print `CONFLICT`; the grep was for the wrong thing and the blobs came from a conflicted tree |
+| 3 | wrapped the intermediate tree with `commit-tree` | "eight files conflict in both orders" | the synthetic commit had one parent, `main`, so git merged two **stacked** branches as if independent and manufactured the conflicts |
+
+Attempts 2 and 3 were each published to three pull requests before being
+checked again.
+
+**Every one of these is a measurement claim. Every one carried a control. Each
+control fired correctly and none of them caught the error**, because each was
+built to answer a narrower question than the one being asked:
+
+- attempt 1's control asked *can I read this tree* — and after attempt 2 fixed
+  that, it kept answering yes while the tree was garbage
+- attempt 3's control asked *is a clean merge distinguishable from a conflicted
+  one* — it was, and the answer was still wrong, because the two commits being
+  merged were not the two things the question was about
+
+**What actually falsified it was a subagent running one command it had no
+reason to skip:** `gh pr view 138 --json baseRefName` → `fix/vf1-reviewed`.
+`#138` targets `#137`. There was never a conflict. The producer had built three
+increasingly sophisticated measurements on top of an unexamined assumption that
+the two branches were parallel, and no control it could design would have
+questioned that assumption, because every control was designed inside it.
+
+### The corrected conclusion
+
+**A control tests the question it was built for. It cannot test the framing of
+that question.** Measurement claims are self-certifiable *against the failure
+modes their controls model*, and blind to everything upstream of them —
+including which objects are being compared and whether the comparison means
+what its author thinks.
+
+That is not a weaker version of the original conclusion. It is a different one:
+the original located the risk in judgement claims and treated measurement as
+safe. **The three failures above were measurement claims that were unsafe in a
+way judgement claims are not**, because their numbers looked verified.
+
+### What this implies that the original did not
+
+The original recommended that recommendations go to someone who did not produce
+the measurement. That is now too narrow. **A measurement whose framing has not
+been independently questioned is not self-certifiable either**, and the cheapest
+available check is not a better control — it is someone who did not start from
+the producer's assumptions.
+
+In this case that cost one subagent, thirteen tool calls, and under three
+minutes. The producer had spent roughly two hours being wrong more precisely.
+
 ## What this record does not do
 
 - **It does not propose any change to `AGENTS.md`, ADR-0014, or any authority
