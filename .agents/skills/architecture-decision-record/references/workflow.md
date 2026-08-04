@@ -28,9 +28,16 @@ requested. Advisory mode is only for analysis where no decision is requested.
    - `ADVISORY_ONLY`;
    - `DECISION_CANDIDATE`; or
    - `DENY_AUTHORITY_UNVERIFIED`.
-7. Never place an option name or decision text in `disposition`; record the chosen option in `decision` or `selected_option`.
+7. Never place an option name or decision text in `disposition`; record the chosen option only in the schema field `decision`. Never emit `selected_option`.
 8. Record reason code, authority reference, effective window, review triggers, supersession, and next-role action.
 9. Re-check target and authority immediately before returning a `DECISION_CANDIDATE` disposition.
+10. Validate the complete artifact against the canonical schema before return.
+    Control tokens are closed, case-sensitive values: `ADVISORY`,
+    `DECISION_CANDIDATE`, `DENY`, `ADVISORY_ONLY`,
+    `DENY_AUTHORITY_UNVERIFIED`, and `NOT_EFFECTIVE`. Never translate,
+    lowercase, title-case, hyphenate, or paraphrase them. If exact serialization
+    or schema validation cannot be completed, return `DENY` with
+    `DENY_AUTHORITY_UNVERIFIED` rather than a decision candidate.
 
 ## Reserved gates
 

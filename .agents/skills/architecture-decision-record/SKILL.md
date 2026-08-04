@@ -35,9 +35,24 @@ Repository mutation requires separate implementation authority. A decision does 
 3. Resolve `ADVISORY`, `DECISION_CANDIDATE`, or `DENY`; fail closed on ambiguity.
 4. State context, scope, drivers, options, consequences, risks, and reversibility.
 5. Select an option only in `DECISION_CANDIDATE` mode; otherwise recommend or deny deterministically.
-6. Keep control disposition separate from the selected option: `disposition` must be one canonical disposition token; put the chosen option only in `decision` or `selected_option`.
+6. Keep control disposition separate from the selected option: `disposition` must be one canonical disposition token; put the chosen option only in the schema field `decision`. Never emit `selected_option`.
 7. Record a reason code, authority reference, evidence references, limitations, effective window, review triggers, and supersession rules.
 8. Unconditionally route higher-risk, authority-affecting, evidence-acceptance, release, memory/knowledge/skill promotion, and activation decisions to the responsible human role.
+
+## Canonical serialization contract
+
+Before returning a structured ADR, normalize and validate the complete artifact
+against `../../schemas/architecture-decision-record.schema.json`. Emit the
+following control tokens byte-for-byte; do not translate, lowercase, title-case,
+hyphenate, or paraphrase them:
+
+- `ADVISORY` with `ADVISORY_ONLY`;
+- `DECISION_CANDIDATE` with `DECISION_CANDIDATE`; or
+- `DENY` with `DENY_AUTHORITY_UNVERIFIED`.
+
+Always emit `effective_status` as `NOT_EFFECTIVE`. If the runtime cannot
+validate the complete artifact or preserve these exact tokens, fail closed with
+`DENY` and `DENY_AUTHORITY_UNVERIFIED`; do not emit a decision candidate.
 
 ## Required outputs
 

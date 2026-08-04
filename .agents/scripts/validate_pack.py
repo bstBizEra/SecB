@@ -64,6 +64,16 @@ try:
     for error in adr_validator.iter_errors(adr_template):
         location='.'.join(str(part) for part in error.path) or '<root>'
         errors.append(f'architecture decision template schema:{location}: {error.message}')
+    for harness in ('codex','claude'):
+        output_path=ROOT/'evals'/f'architecture-decision-record-v0.2.0-{harness}-output.json'
+        output=json.loads(output_path.read_text(encoding='utf-8'))
+        for error in adr_validator.iter_errors(output):
+            location='.'.join(str(part) for part in error.path) or '<root>'
+            errors.append(f'architecture decision {harness} output schema:{location}: {error.message}')
+        if output.get('decision')!='PostgreSQL':
+            errors.append(f'architecture decision {harness} output selected unexpected decision')
+        if 'selected_option' in output:
+            errors.append(f'architecture decision {harness} output emitted selected_option')
     canonical_pairs={
         'ADVISORY':'ADVISORY_ONLY',
         'DECISION_CANDIDATE':'DECISION_CANDIDATE',
