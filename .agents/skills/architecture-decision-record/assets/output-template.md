@@ -1,51 +1,47 @@
-# Architecture Decision Record Output Template
+# Architecture Decision Record
 
-**Artifact ID:**  
-**Project / Work ID:**  
-**Producer role and session:**  
-**Baseline / Context Receipt:**  
-**Status:** Draft candidate  
+**Artifact ID:**
 
-## Title and ID
+**Project / Work ID:**
 
+**Producer role and session:**
 
-## Status
+**Exact target / baseline:**
 
+**Decision mode:** `ADVISORY | DECISION_CAPABLE`
 
-## Context
+**Disposition:** `ADVISORY_ONLY | DECIDED_NOT_EFFECTIVE | DECIDED_EFFECTIVE_A2 | DENY_AUTHORITY_UNVERIFIED`
 
+**Reason code:**
 
-## Decision drivers
+## Authority evidence
 
+- Decision owner:
+- Authority reference:
+- Scope and ceiling:
+- Effective window:
+- Freshness/revocation check:
+
+## Context and decision drivers
 
 ## Options considered
 
+## Decision or recommendation
 
-## Decision
+## Consequences and risks
 
+## Migration, rollback, and operational impact
 
-## Consequences
-
-
-## Risks
-
-
-## Evidence
-
-
-## Owners and approvals
-
-
-## Review triggers
-
-
-## Supersession
-
+## Affected elements
 
 ## Evidence index
 
 | Claim or decision | Evidence reference | Verification status |
 |---|---|---|
+
+## Effective status and separate gates
+
+## Review and supersession triggers
 
 ## Limitations and unresolved items
 
