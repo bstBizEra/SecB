@@ -6,6 +6,7 @@ import { join, resolve, sep } from "node:path";
 import test from "node:test";
 
 import { VERDICT, loadCorpus } from "../src/audit/corpus.mjs";
+import { EXPECTED_CORPUS, independentCounts } from "../src/audit/corpus-expectation.mjs";
 import { CHECKS, deriveExpectedSections, synthCorpus, synthPackage } from "../src/audit/checks-declaration.mjs";
 
 const REPO = resolve(import.meta.dirname, "..");
@@ -348,9 +349,46 @@ test("real-corpus counts are recorded, and every zero is accompanied by proof th
   t.diagnostic(`corpus: ${corpus.counts.packages} packages, ${corpus.counts.governed} governed, ${corpus.counts.ungoverned} ungoverned, ${corpus.counts.files} files`);
   t.diagnostic(`ungoverned and therefore outside these three checks: ${corpus.packages.filter((p) => !p.governed).map((p) => p.name).join(", ")}`);
 
-  assert.equal(corpus.counts.packages, 25, "corpus package count moved off the WP-SK-AUDIT-01 baseline");
-  assert.equal(corpus.counts.governed, 22);
-  assert.equal(corpus.counts.ungoverned, 3);
+  // Two assertions doing two different jobs, where there used to be one
+  // hardcoded triple that did neither well and made the audit unextractable.
+  //
+  // First: does the loader COUNT CORRECTLY? Checked against a second count taken
+  // through plain fs rather than through the loader itself. This holds on any
+  // corpus, which is what lets this suite run on main.
+  const independent = independentCounts(SKILLS);
+  assert.deepEqual(
+    {
+      packages: corpus.counts.packages,
+      governed: corpus.counts.governed,
+      ungoverned: corpus.counts.ungoverned
+    },
+    {
+      packages: independent.packages,
+      governed: independent.governed,
+      ungoverned: independent.ungoverned
+    },
+    "the audit's counts disagree with an independent walk of the same directory"
+  );
+
+  // Second: has the corpus MOVED? The tripwire the old triple was really for,
+  // kept but made portable — it now lives in a file that travels with the
+  // corpus, so extracting this audit to main means updating that file in the
+  // extraction commit rather than editing an assertion during a rebase.
+  assert.deepEqual(
+    {
+      packages: corpus.counts.packages,
+      governed: corpus.counts.governed,
+      ungoverned: corpus.counts.ungoverned,
+      ungovernedNames: corpus.packages.filter((p) => !p.governed).map((p) => p.name).sort()
+    },
+    {
+      packages: EXPECTED_CORPUS.packages,
+      governed: EXPECTED_CORPUS.governed,
+      ungoverned: EXPECTED_CORPUS.ungoverned,
+      ungovernedNames: [...EXPECTED_CORPUS.ungovernedNames].sort()
+    },
+    "corpus moved off the recorded expectation — update src/audit/corpus-expectation.mjs in the same commit as the corpus change, deliberately"
+  );
 
   for (const check of CHECKS) {
     const findings = check.run(corpus);

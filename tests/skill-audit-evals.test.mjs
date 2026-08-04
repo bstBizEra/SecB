@@ -5,6 +5,7 @@ import { join, relative, resolve, sep } from "node:path";
 import test from "node:test";
 
 import { CORPUS_ROOT, VERDICT, loadCorpus, readShallowYaml } from "../src/audit/corpus.mjs";
+import { independentCounts } from "../src/audit/corpus-expectation.mjs";
 import {
   CHECKS,
   casesYaml,
@@ -127,11 +128,23 @@ for (const check of CHECKS) {
 // ---------------------------------------------------------------------------
 
 test("corpus shape", () => {
-  assert.equal(corpus.counts.packages, 25);
-  assert.equal(corpus.counts.governed, 22);
-  assert.equal(corpus.counts.ungoverned, 3);
+  // The shape assertion lives in src/audit/corpus-expectation.mjs so it travels
+  // with the corpus instead of being frozen here. Hardcoding 25/22/3 made this
+  // suite fail on main for a reason unrelated to the audit: main carries 22
+  // packages, all governed.
+  const independent = independentCounts();
+  assert.deepEqual(
+    { p: corpus.counts.packages, g: corpus.counts.governed, u: corpus.counts.ungoverned },
+    { p: independent.packages, g: independent.governed, u: independent.ungoverned },
+    "the loader's counts disagree with an independent walk of the same directory"
+  );
+
   const facts = evalFacts(corpus);
-  assert.equal(facts.packages.filter((p) => p.hasEvals).length, 22);
+  // Stated as the finding it actually is — EVERY governed package carries evals
+  // — rather than as the number 22, which is only incidentally the same on both
+  // branches and would go quietly stale if one governed package lost its evals.
+  assert.equal(facts.packages.filter((p) => p.hasEvals).length, corpus.counts.governed,
+    "every governed package is expected to carry evals; a bare number would hide one losing them");
   assert.equal(facts.packages.filter((p) => !p.parseComplete).length, 0,
     "every cases file parsed completely; any unreadable line must surface as UNDECIDABLE, not as absence");
   const cases = facts.packages.reduce((n, p) => n + p.casesFiles.reduce((m, cf) => m + cf.cases.length, 0), 0);
@@ -141,15 +154,20 @@ test("corpus shape", () => {
 test("evals.expectation-diversity: 220 instances collapse to 10 distinct strings, 22.0 per string", () => {
   const s = summaryOf("evals.expectation-diversity");
   assert.equal(s.verdict, VERDICT.VIOLATION);
-  assert.equal(s.evidence.instances, 220);
   assert.equal(s.evidence.distinct, 10);
-  assert.equal(s.evidence.instancesPerDistinctString, 22);
-  assert.equal(s.evidence.evalBearingPackages, 22);
+  assert.equal(s.evidence.evalBearingPackages, corpus.counts.governed);
+  // The finding is an IDENTITY, not three numbers: every one of the ten strings
+  // appears once in every eval-bearing package, so instances is exactly
+  // distinct x packages. Asserting the identity keeps this true on any corpus
+  // and still fails the moment the boilerplate stops being uniform.
+  assert.equal(s.evidence.instances, s.evidence.distinct * s.evidence.evalBearingPackages);
+  assert.equal(s.evidence.instancesPerDistinctString, s.evidence.evalBearingPackages);
   // All ten strings appear in all 22 eval-bearing packages, so all ten are boilerplate.
   assert.equal(s.evidence.boilerplateStrings.length, 10);
   for (const b of s.evidence.boilerplateStrings) {
-    assert.equal(b.packages, 22, `"${b.text}" should appear in all 22 packages`);
-    assert.equal(b.instances, 22);
+    assert.equal(b.packages, corpus.counts.governed,
+      `"${b.text}" is boilerplate only if it appears in EVERY eval-bearing package`);
+    assert.equal(b.instances, corpus.counts.governed);
     assert.match(b.citation, /^[\w-]+\/evals\/cases\.yaml:\d+$/);
   }
   // Per-package: every package states 10 expectations, 10 distinct within itself,
