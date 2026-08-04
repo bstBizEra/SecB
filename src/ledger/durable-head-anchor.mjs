@@ -11,7 +11,10 @@ import {
 import { dirname, resolve } from "node:path";
 
 const ZERO_HASH = "0".repeat(64);
-const MAX_ANCHOR_BYTES = 8 * 1024;
+// The unified Memory boundary admits a bounded 4 MiB serialized page. A
+// PREPARED checkpoint may carry that exact recovery identity plus ledger and
+// MAC overhead, so the authenticated checkpoint envelope reserves 8 MiB.
+const MAX_ANCHOR_BYTES = 8 * 1024 * 1024;
 const MIN_INTEGRITY_KEY_BYTES = 32;
 
 const isHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);

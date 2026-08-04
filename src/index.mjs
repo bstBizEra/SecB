@@ -157,8 +157,14 @@ export {
 
 export {
   createMemoryLifecycleBatchResolver,
-  MemoryLifecycleBatchResolverConfigurationError
+  MemoryLifecycleBatchResolverConfigurationError,
+  MemoryLifecycleBatchResolverError
 } from "./services/memory-lifecycle-batch-resolver.mjs";
+
+export {
+  createMemoryLifecycleBoundaryCoordinator,
+  MemoryLifecycleBoundaryError
+} from "./services/memory-lifecycle-boundary-coordinator.mjs";
 
 export {
   createMemoryLifecycleUnifiedService,

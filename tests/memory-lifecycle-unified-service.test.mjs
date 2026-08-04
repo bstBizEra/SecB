@@ -10,6 +10,7 @@ import { createMemoryLifecycleUnifiedService, MemoryLifecycleUnifiedConfiguratio
 import { createMemoryAuthorityGateway } from "../src/services/memory-authority-gateway-service.mjs";
 import { createMemoryCandidateProvider } from "../src/services/memory-candidate-provider.mjs";
 import { createMemoryLifecycleBatchResolver } from "../src/services/memory-lifecycle-batch-resolver.mjs";
+import { createMemoryLifecycleBoundaryCoordinator } from "../src/services/memory-lifecycle-boundary-coordinator.mjs";
 import { createMemoryLifecycleService } from "../src/services/memory-lifecycle-service.mjs";
 import { normalizeCandidateSources } from "../src/services/candidate-source-port.mjs";
 import { ContextFederationService, mintReceiptDocument } from "../src/services/context-federation-service.mjs";
@@ -21,6 +22,7 @@ import { MemoryLifecycleLedger } from "../src/ledger/memory-lifecycle-ledger.mjs
 import { checkPairwiseDistinct } from "../src/control/sod-rules.mjs";
 
 const NOW = "2026-08-03T12:00:00.000Z";
+const fenceFields = () => ({ fence_revision: "d".repeat(64), lifecycle_head_hash: "c".repeat(64) });
 
 function memory(overrides = {}) {
   const row = {
@@ -120,7 +122,7 @@ function harness(overrides = {}) {
       actor_id: "actor-1", identity_decision_id: "identity-1", scope_decision_id: "scope-1", authority_decision_id: "gateway-authority-1" };
   } };
   const batch = (request) => ({ ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
-    evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
+    evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(),
     decisions: request.records.map((item) => effectiveDecision(request, item)) });
   const lifecycleResolver = {
     async resolveBatch(request) { calls.lifecycle += 1; return batch(request); },
@@ -181,7 +183,7 @@ test("terminal batch decisions are opaque and subtractive", async () => {
   const { service } = harness({ lifecycleResolver: { async resolveBatch(request) {
     const item = request.records[0];
     return { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
-      evaluated_at: NOW, batch_fingerprint: canonicalFingerprint(request), decisions: [{
+      evaluated_at: NOW, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(), decisions: [{
         request_index: 0, ok: false, code: "DENY_MEMORY_TOMBSTONED", memory_record_id: item.memory_record_id,
         memory_record_version: item.memory_record_version, content_hash: null, target_record_fingerprint: null,
         state_fingerprint: null, lifecycle_head_hash: null, authority_decision_id: null
@@ -226,7 +228,7 @@ test("batch receipt must be closed, complete, unique, and fingerprint-bound", as
   ]) {
     const { service } = harness({ lifecycleResolver: { async resolveBatch(request) {
       const base = { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
-        evaluated_at: NOW, batch_fingerprint: canonicalFingerprint(request), decisions: request.records.map((item) => effectiveDecision(request, item)) };
+        evaluated_at: NOW, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(), decisions: request.records.map((item) => effectiveDecision(request, item)) };
       return mutate(base);
     } } });
     assert.ok((await service.retrieveCandidateSources(retrieval())).code.startsWith("DENY_UNIFY_LIFECYCLE"));
@@ -334,7 +336,7 @@ test("final lifecycle revalidation occurs inside the single issuance fence and b
   const terminal = harness({ lifecycleResolver: { async withIssuanceFence(request, callback) {
     const item = request.records[0];
     return callback({ ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
-      evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), decisions: [{
+      evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(), decisions: [{
         request_index: 0, ok: false, code: "DENY_MEMORY_TOMBSTONED", memory_record_id: item.memory_record_id,
         memory_record_version: item.memory_record_version, content_hash: null, target_record_fingerprint: null,
         state_fingerprint: null, lifecycle_head_hash: null, authority_decision_id: null
@@ -614,7 +616,7 @@ test("atomic PREPARED reservation rejects an overlapping stale preflight before 
       const committedA = await first.service.issueReceipt({ retrieval: retrieval(), issue });
       assert.equal(committedA.state, "ISSUED");
       return callback({ ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
-        evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
+        evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(),
         decisions: request.records.map((item) => effectiveDecision(request, item)) });
     } }
   });
@@ -631,7 +633,7 @@ test("timed-out issuance fence cannot invoke Context Federation later", async ()
   let lateCallback;
   const fixture = harness({ timeoutMs: 5, lifecycleResolver: { async withIssuanceFence(request, callback) {
     lateCallback = () => callback({ ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id,
-      layer: request.layer, evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
+      layer: request.layer, evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(),
       decisions: request.records.map((item) => effectiveDecision(request, item)) });
     return new Promise(() => {});
   } }, contextFederation: { issueReceipt() { federationCalls += 1; throw new Error("must not run"); } } });
@@ -647,7 +649,7 @@ test("a fence that stalls after its callback cannot turn an issued receipt into 
   let secondDisposition;
   const fixture = harness({ timeoutMs: 5, lifecycleResolver: { async withIssuanceFence(request, callback) {
     const batch = { ok: true, code: "MEMORY_BATCH_RESOLVED", project_id: request.project_id, layer: request.layer,
-      evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request),
+      evaluated_at: request.as_of, batch_fingerprint: canonicalFingerprint(request), ...fenceFields(),
       decisions: request.records.map((item) => effectiveDecision(request, item)) };
     callback(batch);
     secondDisposition = callback(batch);
@@ -731,7 +733,6 @@ test("real authority gateway, provider, durable replay adapter, Context Federati
     ledgerId: "secb-memory-lifecycle-ledger", integrityKey: Buffer.alloc(32, 0x54), initialize: true });
   const lifecycleLedger = new MemoryLifecycleLedger({ filePath: join(dir, "lifecycle.jsonl"),
     integrityKey: Buffer.alloc(32, 0x55), headAnchor: lifecycleHead });
-  let issuanceFenceActive = false;
   const lifecycleAuthority = (expected) => ({ decision: "ALLOW", code: "ALLOW_MEMORY_LIFECYCLE", ...expected,
     decision_id: "lifecycle-real-1", actor_id: "governor-1", producer_actor_id: row.actor_id,
     reviewer_actor_id: "reviewer-1", approver_actor_id: "governor-1", work_package_id: wpId,
@@ -741,27 +742,15 @@ test("real authority gateway, provider, durable replay adapter, Context Federati
     project_id: request.project_id, memory_record_id: request.memory_record_id,
     memory_record_version: request.memory_record_version, policy_id: request.policy_id,
     retain_until: "2026-09-01T00:00:00.000Z" });
-  const lifecycleBoundary = {
-    withMutationFence(request, callback) { return callback({ records: [row], evidence: null,
-      authority: lifecycleAuthority(request.authority_expected) }); },
-    withResolutionFence(request, callback) {
-      assert.equal(issuanceFenceActive, true, "real lifecycle resolution must remain inside the shared issuance fence");
-      return callback({ records: [row], retention: retention(request.retention_request),
-        authority: lifecycleAuthority(request.authority_expected) });
-    }
-  };
+  const lifecycleBoundary = createMemoryLifecycleBoundaryCoordinator({ lifecycleLedger,
+    recordSource: () => [row], authoritySource: lifecycleAuthority, retentionSource: retention,
+    evidenceSource: () => null });
   const lifecycleService = createMemoryLifecycleService({ ledger: lifecycleLedger,
-    authorityResolver: async (expected) => lifecycleAuthority(expected),
-    recordResolver: async () => { assert.equal(issuanceFenceActive, true); return [row]; },
-    retentionPolicyResolver: async (request) => retention(request), evidenceResolver: async () => null,
+    authorityResolver: lifecycleBoundary.resolveAuthority, recordResolver: lifecycleBoundary.resolveRecords,
+    retentionPolicyResolver: lifecycleBoundary.resolveRetention, evidenceResolver: lifecycleBoundary.resolveEvidence,
     boundaryCoordinator: lifecycleBoundary, sodRules: { checkPairwiseDistinct }, now: clock });
   const lifecycleResolver = createMemoryLifecycleBatchResolver({ lifecycleService, now: clock,
-    issuanceCoordinator: { async withIssuanceFence(request, callback) {
-      assert.equal(issuanceFenceActive, false, `nested issuance fence for ${request.project_id}`);
-      issuanceFenceActive = true;
-      try { return await callback({ revision: canonicalFingerprint(request) }); }
-      finally { issuanceFenceActive = false; }
-    } } });
+    issuanceCoordinator: lifecycleBoundary });
   const lifecycleProbeRequest = { project_id: projectId, layer: "project", gateway_retrieved_at: NOW,
     gateway_authority_decision_id: "retrieval-real-1", as_of: NOW,
     records: [{ request_index: 0, memory_record_id: row.memory_record_id, memory_record_version: row.version,

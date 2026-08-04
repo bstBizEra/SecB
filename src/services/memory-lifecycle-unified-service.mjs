@@ -19,7 +19,8 @@ const GATEWAY_KEYS = Object.freeze([
 ]);
 const PROVIDER_KEYS = Object.freeze(["decision", "code", "data_untrusted", "project_id", "retrieved_at", "sources", "exclusions", "accounting"]);
 const ACCOUNTING_KEYS = Object.freeze(["requested", "included", "excluded", "token_budget", "tokens_used"]);
-const BATCH_KEYS = Object.freeze(["ok", "code", "project_id", "layer", "evaluated_at", "batch_fingerprint", "decisions"]);
+const BATCH_KEYS = Object.freeze(["ok", "code", "project_id", "layer", "evaluated_at", "batch_fingerprint",
+  "fence_revision", "lifecycle_head_hash", "decisions"]);
 const LEDGER_RECEIPT_KEYS = Object.freeze(["ledgerId", "sequence", "previousHash", "entry", "entryHash", "recordHash", "replayed"]);
 const DECISION_KEYS = Object.freeze([
   "request_index", "ok", "code", "memory_record_id", "memory_record_version", "content_hash",
@@ -105,6 +106,8 @@ const withinWindow = (earlierMs, laterMs, freshnessMs) => Number.isFinite(earlie
 function lifecycleStateDigest(batch) {
   return canonicalFingerprint({
     batch_fingerprint: batch.batch_fingerprint,
+    fence_revision: batch.fence_revision,
+    lifecycle_head_hash: batch.lifecycle_head_hash,
     evaluated_at: batch.evaluated_at,
     decisions: [...batch.decisions].sort((left, right) => left.request_index - right.request_index).map((decision) => ({
       request_index: decision.request_index,
@@ -126,7 +129,8 @@ function snapshotEffectiveBatch(rawBatch, request, bindings, notBeforeMs, observ
     || !isCanonicalInstant(batch.evaluated_at)
     || !withinWindow(notBeforeMs, Date.parse(batch.evaluated_at), freshnessMs)
     || !withinWindow(Date.parse(batch.evaluated_at), observedMs, freshnessMs)
-    || batch.batch_fingerprint !== canonicalFingerprint(request) || !Array.isArray(batch.decisions)
+    || batch.batch_fingerprint !== canonicalFingerprint(request) || !isHash(batch.fence_revision)
+    || !isHash(batch.lifecycle_head_hash) || !Array.isArray(batch.decisions)
     || batch.decisions.length !== bindings.length) return null;
   const decisions = [];
   const seen = new Set();
@@ -139,7 +143,8 @@ function snapshotEffectiveBatch(rawBatch, request, bindings, notBeforeMs, observ
     const binding = bindings[decision.request_index];
     if (decision.memory_record_id !== binding.memory_record_id || decision.memory_record_version !== binding.memory_record_version
       || decision.content_hash !== binding.content_hash || decision.target_record_fingerprint !== binding.target_record_fingerprint
-      || !isHash(decision.state_fingerprint) || !isHash(decision.lifecycle_head_hash) || isBlank(decision.authority_decision_id)) return null;
+      || !isHash(decision.state_fingerprint) || decision.lifecycle_head_hash !== batch.lifecycle_head_hash
+      || isBlank(decision.authority_decision_id)) return null;
     decisions.push(decision);
   }
   return { ...batch, decisions };
@@ -556,6 +561,7 @@ export function createMemoryLifecycleUnifiedService({
       || !withinWindow(retrievedMs, batchEvaluatedMs, freshnessMs) || !withinWindow(batchEvaluatedMs, batchObservedAt.ms, freshnessMs)
       || !withinWindow(operationStart.ms, batchObservedAt.ms, freshnessMs)
       || batch.batch_fingerprint !== canonicalFingerprint(batchRequest) || !Array.isArray(batch.decisions)
+      || !isHash(batch.fence_revision) || !isHash(batch.lifecycle_head_hash)
       || batch.decisions.length !== records.length) {
       return deny("DENY_UNIFY_LIFECYCLE", "atomic lifecycle batch resolver returned an invalid receipt", "lifecycle");
     }
@@ -577,7 +583,7 @@ export function createMemoryLifecycleUnifiedService({
       if (decision.ok === true) {
         if (decision.code !== "MEMORY_EFFECTIVE" || decision.content_hash !== record.content_hash
           || decision.target_record_fingerprint !== canonicalFingerprint(record) || !isHash(decision.state_fingerprint)
-          || !isHash(decision.lifecycle_head_hash) || isBlank(decision.authority_decision_id)) {
+          || decision.lifecycle_head_hash !== batch.lifecycle_head_hash || isBlank(decision.authority_decision_id)) {
           return deny("DENY_UNIFY_LIFECYCLE_BINDING", "lifecycle ALLOW was not bound to the immutable record and state", "lifecycle");
         }
         effective.push(record);

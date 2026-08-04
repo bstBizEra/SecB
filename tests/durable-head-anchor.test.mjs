@@ -59,6 +59,16 @@ test("authenticated prepare is restart-durable and finalize is exact", () => wit
   assert.equal(restarted.readPending(), null);
 }));
 
+test("authenticated PREPARED metadata capacity covers bounded Memory binding identities", () => withTemp((directory) => {
+  const anchor = new DurableHeadAnchor({ filePath: join(directory, "head.json"), ledgerId: LEDGER_ID,
+    integrityKey: KEY, initialize: true });
+  const expected = anchor.read();
+  const next = head("a");
+  const metadata = { entry: { payload: "m".repeat(9 * 1024) } };
+  assert.equal(anchor.prepare({ expected, next, commitment: "c".repeat(64), metadata }), true);
+  assert.deepEqual(anchor.snapshot().pending.metadata, metadata);
+}));
+
 test("stale, skipped, and regressed checkpoints fail closed", () => withTemp((directory) => {
   const anchor = new DurableHeadAnchor({ filePath: join(directory, "head.json"), ledgerId: LEDGER_ID, integrityKey: KEY, initialize: true });
   const zero = anchor.read();
