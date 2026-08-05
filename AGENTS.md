@@ -130,31 +130,49 @@ stakeholder-capability-mapping · system-context-boundaries
 **Status:** DRAFT until independently reviewed and merged to `main` by a human
 operator under the rules effective before this amendment
 
-**Scope:** Prospective repository integration only; no retroactive authority
+**Scope:** Prospective repository integration only; production/environment
+activation is excluded and requires its own A4/A5 authority path
 
-Once effective, a non-human integration principal may push, create or update a
-pull request, merge to `main`, or execute a separately authorized activation
-only when every condition below is satisfied:
+The normative contract is
+[`docs/00-governance/integration-principal-control-contract.md`](docs/00-governance/integration-principal-control-contract.md).
+Once this amendment and that contract are adopted, a non-human
+`INTEGRATION_PRINCIPAL` may perform only the closed actions
+`PUSH_CANDIDATE_BRANCH`, `OPEN_OR_UPDATE_PR`, and
+`MERGE_EXACT_HEAD_TO_MAIN`, and only when every condition below is satisfied:
 
-1. The principal has a server-derived identity mapped to the integration role.
-2. A current, scoped, expiring and revocable operator grant names the repository,
-   action, exact candidate commit, target branch and validity window.
+1. An external policy decision point authenticates a server-derived subject
+   identity and a trusted human issuer; the actor may not verify itself.
+2. A signed, single-use, expiring and revocable operation grant binds issuer,
+   subject, repository, closed action, candidate commit and tree, target ref,
+   expected-old target SHA, expected merge-result tree, nonce, idempotency key,
+   assurance records and human GOV disposition.
 3. Required independent REV, QA and SEC records are durable and bind the exact
    candidate commit and tree; the producer may not transcribe them.
-4. Evidence acceptance, GOV disposition, integration and activation remain
-   separate records and actions. Authority for one does not imply another.
-5. Immediately before mutation, the principal verifies grant freshness,
-   candidate identity, target-branch freshness, required checks and branch
-   protection. Unknown or changed state fails closed.
-6. Merge uses exact-head protection and preserves the reviewed commit as an
-   ancestor. Squash or rebase is prohibited when assurance binds the original
-   commit.
-7. Every remote mutation emits an auditable receipt containing actor, grant,
-   repository, action, before/after refs, candidate commit, result and time.
+4. Evidence acceptance, GOV disposition and integration remain separate records
+   and actions. Authority for one does not imply another.
+5. The external policy decision point revalidates signature trust, scope,
+   expiry, revocation and non-consumption immediately before mutation, then
+   atomically consumes the grant with an expected-old target-ref compare-and-swap.
+   Unknown or changed state fails closed.
+6. Direct push to `main` or another protected ref is always prohibited. Merge
+   uses exact-head protection, matches the reviewed result tree and preserves
+   the reviewed commit as an ancestor. Squash and rebase are prohibited.
+7. A durable append-only ledger records hash-chained `PREPARED`, `COMMITTED` or
+   `ABORTED` receipts. Recovery replays the original idempotent disposition and
+   never performs a second mutation.
 8. No principal may issue or approve its own grant, accept its own evidence,
-   waive findings, alter separation of duties, or declare production status.
+   waive findings, alter separation of duties, change this authority basis, or
+   declare production status. Those remain human A5 decisions and human merges.
+
+When effective, this amendment narrowly supersedes the retained rule “No agent
+merges to `main`” only for `MERGE_EXACT_HEAD_TO_MAIN` executed through the
+adopted external enforcement and receipt path above. The prior prohibition
+continues unchanged for every other agent, principal, path and action. A policy
+document, prompt, local credential or repository write access is not the
+required external enforcement path.
 
 This amendment does not authorize its own review, merge or effectiveness. It
 does not make any current skill effective and does not authorize PR #140 or any
 other existing candidate retroactively. The retained human bootstrap gate
-remains controlling until this amendment is effective.
+remains controlling until this amendment, ADR-0009, the control contract and
+its runtime enforcement have each passed their separate human activation gates.

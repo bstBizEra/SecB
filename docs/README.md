@@ -140,6 +140,7 @@ Legacy 0001/0002 each have two files (pre-existing duplication, retained unchang
 - [ADR-0005: Failure is a learning transition](adr/0005-failure-is-a-learning-transition.md) *(v0.1)*
 - [ADR-0006: Harness-neutral authority](adr/0006-harness-neutral-authority.md) *(v0.1)*
 - [ADR-0007: Serialized integration](adr/0007-serialized-integration.md) *(v0.1)*
+- [ADR-0009: Scoped non-human integration principal](adr/0009-scoped-integration-principal.md) *(DRAFT / NOT EFFECTIVE)*
 
 ## Operating model docs at docs root
 
