@@ -15,10 +15,12 @@
 The effective root rule prohibits every agent merge to `main`. Human GOV asked
 whether a non-human operator could perform a precisely authorized integration
 without turning SecB into a self-authorizing super-agent. Canonical A3 permits
-candidate preparation but not protected merge. Security review of AMD-003
-revision 1 showed that a bearer-like unsigned grant could be fabricated and
-replayed, target movement was not compare-and-swapped, and receipts lacked an
-integrity and recovery contract.
+candidate preparation but not protected merge. The reviewer-authored SEC record
+at PR #145, commit `8939fdd7597dec32295e78f9d4a1ca8fb8619d3e`,
+reported that AMD-003 revision 1 accepted a fabricated unsigned grant and
+replay, did not compare-and-swap target movement, and lacked a receipt integrity
+and recovery contract. This is a reported review finding pending separate
+evidence acceptance, not a producer assertion of accepted fact.
 
 ## Options
 
@@ -47,7 +49,8 @@ accept, reject or require rework after independent REV, QA and SEC.
   self-verification remain denied.
 - Policy adoption does not activate runtime authority. External PDP, trusted
   keys/revocation, atomic consumption/CAS, durable receipts and recovery must be
-  separately implemented, reviewed and activated.
+  separately implemented, aligned with the executable A4 registry, reviewed and
+  activated.
 - Production activation, release, evidence/risk acceptance, policy exceptions
   and future changes to this authority basis remain human A5 decisions.
 
