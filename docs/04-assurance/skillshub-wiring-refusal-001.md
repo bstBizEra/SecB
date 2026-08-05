@@ -176,6 +176,43 @@ That reframing raises the cost and does not change the conclusion: **still do
 not wire.** It moves `DEF-R5` from "small, do it first" to "the second design
 gap alongside separation of duties", and both now sit ahead of any wiring.
 
+## Addendum 2, 2026-08-05 — the obvious workaround for the missing producer does not exist
+
+Separation of duties is now implemented as a pure check
+(`src/skills/separation-of-duties.mjs`) that returns `UNVERIFIABLE` whenever the
+producer is unknown, and `src/skills/promotion-evaluator.mjs` treats that as a
+block. On this branch every promotion is therefore inadmissible.
+
+The obvious way out is to derive the producer from git rather than add a
+contract field. **It does not work here, and that is measurable.**
+
+    distinct git authors across all of .agents/skills
+      BizEra <ounkhamvilay@gmail.com>
+      Vibe Agent <agent@bie.dev>
+
+    most recent author, per package, first 8 of 22
+      all eight: BizEra <ounkhamvilay@gmail.com>
+
+Twenty-two skill packages, two identities, and the one that authored them is the
+repository's configured git identity — shared by every agent that commits.
+
+The same is true of review evidence. The four pull requests carrying the ADR
+skill candidate and its SEC, REV and QA records — `#140`, `#142`, `#143`, `#144`
+— all carry `author=BizEra <ounkhamvilay@gmail.com>`. **Producer and all three
+reviewers are indistinguishable in git.** The records themselves name distinct
+reviewer identities in their bodies, which is precisely why the body is where
+the identity lives and the commit metadata is not.
+
+**Git identity in this repository is a machine identity, not an actor
+identity.** Any SoD check reading `git log` would compare a value to itself and
+report SATISFIED for a promotion authored, reviewed and approved by one party —
+the failure this module exists to prevent, reintroduced by the shortcut around
+it.
+
+That closes the workaround and leaves the contract field as the only route.
+`producer_actor_id` has to be recorded because nothing else in the repository
+records it, and the check is already written to refuse until it is.
+
 ## Limitations
 
 - **`DEF-R5` and `DEF-R6` were confirmed by reading the code, not by a running
