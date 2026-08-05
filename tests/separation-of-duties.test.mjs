@@ -21,8 +21,8 @@ const approval = (type, by) => ({ decision_id: `dec-${type}-${by}`, decision_typ
 
 const THREE_DISTINCT = [
   approval("HUMAN_PROMOTION", "alice"),
-  approval("INDEPENDENT_REVIEW", "bob"),
-  approval("GOVERNANCE", "carol")
+  approval("INDEPENDENT_REV", "bob"),
+  approval("INDEPENDENT_QA", "carol")
 ];
 
 describe("SoD — it refuses to pass on what this branch can actually produce", () => {
@@ -52,7 +52,7 @@ describe("SoD — it refuses to pass on what this branch can actually produce", 
 
 describe("SoD — what it can catch, it catches", () => {
   it("the producer holding any approval role is VIOLATED", () => {
-    for (const role of ["HUMAN_PROMOTION", "INDEPENDENT_REVIEW", "GOVERNANCE"]) {
+    for (const role of ["HUMAN_PROMOTION", "INDEPENDENT_REV", "INDEPENDENT_QA"]) {
       const history = THREE_DISTINCT.map((e) => (e.decision_type === role ? approval(role, "dave") : e));
       const r = assertSeparationOfDuties({ approvalHistory: history, producerActorId: "dave" });
       assert.equal(r.verdict, SOD.VIOLATED, role);
@@ -64,7 +64,7 @@ describe("SoD — what it can catch, it catches", () => {
     // This half IS checkable from the recorded data, and it must not wait for a
     // producer identity to fire.
     const r = assertSeparationOfDuties({
-      approvalHistory: [approval("INDEPENDENT_REVIEW", "bob"), approval("GOVERNANCE", "bob")]
+      approvalHistory: [approval("INDEPENDENT_REV", "bob"), approval("INDEPENDENT_QA", "bob")]
     });
     assert.equal(r.verdict, SOD.VIOLATED);
     assert.deepEqual(r.detail.actors, ["bob"]);
@@ -72,7 +72,7 @@ describe("SoD — what it can catch, it catches", () => {
 
   it("compares actors case- and whitespace-insensitively", () => {
     const r = assertSeparationOfDuties({
-      approvalHistory: [approval("INDEPENDENT_REVIEW", " Bob "), approval("GOVERNANCE", "bob")]
+      approvalHistory: [approval("INDEPENDENT_REV", " Bob "), approval("INDEPENDENT_QA", "bob")]
     });
     assert.equal(r.verdict, SOD.VIOLATED, "casing must not defeat the comparison");
   });
@@ -92,11 +92,11 @@ describe("SoD — absent or malformed input is never a pass", () => {
     ["no approval history", { approvalHistory: undefined }],
     ["empty approval history", { approvalHistory: [] }],
     ["an approval with no approved_by", {
-      approvalHistory: [{ decision_type: "GOVERNANCE", approved_at: NOW }, approval("INDEPENDENT_REVIEW", "bob")],
+      approvalHistory: [{ decision_type: "INDEPENDENT_QA", approved_at: NOW }, approval("INDEPENDENT_REV", "bob")],
       producerActorId: "dave"
     }],
     ["an approval with a blank approved_by", {
-      approvalHistory: [approval("GOVERNANCE", "   "), approval("INDEPENDENT_REVIEW", "bob")],
+      approvalHistory: [approval("INDEPENDENT_QA", "   "), approval("INDEPENDENT_REV", "bob")],
       producerActorId: "dave"
     }]
   ];

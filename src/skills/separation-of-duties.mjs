@@ -41,11 +41,25 @@ export const SOD = Object.freeze({
   UNVERIFIABLE: "UNVERIFIABLE"
 });
 
-/** Approval kinds that must not share an actor with each other or the producer. */
+/**
+ * Approval kinds that must not share an actor with each other or the producer.
+ *
+ * Taken from contracts/skill-manifest.schema.json's own enum, not invented. An
+ * earlier draft listed "INDEPENDENT_REVIEW" and "GOVERNANCE", neither of which
+ * exists — the contract says INDEPENDENT_REV, and the governance act is
+ * HUMAN_PROMOTION. Validating a composed manifest against the real contract is
+ * what caught it.
+ *
+ * REVOCATION is deliberately absent: revoking is not an approval and holding it
+ * alongside one is not a duties conflict.
+ */
 export const DISTINCT_ROLE_TYPES = Object.freeze([
-  "HUMAN_PROMOTION",
-  "INDEPENDENT_REVIEW",
-  "GOVERNANCE"
+  "SANDBOX_ENTRY",
+  "EVALUATION_PASS",
+  "SECURITY_REVIEW",
+  "INDEPENDENT_REV",
+  "INDEPENDENT_QA",
+  "HUMAN_PROMOTION"
 ]);
 
 const norm = (v) => (typeof v === "string" ? v.trim().toLowerCase() : null);
