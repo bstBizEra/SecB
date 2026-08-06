@@ -299,3 +299,69 @@ describe("WP-SK-R1 — a malformed grant is a denial, not a crash", () => {
     assert.equal(attempt_(WELL_FORMED), "ALLOW");
   });
 });
+
+/**
+ * The RESOLUTION-TIME subject check, pinned separately.
+ *
+ * Found by an independent code review and confirmed by sabotage: deleting the
+ * subject comparison inside `#promotionsEffective` left this file green at
+ * 11/0. Every other subject assertion here calls `registerSkill` first, and
+ * registration throws before resolution ever runs — so the whole suite was
+ * satisfied by the admission-time check alone, while DEF-R2's entire point is
+ * that the decision is re-read at RESOLUTION.
+ *
+ * A skill that was legitimately promoted, and whose promotion decision is later
+ * amended to name something else, must stop resolving. That is the case below,
+ * and it is the only one in this file that registration cannot satisfy.
+ */
+describe("WP-SK-R2 / DEF-R2 — the subject is re-checked at resolution", () => {
+  const NOW2 = "2026-08-06T00:00:00Z";
+  const GRANT2 = { project_scopes: ["prj"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" };
+  const CTX2 = { projectId: "prj", runtime: "claude-code", dataClassification: "INTERNAL" };
+  const manifest2 = () => ({
+    skill_id: "S1", version: "1.0.0", name: "n", status: "PUBLISHED", owner: "SKILL",
+    source: { repository: "SecB", commit_sha: "a".repeat(40), licence: "internal" },
+    purpose: "p", supported_runtimes: ["claude-code"], project_scopes: ["prj"],
+    max_data_classification: "INTERNAL", evidence_refs: ["ev"],
+    approval_history: [{ decision_id: "d1", decision_type: "HUMAN_PROMOTION", approved_by: "op", approved_at: NOW2 }],
+    revocation_conditions: ["r"]
+  });
+
+  /** A ledger whose answer changes between the two reads. */
+  const shiftingResolver = (subjects) => {
+    let call = 0;
+    return new SkillResolver({
+      decisionLookup: () => ({
+        decision_id: "d1", decision_type: "GOVERNANCE",
+        subject: subjects[Math.min(call++, subjects.length - 1)]
+      }),
+      evidenceLookup: () => ({ verification_status: "VERIFIED" }),
+      now: () => NOW2
+    });
+  };
+
+  const MATCHING = { kind: "SKILL_VERSION", id: "S1", version: "1.0.0", grant: GRANT2 };
+  const OTHER = { kind: "SKILL_VERSION", id: "S-SOMETHING-ELSE", version: "1.0.0", grant: GRANT2 };
+
+  it("a promotion amended after registration stops the skill resolving", () => {
+    const r = shiftingResolver([MATCHING, OTHER]);
+    r.registerSkill(manifest2());                       // admitted: subject matches
+    assert.equal(r.resolveSkill("S1", "1.0.0", CTX2).code, "DENY_SUBJECT_MISMATCH",
+      "the decision now names another skill; resolution must not trust the admission");
+  });
+
+  it("a promotion that still matches keeps resolving", () => {
+    // The positive arm. Without it the denial above is satisfied by a resolver
+    // that denies every resolution, which is exactly what a broken re-check
+    // would look like from the outside.
+    const r = shiftingResolver([MATCHING, MATCHING]);
+    r.registerSkill(manifest2());
+    assert.equal(r.resolveSkill("S1", "1.0.0", CTX2).code, "ALLOW");
+  });
+
+  it("an amended promotion carrying no subject at all also stops it", () => {
+    const r = shiftingResolver([MATCHING, undefined]);
+    r.registerSkill(manifest2());
+    assert.equal(r.resolveSkill("S1", "1.0.0", CTX2).code, "DENY_UNBOUND_SUBJECT");
+  });
+});
