@@ -365,3 +365,136 @@ describe("WP-SK-R2 / DEF-R2 — the subject is re-checked at resolution", () => 
     assert.equal(r.resolveSkill("S1", "1.0.0", CTX2).code, "DENY_UNBOUND_SUBJECT");
   });
 });
+
+/**
+ * Four guards that exist, are correct, and had nothing pinning them.
+ *
+ * Found by a 47-mutation sweep: each of the four could be disabled and the
+ * whole 1162-test suite stayed green. No source change is needed — the code is
+ * right. What was missing was any test that would notice it stopping.
+ *
+ * The reason each survived is the same in every case: every fixture in this
+ * repository supplies well-formed, matching input, so the branch that handles
+ * mismatched input is never taken.
+ */
+describe("guards the mutation sweep found unpinned", () => {
+  const N = "2026-08-07T00:00:00Z";
+  const G = { project_scopes: ["prj"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" };
+  const C = { projectId: "prj", runtime: "claude-code", dataClassification: "INTERNAL" };
+  const SUBJ = { kind: "SKILL_VERSION", id: "S1", version: "1.0.0", grant: G };
+  const man = (o = {}) => ({
+    skill_id: "S1", version: "1.0.0", name: "n", status: "PUBLISHED", owner: "SKILL",
+    source: { repository: "SecB", commit_sha: "a".repeat(40), licence: "internal" },
+    purpose: "p", supported_runtimes: ["claude-code"], project_scopes: ["prj"],
+    max_data_classification: "INTERNAL", evidence_refs: ["ev"],
+    approval_history: [{ decision_id: "d1", decision_type: "HUMAN_PROMOTION", approved_by: "op", approved_at: N }],
+    revocation_conditions: ["r"], ...o
+  });
+  const res = (decision) => new SkillResolver({
+    decisionLookup: () => decision,
+    evidenceLookup: () => ({ verification_status: "VERIFIED" }),
+    now: () => N
+  });
+  const GOOD = { decision_id: "d1", decision_type: "GOVERNANCE", subject: SUBJ };
+  const go = (decision, manifest = man(), ctx = C) => {
+    try {
+      const r = res(decision);
+      r.registerSkill(manifest);
+      return r.resolveSkill(manifest.skill_id, manifest.version, ctx).code;
+    } catch (e) { return e.code ?? `UNTYPED_${e.constructor.name}`; }
+  };
+
+  it("M12 — a decision whose id is not the one the manifest cites is refused", () => {
+    // Every fixture returns a decision whose id already matches, so the
+    // comparison was never exercised. The comment on that line calls a
+    // fabricated entry "a forgery, not a formality gap".
+    assert.equal(go({ ...GOOD, decision_id: "SOME-OTHER-DECISION" }), "DENY_UNAPPROVED_PUBLICATION");
+    assert.equal(go(GOOD), "ALLOW", "the matching decision must still promote");
+  });
+
+  it("M12 — a decision that is not GOVERNANCE-typed is refused", () => {
+    for (const type of ["OPERATIONAL", "ADVISORY", "", null]) {
+      assert.equal(go({ ...GOOD, decision_type: type }), "DENY_UNAPPROVED_PUBLICATION", String(type));
+    }
+    assert.equal(go(GOOD), "ALLOW");
+  });
+
+  /**
+   * The same two comparisons AT RESOLUTION, which the tests above do not reach.
+   *
+   * Sabotage proved it: disabling the id and GOVERNANCE-type check on line 165 —
+   * the resolution-time copy — left this file green at 19/0, because every case
+   * above is refused at registration first and resolution never runs.
+   *
+   * This is the identical masking pattern already documented three times in this
+   * file, walked into a fourth time. A ledger whose answer changes between the
+   * two reads is the only fixture that separates them.
+   */
+  const shifting = (decisions) => {
+    let call = 0;
+    return new SkillResolver({
+      decisionLookup: () => decisions[Math.min(call++, decisions.length - 1)],
+      evidenceLookup: () => ({ verification_status: "VERIFIED" }),
+      now: () => N
+    });
+  };
+  const afterRegister = (second) => {
+    const r = shifting([GOOD, second]);
+    r.registerSkill(man());
+    return r.resolveSkill("S1", "1.0.0", C).code;
+  };
+
+  it("M12res — a decision amended to another id after registration stops resolution", () => {
+    assert.equal(afterRegister({ ...GOOD, decision_id: "SOME-OTHER-DECISION" }), "DENY_PROMOTION_NOT_EFFECTIVE");
+  });
+
+  it("M12res — a decision amended to another TYPE after registration stops resolution", () => {
+    assert.equal(afterRegister({ ...GOOD, decision_type: "OPERATIONAL" }), "DENY_PROMOTION_NOT_EFFECTIVE");
+  });
+
+  it("M12res — an unchanged decision still resolves", () => {
+    // The positive arm for both of the above. Without it, a resolver that denied
+    // every resolution would satisfy them.
+    assert.equal(afterRegister(GOOD), "ALLOW");
+  });
+
+  it("M20 — a data classification outside the known ladder is refused, not compared", () => {
+    // indexOf returns -1 for an unknown class, and -1 is below every real
+    // index, so a ceiling comparison alone would wave it through.
+    assert.equal(go(GOOD, man(), { ...C, dataClassification: "TOP_SECRET_INVENTED" }), "DENY_DATA_CLASSIFICATION");
+    assert.equal(go(GOOD, man(), C), "ALLOW");
+  });
+
+  it("M23 — a PUBLISHED manifest citing no evidence at all is refused", () => {
+    // The contract has no minItems, so an empty array is valid input. The
+    // existing cases cover non-empty and non-resolving refs, never absent.
+    //
+    // The code is DENY_UNAPPROVED_PUBLICATION, not DENY_UNVERIFIED_EVIDENCE:
+    // carrying no evidence at all is a publication that was never approvable,
+    // while UNVERIFIED is for a reference that exists and does not resolve.
+    // Asserted as measured rather than as first assumed.
+    assert.equal(go(GOOD, man({ evidence_refs: [] })), "DENY_UNAPPROVED_PUBLICATION");
+    assert.equal(go(GOOD, man({ evidence_refs: ["ev"] })), "ALLOW");
+  });
+
+  it("M26 — the same skill_id@version cannot be registered twice", () => {
+    // skill-resolver.mjs relies on this: "without it, registering a widened
+    // version FIRST simply wins". Nothing asserted it.
+    const r = res(GOOD);
+    r.registerSkill(man());
+    assert.throws(() => r.registerSkill(man({ name: "impostor" })), (e) => e.code === "DENY_DUPLICATE_SKILL");
+
+    /**
+     * Positive arm. A DIFFERENT version registers — but only under a decision
+     * whose subject names THAT version.
+     *
+     * The first draft of this arm reused the 1.0.0 decision for a 2.0.0
+     * manifest and was refused DENY_SUBJECT_MISMATCH, which is DEF-R1's version
+     * binding working exactly as intended. Written correctly, this arm now
+     * proves the earlier refusal is about the collision and not about
+     * registration being broken.
+     */
+    const r2 = res({ ...GOOD, subject: { ...SUBJ, version: "2.0.0" } });
+    assert.doesNotThrow(() => r2.registerSkill(man({ version: "2.0.0" })));
+  });
+});
