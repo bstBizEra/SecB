@@ -50,19 +50,59 @@ function git(...args) {
 
 /** A guard is a test that asserts byte identity. */
 const GUARD_MARK = /byte-identical|byte-identity/i;
-/** A protected file is a src path appearing as a string literal. */
-const SRC_LITERAL = /"(src\/[A-Za-z0-9._/-]+\.mjs)"/g;
-
-const BLOCK_COMMENT = new RegExp("/\\*[\\s\\S]*?\\*/", "g");
-const LINE_COMMENT = new RegExp("^\\s*//[^\\n]*$", "gm");
+/**
+ * A protected file is a src path appearing as a string literal.
+ * The quote is captured and backreferenced so all three JS quoting forms count:
+ * a double-quote-only pattern reported `'src/index.mjs'` as UNCOVERED, which
+ * reads as a missing guard when the guard is right there.
+ */
+const SRC_LITERAL = /(["'`])(src\/[A-Za-z0-9._/-]+\.mjs)\1/g;
 
 /**
  * Comments are stripped so a commented-out entry is not counted as coverage.
  * This is NOT comment parsing: nothing is read FROM a comment, and no meaning is
  * attached to one. The check behaves identically if every comment is deleted.
+ *
+ * REPRODUCTION that forced a scanner. The previous line-comment pattern was
+ * `/^\s*\/\/[^\n]*$/gm`, anchored to line start, so the TRAILING form survived:
+ *
+ *     "src/a.mjs",  // "src/b.mjs",
+ *
+ * and `src/b.mjs` was counted as covered by a guard that no longer names it.
+ * Trailing is how an entry actually gets disabled, so the anchored pattern
+ * missed the only case it existed to catch.
+ *
+ * REJECTED: widening the regex to unanchored `//[^\n]*`. `//` also occurs
+ * inside string literals, and stripping to end-of-line would swallow any
+ * protected path sharing a line with a URL. The scanner tracks quoting, so
+ * `"https://x"` is data and ` // "src/b.mjs"` is a comment.
+ *
+ * KNOWN LIMIT: a regex literal containing an unbalanced quote character would
+ * desynchronise the quote state. Not worth a JS tokeniser here; guard files are
+ * arrays of string literals.
  */
-export const stripComments = (src) =>
-  src.replace(BLOCK_COMMENT, "").replace(LINE_COMMENT, "");
+export function stripComments(src) {
+  let out = "", i = 0, quote = null;
+  while (i < src.length) {
+    const c = src[i], next = src[i + 1];
+    if (quote) {
+      if (c === "\\") { out += c + (next ?? ""); i += 2; continue; }
+      if (c === quote) quote = null;
+      out += c; i++; continue;
+    }
+    if (c === '"' || c === "'" || c === "`") { quote = c; out += c; i++; continue; }
+    if (c === "/" && next === "/") { while (i < src.length && src[i] !== "\n") i++; continue; }
+    if (c === "/" && next === "*") { i = skipBlock(src, i); continue; }
+    out += c; i++;
+  }
+  return out;
+}
+
+function skipBlock(src, i) {
+  i += 2;
+  while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
+  return i + 2;
+}
 
 /**
  * Pure core: which guards name each src path.
@@ -74,7 +114,7 @@ export function coverageFrom(sources, realFiles) {
   for (const [guard, raw] of sources) {
     if (!raw || !GUARD_MARK.test(raw)) continue;
     for (const m of stripComments(raw).matchAll(SRC_LITERAL)) {
-      const src = m[1];
+      const src = m[2];
       if (realFiles && !realFiles.has(src)) continue;
       if (!map.has(src)) map.set(src, new Set());
       map.get(src).add(guard);

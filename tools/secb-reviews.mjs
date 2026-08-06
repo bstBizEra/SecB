@@ -80,13 +80,49 @@ export function reviewCommitsOn(branch, base = "origin/main") {
     .filter(({ subject }) => /\b(REV|REVIEW|CROSSREV|REV-SEC)\b|[Ii]ndependent review/.test(subject));
 }
 
-/** A verdict token if the text states one. Null when it does not — never guessed. */
+/**
+ * Returned when a text states more than one verdict. Deliberately not a member
+ * of VERDICTS: a caller testing `verdict === "APPROVE_FOR_MERGE"` gets false.
+ */
+export const CONFLICTED = "CONFLICTED";
+
+/** Every distinct verdict the text states, ordered by first appearance. */
+export function verdictsIn(text) {
+  if (!text) return [];
+  return VERDICTS
+    .map((v) => [text.search(new RegExp(`\\b${v}\\b`)), v])
+    .filter(([at]) => at >= 0)
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v);
+}
+
+/**
+ * The verdict a text states. Null when it states none — never guessed.
+ * CONFLICTED when it states several, because picking one is the laundering this
+ * file exists to prevent.
+ *
+ * MEASURED, not hypothetical. Scanning in VERDICTS declaration order put
+ * APPROVE_FOR_MERGE first, and on this repository's 21 evidence refs that
+ * reported three branches as APPROVE_FOR_MERGE whose review said
+ * REQUEST_CHANGES: mod-integ-queue-third, mod-runtime-s1-checkpoint-ledger-
+ * second, mod-wspace-s2-overlap-policy-second.
+ *
+ * REJECTED: scanning in TEXT order. It fixes only one of those three. The
+ * dominant shape of a real record is to CITE the prior review's verdict in its
+ * header — "prior review consulted, not trusted: ... verdict APPROVE_FOR_MERGE"
+ * — before stating its own further down. Text order therefore returns the
+ * PRIOR reviewer's approval, which is the same laundering with a new rule.
+ *
+ * Telling "the verdict of this record" from "a verdict this record mentions"
+ * needs prose comprehension, which the header of this file already refuses to
+ * attempt. So the conflict is surfaced instead of resolved: seven of the 21
+ * refs now read CONFLICTED and send the reader to the record, and none of them
+ * asserts an approval that a REQUEST_CHANGES in the same file contradicts.
+ */
 export function verdictIn(text) {
-  if (!text) return null;
-  for (const v of VERDICTS) {
-    if (new RegExp(`\\b${v}\\b`).test(text)) return v;
-  }
-  return null;
+  const stated = verdictsIn(text);
+  if (!stated.length) return null;
+  return stated.length === 1 ? stated[0] : CONFLICTED;
 }
 
 /**
@@ -142,16 +178,28 @@ export function namedCommits(text) {
  * making this parser cleverer.
  */
 
+/**
+ * Formats a verdict can be filed in.
+ *
+ * This was `.md` only, which is a silent exclusion rather than a disclosed one:
+ * a verdict recorded in YAML or JSON was invisible with nothing saying so, and
+ * this repository already files review handoffs as `.yaml`. Everything else —
+ * source, images, lockfiles — stays out because a verdict is not filed there,
+ * and that omission is now the stated one.
+ */
+export const isRecordFile = (path) => /\.(md|markdown|ya?ml|json|txt)$/i.test(path);
+
 /** Evidence carried by one ref: its record text, the commits it names, its verdict. */
 export function evidenceForRef({ sha, ref }) {
   const files = (git("show", "--format=", "--name-only", sha) ?? "")
-    .split("\n").filter((f) => f.endsWith(".md"));
+    .split("\n").filter(isRecordFile);
   const text = files.map((f) => git("show", `${sha}:${f}`) ?? "").join("\n");
   return {
     ref,
     refSha: sha,
     files,
     verdict: verdictIn(text),
+    verdicts: verdictsIn(text),
     // The ref's own commit is not evidence about itself.
     names: namedCommits(text).filter((c) => c !== sha)
   };
@@ -207,11 +255,27 @@ export function collectEvidence(branch) {
   const fromBranch = branch
     ? reviewCommitsOn(branch).map(({ sha, subject }) => {
         const inner = evidenceForRef({ sha, ref: `(commit on ${branch})` });
-        return { ...inner, verdict: inner.verdict ?? verdictIn(subject), names: [sha, ...inner.names] };
+        // The subject line is a fallback only when the record files state
+        // nothing; it must not add a second verdict and manufacture a conflict.
+        const fallback = inner.verdicts.length ? inner.verdicts : verdictsIn(subject);
+        return {
+          ...inner,
+          verdict: inner.verdict ?? verdictIn(subject),
+          verdicts: fallback,
+          names: [sha, ...inner.names]
+        };
       })
     : [];
 
   return [...fromRefs, ...fromBranch];
+}
+
+/** A conflict is shown in full, so the reader can see what it is between. */
+function showVerdict(e) {
+  if (e.verdict === CONFLICTED) {
+    return `CONFLICTED — states ${e.verdicts.join(", ")}; read the record`;
+  }
+  return e.verdict ?? "(none stated)";
 }
 
 function main(argv) {
@@ -221,7 +285,7 @@ function main(argv) {
     process.stdout.write(`${refs.length} candidate evidence ref(s) outside refs/heads, refs/remotes, refs/tags\n\n`);
     for (const e of refs.map(evidenceForRef)) {
       process.stdout.write(`  ${e.refSha.slice(0, 8)}  ${e.ref.replace(/^refs\//, "")}\n`);
-      process.stdout.write(`      verdict: ${e.verdict ?? "(none stated)"}   names ${e.names.length} commit(s)\n`);
+      process.stdout.write(`      verdict: ${showVerdict(e)}   names ${e.names.length} commit(s)\n`);
     }
     process.stdout.write("\n  secb-reviews <branch>   bind evidence to a branch\n");
     return 0;
@@ -241,7 +305,7 @@ function main(argv) {
   }
   for (const h of result.hits) {
     process.stdout.write(`  ${h.coversHead ? "[HEAD]" : "[    ]"} ${h.ref.replace(/^refs\//, "")}\n`);
-    process.stdout.write(`         verdict: ${h.verdict ?? "(none stated)"}\n`);
+    process.stdout.write(`         verdict: ${showVerdict(h)}\n`);
     process.stdout.write(`         names:   ${h.relevant.map((s) => s.slice(0, 8)).join(" ")}\n`);
     for (const f of h.files) process.stdout.write(`         record:  ${f}\n`);
   }

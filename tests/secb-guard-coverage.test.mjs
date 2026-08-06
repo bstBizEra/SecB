@@ -22,6 +22,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   coverageFrom, stripComments, coverage, mergeResult, gaps
 } from "../tools/secb-guard-coverage.mjs";
@@ -95,14 +98,70 @@ describe("WP-GOV-UC1 / AC-UC1-05 — independent of comment wording", () => {
     assert.equal(cov.get("src/a.mjs")?.size, 1);
   });
 
+  it("a TRAILING commented-out entry is not counted as coverage", () => {
+    // The form the own-line case above did not cover, and the form an entry is
+    // actually disabled in. The line-start-anchored stripper left it standing,
+    // so src/b.mjs read as covered by a guard that no longer names it.
+    const disabled = `
+      test("byte-identity", () => {
+        const PROTECTED = [
+          "src/a.mjs",  // "src/b.mjs",  disabled on this branch
+        ];
+      });`;
+    const cov = coverageFrom(new Map([["tests/g.test.mjs", disabled]]), real);
+    assert.equal(cov.get("src/b.mjs"), undefined,
+      "a trailing-disabled entry protects nothing and must not read as protection");
+    assert.equal(cov.get("src/a.mjs")?.size, 1,
+      "the live entry on the same line must survive the strip");
+  });
+
+  it("`//` inside a string literal is not a comment", () => {
+    // The reason this strips with a scanner and not a wider regex: stripping to
+    // end-of-line on any `//` would take the protected path sitting after a URL.
+    const withUrl = `
+      test("byte-identity", () => {
+        const DOCS = "https://example.invalid/guard";
+        const PROTECTED = ["src/a.mjs", "src/b.mjs"];
+      });`;
+    const cov = coverageFrom(new Map([["tests/g.test.mjs", withUrl]]), real);
+    assert.equal(cov.get("src/a.mjs")?.size, 1);
+    assert.equal(cov.get("src/b.mjs")?.size, 1,
+      "a path after a URL on the same line is still coverage");
+  });
+
+  it("a path counts in any of the three JS quoting forms", () => {
+    // A double-quote-only pattern reported a single-quoted guard entry as
+    // UNCOVERED, which reads as a missing guard when the guard is right there.
+    const quotes = new Set(["src/a.mjs", "src/b.mjs", "src/c.mjs"]);
+    const src = `
+      test("byte-identity", () => {
+        const PROTECTED = ["src/a.mjs", 'src/b.mjs', \`src/c.mjs\`];
+      });`;
+    const cov = coverageFrom(new Map([["tests/g.test.mjs", src]]), quotes);
+    assert.deepEqual([...cov.keys()].sort(), ["src/a.mjs", "src/b.mjs", "src/c.mjs"]);
+    // Negative arm: a mismatched pair is not a string literal and must not count.
+    const mismatched = `test("byte-identity", () => { const P = ["src/a.mjs']; });`;
+    assert.equal(coverageFrom(new Map([["tests/g.test.mjs", mismatched]]), quotes).size, 0);
+  });
+
   it("a file named only in a NON-guard test is not coverage", () => {
     const notAGuard = `test("unrelated", () => { load("src/a.mjs"); });`;
     assert.equal(coverageFrom(new Map([["tests/x.test.mjs", notAGuard]]), real).size, 0);
   });
 
-  it("stripComments leaves code intact", () => {
-    assert.match(stripComments('const a = "src/a.mjs"; // gone'), /src\/a\.mjs/);
+  it("stripComments removes the comment AND leaves code intact", () => {
+    // Both arms. The previous version asserted only that the path SURVIVED, so
+    // it passed against a stripper that removed nothing at all — which is how
+    // the trailing-comment defect went unnoticed for the life of this file.
+    const trailing = 'const a = "src/a.mjs"; // gone';
+    assert.match(stripComments(trailing), /src\/a\.mjs/, "code must survive");
+    assert.doesNotMatch(stripComments(trailing), /gone/, "the comment must not");
+
     assert.doesNotMatch(stripComments("// only a comment\n"), /comment/);
+
+    const block = 'const a = "src/a.mjs"; /* gone */ const b = 2;';
+    assert.match(stripComments(block), /const b = 2/, "code after a block survives");
+    assert.doesNotMatch(stripComments(block), /gone/);
   });
 });
 
@@ -180,7 +239,45 @@ describe("WP-GOV-UC1 / AC-UC1-06 — controls", () => {
     assert.ok(coverage(MAIN).size > 0, "a detector that sees no coverage reports no gaps");
   });
 
-  it("a conflicted merge yields null rather than a measurement", () => {
-    assert.equal(mergeResult(MAIN, "refs/heads/no-such-branch-xyz"), null);
+  it("an unresolvable ref yields null rather than a measurement", () => {
+    // Renamed. This was called "a conflicted merge yields null" but passed a
+    // ref that does not exist, so it returned null from the lookup failure and
+    // never reached the conflict path at all. It also depended on origin/main
+    // without a skip guard, so where that ref is absent it passed for a third
+    // unrelated reason. Both arms are now hermetic: see the test below.
+    assert.equal(mergeResult("refs/heads/no-such-base-xyz", "refs/heads/no-such-branch-xyz"), null);
+  });
+
+  it("a genuinely conflicted merge yields null, and a clean one yields a tree", () => {
+    // A real conflict, built in a throwaway repository so this neither depends
+    // on nor mutates SecB. `git merge-tree --write-tree` exits 1 on conflict,
+    // which is the path the test above never reached.
+    const dir = mkdtempSync(join(tmpdir(), "secb-guard-conflict-"));
+    const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const cwd = process.cwd();
+    try {
+      g("init", "-q", "-b", "main", ".");
+      g("config", "user.email", "t@example.invalid");
+      g("config", "user.name", "t");
+      writeFileSync(join(dir, "f.txt"), "base\n");
+      g("add", "f.txt"); g("commit", "-qm", "base");
+      g("checkout", "-q", "-b", "left");
+      writeFileSync(join(dir, "f.txt"), "LEFT\n");
+      g("commit", "-qam", "left");
+      g("checkout", "-q", "main"); g("checkout", "-q", "-b", "right");
+      writeFileSync(join(dir, "f.txt"), "RIGHT\n");
+      g("commit", "-qam", "right");
+
+      process.chdir(dir);
+      // Positive arm: a clean merge in this same repo DOES produce a tree, so
+      // the null below is the conflict and not a broken fixture.
+      assert.match(mergeResult("main", "left") ?? "", /^[0-9a-f]{40}$/,
+        "a clean merge must still measure");
+      assert.equal(mergeResult("left", "right"), null,
+        "two branches editing the same line conflict and have no result to measure");
+    } finally {
+      process.chdir(cwd);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
