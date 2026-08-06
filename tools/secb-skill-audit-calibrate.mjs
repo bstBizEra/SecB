@@ -35,7 +35,7 @@ Plants known violations in an IN-MEMORY copy of the corpus and measures whether
 the checks catch them. .agents/ is never written.
 
   --seed <s>   required. Hold it privately; it is the answer key.
-  --count N    mutations to plant (default 9, one per class)
+  --count N    mutations to plant (default: one per applicable class, derived)
   --reveal     print which package carried which mutation. Do not use this
                before recording the rates, or the calibration is worthless.
 
@@ -62,9 +62,21 @@ if (dead.length > 0) {
 }
 
 const base = loadCorpus();
+
+/**
+ * NO DEFAULT HERE. `plant()` derives the count from the applicable pool, so a
+ * literal in this file is a second copy of a number the module owns.
+ *
+ * It used to read `Number(valueOf("--count", "9"))`, correct only because the
+ * pool happens to be nine. A tenth mutation class would leave this CLI planting
+ * nine, and the omitted class would then be scored as covered — the same shape
+ * as the defect that made the module's own default plant six of nine and skip
+ * both repair-arm classes entirely.
+ */
+const requestedCount = valueOf("--count", null);
 const { corpus: mutatedCorpus, key } = plant(base, {
   seed: valueOf("--seed", null),
-  count: Number(valueOf("--count", "9"))
+  ...(requestedCount === null ? {} : { count: Number(requestedCount) })
 });
 
 const runAll = (corpus) => checks.flatMap((c) => {

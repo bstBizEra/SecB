@@ -150,8 +150,31 @@ verification"*. `composeManifest` drops it, and accepts `commit_sha` as an
 unchecked caller argument instead.
 
 **The one specified path binds bytes by assertion and discards the governed
-digest.** That is a real omission in the composition, not in the map of it, and
-it is not fixed here.
+digest.**
+
+### Correction, same day — the composition is not where this belongs
+
+Checked before treating it as a composition bug:
+
+    contracts/skill-manifest.schema.json
+      additionalProperties         false
+      source_content_digest        not a property
+      source.properties            repository, commit_sha, licence
+      source.additionalProperties  false
+
+**`skillManifest` has nowhere to put the digest.** Carrying it through
+`composeManifest` would produce a manifest the contract rejects, so dropping it
+is the only behaviour the contract permits — not an omission in the composition.
+
+The gap is real and is located elsewhere: `source_content_digest` is declared on
+the **grant** and is documented as being *"for resolution-time content
+verification"*. Nothing verifies it, and the manifest — the only artefact the
+resolver sees — cannot carry it. So resolution-time content verification needs
+the resolver to read the grant or the decision directly, not a field added to
+`composeManifest`.
+
+Recorded rather than fixed, and re-scoped rather than left as written. Calling it
+a composition omission would have sent whoever picks it up to the wrong file.
 
 ## Limitations
 
