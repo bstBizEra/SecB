@@ -63,6 +63,35 @@ function subjectDenial(subject, manifest) {
 
   const grant = subject.grant;
   if (!grant) return "DENY_SUBJECT_MISMATCH";
+
+  /**
+   * SHAPE, NOT JUST PRESENCE.
+   *
+   * `if (!grant)` catches null and undefined and nothing else. A ledger
+   * returning `grant: {}` — or any grant whose arrays are not arrays — reached
+   * `grant.project_scopes.includes(...)` and threw a raw TypeError with no
+   * `code`, out of BOTH registerSkill and resolveSkill.
+   *
+   * resolveSkill is documented to return a typed deny and never throw. Every
+   * caller written against `{ skill, code, reason }` got an exception instead,
+   * and could not tell a malformed record from a bug in its own call.
+   *
+   * The lookup two frames up is already wrapped so that a ledger OUTAGE refuses
+   * the registration rather than crashing the caller. A malformed ANSWER from
+   * the same ledger deserves the same treatment, and did not have it. Contract
+   * validation does not help here: the decision was validated when it was
+   * appended, not when it was read back.
+   */
+  const arrays = ["project_scopes", "supported_runtimes"];
+  for (const key of arrays) {
+    if (!Array.isArray(grant[key])) return "DENY_SUBJECT_MISMATCH";
+  }
+  if (DATA_CLASS_ORDER.indexOf(grant.max_data_classification) === -1) {
+    // An unrecognised ceiling is not a high ceiling. indexOf returns -1, and
+    // -1 compares low against every real class, so treating it as a value would
+    // let an unknown grant ceiling pass every comparison below.
+    return "DENY_SUBJECT_MISMATCH";
+  }
   // Self-widening. Subset, not equality: a manifest NARROWER than its grant is
   // fine, a manifest that claims more than was granted is not.
   if (!manifest.project_scopes.every((scope) => grant.project_scopes.includes(scope))) return "DENY_SUBJECT_MISMATCH";

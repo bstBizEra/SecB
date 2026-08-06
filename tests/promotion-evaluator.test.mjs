@@ -127,7 +127,7 @@ describe("admissibility — SoD reads the composed history, not a separate one",
     const dirty = grant({ approval_history: [approval("INDEPENDENT_QA", "dave"), approval("INDEPENDENT_REV", "dave")] });
     const r = evaluate({ grant: dirty });
     assert.equal(r.code, "DENY_SOD_VIOLATED");
-    assert.deepEqual(r.separationOfDuties.detail.actors, ["dave"]);
+    assert.equal(r.separationOfDuties.actorId, "dave");
   });
 });
 

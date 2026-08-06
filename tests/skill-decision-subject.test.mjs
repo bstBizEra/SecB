@@ -237,3 +237,65 @@ describe("WP-SK-R1 / AC-R1-06 — the deny codes keep their type through the hub
     assert.ok(unknown.searchSkills("", CTX).withheld_reasons.DENY_UNRESOLVED > 0);
   });
 });
+
+/**
+ * A malformed grant from the ledger must DENY, not throw.
+ *
+ * Found by an independent code review. `subjectDenial` checked `if (!grant)`,
+ * which catches null and undefined and nothing else, then dereferenced
+ * `grant.project_scopes.includes(...)`. A ledger returning `grant: {}` produced
+ * a raw TypeError with `code: undefined` out of both entry points.
+ *
+ * resolveSkill is documented to return a typed deny and never throw. Contract
+ * validation does not cover this: the decision was validated when it was
+ * appended, not when it was read back.
+ */
+describe("WP-SK-R1 — a malformed grant is a denial, not a crash", () => {
+  const NOW_ = "2026-08-06T00:00:00Z";
+  const manifest_ = () => ({
+    skill_id: "S1", version: "1.0.0", name: "n", status: "PUBLISHED", owner: "SKILL",
+    source: { repository: "SecB", commit_sha: "a".repeat(40), licence: "internal" },
+    purpose: "p", supported_runtimes: ["claude-code"], project_scopes: ["prj"],
+    max_data_classification: "INTERNAL", evidence_refs: ["ev"],
+    approval_history: [{ decision_id: "d1", decision_type: "HUMAN_PROMOTION", approved_by: "op", approved_at: NOW_ }],
+    revocation_conditions: ["r"]
+  });
+  const resolverWith = (subject) => new SkillResolver({
+    decisionLookup: () => ({ decision_id: "d1", decision_type: "GOVERNANCE", subject }),
+    evidenceLookup: () => ({ verification_status: "VERIFIED" }),
+    now: () => NOW_
+  });
+  const attempt_ = (subject) => {
+    try {
+      const r = resolverWith(subject);
+      r.registerSkill(manifest_());
+      return r.resolveSkill("S1", "1.0.0", { projectId: "prj", runtime: "claude-code", dataClassification: "INTERNAL" }).code;
+    } catch (error) {
+      return error.code ?? `UNTYPED_${error.constructor.name}`;
+    }
+  };
+  const WELL_FORMED = {
+    kind: "SKILL_VERSION", id: "S1", version: "1.0.0",
+    grant: { project_scopes: ["prj"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" }
+  };
+
+  it("every malformed grant shape denies with a code a caller can read", () => {
+    const malformed = [
+      ["empty object", {}],
+      ["scopes not an array", { project_scopes: "prj", supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" }],
+      ["runtimes not an array", { project_scopes: ["prj"], supported_runtimes: null, max_data_classification: "INTERNAL" }],
+      ["unknown data class", { project_scopes: ["prj"], supported_runtimes: ["claude-code"], max_data_classification: "INVENTED" }],
+      ["data class absent", { project_scopes: ["prj"], supported_runtimes: ["claude-code"] }]
+    ];
+    for (const [label, grant] of malformed) {
+      const got = attempt_({ ...WELL_FORMED, grant });
+      assert.equal(got, "DENY_SUBJECT_MISMATCH", `${label} produced ${got}`);
+    }
+  });
+
+  it("the well-formed grant still resolves, so the denials are about the shape", () => {
+    // Control. Without it the five denials above are satisfied by a resolver
+    // that denies everything.
+    assert.equal(attempt_(WELL_FORMED), "ALLOW");
+  });
+});
