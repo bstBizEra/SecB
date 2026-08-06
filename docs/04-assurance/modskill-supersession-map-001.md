@@ -89,6 +89,62 @@ Five things, all resolver-side, none recoverable from `main`:
 
 That is what the divergence bought, and it is worth porting.
 
+## Addendum, 2026-08-06 — one recommendation from this map does not survive contact
+
+This map recommended discarding `promotion-evaluator.mjs`'s SoD path in favour
+of `approval-binding.mjs`, on the ground that it is a more complete
+implementation reconciling the `REV` / `independent_review` vocabulary split.
+
+**A coder agent was sent to do it and refused, with evidence. The refusal holds,
+and both decisive facts are verified here.**
+
+    HEAD:src/control/approval-binding.mjs         does not exist
+    origin/main:src/control/approval-binding.mjs  exists
+    git ls-files src/control/approval-binding.mjs 0
+
+The file is on `main` only. Copies visible on disk are inside other agents'
+`.claude/worktrees/` checkouts and are not importable from this branch.
+
+**The vocabulary claim in this map is false.** `approval-binding` reconciles the
+split between the two services it was extracted from — capability-registry and
+goal-graph. It has no knowledge of the skill enum, and this branch's
+`normalizeRole` passes every one of the seven skill tokens through unchanged:
+
+    SANDBOX_ENTRY, EVALUATION_PASS, SECURITY_REVIEW, INDEPENDENT_REV,
+    INDEPENDENT_QA, HUMAN_PROMOTION, REVOCATION   -> all unchanged, none REV or GOV
+
+So neither of `approval-binding`'s match modes accepts a skill approval history.
+Run against a rebase simulation on the best history the schema can express —
+three distinct actors, correct enum tokens — it returns `DENY_APPROVALS` for
+**every** case, including the correct one, collapsing `DENY_SOD_UNVERIFIABLE`
+and `DENY_SOD_VIOLATED` into one undifferentiated code.
+
+**Delegating would deny valid promotions.** That is a regression wearing the
+costume of a tightening.
+
+The agent supplied a control arm rather than reporting the denials alone: fed
+`approval-binding` its own native vocabulary through the identical adapter, it
+returns `ok: true`, and `DENY_SELF_APPROVAL` when the reviewer is the producer.
+The adapter is sound; the enum is the sole blocker.
+
+### What the port would actually cost after a rebase
+
+Not plumbing. `ROLE_ALIASES` would need `INDEPENDENT_REV → REV` and
+`HUMAN_PROMOTION → GOV` — **a kernel SoD semantics change affecting every
+existing consumer**, and the second of those is an authority ruling about
+whether a human promotion *is* governance, not a refactor.
+
+### What this map got right and wrong
+
+Right: `main` owns the write side, and `approval-binding` is a more complete
+implementation of the concept.
+
+Wrong: that this makes it a drop-in for a third caller speaking a vocabulary it
+was never taught. **Reasoning from "more complete implementation of the same
+concept" to "should be used here" skipped the step of checking whether it can
+read the input.** That is the same shape of error this map was written to
+correct in others.
+
 ## Limitations
 
 - **Produced by an independent review and verified selectively by the producer**,
