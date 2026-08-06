@@ -352,9 +352,14 @@ describe('SecBSkillsHub against the governed SkillResolver', () => {
  */
 describe('SkillsHub — the corpus is reported, not assumed', () => {
   const CTX = { projectId: 'PRJ-SECB', runtime: 'node', dataClassification: 'INTERNAL' };
-  const hub = () => new SecBSkillsHub({
-    services: { skillResolver: { resolveSkill: () => ({ skill: null, code: 'DENY_UNKNOWN_SKILL' }) } }
-  });
+  // Denies every package, which is what makes `withheld_count` and
+  // `corpus.indexed` two readings of one fact: nothing is authorized, so every
+  // indexed package is withheld and the two numbers must agree.
+  const DENY_ALL = { skillResolver: { resolveSkill: () => ({ skill: null, code: 'DENY_UNKNOWN_SKILL' }) } };
+  // Passing skillsDir indexes that root ONCE, from the constructor. Calling
+  // hub().indexLocalSkills(root) indexes twice — the distinction the accumulation
+  // defect lived in, so both forms are needed to pin it.
+  const hub = (skillsDir) => new SecBSkillsHub({ services: DENY_ALL, skillsDir });
 
   it('names the root and the count for a corpus that exists', () => {
     const h = hub();
@@ -398,9 +403,82 @@ describe('SkillsHub — the corpus is reported, not assumed', () => {
     assert.equal(e.count, 0);
     // Same visible count, different facts, and the result must say which.
     assert.ok(f.withheld_count > 0 && f.corpus.indexed > 0, 'denial: packages existed and were withheld');
+
+    // NOT `if (origin === 'absent')`. That guard was the accumulation defect's
+    // cover, and it made the outcome depend on the machine rather than on the
+    // code. Where the sibling corpus at ../ruflo/.agents/skills exists the origin
+    // is 'fallback', the branch never ran, and the suite was green while the
+    // result said `indexed: 134` against `withheld_count: 159`. Where it does not
+    // exist the branch ran and `withheld_count === 0` failed, because the index
+    // still held the constructor's 25 packages. Same defect, same commit,
+    // opposite verdicts — and the machine that reported green is the one the
+    // work was done on.
+    //
+    // Every indexed package is withheld under DENY_ALL, so this equality is the
+    // same statement on both machines and under every origin.
+    assert.equal(e.withheld_count, e.corpus.indexed,
+      'withheld_count and corpus.indexed count the same packages and must agree');
+    assert.equal(f.withheld_count, f.corpus.indexed);
+
+    // Both origins are still asserted, each on its own terms, so neither is a
+    // silent skip.
     if (e.corpus.origin === 'absent') {
       assert.equal(e.corpus.indexed, 0, 'empty: nothing was there to withhold');
       assert.equal(e.withheld_count, 0);
+    } else {
+      assert.notEqual(e.corpus.root, f.corpus.root,
+        'a fallback must name a root other than the one the requested corpus resolved to');
     }
+  });
+
+  /**
+   * The corpus block is replaced by each scan, so the index must be too.
+   *
+   * Reproduced before the fix: constructing the hub indexes 25 packages, then
+   * `indexLocalSkills('this-root-does-not-exist')` falls back to the sibling
+   * corpus and reports `indexed: 134` — while the tally, computed from an index
+   * that still held the first 25, said `withheld_count: 159`. A block written to
+   * answer "where did the zero come from" gave a number no other field agreed
+   * with, and only from the second call onward.
+   */
+  it('re-indexing the same root reports one corpus, not two', () => {
+    const once = hub();
+    const a = once.searchSkills('', CTX);
+
+    const twice = hub();
+    twice.indexLocalSkills();
+    const b = twice.searchSkills('', CTX);
+
+    // Repopulated, not merely emptied: the package is present and denied, which
+    // is a different answer from absent.
+    assert.ok(b.corpus.indexed > 0, 'the corpus must survive re-indexing');
+    assert.equal(twice.getSkill('security-threat-modeling', CTX).deny_code, 'DENY_UNKNOWN_SKILL',
+      're-indexed packages must still be in the index, not cleared away');
+    assert.equal(b.withheld_count, b.corpus.indexed);
+    assert.deepEqual(
+      { indexed: b.corpus.indexed, withheld: b.withheld_count },
+      { indexed: a.corpus.indexed, withheld: a.withheld_count },
+      'indexing a root twice must report what indexing it once reports'
+    );
+  });
+
+  it('switching roots reports the new corpus, not the union of both', () => {
+    const switched = hub();
+    switched.indexLocalSkills('this-root-does-not-exist');
+    const s = switched.searchSkills('', CTX);
+
+    // The control never saw the first root at all: it indexes the missing root
+    // once, from the constructor. Whatever it reports is what "this root" means,
+    // on a machine with the sibling corpus and on one without.
+    const control = hub('this-root-does-not-exist');
+    const c = control.searchSkills('', CTX);
+
+    assert.deepEqual(
+      { origin: s.corpus.origin, root: s.corpus.root, indexed: s.corpus.indexed, withheld: s.withheld_count },
+      { origin: c.corpus.origin, root: c.corpus.root, indexed: c.corpus.indexed, withheld: c.withheld_count },
+      'a hub that reached this root by re-indexing must report what a hub that started there reports'
+    );
+    assert.equal(s.withheld_count, s.corpus.indexed,
+      'the abandoned root\'s packages must not be tallied against the new one');
   });
 });

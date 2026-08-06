@@ -332,6 +332,16 @@ export class SecBSkillsHub {
    * SKILL.md frontmatter and, when present, the package manifest.yaml.
    */
   indexLocalSkills(skillsDir = ".agents/skills") {
+    // THE INDEX IS REPLACED, NOT APPENDED TO. `indexedCount` was reset per call
+    // while the index was not, so a second call reported the last scan's count
+    // against a tally that still carried the first scan's packages: constructing
+    // the hub here (25 packages, origin "requested") and then re-indexing a
+    // missing root gave `indexed: 134` against `withheld_count: 159`. Every
+    // other corpus field below is overwritten, so the corpus block described one
+    // scan while the tally described two — the block exists to say where the
+    // zero came from, and answered with a number nothing in the result matched.
+    this.#skillsIndex.clear();
+
     const requested = resolve(process.cwd(), skillsDir ?? ".agents/skills");
     let fullPath = requested;
 

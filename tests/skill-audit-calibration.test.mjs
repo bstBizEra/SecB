@@ -28,9 +28,12 @@ const SEED = "test-seed-fixed";
 
 const runAll = (corpus) => CHECKS.flatMap((c) => { try { return c.run(corpus); } catch { return []; } });
 
+// Deliberately takes the DEFAULT count. The default used to plant 6 of 9 classes
+// and this helper passed MUTATIONS.length, so every test below ran a count the
+// real default never produced and none of them could see the gap.
 function calibrate(seed = SEED, checks = CHECKS) {
   const base = loadCorpus();
-  const { corpus, key } = plant(base, { seed, count: MUTATIONS.length });
+  const { corpus, key } = plant(base, { seed });
   const run = (c) => checks.flatMap((x) => { try { return x.run(c); } catch { return []; } });
   return { key, result: score({ key, baseline: run(base), mutated: run(corpus), reveal: true }) };
 }
@@ -152,6 +155,86 @@ describe("AC-AUDIT-01 — the harness is honest about itself", () => {
     calibrate();
     execFileSync(process.execPath, ["tools/secb-skill-audit-calibrate.mjs", "--seed", "io-check"], { encoding: "utf8" });
     assert.equal(digestAgents(), before);
+  });
+});
+
+/**
+ * The default is what an unattended caller gets, so it is the configuration that
+ * has to be sound. Selection is `pool[i % pool.length]` — round-robin, not
+ * sampling — so a count below the pool size plants a FIXED PREFIX, identical on
+ * every seed, rather than a random subset. The default was 6 against 9.
+ */
+describe("AC-AUDIT-01 — the default plant exercises every class it declares", () => {
+  const applicableTo = (corpus) => MUTATIONS.filter((m) => corpus.packages.some((p) => m.applicable(p)));
+
+  it("reaches the whole applicable pool on every seed, repair arm included", () => {
+    // Measured before the fix on seeds s1/s2/s3: claim-prohibited-authority,
+    // repair-eval-suite-path and repair-expectation-uniqueness were absent from
+    // all three keys. Both repair classes — the arm the module's own header
+    // argues is the only thing separating "detects the defect" from "shouts
+    // unconditionally" — were the ones the prefix cut off.
+    const base = loadCorpus();
+    const applicable = applicableTo(base);
+    const repairs = applicable.filter((m) => m.arm === "repair");
+    assert.ok(repairs.length > 0, "this corpus must supply a repair class, or the arm cannot be tested at all");
+
+    for (const seed of ["default-a", "default-b", "default-c"]) {
+      const planted = new Set(plant(base, { seed }).key.map((k) => k.mutation));
+      assert.deepEqual(
+        [...planted].sort(),
+        applicable.map((m) => m.id).sort(),
+        `seed ${seed}: the default count must plant every applicable class`
+      );
+      for (const m of repairs) {
+        assert.ok(planted.has(m.id), `seed ${seed}: repair class ${m.id} must be planted by default`);
+      }
+    }
+  });
+
+  it("a blinded repair check is STRUCK under the default count, not reported clean", () => {
+    // The assertion the old default could not make. With nothing from the repair
+    // arm planted, score() built no row for evals.expectation-diversity, could
+    // not list it as uncovered, and printed "Every planted class was caught"
+    // over a check that had been blinded outright.
+    const base = loadCorpus();
+    const { corpus, key } = plant(base, { seed: SEED });
+    const run = (co, ch) => ch.flatMap((x) => { try { return x.run(co); } catch { return []; } });
+    const blinded = CHECKS.map((c) =>
+      c.id === "evals.expectation-diversity" ? { ...c, run: () => [] } : c);
+
+    const clean = score({ key, baseline: run(base, CHECKS), mutated: run(corpus, CHECKS) });
+    assert.equal(clean.uncovered.length, 0, "the unblinded default run must be clean");
+    assert.doesNotMatch(clean.instruction, /STRIKE/);
+
+    const struck = score({ key, baseline: run(base, blinded), mutated: run(corpus, blinded) });
+    assert.ok(
+      struck.uncovered.some((u) => u.targets === "evals.expectation-diversity" && u.arm === "repair"),
+      "blinding a repair check must surface as an uncovered repair class"
+    );
+    assert.match(struck.instruction, /^STRIKE from claimed coverage/);
+  });
+
+  it("a class with nowhere to plant throws instead of vanishing from the key", () => {
+    const base = loadCorpus();
+    const governed = base.packages.find((p) => p.governed && p.manifest.values.skill_id);
+    const ungoverned = base.packages.find((p) => !p.governed);
+    assert.ok(governed && ungoverned, "fixture needs one governed and one ungoverned package");
+
+    // The governed package is reserved as the collision donor and is therefore
+    // never a target, so every mutation gated on `p.governed` sits in the pool
+    // with zero candidates. `continue` dropped each of them from the key, and a
+    // class absent from the key is scored as covered rather than uncovered —
+    // exactly the false negative the no-op guard throws to prevent.
+    assert.throws(
+      () => plant({ ...base, packages: [governed, ungoverned] }, { seed: SEED }),
+      /no package to plant in/,
+      "a class that cannot be planted must be reported, not skipped"
+    );
+
+    // Paired positive: the real corpus carries every class at the same seed, so
+    // the throw above is about candidate exhaustion, not about plant() having
+    // become unable to run.
+    assert.doesNotThrow(() => plant(base, { seed: SEED }));
   });
 });
 

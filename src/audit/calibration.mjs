@@ -197,7 +197,7 @@ export const MUTATIONS = Object.freeze([
  * Builds a mutated corpus from a seed. Returns the corpus and the answer key.
  * Callers that must stay blind take the corpus and discard the key.
  */
-export function plant(corpus, { seed, count = 6 } = {}) {
+export function plant(corpus, { seed, count } = {}) {
   const next = rng(seed);
   const key = [];
   const byName = new Map(corpus.packages.map((p) => [p.name, p]));
@@ -230,13 +230,56 @@ export function plant(corpus, { seed, count = 6 } = {}) {
   };
 
   const pool = MUTATIONS.filter((m) => corpus.packages.some((p) => m.applicable(p)));
-  for (let i = 0; i < count; i += 1) {
+
+  /**
+   * THE DEFAULT MUST REACH EVERY CLASS IN THE POOL.
+   *
+   * Selection is `pool[i % pool.length]` — round-robin, not sampling — so a
+   * count below the pool size does not plant a random subset, it plants a FIXED
+   * prefix. The default was 6 against a pool of 9, and the three it never
+   * reached were `claim-prohibited-authority` and BOTH repair-arm classes,
+   * identically on every seed. The repair arm is the only thing that separates
+   * "detects the defect" from "shouts unconditionally", so the default measured
+   * detection alone and `score()` then reported `uncovered: []` — a clean bill
+   * of health for a calibration that had not run half its argument.
+   *
+   * Derived from the pool rather than from MUTATIONS.length so that a class
+   * applicable to nothing in this corpus does not push the count past what can
+   * be planted, and a class added later is covered without editing this line.
+   */
+  const planned = count ?? pool.length;
+
+  for (let i = 0; i < planned; i += 1) {
     const mutation = pool[i % pool.length];
     const candidates = corpus.packages.filter((p) =>
       mutation.applicable(p) &&
       p.name !== reserved.name &&                       // the donor is never a target
       !key.some((k) => k.package === p.name));         // one mutation per package
-    if (candidates.length === 0) continue;
+
+    /**
+     * A CLASS WITH NOWHERE TO PLANT IS NOT A CLASS THAT PASSED.
+     *
+     * This was `continue`. The class then never entered `key`, so `score()`
+     * built no row for it, `uncovered` could not name it, and the run reported
+     * full coverage of a class it had not exercised — the same false negative
+     * the no-op guard forty lines below throws to prevent, arriving through a
+     * different door. Symmetry is the point: both are "the mutation did not
+     * happen", and both must be loud.
+     *
+     * Reached two ways. `applicable` may hold only for the reserved donor, which
+     * is excluded as a target, so the class is in the pool and has no candidate.
+     * Or a count above the pool size may revisit a class after the one-mutation-
+     * per-package rule has consumed every package it applies to.
+     */
+    if (candidates.length === 0) {
+      throw new Error(
+        `calibration mutation "${mutation.id}" has no package to plant in. ` +
+        "Skipping it would omit the class from the answer key, and a class absent from the key " +
+        "is scored as covered rather than reported as uncovered. " +
+        `Lower count (${planned}) or widen the corpus rather than the score.`
+      );
+    }
+
     const target = pick(candidates, next);
     const seeded = mutation.apply(target, ctx);
 
