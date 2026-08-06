@@ -107,6 +107,52 @@ what was broken rather than what the pieces were.
 - **That any of this is reachable.** Nothing calls `registerSkill`, and this
   record adds no caller.
 
+## Addendum, 2026-08-06 — the conclusion survives, the evidence does not
+
+An independent architecture review checked this record's central table. **The
+`NEITHER` row is an artefact of how it was computed, and the schema already
+answered the question it presents as a discovery.**
+
+Provenance was computed by set membership over each schema's `required` array.
+`contracts/skill-package-descriptor.schema.json` declares both fields in
+`properties`, with descriptions that state the rule directly:
+
+    owner    "Optional at descriptor stage, REQUIRED before promotion.
+              Not derivable from a package..."
+    source   required: [repository, commit_sha]
+             "licence is optional here and required before promotion, for the
+              same reason as owner"
+
+So `owner` and `source` are not unaccounted. They are **declared, deliberately
+optional at intake, and documented as required before promotion** — which is the
+same rule this record derived from their absence and presented as a finding.
+
+The record's own Limitations section names this method risk ("a field present
+under a different name in a nested object would read as unaccounted") and then
+does not act on it. Naming a limitation is not the same as checking whether it
+bit.
+
+**What survives:** the composition itself, and the observation that the
+`ADR-0013` trust-tier split cut `skillManifest` along the line a promotion path
+needs. `composeManifest` requires `owner` and `source` as arguments and refuses
+without them, which matches the schemas' stated rule — arrived at from the wrong
+evidence, and correct anyway.
+
+**What does not:** "11 of 13" and "NEITHER". The honest count is that every
+required field has a declared home, and the two the promotion must supply are
+marked as such in the descriptor's own descriptions.
+
+### A gap the record did miss
+
+`contracts/skill-grant-record.schema.json` declares `source_content_digest` —
+*"Recorded by the promotion service at promotion, for resolution-time content
+verification"*. `composeManifest` drops it, and accepts `commit_sha` as an
+unchecked caller argument instead.
+
+**The one specified path binds bytes by assertion and discards the governed
+digest.** That is a real omission in the composition, not in the map of it, and
+it is not fixed here.
+
 ## Limitations
 
 - Field provenance was computed by set membership over the three schemas'
