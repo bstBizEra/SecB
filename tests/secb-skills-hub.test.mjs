@@ -482,3 +482,72 @@ describe('SkillsHub — the corpus is reported, not assumed', () => {
       'the abandoned root\'s packages must not be tallied against the new one');
   });
 });
+
+/**
+ * The allow-list gate, pinned independently of the null-skill clause.
+ *
+ * `#authorize` withholds when `verdict?.code !== "ALLOW" || !verdict.skill`.
+ * Found by a mutation sweep: replacing the first clause with the deny-list form
+ * the module header names as the original bug — IMM-SKILL-HUB-01, "the previous
+ * form only recognized verdict === DENY" — left the entire 1162-test suite
+ * green, this file included at 22/0.
+ *
+ * The reason no test noticed: every existing deny stub returns `skill: null`,
+ * so the second clause satisfies every assertion on its own and the first is
+ * never exercised. The two clauses mutually mask each other.
+ *
+ * Reproduced with the mutation applied and identity binding satisfied: a
+ * DENY_REVOKED verdict carrying a populated skill was SERVED to the caller,
+ * content and all.
+ */
+describe('SkillsHub — a deny code withholds even when the resolver returns a skill', () => {
+  const CTX = { projectId: 'PRJ-SECB', runtime: 'node', dataClassification: 'INTERNAL' };
+
+  // A real package directory, so the identity binding (IMM-SKILL-HUB-03) passes
+  // and the allow-list is the control actually under test rather than a second
+  // gate standing in front of it.
+  const realPackage = () => readdirSync(resolve(process.cwd(), '.agents/skills'))[0];
+
+  const hubReturning = (code, skillName) => new SecBSkillsHub({
+    services: {
+      skillResolver: {
+        resolveSkill: () => ({ code, skill: skillName === null ? null : { name: skillName, content: 'BODY' } })
+      }
+    }
+  });
+
+  it('withholds a NON-NULL skill carried alongside a deny code', () => {
+    const name = realPackage();
+    for (const code of ['DENY_REVOKED', 'DENY_NOT_PUBLISHED', 'DENY_SUBJECT_MISMATCH', 'DENY_PROMOTION_NOT_EFFECTIVE']) {
+      const hub = hubReturning(code, name);
+      hub.indexLocalSkills();
+      const r = hub.searchSkills('', CTX);
+      assert.equal(r.count, 0, `${code} served a skill: the gate is reading the deny code, not the null`);
+    }
+  });
+
+  it('an unrecognised deny code also withholds, rather than only known ones', () => {
+    // The deny-list form this pins against recognised one literal string. A code
+    // the hub has never heard of must withhold too.
+    const hub = hubReturning('DENY_SOMETHING_INVENTED', realPackage());
+    hub.indexLocalSkills();
+    assert.equal(hub.searchSkills('', CTX).count, 0);
+  });
+
+  it('ALLOW with a real skill is still served', () => {
+    // The positive arm, and it is what makes the three denials above mean
+    // something: a gate that withholds everything passes every negative test.
+    const hub = hubReturning('ALLOW', realPackage());
+    hub.indexLocalSkills();
+    assert.equal(hub.searchSkills('', CTX).count, 1, 'an authorized skill must still reach the caller');
+  });
+
+  it('ALLOW with a null skill withholds, so neither clause carries the other', () => {
+    // The complement of the first test. Together they exercise both clauses
+    // separately; either one alone leaves the other untested, which is exactly
+    // how this gap survived.
+    const hub = hubReturning('ALLOW', null);
+    hub.indexLocalSkills();
+    assert.equal(hub.searchSkills('', CTX).count, 0);
+  });
+});
