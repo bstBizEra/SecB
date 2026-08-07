@@ -551,3 +551,55 @@ describe('SkillsHub — a deny code withholds even when the resolver returns a s
     assert.equal(hub.searchSkills('', CTX).count, 0);
   });
 });
+
+/**
+ * H05 — half an identity must not reach the resolver.
+ *
+ * `if (!entry.skillId || !entry.version)` withholds a package missing either
+ * half. The mutation sweep changed `||` to `&&` at BOTH of its occurrences and
+ * the suite stayed green, because every package on disk carries both — the
+ * mutation is equivalent on the real corpus and only differs for a crafted
+ * half-identity entry.
+ *
+ * A first attempt at this test asserted `r.count >= 0`, which is true of every
+ * possible run, and a second only inspected calls the real corpus produces.
+ * Neither caught either mutation. This one injects the entry.
+ */
+describe('SkillsHub — half an identity never reaches the resolver', () => {
+  const CTX2 = { projectId: 'PRJ-SECB', runtime: 'node', dataClassification: 'INTERNAL' };
+
+  const probe = (entry) => {
+    const seen = [];
+    const hub = new SecBSkillsHub({
+      services: {
+        skillResolver: {
+          resolveSkill: (id, version) => { seen.push([id, version]); return { code: 'ALLOW', skill: { name: entry.name } }; }
+        }
+      }
+    });
+    hub.registerSkill(entry);
+    const result = hub.searchSkills('', CTX2);
+    return { seen, result };
+  };
+
+  it('an entry with a skillId but no version is withheld before lookup', () => {
+    const { seen } = probe({ name: 'half-a', skillId: 'S-HALF-A', version: null });
+    assert.ok(!seen.some(([id]) => id === 'S-HALF-A'),
+      `the resolver was consulted for a versionless entry: ${JSON.stringify(seen.filter(([id]) => id === 'S-HALF-A'))}`);
+  });
+
+  it('an entry with a version but no skillId is withheld before lookup', () => {
+    const { seen } = probe({ name: 'half-b', skillId: null, version: '1.0.0' });
+    assert.ok(!seen.some(([, v]) => v === '1.0.0' && seen.length && false === true) &&
+      !seen.some(([id]) => id === null || id === undefined),
+      `the resolver was consulted with a blank identity: ${JSON.stringify(seen)}`);
+  });
+
+  it('an entry carrying BOTH halves is looked up', () => {
+    // The positive arm. Without it, a gate that withheld everything would pass
+    // both assertions above.
+    const { seen } = probe({ name: 'whole', skillId: 'S-WHOLE', version: '1.0.0' });
+    assert.ok(seen.some(([id, v]) => id === 'S-WHOLE' && v === '1.0.0'),
+      'a complete identity must reach the resolver');
+  });
+});

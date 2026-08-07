@@ -498,3 +498,72 @@ describe("guards the mutation sweep found unpinned", () => {
     assert.doesNotThrow(() => r2.registerSkill(man({ version: "2.0.0" })));
   });
 });
+
+/**
+ * Three more the sweep found unpinned. Same shape as the last five: the guard
+ * exists, is correct, and nothing would notice it going.
+ */
+describe("guards the sweep found unpinned, second batch", () => {
+  const N2 = "2026-08-07T00:00:00Z";
+  const G2 = { project_scopes: ["prj"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" };
+  const C2 = { projectId: "prj", runtime: "claude-code", dataClassification: "INTERNAL" };
+  const S2 = { kind: "SKILL_VERSION", id: "S1", version: "1.0.0", grant: G2 };
+  const D2 = { decision_id: "d1", decision_type: "GOVERNANCE", subject: S2 };
+  const promo = (id) => ({ decision_id: id, decision_type: "HUMAN_PROMOTION", approved_by: "op", approved_at: N2 });
+  const man2 = (o = {}) => ({
+    skill_id: "S1", version: "1.0.0", name: "n", status: "PUBLISHED", owner: "SKILL",
+    source: { repository: "SecB", commit_sha: "a".repeat(40), licence: "internal" },
+    purpose: "p", supported_runtimes: ["claude-code"], project_scopes: ["prj"],
+    max_data_classification: "INTERNAL", evidence_refs: ["ev"],
+    approval_history: [promo("d1")], revocation_conditions: ["r"], ...o
+  });
+  const resolverFor = (lookup) => new SkillResolver({
+    decisionLookup: lookup,
+    evidenceLookup: () => ({ verification_status: "VERIFIED" }),
+    now: () => N2
+  });
+
+  it("M22 — REGISTRATION itself refuses a mismatched subject, not just resolution", () => {
+    // Disabling the registration-time subjectDenial left the suite green,
+    // because the resolution-time copy covered for it and every existing test
+    // reads the resolve() code. Assert the THROW at registration directly.
+    const bad = resolverFor(() => ({ ...D2, subject: { ...S2, id: "S-SOMETHING-ELSE" } }));
+    assert.throws(() => bad.registerSkill(man2()), (e) => e.code === "DENY_SUBJECT_MISMATCH");
+    // Positive arm: the matching subject registers without throwing.
+    assert.doesNotThrow(() => resolverFor(() => D2).registerSkill(man2()));
+  });
+
+  it("M30 — a subject with NO grant key at all denies rather than throwing", () => {
+    // The existing cases cover a malformed grant ({}, wrong types). An ABSENT
+    // grant took a different branch, and disabling it produced an untyped
+    // TypeError with code undefined out of registerSkill.
+    const noGrant = { kind: "SKILL_VERSION", id: "S1", version: "1.0.0" };
+    let code;
+    try {
+      resolverFor(() => ({ ...D2, subject: noGrant })).registerSkill(man2());
+      code = "REGISTERED";
+    } catch (e) { code = e.code ?? `UNTYPED_${e.constructor.name}`; }
+    assert.equal(code, "DENY_SUBJECT_MISMATCH", "an absent grant must be a typed denial, never a crash");
+    assert.doesNotThrow(() => resolverFor(() => D2).registerSkill(man2()));
+  });
+
+  it("M10 — EVERY claimed promotion is re-resolved, not just the first", () => {
+    // Truncating the loop to promotions.slice(0, 1) survived: no fixture had
+    // more than one HUMAN_PROMOTION, so first-only and all were the same set.
+    let call = 0;
+    const r = resolverFor((ref) => {
+      call += 1;
+      // d1 always resolves; d2 stops being effective after registration.
+      if (ref === "d1") return { ...D2, decision_id: "d1" };
+      return call <= 2 ? { ...D2, decision_id: "d2" } : null;
+    });
+    r.registerSkill(man2({ approval_history: [promo("d1"), promo("d2")] }));
+    assert.equal(r.resolveSkill("S1", "1.0.0", C2).code, "DENY_PROMOTION_NOT_EFFECTIVE",
+      "the SECOND promotion went ineffective; scanning only the first would miss it");
+
+    // Positive arm: both still effective resolves.
+    const ok = resolverFor((ref) => ({ ...D2, decision_id: ref }));
+    ok.registerSkill(man2({ approval_history: [promo("d1"), promo("d2")] }));
+    assert.equal(ok.resolveSkill("S1", "1.0.0", C2).code, "ALLOW");
+  });
+});
