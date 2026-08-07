@@ -41,6 +41,8 @@ Where both packs cover a topic, the operating-model document is the intended suc
 - [Work package lifecycle](12-execution/05-work-package-lifecycle.md)
 - [Parallel execution](12-execution/06-parallel-execution.md)
 - [Context and handoff](12-execution/07-context-and-handoff.md)
+- [bOPEN Engineering Loop](12-execution/08-bopen-engineering-loop.md)
+- [Engineering Loop Specification](12-execution/ENGINEERING-LOOP.md)
 
 ### 13 — Skills
 

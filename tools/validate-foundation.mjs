@@ -33,6 +33,34 @@ for (const file of manifest.files) {
   assert(existsSync(resolve(root, file)), `manifest.file.${file}`, "exists");
 }
 
+// The loop above proves every inventoried path exists. It does not prove the
+// converse, and nothing else did either, so a file could be added under a
+// governed path and stay outside MANIFEST indefinitely — which is how 25 of
+// them did, undetected by a green suite. AGENTS.md AMD-002 §1 names
+// contracts/, src/, tests/ and tools/ as the pre-authorized implementation
+// paths and §2 makes keeping MANIFEST accurate for them a duty; this asserts
+// the duty instead of trusting it.
+//
+// Scope is those four roots only. MANIFEST is deliberately not a whole-repo
+// inventory — .agents/ and dashboard/ are tracked but inventoried elsewhere or
+// not at all — so a repo-wide reverse check would report drift that is not
+// drift. Tracked, not on-disk: an untracked working file is not yet part of
+// the repository and is not yet owed an entry.
+const INVENTORIED_ROOTS = ["contracts/", "src/", "tests/", "tools/"];
+const inventoried = new Set(manifest.files);
+const governedTracked = execFileSync("git", ["ls-files", "--", ...INVENTORIED_ROOTS], {
+  cwd: root,
+  encoding: "utf8"
+}).split("\n").filter(Boolean);
+const uninventoried = governedTracked.filter((file) => !inventoried.has(file));
+assert(
+  uninventoried.length === 0,
+  "manifest.complete",
+  uninventoried.length === 0
+    ? `${governedTracked.length} tracked paths under ${INVENTORIED_ROOTS.join(", ")} all inventoried`
+    : `${uninventoried.length} tracked path(s) missing from MANIFEST.json: ${uninventoried.join(", ")}`
+);
+
 assert(docsManifest.status === "DRAFT_NOT_EFFECTIVE", "docs-manifest.status", "draft and not effective");
 assert(
   docsManifest.file_count_excluding_manifests === docsManifest.files.length,

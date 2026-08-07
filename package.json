@@ -7,6 +7,7 @@
   "main": "src/index.mjs",
   "exports": "./src/index.mjs",
   "bin": {
+    "secb": "./tools/secb.mjs",
     "secb-graph": "./tools/secb-graph.mjs",
     "secb-skills": "./tools/secb-skills.mjs",
     "secb-mcp-config": "./tools/secb-mcp-config.mjs",
@@ -18,8 +19,10 @@
     "secb:skills": "node tools/secb-skills.mjs",
     "secb:mcp-config": "node tools/secb-mcp-config.mjs",
     "secb:mcp-doctor": "node tools/secb-mcp-doctor.mjs",
+    "secb": "node tools/secb.mjs",
     "validate": "node tools/validate-foundation.mjs",
-    "test": "npm run validate && node --test tests/*.test.mjs"
+    "test": "npm run validate && node --test tests/*.test.mjs",
+    "secb:queue": "node tools/secb-queue.mjs"
   },
   "engines": {
     "node": ">=22"

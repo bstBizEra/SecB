@@ -30,11 +30,12 @@ The controlled documentation tree is rooted at [`docs/`](docs/). Before beginnin
 
 1. [`docs/README.md`](docs/README.md)
 2. [`docs/00-governance/governance-baseline.md`](docs/00-governance/governance-baseline.md)
-3. [`docs/02-operating-model/universal-work-lifecycle.md`](docs/02-operating-model/universal-work-lifecycle.md)
-4. [`docs/02-operating-model/agent-team-and-sod.md`](docs/02-operating-model/agent-team-and-sod.md)
-5. [`docs/03-project-control/project-contract.md`](docs/03-project-control/project-contract.md)
-6. [`docs/03-project-control/work-package-contract.md`](docs/03-project-control/work-package-contract.md)
-7. Documents and templates directly referenced by the active bounded slice.
+3. [`docs/00-governance/SECB-GOV-SURFACE-001.md`](docs/00-governance/SECB-GOV-SURFACE-001.md) (Governance Surface & High-Logic Agent Protocols)
+4. [`docs/02-operating-model/universal-work-lifecycle.md`](docs/02-operating-model/universal-work-lifecycle.md)
+5. [`docs/02-operating-model/agent-team-and-sod.md`](docs/02-operating-model/agent-team-and-sod.md)
+6. [`docs/03-project-control/project-contract.md`](docs/03-project-control/project-contract.md)
+7. [`docs/03-project-control/work-package-contract.md`](docs/03-project-control/work-package-contract.md)
+8. Documents and templates directly referenced by the active bounded slice.
 
 Changes under `docs/**` also follow [`docs/AGENTS.md`](docs/AGENTS.md). The repository-level [`MANIFEST.json`](MANIFEST.json) is the canonical local build inventory; [`docs/MANIFEST.json`](docs/MANIFEST.json) inventories the imported documentation pack.
 
