@@ -1,0 +1,13 @@
+{
+  "checkpoint_id": "chk_p0_runtime_001",
+  "version": 1,
+  "project_id": "prj_secb_local",
+  "work_package_id": "wp_p0_runtime_001",
+  "session_id": "ses_local_runtime_001",
+  "actor_id": "claude-motor-modruntime-s1",
+  "source_ledger_id": "secb-event-ledger",
+  "sequence_at_checkpoint": 4,
+  "state_snapshot_ref": "opaque://session-snapshots/ses_local_runtime_001/4",
+  "created_at": "2026-07-20T18:00:00+07:00",
+  "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

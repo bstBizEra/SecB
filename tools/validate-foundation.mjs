@@ -83,9 +83,18 @@ const allSchemaFiles = manifest.files.filter((file) => file.endsWith(".schema.js
 const schemaFiles = allSchemaFiles.filter((file) => file.startsWith("contracts/"));
 const subsystemSchemaFiles = allSchemaFiles.filter((file) => !file.startsWith("contracts/"));
 // 7 canonical bootstrap schemas plus governed extensions (P0-14 temporal
-// ledgers, skill resolver, MOD-MCP capability registry, MOD-WORK goal graph).
-// Set equality keeps this fail-closed: an unexpected contract addition or a
-// missing canonical contract both fail.
+// ledgers, skill resolver, MOD-MCP capability registry, MOD-WORK goal graph,
+// MOD-SKILL S1 skill-candidate intake, MOD-A2A S1 delegation-request
+// contract, MOD-RUNTIME S1 checkpoint ledger, MOD-WSPACE S3 workspace-lease
+// ledger, MOD-MEM S2 memory-record contract, MOD-SKILL S2 skill-promotion
+// ledger, MOD-INTEG S1 integration-queue-entry ledger, plus project
+// registration, swarm execution, system settings and MCP upstreams). Set
+// equality keeps this fail-closed: an unexpected schema addition or a missing
+// canonical schema both fail.
+//
+// This list is the UNION of both merge parents. Resolving it by picking one
+// side would silently shrink the fail-closed set — the exact governance
+// regression the set-equality assertion exists to prevent.
 const expectedSchemas = [
   "contracts/agent-enrollment-request.schema.json",
   "contracts/agent-registration.schema.json",
@@ -114,12 +123,19 @@ const expectedSchemas = [
   "contracts/project-registration-package.schema.json",
   "contracts/swarm-execution-contract.schema.json",
   "contracts/system-settings.schema.json",
-  "contracts/mcp-upstream-registry.schema.json"
+  "contracts/mcp-upstream-registry.schema.json",
+  "contracts/skill-candidate.schema.json",
+  "contracts/delegation-request.schema.json",
+  "contracts/checkpoint.schema.json",
+  "contracts/workspace-lease.schema.json",
+  "contracts/memory-record.schema.json",
+  "contracts/skill-promotion.schema.json",
+  "contracts/integration-queue-entry.schema.json"
 ];
 assert(
   schemaFiles.length === expectedSchemas.length && expectedSchemas.every((file) => schemaFiles.includes(file)),
   "schemas.count",
-  "7 canonical bootstrap schemas + governed extensions including agent enrollment, temporal ledgers, skills, capabilities, goals, project registration, swarm execution, system settings, and MCP upstreams"
+  "7 canonical bootstrap schemas + governed extensions from both merge parents: agent enrollment, temporal ledgers, skills, capabilities, goals, project registration, swarm execution, system settings, MCP upstreams, skill candidate, delegation request, checkpoint, workspace lease, memory record, skill promotion, integration queue entry"
 );
 // Subsystem schemas are module-internal and carry no contract authority, but
 // they are still allowlisted so that adding one is a deliberate, reviewed act.
@@ -164,7 +180,14 @@ const mandatoryIdentityFields = {
   "contracts/project-registration-package.schema.json": ["registration_id", "project_id", "version", "status", "mode"],
   "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "validity"],
   "contracts/system-settings.schema.json": ["schema_version", "environment", "governance"],
-  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "wsl_distro", "upstreams"]
+  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "wsl_distro", "upstreams"],
+  "contracts/skill-candidate.schema.json": ["skill_candidate_id", "version", "status", "source_identity", "immutable_version", "integrity"],
+  "contracts/delegation-request.schema.json": ["delegation_id", "version", "project_id", "work_package_id", "session_id", "source_actor_id", "content_hash"],
+  "contracts/checkpoint.schema.json": ["checkpoint_id", "version", "project_id", "session_id", "source_ledger_id", "sequence_at_checkpoint", "content_hash"],
+  "contracts/workspace-lease.schema.json": ["lease_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "content_hash"],
+  "contracts/memory-record.schema.json": ["memory_record_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "layer", "source", "classification", "valid_from", "valid_until", "content_hash"],
+  "contracts/skill-promotion.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "skill_candidate_id", "skill_version", "content_hash"],
+  "contracts/integration-queue-entry.schema.json": ["queue_entry_id", "version", "project_id", "work_package_id", "session_id", "candidate_branch", "status", "content_hash"]
 };
 for (const file of schemaFiles) {
   const schema = JSON.parse(read(file));
@@ -233,7 +256,13 @@ const exactRequiredSets = {
   "contracts/event-envelope.schema.json": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "event_type", "occurred_at", "observed_fact", "source", "idempotency_key", "classification", "content_hash"],
   "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "evidence_type", "source", "observed_at", "procedure", "result", "exit_status", "limitations", "content_hash", "verification_status", "classification", "retention_policy"],
   "contracts/handoff-envelope.schema.json": ["handoff_id", "version", "project_id", "work_package_id", "source_session_id", "destination_role", "objective", "authorized_scope", "work_completed", "artifacts", "assumptions", "evidence_refs", "checks", "limitations", "unresolved_findings", "risks", "recommended_next_action", "context_delta", "content_hash"],
-  "contracts/project-contract.schema.json": ["project_id", "version", "profile_id", "status", "owners", "repositories", "risk_class", "evidence_destination", "valid_from", "valid_until", "approvals"],
+  // main widened this contract with its own alignment test at
+  // tests/project-contract-schema-alignment.test.mjs. The four fields this pin
+  // used to require — risk_class, evidence_destination, valid_from,
+  // valid_until — were not deleted; they are optional properties now, listed
+  // in the property map below. The pin follows main's file because main's file
+  // is the reviewed one and this branch never edited it.
+  "contracts/project-contract.schema.json": ["project_id", "version", "status", "profile_id", "owners", "repositories", "approvals"],
   "contracts/work-package.schema.json": ["work_package_id", "version", "project_id", "objective", "risk_class", "status", "baseline", "scope", "non_scope", "acceptance_criteria", "roles", "allowed_paths", "prohibited_paths", "evidence_obligations", "valid_until"],
   "contracts/decision-record.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "decision_type", "outcome", "rationale", "authority_ref", "evidence_refs", "decided_at", "valid_from", "valid_until"],
   "contracts/knowledge-claim.schema.json": ["claim_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "statement", "derivation", "truth_status", "evidence_refs", "claimed_at", "valid_from", "valid_until", "retention_policy"],
@@ -247,7 +276,19 @@ const exactRequiredSets = {
   "contracts/project-registration-package.schema.json": ["project_id", "registration_id", "version", "status", "mode", "repository_mutation_authorized", "identity", "proposed_changes", "prohibited_actions", "created_at"],
   "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "scope", "team_policy", "runtime_policy", "context", "workspace", "evidence", "validity"],
   "contracts/system-settings.schema.json": ["schema_version", "environment", "governance", "ports", "swarm", "security", "knowledge", "ledgers"],
-  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "wsl_distro", "upstreams"]
+  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "wsl_distro", "upstreams"],
+  // The seven below arrived with main. This map is a branch-local guard that
+  // main never had, so the merge auto-resolved without pinning them and the
+  // coverage assertion is what caught the gap — the assertion doing its job.
+  // Each array is the schema's own `required` list read from the file, so a
+  // later edit to the schema fails here instead of passing silently.
+  "contracts/skill-candidate.schema.json": ["skill_candidate_id", "version", "name", "purpose", "status", "source_identity", "immutable_version", "integrity", "tool_inventory", "filesystem_boundary", "network_boundary", "credential_handle", "harness_compatibility", "intake_evidence_refs", "withdrawal"],
+  "contracts/delegation-request.schema.json": ["delegation_id", "version", "project_id", "work_package_id", "session_id", "source_actor_id", "destination_role", "objective", "inputs", "expected_output", "acceptance_criteria", "ceiling", "skills", "budget", "due_condition", "escalation_route", "evidence_obligations", "created_at", "content_hash"],
+  "contracts/checkpoint.schema.json": ["checkpoint_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "source_ledger_id", "sequence_at_checkpoint", "state_snapshot_ref", "created_at", "content_hash"],
+  "contracts/workspace-lease.schema.json": ["lease_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "write_set", "issued_at", "ttl", "expires_at", "content_hash"],
+  "contracts/memory-record.schema.json": ["memory_record_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "layer", "source", "statement", "classification", "confidence", "provenance", "valid_from", "valid_until", "retention_policy", "admitted_at", "content_hash"],
+  "contracts/skill-promotion.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "skill_candidate_id", "skill_version", "status", "producer_actor_id", "independent_review_actor_id", "governance_actor_id", "bound_action", "bound_object_version", "evidence_refs", "risk_class", "decided_at", "content_hash"],
+  "contracts/integration-queue-entry.schema.json": ["queue_entry_id", "version", "project_id", "work_package_id", "session_id", "candidate_branch", "candidate_tip_commit", "base_ref", "declared_write_set", "status", "submitted_by", "submitted_at", "content_hash"]
 };
 // Property-name sets. Where a contract carries optional properties they are
 // listed here and NOT in the required map above; that difference is itself the
@@ -267,7 +308,13 @@ const exactPropertySets = {
   "contracts/event-envelope.schema.json": ["event_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "event_type", "occurred_at", "observed_fact", "source", "idempotency_key", "classification", "content_hash"],
   "contracts/evidence-envelope.schema.json": ["evidence_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "evidence_type", "source", "observed_at", "procedure", "result", "exit_status", "limitations", "content_hash", "verification_status", "classification", "retention_policy"],
   "contracts/handoff-envelope.schema.json": ["handoff_id", "version", "project_id", "work_package_id", "source_session_id", "destination_role", "objective", "authorized_scope", "work_completed", "artifacts", "assumptions", "evidence_refs", "checks", "limitations", "unresolved_findings", "risks", "recommended_next_action", "context_delta", "content_hash"],
-  "contracts/project-contract.schema.json": ["project_id", "version", "profile_id", "status", "owners", "repositories", "risk_class", "evidence_destination", "valid_from", "valid_until", "approvals"],
+  // Property side of main's widened contract — 47 names. risk_class,
+  // evidence_destination, valid_from and valid_until appear here but not in
+  // the required map: main made them optional and added risk_ceiling,
+  // evidence_root, evidence_destination_status, effective_from and expires_at
+  // beside them. Expand-migrate, not contract weakening, and this map is where
+  // that distinction is recorded.
+  "contracts/project-contract.schema.json": ["project_id", "version", "status", "profile_id", "namespace", "name", "description", "owners", "repositories", "risk_class", "evidence_destination", "valid_from", "valid_until", "risk_ceiling", "environments", "security_classification", "data_categories", "applicable_policies", "governing_lifecycle_policy", "evidence_chain", "open_register_alignment", "authority_invariant", "approved_runtime_deployments", "proposed_runtime_deployments", "approved_agents", "proposed_agent_registrations", "approved_models", "approved_tools", "approved_mcp_methods", "approved_skills", "evidence_root", "evidence_destination_status", "memory_policy", "release_authority", "integration_authority", "data_residency", "provider_transport_policy", "agent_tool_network_policy", "credential_policy", "retention_policy", "required_exit_gates", "activation_restrictions", "revocation_policy", "expiry_policy", "effective_from", "expires_at", "approvals"],
   "contracts/work-package.schema.json": ["work_package_id", "version", "project_id", "objective", "risk_class", "status", "baseline", "scope", "non_scope", "acceptance_criteria", "roles", "allowed_paths", "prohibited_paths", "evidence_obligations", "valid_until"],
   "contracts/decision-record.schema.json": ["decision_id","version","project_id","work_package_id","session_id","actor_id","decision_type","outcome","rationale","authority_ref","evidence_refs","decided_at","valid_from","valid_until","reverts","subject"],
   "contracts/knowledge-claim.schema.json": ["claim_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "statement", "derivation", "truth_status", "evidence_refs", "claimed_at", "valid_from", "valid_until", "retention_policy"],
@@ -281,7 +328,18 @@ const exactPropertySets = {
   "contracts/project-registration-package.schema.json": ["project_id", "registration_id", "version", "status", "mode", "repository_mutation_authorized", "identity", "proposed_changes", "prohibited_actions", "created_at"],
   "contracts/swarm-execution-contract.schema.json": ["schema_version", "execution", "objective", "scope", "team_policy", "runtime_policy", "context", "workspace", "evidence", "validity"],
   "contracts/system-settings.schema.json": ["schema_version", "environment", "governance", "ports", "swarm", "security", "knowledge", "ledgers"],
-  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "description", "wsl_distro", "upstreams"]
+  "contracts/mcp-upstream-registry.schema.json": ["schema_version", "registry_id", "description", "wsl_distro", "upstreams"],
+  // The seven from main again, here as full property lists. Six are identical
+  // to their required set — every property is mandatory. memory-record is not:
+  // `supersedes` is its one optional, and recording that difference is the
+  // point of keeping this map separate from the required map above.
+  "contracts/skill-candidate.schema.json": ["skill_candidate_id", "version", "name", "purpose", "status", "source_identity", "immutable_version", "integrity", "tool_inventory", "filesystem_boundary", "network_boundary", "credential_handle", "harness_compatibility", "intake_evidence_refs", "withdrawal"],
+  "contracts/delegation-request.schema.json": ["delegation_id", "version", "project_id", "work_package_id", "session_id", "source_actor_id", "destination_role", "objective", "inputs", "expected_output", "acceptance_criteria", "ceiling", "skills", "budget", "due_condition", "escalation_route", "evidence_obligations", "created_at", "content_hash"],
+  "contracts/checkpoint.schema.json": ["checkpoint_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "source_ledger_id", "sequence_at_checkpoint", "state_snapshot_ref", "created_at", "content_hash"],
+  "contracts/workspace-lease.schema.json": ["lease_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "write_set", "issued_at", "ttl", "expires_at", "content_hash"],
+  "contracts/memory-record.schema.json": ["memory_record_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "layer", "source", "statement", "classification", "confidence", "provenance", "valid_from", "valid_until", "retention_policy", "admitted_at", "supersedes", "content_hash"],
+  "contracts/skill-promotion.schema.json": ["decision_id", "version", "project_id", "work_package_id", "session_id", "actor_id", "skill_candidate_id", "skill_version", "status", "producer_actor_id", "independent_review_actor_id", "governance_actor_id", "bound_action", "bound_object_version", "evidence_refs", "risk_class", "decided_at", "content_hash"],
+  "contracts/integration-queue-entry.schema.json": ["queue_entry_id", "version", "project_id", "work_package_id", "session_id", "candidate_branch", "candidate_tip_commit", "base_ref", "declared_write_set", "status", "submitted_by", "submitted_at", "content_hash"]
 };
 // A pin nobody is required to write is a pin that quietly stops covering
 // things. Both maps must cover the governed contract set exactly.

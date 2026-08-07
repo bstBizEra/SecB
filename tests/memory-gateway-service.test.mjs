@@ -12,7 +12,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createMemoryGateway, MemoryGatewayConfigurationError } from "../src/services/memory-gateway-service.mjs";
@@ -304,13 +304,24 @@ test("retrieve honestly filters TTL-expired records (computed, not stored, no pr
 
 test("GUARD: temporal-ledgers.mjs and sod-rules.mjs match the reviewed boundary digests", () => {
   const normalize = (text) => text.replace(/\r\n/g, "\n");
-  const expected = {
-    "src/ledger/temporal-ledgers.mjs": "3da3120b3550fa830a6a8c1f2f22ae35b6cbe02fa5564813c1cc2338a8349d93",
-    "src/control/sod-rules.mjs": "e0670b8ded25e094f9988c343c72dca4aaf279f1546ad46acf5890c5ba430428"
-  };
+  // Mechanism from main: compare against `git show main:<path>` rather than a
+  // hardcoded digest, so the guard cannot go stale the way the old pins did.
+  //
+  // main also EXCLUDED src/control/sod-rules.mjs here, under
+  // mod-gov-s1-sod-rules-hardening-fix-001. That exclusion is not inherited.
+  // It authorizes main's own cross-cutting fix to the primitive; this branch
+  // made a SEPARATE, still-unratified change to the same file at 9d4da11,
+  // which deliberately left this guard red and queued it at f161746. Adopting
+  // main's exclusion would silence the signal for our change while leaving
+  // main's rationale attached to it — the branch would read as mergeable
+  // precisely where it is not.
+  //
+  // Both paths therefore stay in the loop, and both are expected RED until the
+  // queued slice ratifies them. A green result here would mean the queue was
+  // resolved, not that the check was satisfied by assumption.
   for (const path of ["src/ledger/temporal-ledgers.mjs", "src/control/sod-rules.mjs"]) {
+    const onMain = execFileSync("git", ["show", `main:${path}`], { cwd: REPO_ROOT, encoding: "utf8" });
     const onBranch = readFileSync(resolve(REPO_ROOT, path), "utf8");
-    const digest = createHash("sha256").update(normalize(onBranch)).digest("hex");
-    assert.equal(digest, expected[path], `${path} must match the reviewed wrap-not-modify boundary`);
+    assert.equal(normalize(onBranch), normalize(onMain), `${path} must be untouched vs main (wrap-not-modify, R3+ hard line)`);
   }
 });

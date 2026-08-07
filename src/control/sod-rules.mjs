@@ -63,12 +63,36 @@ export const ROLE_ALIASES = Object.freeze({
   producer: "PRODUCER"
 });
 
+// Case-folded lookup table built once at module load: every CANONICAL_ROLES
+// member and every ROLE_ALIASES key, keyed by its trimmed-lowercase form, so
+// "REV", "Rev", "rev", and " rev " all resolve identically. This mirrors the
+// established convention elsewhere in this codebase for identity comparison
+// (runtime-registry.mjs normalizeIdentifierForComparison: trim + case-fold)
+// but deliberately narrower: NO Unicode (NFC) normalization is applied here,
+// so confusable-but-distinct code points are never silently accepted as
+// equivalent — a role token must fold to an ASCII-recognizable known alias or
+// canonical token, or it is rejected outright.
+const ROLE_LOOKUP = Object.freeze(
+  Object.fromEntries([
+    ...CANONICAL_ROLES.map((canonical) => [canonical.toLowerCase(), canonical]),
+    ...Object.entries(ROLE_ALIASES).map(([alias, canonical]) => [alias.toLowerCase(), canonical])
+  ])
+);
+
 // Normalize an external role token to its canonical SecB role.
-// Deny-by-default: a non-string / empty token normalizes to null (no role),
-// which callers must treat as "unknown role" rather than a permissive default.
+// Folds case and trims surrounding whitespace BEFORE alias/canonical lookup,
+// so near-miss spellings ("Rev", "REV ", "rev") all resolve identically
+// instead of silently defeating the ladder checks downstream.
+// Deny-by-default: a non-string / empty / all-whitespace token, OR a token
+// that does not resolve (after folding) to a known alias or a member of
+// CANONICAL_ROLES, normalizes to null (no role) — callers must treat null as
+// "unknown role" rather than a permissive default. Unrecognized near-miss
+// tokens are never passed through unchanged.
 export function normalizeRole(role) {
-  if (typeof role !== "string" || role.length === 0) return null;
-  return ROLE_ALIASES[role] ?? role;
+  if (typeof role !== "string") return null;
+  const trimmed = role.trim();
+  if (trimmed.length === 0) return null;
+  return ROLE_LOOKUP[trimmed.toLowerCase()] ?? null;
 }
 
 // --- Actor identifier admissibility ----------------------------------------
@@ -124,11 +148,11 @@ function displayActorId(value) {
 // CONFLICTING_ROLES; owned here so every SoD site shares one source of truth.
 
 export const CONFLICTING_ROLE_PAIRS = Object.freeze([
-  ["ENGIN", "REV"],
-  ["REV", "QA"],
-  ["QA", "GOV"],
-  ["SKILL_PRODUCER", "SKILL_PUBLISHER"],
-  ["EVIDENCE_PRODUCER", "EVIDENCE_ACCEPTOR"]
+  Object.freeze(["ENGIN", "REV"]),
+  Object.freeze(["REV", "QA"]),
+  Object.freeze(["QA", "GOV"]),
+  Object.freeze(["SKILL_PRODUCER", "SKILL_PUBLISHER"]),
+  Object.freeze(["EVIDENCE_PRODUCER", "EVIDENCE_ACCEPTOR"])
 ]);
 
 // Deny if the given role collection contains any conflicting pair.

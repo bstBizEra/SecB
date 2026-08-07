@@ -126,15 +126,36 @@ export function loadRegistrySeed(seedPath) {
 // Build a RuntimeRegistry from a validated seed. Registrations enter as
 // CANDIDATE/PENDING (registry invariant) and are then transitioned to
 // APPROVED/ACTIVE per their seed flags so the seeded identities can resolve.
+//
+// F-VER (mod-reg-qa-001): this loop is the one real (non-test) caller of
+// transitionEvaluation/transitionLifecycle in the codebase. Today it runs
+// synchronously in a single process with no `await` between register() and
+// its immediate transition calls, so there is no live concurrent-writer
+// window at this call site right now. The registry's optimistic-concurrency
+// check (expectedVersion) is opt-in, and this loop already knows the exact
+// version returned by each prior call — so we thread it through at zero
+// behavioral cost: every expectedVersion here always matches the actual
+// version during normal (single-writer, synchronous) seeding, meaning this
+// change is a no-op for current behavior. It exists purely as defense-in-
+// depth against a future refactor of this loop (or of RuntimeRegistry) that
+// introduces an asynchronous boundary between register() and its transition,
+// where a stale-write would otherwise be silently accepted (QA's
+// recommended remediation option: "have secb-mcp-server-wiring.mjs start
+// passing it").
 export function seedRegistry(validatedSeed) {
   const { policyCeiling, registrations } = validatedSeed;
   const registry = new RuntimeRegistry({ policyCeiling });
   for (const { registration, approve, activate } of registrations) {
     const { agent_instance_id: id } = registration;
     try {
-      registry.register(registration);
-      if (approve) registry.transitionEvaluation(id, "APPROVED");
-      if (activate) registry.transitionLifecycle(id, "ACTIVE");
+      const { version: registeredVersion } = registry.register(registration);
+      let currentVersion = registeredVersion;
+      if (approve) {
+        ({ version: currentVersion } = registry.transitionEvaluation(id, "APPROVED", { expectedVersion: currentVersion }));
+      }
+      if (activate) {
+        registry.transitionLifecycle(id, "ACTIVE", { expectedVersion: currentVersion });
+      }
     } catch (error) {
       throw new DeploymentError("DENY_SEED_REGISTER", `Seeding instance ${id} denied: ${error.code ?? error.message}`);
     }

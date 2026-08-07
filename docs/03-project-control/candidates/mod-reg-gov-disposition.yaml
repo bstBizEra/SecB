@@ -1,0 +1,74 @@
+# MOD-REG Human GOV Disposition Record
+# Disposes: docs/03-project-control/candidates/mod-reg-human-gov-disposition-candidate-001.md
+# Authority: explicit Human GOV instruction ("sign the MOD-REG disposition") received 2026-07-21
+# Recorded by: Claude (BST-SA motor lane, worker only)
+
+disposition_record:
+  work_package: "wp_secb_mod_reg_registry_services_003"
+  candidate_commit: "09d686c64f4bb3d8cd053f91b5f443b0ad69f811"
+  candidate_tree: "7312fefd05a0ed9084f62779fd002b37fc4635fb"
+  candidate_branch: "codex/mod-reg/registry-services-003"
+  bound_candidate_record:
+    path: "docs/03-project-control/candidates/mod-reg-human-gov-disposition-candidate-001.md"
+    sha256: "AE56F6EEBC549855FA76F23273ED983B9E6AD28F1276A2C8CFA37B7846690B40"
+  disposed_at: "2026-07-21"
+  disposed_by: "human-operator"
+  issuer_role: "HUMAN_GOV"
+  issuer_identity: "current_task_user"
+  disposition: "APPROVE_NOT_EFFECTIVE"
+
+independent_verification_before_signature: >
+  The bound candidate record's SHA-256 was recomputed against the file in
+  this session immediately before signing and matched exactly; no drift
+  detected. The candidate commit's own tree hash was independently
+  reverified via `git log -1 --format=%T` immediately before signing and
+  matched 7312fefd05a0ed9084f62779fd002b37fc4635fb exactly. Both facts
+  were also independently confirmed by two separate Codex agent surfaces
+  (Codex Desktop, Codex CLI) in this same session, converging on the
+  identical commit/tree binding and the identical recommended disposition.
+
+human_statement: >
+  I, as Human GOV, dispose of the frozen MOD-REG registry candidate at
+  commit 09d686c64f4bb3d8cd053f91b5f443b0ad69f811 (tree
+  7312fefd05a0ed9084f62779fd002b37fc4635fb, branch
+  codex/mod-reg/registry-services-003) as APPROVE_NOT_EFFECTIVE. This is a
+  technical acceptance only, informed by two independent review passes
+  (cross-provider REV 8eef154 and independent Claude QA 278c536), both
+  reproduced with no blocking findings. This disposition does NOT authorize
+  merging this branch to main, does NOT authorize any integration or
+  activation depending on it, and does NOT itself close the two disclosed
+  non-blocking findings (F-VER, F-IDNORM), which remain open for a future
+  slice. A separate, later, explicit decision is required before this
+  candidate may be merged, integrated, or activated.
+
+evidence_bindings:
+  cross_provider_rev:
+    commit: "8eef154057aad30f7fc948c5de1c4fbbec9463d3"
+    verdict: "APPROVE_FOR_QA_GATE"
+  independent_claude_qa:
+    commit: "278c536"
+    verdict: "READY_NO_BLOCKERS"
+
+what_this_disposition_does_not_authorize:
+  - "Merging codex/mod-reg/registry-services-003 into main"
+  - "Any integration work depending on this candidate"
+  - "Deploying or activating anything that consumes the registry"
+  - "Closing F-VER (expectedVersion opt-in, unused by the real caller) or F-IDNORM (agent_instance_id duplicate detection lacks normalization) -- both remain open, named, non-blocking follow-ups"
+
+next_transition: >
+  A separate, explicit Human GOV decision is required before
+  codex/mod-reg/registry-services-003 may be merged, integrated, or
+  activated. Note: a bounded fix for F-VER/F-IDNORM was independently
+  dispatched this same session as a producer slice against current main
+  (branch bst/mod-reg-f-ver-f-idnorm-fix-001) -- that work is separate from
+  and does not depend on this disposition; it addresses the underlying
+  registry module's code quality, not the frozen candidate's
+  merge/integration status.
+
+self_certification:
+  agent_id: "Claude-Sonnet5-Motor"
+  peer_agent_id: "codex:/root (candidate producer + cross-provider REV) / claude-code-bst-sa-worker (independent QA) / Codex Desktop + Codex CLI (independent convergence confirmation)"
+  certification_scope: "advisory_only"
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true

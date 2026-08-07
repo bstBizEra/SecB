@@ -72,6 +72,56 @@ Agents do not halt work to wait for human GOV, except at the retained hard gates
 - R3/R4 and authority-affecting changes activate only after the reviews required by [`docs/AGENTS.md`](docs/AGENTS.md) — but candidate preparation for them is authorized per the advise-and-proceed rule.
 - The Phase 0 documentation pack remains `DRAFT / NOT EFFECTIVE` per the bootstrap boundary above.
 
+## Skills registry amendment — 2026-07-22
+
+The repository carries an agent skills registry at [`.agents/`](.agents/) — the
+**SecB Architecture Skills Pack v0.1** (`SECB-ARCH-SKILLS-PACK-001`), committed by
+operator order (PR #127). Both agent lanes (Claude Code, Codex, and any Agent
+Skills-compatible client) discover skills there.
+
+### Registry
+
+- **Location:** `.agents/skills/<skill-name>/` (portable `SKILL.md` + governance
+  `manifest.yaml` + references/assets/evals per skill)
+- **Catalog:** [`.agents/docs/skill-catalog.md`](.agents/docs/skill-catalog.md);
+  pack rules: [`.agents/AGENTS.md`](.agents/AGENTS.md)
+- **Integrity:** [`.agents/MANIFEST.sha256`](.agents/MANIFEST.sha256) (verify:
+  `python .agents/scripts/validate_pack.py`); repo `MANIFEST.json` anchors the
+  pack roots
+- **Status:** every skill is **CANDIDATE / NOT EFFECTIVE**, mutation-class **M0**
+  (analyze/model/recommend/document only)
+
+### Registered skills (22)
+
+ai-agent-system-architecture · api-integration-architecture ·
+arc42-architecture-documentation · architecture-decision-record ·
+architecture-evidence-handoff · architecture-fitness-functions ·
+architecture-intake-framing · architecture-options-tradeoffs ·
+architecture-review-conformance · architecture-roadmap-work-packages ·
+c4-architecture-modeling · current-state-architecture-discovery ·
+data-architecture-governance · deployment-environment-architecture ·
+domain-bounded-context-design · event-driven-architecture ·
+mcp-a2a-federation-architecture · quality-attribute-scenarios ·
+runtime-resilience-observability · security-threat-modeling ·
+stakeholder-capability-mapping · system-context-boundaries
+
+### Governing rules (additive to all rules above)
+
+1. Skill output is a **candidate** — the pack's boundary (skill output →
+   architecture candidate → independent review → authorized decision →
+   separately authorized implementation) composes with the working rules and
+   V-020; no skill confers approval, mutation, integration, deployment, or
+   activation authority.
+2. Making any skill EFFECTIVE (adoption/publication) is a separate
+   operator/SEC-GOV act — committing the pack did not adopt it (tracker line
+   2026-07-22, `claude-coordinator-skills-pack-01`).
+3. Skill additions or revisions follow extend-only discipline: new pack version,
+   re-verified `MANIFEST.sha256`, registry amendment here, operator-ratified PR.
+4. The MOD-SKILL governed intake/promotion/revocation primitives
+   (`skill-candidate-registry`, `skill-promotion-ledger`,
+   `skill-revocation-ledger`) remain the eventual runtime registry; this
+   file-based registry is the bootstrap surface until those are wired
+   (SEC/GOV-gated).
 ## Engineering loop binding amendment — 2026-08-08
 
 **Amendment ID:** SECB-AGENTS-AMD-003

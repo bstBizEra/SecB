@@ -29,7 +29,14 @@ const schemaPaths = {
   skillPackageDescriptor: "skill-package-descriptor.schema.json",
   skillGrantRecord: "skill-grant-record.schema.json",
   runtimeProviderPlugin: "runtime-provider-plugin.schema.json",
-  goal: "goal.schema.json"
+  goal: "goal.schema.json",
+  skillCandidate: "skill-candidate.schema.json",
+  delegationRequest: "delegation-request.schema.json",
+  checkpoint: "checkpoint.schema.json",
+  "workspace-lease": "workspace-lease.schema.json",
+  memoryRecord: "memory-record.schema.json",
+  skillPromotion: "skill-promotion.schema.json",
+  integrationQueueEntry: "integration-queue-entry.schema.json"
 };
 
 let ajv = null;

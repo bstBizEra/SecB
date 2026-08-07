@@ -32,7 +32,14 @@ const validFixtures = {
   skillPackageDescriptor: "valid/skill-package-descriptor.json",
   skillGrantRecord: "valid/skill-grant-record.json",
   runtimeProviderPlugin: "valid/runtime-provider-plugin.json",
-  goal: "valid/goal.json"
+  goal: "valid/goal.json",
+  skillCandidate: "valid/skill-candidate.json",
+  delegationRequest: "valid/delegation-request.json",
+  checkpoint: "valid/checkpoint.json",
+  "workspace-lease": "valid/workspace-lease.json",
+  memoryRecord: "valid/memory-record.json",
+  skillPromotion: "valid/skill-promotion.json",
+  integrationQueueEntry: "valid/integration-queue-entry.json"
 };
 
 const invalidFixtures = {
@@ -59,7 +66,14 @@ const invalidFixtures = {
   skillPackageDescriptor: "invalid/skill-package-descriptor-declares-scope.json",
   skillGrantRecord: "invalid/skill-grant-record-bad-status.json",
   runtimeProviderPlugin: "invalid/runtime-provider-plugin-declares-authority.json",
-  goal: "invalid/goal-missing-id.json"
+  goal: "invalid/goal-missing-id.json",
+  skillCandidate: "invalid/skill-candidate-bad-status.json",
+  delegationRequest: "invalid/delegation-request-missing-budget.json",
+  checkpoint: "invalid/checkpoint-missing-id.json",
+  "workspace-lease": "invalid/workspace-lease-missing-id.json",
+  memoryRecord: "invalid/memory-record-missing-id.json",
+  skillPromotion: "invalid/skill-promotion-missing-id.json",
+  integrationQueueEntry: "invalid/integration-queue-entry-missing-id.json"
 };
 
 test("all canonical contract kinds have valid fixtures", () => {

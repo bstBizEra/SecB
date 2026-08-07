@@ -86,7 +86,13 @@ test("supportedContractKinds reports every declared kind, not just compiled ones
   // 24 since runtimeProviderPlugin added the harness-neutral provider contract. The
   // literal is deliberate: it catches a kind added by accident, so it is
   // updated only alongside a contract that meant to be added.
-  assert.equal(out, "24|24");
+  //
+  // 31 after reconciling with main: skillCandidate, delegationRequest,
+  // checkpoint, workspace-lease, memoryRecord, skillPromotion and
+  // integrationQueueEntry arrived from main, each with its own slice and
+  // review. Seven contracts that meant to be added is exactly the condition
+  // this literal is updated under — not an accident slipping past it.
+  assert.equal(out, "31|31");
 });
 
 test("a validated contract still round-trips after lazy compilation", () => {
