@@ -567,3 +567,36 @@ describe("guards the sweep found unpinned, second batch", () => {
     assert.equal(ok.resolveSkill("S1", "1.0.0", C2).code, "ALLOW");
   });
 });
+
+/**
+ * M21 — each missing context field on its own is DENY_UNBOUND_CONTEXT.
+ *
+ * The sweep found `isBlank(a) || isBlank(b) || isBlank(c)` could be changed to
+ * `&&` and the suite stayed green. It does not open a hole — partial context
+ * still denies — but it denies with the WRONG CODE, reporting
+ * DENY_DATA_CLASSIFICATION for a caller who simply omitted a project. A caller
+ * told the wrong reason fixes the wrong thing.
+ *
+ * The existing case passed `{}`, where all three are blank and both operators
+ * agree. Only one-at-a-time separates them.
+ */
+describe("M21 — a partly-bound context is reported as unbound, not as something else", () => {
+  const bare = () => new SkillResolver({ decisionLookup: () => null });
+  const FULL = { projectId: "prj", runtime: "claude-code", dataClassification: "INTERNAL" };
+
+  it("each field missing ALONE reports DENY_UNBOUND_CONTEXT", () => {
+    for (const field of ["projectId", "runtime", "dataClassification"]) {
+      const ctx = { ...FULL };
+      delete ctx[field];
+      assert.equal(bare().resolveSkill("S1", "1.0.0", ctx).code, "DENY_UNBOUND_CONTEXT",
+        `omitting ${field} must be reported as unbound context, not as a policy refusal`);
+    }
+  });
+
+  it("a fully-bound context gets past the binding check", () => {
+    // The positive arm. Without it, a resolver reporting DENY_UNBOUND_CONTEXT
+    // for everything would satisfy the three above. DENY_UNKNOWN_SKILL means the
+    // context was accepted and the registry is simply empty.
+    assert.equal(bare().resolveSkill("S1", "1.0.0", FULL).code, "DENY_UNKNOWN_SKILL");
+  });
+});
