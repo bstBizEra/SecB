@@ -43,6 +43,9 @@ Where both packs cover a topic, the operating-model document is the intended suc
 - [Context and handoff](12-execution/07-context-and-handoff.md)
 - [bOPEN Engineering Loop](12-execution/08-bopen-engineering-loop.md)
 - [Engineering Loop Specification](12-execution/ENGINEERING-LOOP.md)
+- [Panel review and rubric](12-execution/09-panel-review-and-rubric.md)
+- [Inner-loop efficiency](12-execution/10-inner-loop-efficiency.md)
+- [Agent capability baseline](12-execution/11-agent-capability-baseline.md)
 
 ### 13 — Skills
 
