@@ -505,6 +505,7 @@
     "tests/secb-reviews.test.mjs",
     "tools/secb-queue.mjs",
     "tools/secb.mjs",
-    "tests/secb-cli.test.mjs"
+    "tests/secb-cli.test.mjs",
+    "docs/12-execution/09-panel-review-and-rubric.md"
   ]
 }
