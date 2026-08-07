@@ -3,7 +3,7 @@
   "version": "1.0.0-draft",
   "status": "DRAFT_NOT_EFFECTIVE",
   "generated_at": "2026-07-17",
-  "file_count_excluding_manifests": 75,
+  "file_count_excluding_manifests": 76,
   "files": [
     "AGENTS.md",
     "docs/12-execution/08-bopen-engineering-loop.md",
@@ -79,6 +79,7 @@
     "docs/adr/0010-canonical-five-layer-registry-persistence.md",
     "docs/adr/0011-single-mcp-invocation-enforcement-pipeline.md",
     "docs/adr/0012-authenticated-local-stdio-ipc-bridge.md",
-    "docs/12-execution/09-panel-review-and-rubric.md"
+    "docs/12-execution/09-panel-review-and-rubric.md",
+    "docs/12-execution/10-inner-loop-efficiency.md"
   ]
 }

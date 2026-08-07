@@ -506,6 +506,7 @@
     "tools/secb-queue.mjs",
     "tools/secb.mjs",
     "tests/secb-cli.test.mjs",
-    "docs/12-execution/09-panel-review-and-rubric.md"
+    "docs/12-execution/09-panel-review-and-rubric.md",
+    "docs/12-execution/10-inner-loop-efficiency.md"
   ]
 }
