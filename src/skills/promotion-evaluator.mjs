@@ -84,19 +84,48 @@ export function evaluatePromotion({ descriptor, grant, source, owner, producerAc
   const history = manifest.approval_history;
 
   /**
-   * The producer is not recorded by any contract on this branch — measured, and
-   * deriving it from git was measured too and does not work, because git
-   * identity here is a machine identity shared by every agent. So this is
-   * UNVERIFIABLE for every promotion this repository can currently produce, and
-   * UNVERIFIABLE BLOCKS. It is not a warning attached to a success.
+   * WP-GOV-SOD1. The producer identity now comes from the GOVERNED RECORD, not
+   * from a caller argument.
+   *
+   * It used to be a parameter, which meant the party whose separation was being
+   * checked could supply the value being checked against them. `grant`
+   * `producer_actor_id` is optional in the schema — so no existing record is
+   * invalidated, the WP-SK-R1 pattern — and mandatory here.
+   *
+   * The caller argument is still accepted, but ONLY to detect a disagreement:
+   * a caller naming a different producer than the grant does is refused rather
+   * than silently overridden in either direction. Deriving the producer any
+   * other way was measured and does not work — git identity in this repository
+   * is a machine identity shared by every agent, so a check reading it would
+   * compare a value to itself.
    */
-  if (typeof producerActorId !== "string" || producerActorId.trim() === "") {
+  const recordedProducer = grant.producer_actor_id;
+  if (
+    typeof producerActorId === "string" && producerActorId.trim() !== "" &&
+    typeof recordedProducer === "string" && recordedProducer.trim() !== "" &&
+    producerActorId.trim() !== recordedProducer.trim()
+  ) {
+    return {
+      verdict: ADMISSIBILITY.INADMISSIBLE,
+      code: "DENY_PRODUCER_CONFLICT",
+      reason:
+        `The caller names producer "${producerActorId}" and the grant records ` +
+        `"${recordedProducer}". A disagreement about who produced a skill is not ` +
+        "resolvable by preferring one side.",
+      manifest: null,
+      separationOfDuties: { caller: producerActorId, recorded: recordedProducer }
+    };
+  }
+
+  const producer = recordedProducer;
+  if (typeof producer !== "string" || producer.trim() === "") {
     return {
       verdict: ADMISSIBILITY.INADMISSIBLE,
       code: "DENY_SOD_UNVERIFIABLE",
       reason:
-        "No producer identity. No contract on this branch records who authored a skill, " +
-        "so producer-vs-approver cannot be evaluated. This is a denial, not a pass.",
+        "The grant records no producer_actor_id, so producer-vs-approver cannot be " +
+        "evaluated. The field is optional in the schema and mandatory here: a " +
+        "promotion whose author is unknown is a denial, not a pass.",
       manifest: null,
       separationOfDuties: { missing: "producerActorId" }
     };
@@ -115,7 +144,7 @@ export function evaluatePromotion({ descriptor, grant, source, owner, producerAc
   }
 
   const actors = [
-    { role: "PRODUCER", actorId: producerActorId },
+    { role: "PRODUCER", actorId: producer },
     ...history.map((e) => ({
       role: normalizeRole(e.decision_type) ?? e.decision_type,
       actorId: e.approved_by

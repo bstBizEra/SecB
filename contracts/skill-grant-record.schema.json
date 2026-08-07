@@ -40,6 +40,11 @@
       ],
       "description": "RESTRICTED_PUBLICATION is a required stage of the SECB-SKILL-001 lifecycle that the previous enum omitted, which let FR-SKP-009 be treated as skippable."
     },
+    "producer_actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who authored the skill. OPTIONAL in this schema so no existing record is invalidated, and MANDATORY at the promotion evaluator, which refuses DENY_SOD_UNVERIFIABLE without it. Shape matches main's skill-promotion.schema.json so the two converge rather than diverging into a third vocabulary. Recorded here rather than on the descriptor because self-attestation by the party whose separation is being checked is not separation of duties."
+    },
     "project_scopes": {
       "type": "array",
       "minItems": 1,

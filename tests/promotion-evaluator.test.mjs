@@ -42,13 +42,14 @@ const grant = (over = {}) => ({
     approval("INDEPENDENT_QA", "carol")
   ],
   revocation_conditions: ["regression"],
+  producer_actor_id: "dave",
   ...over
 });
 
 const SOURCE = { repository: "SecB", commit_sha: "a".repeat(40), licence: "internal" };
 
 const evaluate = (over = {}) => evaluatePromotion({
-  descriptor: DESCRIPTOR, grant: grant(), source: SOURCE, owner: "SKILL", producerActorId: "dave", ...over
+  descriptor: DESCRIPTOR, grant: grant(), source: SOURCE, owner: "SKILL", ...over
 });
 
 describe("admissibility — the positive arm", () => {
@@ -70,7 +71,7 @@ describe("admissibility — the positive arm", () => {
 describe("admissibility — an unverifiable SoD BLOCKS, it does not annotate", () => {
   it("no producer identity is INADMISSIBLE even though the composition is perfect", () => {
     // This is the state every promotion in this repository is in today.
-    const r = evaluate({ producerActorId: undefined });
+    const r = evaluate({ grant: grant({ producer_actor_id: undefined }) });
     assert.equal(r.verdict, ADMISSIBILITY.INADMISSIBLE);
     assert.equal(r.code, "DENY_SOD_UNVERIFIABLE");
     assert.equal(r.manifest, null,
@@ -78,8 +79,8 @@ describe("admissibility — an unverifiable SoD BLOCKS, it does not annotate", (
   });
 
   it("distinguishes UNVERIFIABLE from VIOLATED, because the remedies differ", () => {
-    const unverifiable = evaluate({ producerActorId: undefined });
-    const violated = evaluate({ producerActorId: "bob" }); // bob also reviewed
+    const unverifiable = evaluate({ grant: grant({ producer_actor_id: undefined }) });
+    const violated = evaluate({ grant: grant({ producer_actor_id: "bob" }) }); // bob also reviewed
     assert.equal(unverifiable.code, "DENY_SOD_UNVERIFIABLE");
     assert.equal(violated.code, "DENY_SOD_VIOLATED");
     assert.notEqual(unverifiable.code, violated.code,
@@ -88,13 +89,13 @@ describe("admissibility — an unverifiable SoD BLOCKS, it does not annotate", (
 
   it("the producer holding an approval role is INADMISSIBLE", () => {
     for (const who of ["alice", "bob", "carol"]) {
-      const r = evaluate({ producerActorId: who });
+      const r = evaluate({ grant: grant({ producer_actor_id: who }) });
       assert.equal(r.verdict, ADMISSIBILITY.INADMISSIBLE, who);
       assert.equal(r.code, "DENY_SOD_VIOLATED", who);
     }
     // Control: a producer who approved nothing is admitted, so the three above
     // are about the overlap and not about the fixture.
-    assert.equal(evaluate({ producerActorId: "dave" }).verdict, ADMISSIBILITY.ADMISSIBLE);
+    assert.equal(evaluate().verdict, ADMISSIBILITY.ADMISSIBLE);
   });
 });
 
@@ -135,5 +136,53 @@ describe("admissibility — it evaluates, and does not promote", () => {
   it("exports no path that registers or resolves", async () => {
     const mod = await import("../src/skills/promotion-evaluator.mjs");
     assert.deepEqual(Object.keys(mod).sort(), ["ADMISSIBILITY", "evaluatePromotion"]);
+  });
+});
+
+/**
+ * WP-GOV-SOD1 — the producer identity comes from the governed record.
+ *
+ * It used to be a caller argument, which meant the party whose separation was
+ * being checked supplied the value checked against them. `producer_actor_id` is
+ * optional in skill-grant-record — so no existing record is invalidated, the
+ * WP-SK-R1 pattern — and mandatory here.
+ */
+describe("admissibility — the producer is read from the grant, not from the caller", () => {
+  it("a grant recording no producer is INADMISSIBLE however the caller is called", () => {
+    const noProducer = grant({ producer_actor_id: undefined });
+    for (const claim of [undefined, "dave", "alice"]) {
+      const r = evaluatePromotion({
+        descriptor: DESCRIPTOR, grant: noProducer, source: SOURCE, owner: "SKILL", producerActorId: claim
+      });
+      assert.equal(r.code, "DENY_SOD_UNVERIFIABLE",
+        `a caller naming "${claim}" must not supply an identity the record does not carry`);
+    }
+  });
+
+  it("the caller cannot override the recorded producer, in either direction", () => {
+    // A caller claiming to be someone other than the record says is a
+    // disagreement about who authored the skill, and preferring either side
+    // would make one of them decorative.
+    const r = evaluatePromotion({
+      descriptor: DESCRIPTOR, grant: grant(), source: SOURCE, owner: "SKILL", producerActorId: "someone-else"
+    });
+    assert.equal(r.code, "DENY_PRODUCER_CONFLICT");
+    assert.equal(r.separationOfDuties.recorded, "dave");
+    assert.equal(r.separationOfDuties.caller, "someone-else");
+  });
+
+  it("a caller agreeing with the record is accepted", () => {
+    // The positive arm for the conflict check: agreement is not a conflict, so
+    // the denial above is about the disagreement and not about the argument
+    // being present at all.
+    const r = evaluatePromotion({
+      descriptor: DESCRIPTOR, grant: grant(), source: SOURCE, owner: "SKILL", producerActorId: "dave"
+    });
+    assert.equal(r.verdict, ADMISSIBILITY.ADMISSIBLE);
+  });
+
+  it("a recorded producer who also approved is still VIOLATED", () => {
+    // Moving the identity into the record must not weaken the check it feeds.
+    assert.equal(evaluate({ grant: grant({ producer_actor_id: "alice" }) }).code, "DENY_SOD_VIOLATED");
   });
 });

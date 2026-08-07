@@ -1,7 +1,7 @@
 schema_version: "0.1"
 record_metadata:
   record_id: "wp_gov_sod1_producer_identity_v1_candidate"
-  record_status: "AWAITING_GOV_AUTHORIZATION"
+  record_status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
   source_template: "docs/templates/work-package.yaml"
   producer_runtime: "Claude Code"
   prepared_as: "SARCHI — architecture and design. SARCHI does not authorize; GOV does."
@@ -96,7 +96,7 @@ open_design_question: >-
 
 risk_class: "R3"
 mutation_class: "M3"
-status: "AWAITING_GOV_AUTHORIZATION"
+status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
 
 baseline:
   target_branch: "feat/secb-ruflo-command-center"
@@ -195,3 +195,55 @@ authority_note: >-
   exist. What makes it consequential is that it is the last of the three items
   standing between SkillsHub and being wireable - and that is a reason to be
   more careful with it, not less. Nothing here asks for the wiring.
+
+implementation:
+  built_at: "2026-08-07, on operator instruction to proceed"
+  authority_note: >-
+    THE TWO OPEN QUESTIONS WERE ANSWERED BY THE PRODUCER, NOT BY GOV. The
+    operator directed the work; it did not rule on the questions, and this
+    record still carries no signature. The answers used are the producer's own
+    recommendations, already on file with the producer's interest in each
+    disclosed:
+
+      which record carries it   skill-grant-record, NOT the descriptor.
+                                Self-attestation by the party whose separation
+                                is being checked is not separation of duties.
+      grandfathering            none. A missing producer stays a hard block.
+                                The producer recommended this AGAINST its own
+                                interest - grandfathering would make its unwired
+                                modules reachable sooner.
+
+    A reader who disagrees with either should treat the code as reversible: it
+    adds an optional field and one comparison, and nothing consumes it.
+
+  what_changed:
+    - "contracts/skill-grant-record.schema.json - producer_actor_id added as OPTIONAL, shape identical to main's skill-promotion.schema.json so the two converge rather than diverging into a third vocabulary."
+    - "src/skills/promotion-evaluator.mjs - reads grant.producer_actor_id. The caller argument survives only to detect a DISAGREEMENT, refused as DENY_PRODUCER_CONFLICT rather than resolved by preferring a side."
+    - "tools/validate-foundation.mjs - the exact-set property pin updated."
+    - "tests/promotion-evaluator.test.mjs - fixtures record the producer in the grant; four cases added."
+
+  acceptance_criteria_met:
+    AC-SOD1-01: >-
+      A promotion carrying a distinct producer is ADMISSIBLE. First time any
+      promotion in this repository has been.
+    AC-SOD1-02: "A producer who also approved is still DENY_SOD_VIOLATED."
+    AC-SOD1-03: >-
+      A grant with no producer_actor_id is DENY_SOD_UNVERIFIABLE, and stays so
+      however the caller names itself. No grandfathering.
+    AC-SOD1-04: >-
+      Records invalidated: ZERO. The field is optional in the schema, so the
+      existing skill-grant-record fixture still validates - checked, not
+      assumed. This is the WP-SK-R1 pattern: optional at the contract,
+      mandatory at the consumer.
+    AC-SOD1-05: >-
+      The pin fired before it was updated - schema.properties.exact for
+      skill-grant-record, "property set is exactly 11 names" - then exit 0
+      after. The failure is the free evidence the pin works.
+    AC-SOD1-06: >-
+      Sabotage, each anchor asserted to land: caller argument wins over the
+      record 15/1; conflict check disabled 15/1; empty producer admitted 13/3.
+
+  not_done:
+    - "Nothing consumes evaluatePromotion. This makes separation of duties EVALUABLE; it switches nothing on."
+    - "DEF-R5 remains ahead of any wiring: a governance decision still cannot record a refusal."
+    - "The descriptor and decision-record alternatives were not implemented. If GOV rules for either, this change is one optional field to move."
