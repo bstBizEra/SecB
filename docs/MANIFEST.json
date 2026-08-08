@@ -3,7 +3,7 @@
   "version": "1.0.0-draft",
   "status": "DRAFT_NOT_EFFECTIVE",
   "generated_at": "2026-07-17",
-  "file_count_excluding_manifests": 80,
+  "file_count_excluding_manifests": 81,
   "files": [
     "AGENTS.md",
     "docs/12-execution/08-bopen-engineering-loop.md",
@@ -84,6 +84,7 @@
     "docs/12-execution/11-agent-capability-baseline.md",
     "docs/03-project-control/candidates/mod-know-s2-rev-001.md",
     "docs/03-project-control/candidates/mcp-gate-agent-seed.draft.json",
-    "docs/03-project-control/candidates/2026-08-08-post-merge-guard-disposition.draft.md"
+    "docs/03-project-control/candidates/2026-08-08-post-merge-guard-disposition.draft.md",
+    "docs/03-project-control/candidates/2026-08-08-wp-mem-integration-map.draft.md"
   ]
 }
