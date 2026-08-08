@@ -1,0 +1,204 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_gov_vf1_validator_exact_pins_v1_candidate"
+  record_status: "AUTHORIZED"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  authorization: "Authorized by Operator (BizEra) 2026-08-03 via SECB-DECISION-SHEET-001 item 4. Not mergeable until the seven byte-identity pins are updated and AC-VF1-06 shows the guards still bite."
+  limitations:
+    - "Producer is also the assigned ENGIN and may not accept its own evidence."
+    - "The code is already written and sabotage-verified on branch fix/validate-foundation-exact-pins at 8f7a91e. This work package exists to obtain the AUTHORITY to land it, not to schedule the writing. Authorizing it is authorizing a modification to a file main deliberately guards; the work is not the interesting part of the request."
+    - "Producer prepared this work package on feat/secb-ruflo-command-center, a branch whose entire prior programme was closed because its baseline was 296 commits stale. The change here was re-derived directly against main at e8eb4ec, in a clean worktree, and every exit code below was observed there rather than carried over. That distinction is load-bearing and is the reason the branch exists separately."
+
+work_package_id: "WP-GOV-VF1"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-GOV"
+title: "Authorized modification: exact-set contract pins in the foundation validator"
+
+objective: >-
+  Make `tools/validate-foundation.mjs` capable of failing when a governed
+  contract gains, loses, or promotes a field, and update the seven byte-identity
+  guards that pin the validator's blob, as an authorized modification in the
+  idiom those guards already record.
+
+problem_statement: >-
+  DEF-M2. `npm run validate` cannot see a contract property change. Verified on
+  main at e8eb4ec by mutation, exit codes observed rather than inferred: adding
+  an optional property to contracts/decision-record.schema.json left validate at
+  exit 0, and pushing that property into the schema's `required` array ALSO left
+  it at exit 0. Only the per-contract unit test caught either.
+
+  The pin at `mandatoryIdentityFields` is a required-field SUBSET test, satisfied
+  by any superset, with no property-set and no count assertion. Anyone changing a
+  governed contract and running `validate` alone gets a green light
+  unconditionally. Twenty governed contracts are exposed.
+
+  This is DEF-M1's standing rule turned on the validator: a check that cannot
+  fail is not evidence. The programme that adopted that rule then leaned on this
+  validator for six review rounds.
+
+risk_class: "R2"
+mutation_class: "M2"
+status: "AUTHORIZED"
+
+baseline:
+  target_branch: "main"
+  baseline_commit: "e8eb4ec"
+  prepared_branch: "fix/validate-foundation-exact-pins"
+  prepared_commit: "8f7a91e"
+  note: >-
+    The prepared commit deliberately FAILS main's byte-identity guards and is not
+    mergeable as-is. That is the point of this request.
+
+scope:
+  - "tools/validate-foundation.mjs — add exact-set pins on both the required set and the property-name set of all 20 governed contracts, plus two coverage assertions holding each map's key set equal to the schema allowlist."
+  - "Retain the existing subset pin unchanged. It names the identity fields a contract may never lose, which is a narrower and more legible claim than the exact sets. Coverage grows; nothing is replaced."
+  - "Update the validator blob pin in the SEVEN test files that carry it: tests/cadence-policy, event-family-policy, kpi-registry, overlap-policy, replay-assembler, scorecard-assembler, write-set-policy. Each currently asserts dbd4d10883e7724aa75301fc7f3b5c9528089726."
+  - "Record the modification in each guard's comment in the existing idiom — the guards already read 'authorized-modified by MOD-WSPACE-S3', then 'again by MOD-MEM S2'. This becomes the third such entry and must name this work package."
+
+non_scope:
+  - "No contract schema is added, removed, or edited. The file SET and every schema's content are unchanged; only the validator's assertions about them change."
+  - "No other pinned file is touched. The guards protecting DOC_REL, src/control/risk-registry.mjs, tests/risk-registry.test.mjs and package.json must continue to pass unmodified."
+  - "No src/ change. No runtime behaviour change of any kind. The validator is a build-time check."
+  - "DEF-M3 is NOT in scope. src/control/risk-registry.mjs:36 asserts that doc-parity drift 'fails CI' when no CI exists in this repository — no .github/, no .gitlab-ci.yml, no azure-pipelines.yml, no Jenkinsfile. That file is blob-pinned by the same guards and correcting its comment would require this work package to modify a second guarded file for an unrelated reason. Raised so it is not lost; it needs its own disposition."
+
+acceptance_criteria:
+  - id: "AC-VF1-01"
+    statement: "`npm run validate` exits 1 when an optional property is added to any governed contract, and exits 1 when an existing optional property is promoted to required."
+    verification: "Mutate contracts/decision-record.schema.json both ways; observe exit 1 each time; restore; observe exit 0. Claimed by exit code, never by grepping output for a status string."
+  - id: "AC-VF1-02"
+    statement: "`npm run validate` exits 1 when a required field is removed from any governed contract, including a field the subset pin does not name."
+    verification: "Remove bound_action from contracts/skill-promotion.schema.json and, separately, integrity from contracts/skill-candidate.schema.json. Neither appears in mandatoryIdentityFields, so neither is caught today. Observe exit 1 each time; restore; observe exit 0."
+  - id: "AC-VF1-03"
+    statement: "A contract admitted to the schema allowlist without a pin entry fails the coverage assertion."
+    verification: "Delete one entry from exactPropertySets against clean schemas; observe exit 1 naming schema.properties.exact.coverage; restore."
+  - id: "AC-VF1-04"
+    statement: "The new assertions are demonstrably the mechanism doing the work, not something else in the file happening to catch the mutation."
+    verification: "Run a copy of the validator with the new loops, both maps and both coverage assertions removed, against the SAME mutated schemas. It must pass every mutation the fixed validator rejects. Record both columns. A control that cannot distinguish the two proves nothing."
+  - id: "AC-VF1-05"
+    statement: "The full test suite exits 0 on main with this change and the seven updated pins."
+    verification: "`node --test tests/*.test.mjs` exit 0. NOTE: run this in a checkout that HAS node_modules. The producer's first attempt returned exit 1 in a fresh worktree solely because ajv was unresolvable, which would have been reported as a pre-existing main failure had it not been checked. A suite result from a tree missing its dependencies is not a baseline."
+  - id: "AC-VF1-06"
+    statement: "Each of the seven guards fails if the validator drifts again after this change."
+    verification: "After re-pinning, append a comment line to tools/validate-foundation.mjs and confirm all seven guards fail; revert. Re-pinning tamper detection without demonstrating it still bites is re-pinning it to nothing."
+
+roles:
+  ENGIN: "unassigned — the producer wrote the prepared commit and may not accept its own evidence"
+  REV: "unassigned — must not be the producer"
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted on the guard re-pin, which is the authority-bearing element"
+  GOV: "authorizes; a human governance body, per the retained hard gates in root AGENTS.md"
+
+allowed_paths:
+  - "tools/validate-foundation.mjs"
+  - "tests/cadence-policy.test.mjs"
+  - "tests/event-family-policy.test.mjs"
+  - "tests/kpi-registry.test.mjs"
+  - "tests/overlap-policy.test.mjs"
+  - "tests/replay-assembler.test.mjs"
+  - "tests/scorecard-assembler.test.mjs"
+  - "tests/write-set-policy.test.mjs"
+
+prohibited_paths:
+  - "contracts/**"
+  - "src/**"
+  - "MANIFEST.json"
+  - "docs/MANIFEST.json"
+  - ".agents/**"
+
+evidence_obligations:
+  - "The full sabotage matrix with raw exit codes, including the AC-VF1-04 control column."
+  - "The before and after blob hashes of tools/validate-foundation.mjs, and the seven guard files each pin was updated in."
+  - "The AC-VF1-06 post-repin drift demonstration."
+  - "A statement of which checkout the suite was run in and whether node_modules was present."
+
+valid_until: "2026-11-03T00:00:00Z"
+
+authority_note: >-
+  This is the request the guards themselves describe. main pins the validator's
+  blob in seven test files so that, in their own words, "any UNAUTHORIZED further
+  drift of the validator still fails this guard", and records the legitimate
+  route in each: the file "was authorized-modified by MOD-WSPACE-S3", then "again
+  by MOD-MEM S2".
+
+  The producer declined to update those pins on the prepared branch. Re-pinning
+  tamper detection to an artifact the producer wrote, without authorization, is
+  precisely the move the guard exists to prevent — and doing it would have made
+  the branch look mergeable while removing the only signal that it was not. The
+  seven failures are left standing so the requirement is visible.
+
+  GOV authorization of this work package is what converts that drift from
+  unauthorized to authorized. Without it there is nothing here to merge.
+
+review_verdict:
+  record_id: "WP-GOV-VF1-REV-001"
+  reviewer: "Codex (REV), independent of the producer"
+  reviewed_at: "2026-08-03"
+  scope: "PR 136, base 8be8c995, target 5d97c4cb. Later commits not reviewed. No merge performed."
+  verdict: "APPROVE_WITH_NOTES"
+  blocking_findings: 0
+  independently_reproduced:
+    - "npm run validate exit 0"
+    - "4 mutations each exit 1"
+    - "AC-VF1-06: 7/7 guards passed before, 7/7 failed after an injected drift, 7/7 passed after revert, worktree clean"
+    - "Full suite on target AND base both 1342 passed / 1 failed / 3 skipped - the target introduces no additional failure"
+  rev_noted_one_probe_was_weaker_than_the_producer_implied: >-
+    Removing `integrity` from skill-candidate's required set was caught by the
+    EXISTING schema.identity guard, not by the new exact-set pin. It is
+    fail-closed either way, but that probe does not independently exercise what
+    this work package added. The producer listed it among its evidence without
+    noticing.
+  answered_the_question_the_producer_could_not: >-
+    Acceptable on main, with conditions. A governed contract schema is a wire and
+    authority boundary, so an intentional shape change SHOULD fail validation
+    until the expected shape is explicitly updated in the same authorized and
+    reviewed change. Conditions: a re-pin is acknowledgement that a contract
+    changed, not proof it is safe or authorized; migration, compatibility and
+    authority implications still require review; the target SHA stays frozen and
+    any later commit needs a new round.
+
+producer_corrections_accepted:
+  - id: "REV-VF1-N01"
+    severity: "MEDIUM, non-blocking"
+    the_claim_that_was_wrong: >-
+      The producer stated the maintenance cost as "one line per deliberate
+      contract change", in the validator's own comment and in the review brief.
+      Incomplete. Editing validate-foundation.mjs also invalidates seven
+      byte-identity guards, so the real fan-out is the validator pin PLUS seven
+      test re-pins - EIGHT, not one.
+    why_it_matters: >-
+      The producer asked REV to judge whether that maintenance cost was
+      acceptable on main while understating it by a factor of eight. The verdict
+      survived the correction, but it was reached against a wrong number, and
+      that is the producer's error rather than the reviewer's.
+    where_it_is_NOT_corrected: >-
+      The claim also sits in a comment inside tools/validate-foundation.mjs on
+      the frozen target. Correcting it there would change that file's blob and
+      invalidate all seven pins, forcing another authorized re-pin round for a
+      sentence. It is left standing and corrected here instead - a reader of that
+      comment should treat this record as the accurate figure.
+    recommendation_accepted_not_opened: >-
+      REV recommends a separate bounded work package to move contract-shape
+      expectations into a declarative baseline, or to centralise the validator
+      integrity guard, WITHOUT weakening fail-closed behaviour. Recorded so it is
+      not lost; not opened here, because the queue is already full.
+  - id: "REV-VF1-N02"
+    severity: "LOW, non-blocking"
+    finding: "A spliced comment fragment in 3 files and stale post-MOD-MEM-S2 provenance in all 7."
+    status: >-
+      Corrected at 7a975f0 in a separately pinned revision, as REV asked. The
+      producer's commit message for that fix then overstated the diff as
+      comment-only when 10 of the changed lines are assertion message strings;
+      corrected on the PR rather than by force-pushing a branch under review.
+
+residual_risk_recorded_by_rev:
+  - "Updating the expected arrays alongside a schema can mechanically make validation green. The pin records that a change happened; it does not judge it."
+  - "Exact property and required sets do NOT detect changes to types, enums, formats or nested constraints."
+  - "This validator is a drift tripwire, not an authorization verifier. Human review remains necessary."
+
+authority_recorded:
+  technical_acceptance: "granted for the exact target 5d97c4cb"
+  governance_acceptance: "NOT granted"
+  merge_authority: "NOT granted - the operator merges"
+  deployment_or_activation: "NOT granted"

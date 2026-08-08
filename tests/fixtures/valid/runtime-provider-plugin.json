@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "plugin_id": "runtime-provider-example",
+  "plugin_version": "0.1.0",
+  "provider_id": "PROVIDER-EXAMPLE",
+  "runtime_product_id": "example-runtime",
+  "display_name": "Example Runtime Provider",
+  "purpose": "Provide bounded runtime telemetry to SecB.",
+  "implementation": {
+    "module": "src/runtime/providers/example-runtime-provider.mjs",
+    "export_name": "ExampleRuntimeProvider"
+  },
+  "capabilities": {
+    "deployment_types": ["local_sidecar"],
+    "operations": ["inspect_health"],
+    "event_types": ["runtime.heartbeat"]
+  },
+  "security": {
+    "maximum_input_classification": "INTERNAL",
+    "network_access": "loopback",
+    "credential_mode": "brokered",
+    "output_trust": "UNTRUSTED_CANDIDATE"
+  },
+  "boundaries": {
+    "authority_source": "SECB",
+    "may_issue_authority": false,
+    "may_self_authorize": false,
+    "may_accept_evidence": false,
+    "may_admit_memory": false,
+    "may_promote_knowledge": false,
+    "may_publish_skills": false,
+    "may_merge_protected_branch": false,
+    "may_release": false,
+    "may_activate": false,
+    "owns_secb_work_state": false
+  },
+  "ui": {
+    "mode": "projection",
+    "surface": "SecB Command Center / Runtime Operations"
+  },
+  "evidence_obligations": ["event-envelope"],
+  "candidate_status": "CANDIDATE"
+}

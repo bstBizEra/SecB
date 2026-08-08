@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/skill-grant-record.schema.json",
+  "title": "SecB Skill Grant Record",
+  "description": "The GRANTED tier of a skill manifest (ADR-0013). Every field here is written by the promotion service and by nothing else. No package author supplies any of it, and additionalProperties:false means a descriptor field smuggled in here is rejected rather than ignored. Joined to skill-package-descriptor on skill_id + version. This split exists because DEF-A5 found the resolver reading project_scopes, supported_runtimes and max_data_classification straight out of the caller-supplied manifest as its own authorization ceiling. Both publication stages - PUBLISHED and RESTRICTED_PUBLICATION - are conditionally required to carry evidence and approval history. The schema previously accepted PUBLISHED with both empty, and then gated only PUBLISHED, leaving the restricted stage its own text calls required reachable with zero evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_id",
+    "version",
+    "status",
+    "project_scopes",
+    "supported_runtimes",
+    "max_data_classification",
+    "evidence_refs",
+    "approval_history",
+    "revocation_conditions"
+  ],
+  "properties": {
+    "skill_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "description": "Charset-constrained so the resolver's reserved-delimiter guard cannot be bypassed by a field that reached the registry through this tier. '@' is the registry's own key delimiter."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "CANDIDATE",
+        "SANDBOX",
+        "EVALUATION",
+        "REVIEW",
+        "RESTRICTED_PUBLICATION",
+        "PUBLISHED",
+        "DEPRECATED",
+        "REVOKED",
+        "QUARANTINED"
+      ],
+      "description": "RESTRICTED_PUBLICATION is a required stage of the SECB-SKILL-001 lifecycle that the previous enum omitted, which let FR-SKP-009 be treated as skippable."
+    },
+    "producer_actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Who authored the skill. OPTIONAL in this schema so no existing record is invalidated, and MANDATORY at the promotion evaluator, which refuses DENY_SOD_UNVERIFIABLE without it. Shape matches main's skill-promotion.schema.json so the two converge rather than diverging into a third vocabulary. Recorded here rather than on the descriptor because self-attestation by the party whose separation is being checked is not separation of duties."
+    },
+    "project_scopes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "supported_runtimes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "max_data_classification": {
+      "enum": [
+        "PUBLIC",
+        "INTERNAL",
+        "CONFIDENTIAL",
+        "RESTRICTED"
+      ],
+      "description": "An INVOCATION control: the highest data class this skill is certified to operate on. It is NOT a disclosure control. Per SECB-SEC-DECISION-SKILLSHUB-C3-001 (ruled B), skill content carries no independent sensitivity and no content_classification field exists. The call site must stop passing a caller's clearance here as a requested class (DEF-C3)."
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "EXECUTED evaluation results accepted by the Evidence authority. A declared suite in the descriptor is not evidence."
+    },
+    "approval_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision_id",
+          "decision_type",
+          "approved_by",
+          "approved_at",
+          "work_package_id"
+        ],
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "decision_type": {
+            "enum": [
+              "SANDBOX_ENTRY",
+              "EVALUATION_PASS",
+              "SECURITY_REVIEW",
+              "INDEPENDENT_REV",
+              "INDEPENDENT_QA",
+              "HUMAN_PROMOTION",
+              "RESTRICTED_PUBLICATION",
+              "REVOCATION"
+            ]
+          },
+          "approved_by": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "work_package_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "REQUIRED. contracts/decision-record.schema.json requires work_package_id on every decision, so a promotion cannot be minted outside an authorized work package (DEF-B3). This was previously asserted in prose while the schema left it optional - a structural claim the structure did not make."
+          }
+        }
+      }
+    },
+    "revocation_conditions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "granted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_content_digest": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Recorded by the promotion service at promotion, for resolution-time content verification (DEF-B1, DEF-C2). On the GRANTED tier because an author-declared digest verifies nothing."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "PUBLISHED",
+              "RESTRICTED_PUBLICATION"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1
+          },
+          "approval_history": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}

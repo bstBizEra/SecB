@@ -11,6 +11,7 @@ This directory is SecB’s controlled architecture and operating-model baseline.
 ## Rules
 
 - Use one authoritative definition for each contract or concept; link to it elsewhere.
+- Follow the Governance Surface & High-Logic Agent Prompting Protocols in [`00-governance/SECB-GOV-SURFACE-001.md`](00-governance/SECB-GOV-SURFACE-001.md) for First-Principles Analysis, Refusal Matrix, and Sequential Thinking.
 - Preserve document IDs, version, status, owner, approval state, and last-updated date.
 - Mark all unapproved material `DRAFT / NOT EFFECTIVE`.
 - Distinguish normative requirements from examples and recommendations.

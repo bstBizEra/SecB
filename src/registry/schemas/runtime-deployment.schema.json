@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "secb://schemas/runtime-deployment/v1.0",
+  "title": "SecB Runtime Deployment",
+  "description": "Canonical registration record for an external execution runtime within the SecB governance framework.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "runtime_deployment_id",
+    "provider_id",
+    "runtime_product",
+    "runtime_provider_plugin_id",
+    "runtime_provider_plugin_version",
+    "runtime_provider_plugin_fingerprint",
+    "deployment_type",
+    "endpoint",
+    "identity",
+    "capabilities",
+    "authority",
+    "lifecycle"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "runtime_deployment_id": {
+      "type": "string",
+      "pattern": "^RT-[A-Z0-9-]+$",
+      "description": "Stable, globally-unique SecB runtime deployment identifier."
+    },
+    "provider_id": {
+      "type": "string",
+      "pattern": "^PROVIDER-[A-Z0-9-]+$"
+    },
+    "runtime_product": {
+      "type": "string",
+      "description": "Product name e.g. 'ruflo', 'codex', 'claude-code'."
+    },
+    "runtime_provider_plugin_id": {
+      "type": "string",
+      "pattern": "^runtime-provider-[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Candidate plugin descriptor identity. This reference does not activate the plugin or grant authority."
+    },
+    "runtime_provider_plugin_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "runtime_provider_plugin_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Canonical SHA-256 fingerprint of the exact plugin descriptor."
+    },
+    "runtime_version": { "type": "string" },
+    "deployment_type": {
+      "type": "string",
+      "enum": ["local_sidecar", "remote_api", "container", "sandbox"]
+    },
+    "endpoint": {
+      "type": "object",
+      "required": ["mcp"],
+      "properties": {
+        "control_api": { "type": "string", "format": "uri" },
+        "event_ingress": { "type": "string", "format": "uri" },
+        "mcp": { "type": "string", "format": "uri" },
+        "dashboard": { "type": "string", "format": "uri" }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "required": ["authentication", "host_id"],
+      "properties": {
+        "authentication": {
+          "type": "string",
+          "enum": ["mtls", "local_workload_token", "api_key", "none"]
+        },
+        "host_id": { "type": "string" },
+        "workload_id": { "type": "string" }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "swarm_planning",
+          "multi_agent_execution",
+          "parallel_task_execution",
+          "agent_memory",
+          "mcp_client",
+          "mcp_server",
+          "lifecycle_hooks",
+          "read_repository",
+          "write_repository",
+          "run_tests",
+          "container_execution",
+          "credential_injection"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "authority": {
+      "type": "object",
+      "required": [
+        "maximum_authority_class",
+        "may_self_authorize",
+        "may_accept_evidence",
+        "may_publish_skills",
+        "may_merge_protected_branch"
+      ],
+      "properties": {
+        "maximum_authority_class": {
+          "type": "string",
+          "enum": ["A0", "A1", "A2", "A3"]
+        },
+        "may_self_authorize": { "type": "boolean" },
+        "may_accept_evidence": { "type": "boolean" },
+        "may_publish_skills": { "type": "boolean" },
+        "may_merge_protected_branch": { "type": "boolean" }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["candidate", "active", "suspended", "deregistered"]
+        },
+        "operationally_effective": { "type": "boolean" },
+        "registered_at": { "type": "string", "format": "date-time" },
+        "last_health_check": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

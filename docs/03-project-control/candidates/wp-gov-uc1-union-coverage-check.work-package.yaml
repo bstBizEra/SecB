@@ -1,0 +1,210 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_gov_uc1_union_coverage_check_v1_candidate"
+  record_status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
+  implementation_note: >-
+    Built 2026-08-04 on the operator's instruction to proceed through the
+    sequence, whose step 5 is this check. Authority basis stated plainly so a
+    reader can disagree with it: AGENTS.md line 54 pre-authorizes bounded slices
+    under tools/** and tests/**, and this touches only those two paths. GOV
+    acceptance of the EVIDENCE is still outstanding and the producer cannot
+    grant it.
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  source: >-
+    Operator instruction, 2026-08-04, step 4 of the post-#137 sequence: make the
+    union check a bounded work package, and make the check fail when a file that
+    has been excluded is left with zero byte-identity coverage.
+  limitations:
+    - "Producer prepared this and may not accept its own evidence."
+    - "The producer's first measurement of this problem used comment scanning, which the operator correctly rejected as fragile. The design below exists because that rejection was right; see design_evidence."
+
+work_package_id: "WP-GOV-UC1"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-GOV"
+title: "Fail closed when a source file loses all byte-identity coverage"
+
+objective: >-
+  Turn SECB-ASSURANCE-GUARD-EXCLUSION-UNION-001 from a document into a check, so
+  that the union of guard exclusions cannot silently stop being safe.
+
+problem_statement: >-
+  A branch that legitimately changes a guarded file must re-pin or exclude it.
+  Exclusion is correct and every exclusion in this repository is disclosed.
+
+  What no review sees is the UNION. Each reviewer is shown one branch removing
+  one file; what reaches main is the accumulation. Measured on 2026-08-04:
+  5 exclusions on main across 5 guards, growing to 9 across 7 if every open pull
+  request merges, with two guards holding two exclusions each - and those two
+  guards are exactly where #68 and #69 currently conflict.
+
+  One of those accumulations is already a real gap. #94 removes
+  src/control/overlap-policy.mjs from both of the two guards that cover it. Every
+  individual step was approved; the total was not, because nothing looks at it.
+
+design: >-
+  DO NOT DETECT EXCLUSIONS. Detect coverage.
+
+  A file is covered by a guard if and only if the guard NAMES it as a protected
+  file. Removing it drops the coverage whether the removal carries an
+  explanatory comment, a differently-worded comment, or no comment at all. So
+  the exclusion never needs to be parsed - only the coverage does.
+
+  This is strictly stronger than the producer's first approach, which scanned
+  exclusion comments: it also catches a SILENT removal, which comment scanning
+  cannot see by construction, and it does not break when comment wording changes.
+
+  The check: for every path a guard names on the base, count the guards naming
+  it in the candidate. Fail when a count reaches zero.
+
+design_evidence: >-
+  Prototyped and run before this package was written, because two corrections
+  were only visible by running it.
+
+  Reading declarations alone, comparing BRANCH against main, reported 27 files
+  reaching zero coverage across the eight open pull requests. Nearly all were
+  artefacts of two kinds:
+
+    1. The branch predates a guard that exists on main. That is not a coverage
+       decision and it disappears on merge. THE COMPARISON MUST BE AGAINST THE
+       MERGE RESULT, NOT THE BRANCH - git merge-tree --write-tree computes it
+       without checking anything out.
+
+    2. Test fixture strings that look like source paths. Of 70 paths named
+       inside guards on main, only 43 ARE REAL FILES; src/moduleA/a.mjs and
+       src/x.mjs are fixtures. A NAMED PATH ONLY COUNTS IF IT EXISTS IN THE TREE.
+
+  With both corrections, the same 27 collapse to 1:
+
+    #60   0    #73   0    #88   0    #91   0    #110  0
+    #68   conflicting, merge result not computable
+    #69   conflicting, merge result not computable
+    #94   1    src/control/overlap-policy.mjs  2 -> 0
+
+  which is the file the comment-based scan found, reached by an independent
+  route. Control: main merged with itself reports 0 gaps.
+
+risk_class: "R2"
+mutation_class: "M2"
+status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
+
+evidence:
+  built:
+    - "tools/secb-guard-coverage.mjs"
+    - "tests/secb-guard-coverage.test.mjs"
+  cli_exit_codes: >-
+    Distinct and load-bearing, run against real merge results:
+      #94  exit 1  src/control/overlap-policy.mjs  2 -> 0
+      #91  exit 0  no file loses all coverage
+      #88  exit 0  no file loses all coverage
+      #68  exit 3  CONFLICTING - merge result not computable, and it says so
+                   rather than measuring the branch and calling it the same
+  sabotage_matrix: >-
+    Each mutation asserted to have landed before the suite ran; a sabotage that
+    silently fails to apply produces a green run that looks like proof.
+
+      baseline                                    13 pass   0 fail
+      stop filtering fixture paths                11 pass   2 fail
+      fire on ANY drop, not only reaching zero    12 pass   1 fail
+      stop stripping comments                     12 pass   1 fail
+      restored                                    13 pass   0 fail
+  suite: "validate exit 0; full suite 1100 tests, 1093 pass, 0 fail, 7 skipped."
+  not_done:
+    - "AC-UC1-05's silent-removal case is proven hermetically, not against a real branch. No branch in this repository has yet removed a protected file WITHOUT a comment, which is precisely why that case needed constructing rather than observing."
+    - "The check is not wired into anything. It is a command someone must run. Wiring it is a separate decision and this package explicitly refuses to claim a CI gate that does not exist - see non_scope and DEF-M3."
+
+baseline:
+  target_branch: "to be decided by the authorizer - main, or the working branch"
+  baseline_commit: "origin/main @ 8be8c99"
+  note: >-
+    This package adds a check; it changes no guard and re-pins nothing, so it
+    does not invalidate any byte-identity pin. That is deliberate. A design that
+    required guards to declare their protected sets uniformly would be better and
+    would cost a re-pin of every guard it touched, which is the WP-GOV-VF1 cost
+    multiplied. Recorded as a rejected alternative rather than taken.
+
+scope:
+  - "tools/ - the coverage computation and a CLI that exits non-zero on a gap."
+  - "tests/ - both arms, plus the two corrections above pinned as regressions."
+
+non_scope:
+  - "NO change to any existing guard, and no re-pin. Adding this check must not itself cost a re-pin round."
+  - "NO judgement about whether any individual exclusion was justified. That question is already with a reviewer in HANDOFF-POST-VERDICT-DELTA-001."
+  - "NO enforcement in CI. There is no CI in this repository - see DEF-M3, which records an existing assertion that drift 'fails CI' when nothing does. This package must not add a second such claim."
+  - "NO uniform protected-set declaration across guards. Better design, wrong cost, recorded in baseline.note."
+
+acceptance_criteria:
+  - id: "AC-UC1-01"
+    statement: "A file losing its last byte-identity guard fails the check."
+    verification: "Run against #94's merge result. Expect exit non-zero naming src/control/overlap-policy.mjs, 2 -> 0."
+  - id: "AC-UC1-02"
+    statement: "A file losing SOME but not all coverage passes."
+    verification: >-
+      Run against #91's merge result, where checkpoint-ledger.mjs drops but keeps
+      two guards. Expect exit 0. This is the arm that makes AC-UC1-01 mean
+      something: a check that failed on any drop would fail on #94 for the wrong
+      reason.
+  - id: "AC-UC1-03"
+    statement: "The comparison is against the merge result, not the branch."
+    verification: >-
+      Pin the branch-comparison result as a regression: comparing #88's BRANCH
+      against main reports 14 files at zero; comparing its MERGE RESULT reports
+      0. A future refactor that reverts to branch comparison must fail here.
+  - id: "AC-UC1-04"
+    statement: "A named path that is not a real file is not counted as coverage."
+    verification: >-
+      Assert that src/moduleA/a.mjs and src/x.mjs, which appear inside guards as
+      fixtures, are absent from the coverage map. 70 named paths, 43 real, on
+      main today.
+  - id: "AC-UC1-05"
+    statement: "The check does not depend on comment wording."
+    verification: >-
+      Sabotage: reword or delete an exclusion comment without changing the
+      protected list. The result must not move. Then remove a file from a
+      protected list with NO comment at all; the check must fail. The second half
+      is the point - it is the case the producer's first method could not see.
+  - id: "AC-UC1-06"
+    statement: "Every check is shown failing when it should."
+    verification: >-
+      Sabotage matrix with raw exit codes and a control column, and a control
+      that main-merged-with-itself yields zero gaps. A detector that reports zero
+      because it is broken is indistinguishable from one that reports zero
+      because nothing is wrong, unless the control fires.
+
+roles:
+  ENGIN: "unassigned"
+  REV: "unassigned — must not be the producer"
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted. This check exists to protect tamper detection from erosion."
+  GOV: "authorizes."
+
+allowed_paths:
+  - "tools/secb-guard-coverage.mjs"
+  - "tests/secb-guard-coverage.test.mjs"
+  - "docs/04-assurance/guard-exclusion-union-001.md"
+
+prohibited_paths:
+  - "tests/*byte-identity*"
+  - "tools/validate-foundation.mjs"
+  - "src/**"
+  - ".agents/**"
+  - "MANIFEST.json"
+
+evidence_obligations:
+  - "The AC-UC1-01/02 pair, run against real merge results, with exit codes."
+  - "The AC-UC1-05 sabotage, including the silent-removal half."
+  - "The AC-UC1-06 matrix with its control column."
+  - "A statement of what the check CANNOT see, in the same register as the limitations in SECB-ASSURANCE-GUARD-EXCLUSION-UNION-001."
+
+valid_until: "2026-11-04T00:00:00Z"
+
+authority_note: >-
+  R2 and M2: a new tool and its tests, touching no guard, no contract and no
+  source. It is filed for authorization rather than built under the pre-authorized
+  bounded-slice path because the producer has already built one tool this session
+  without a package, and because the operator asked for this one as a package.
+
+  The check it adds is small. What it protects is not: byte-identity guards are
+  the only mechanism in this repository that notices a governed file changing
+  without authorization, and exclusions erode them one correct decision at a time.

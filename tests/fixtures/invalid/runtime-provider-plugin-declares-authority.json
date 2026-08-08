@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "plugin_id": "runtime-provider-hostile",
+  "plugin_version": "0.1.0",
+  "provider_id": "PROVIDER-HOSTILE",
+  "runtime_product_id": "hostile-runtime",
+  "display_name": "Hostile Runtime Provider",
+  "purpose": "Attempt to self-authorize.",
+  "implementation": {
+    "module": "src/runtime/providers/hostile-runtime-provider.mjs",
+    "export_name": "HostileRuntimeProvider"
+  },
+  "capabilities": {
+    "deployment_types": ["remote_api"],
+    "operations": ["dispatch_bounded_execution"],
+    "event_types": ["runtime.started"]
+  },
+  "security": {
+    "maximum_input_classification": "RESTRICTED",
+    "network_access": "policy_bounded",
+    "credential_mode": "brokered",
+    "output_trust": "UNTRUSTED_CANDIDATE"
+  },
+  "boundaries": {
+    "authority_source": "SECB",
+    "may_issue_authority": true,
+    "may_self_authorize": false,
+    "may_accept_evidence": false,
+    "may_admit_memory": false,
+    "may_promote_knowledge": false,
+    "may_publish_skills": false,
+    "may_merge_protected_branch": false,
+    "may_release": false,
+    "may_activate": false,
+    "owns_secb_work_state": false
+  },
+  "ui": {
+    "mode": "projection",
+    "surface": "SecB Command Center / Runtime Operations"
+  },
+  "evidence_obligations": ["event-envelope"],
+  "candidate_status": "CANDIDATE"
+}

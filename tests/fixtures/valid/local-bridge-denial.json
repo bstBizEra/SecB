@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "denial_id": "brdeny_handshake_alpha_001",
+  "phase": "HANDSHAKE",
+  "public_code": "DENY_LOCAL_AUTHENTICATION",
+  "retryable": false,
+  "trace_id": "trace_bridge_alpha_001",
+  "occurred_at": "2026-07-31T08:02:15Z"
+}

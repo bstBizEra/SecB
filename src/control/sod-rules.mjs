@@ -22,6 +22,7 @@
 // primitives:
 //
 //   - normalizeRole()            : role-alias vocabulary map
+//   - isWellFormedActorId()      : actor-identifier admissibility gate
 //   - checkConflictingRoles()    : conflicting-role-pairs check
 //   - checkProhibitedActors()    : prohibited-actor ladder (actor-history)
 //   - checkPairwiseDistinct()    : pairwise-distinct actor sets
@@ -92,6 +93,52 @@ export function normalizeRole(role) {
   const trimmed = role.trim();
   if (trimmed.length === 0) return null;
   return ROLE_LOOKUP[trimmed.toLowerCase()] ?? null;
+}
+
+// --- Actor identifier admissibility ----------------------------------------
+//
+// Every actor comparison below this line is exact string equality. That is only
+// a separation-of-duties check if two strings that name the same principal are
+// the same string. Reproduced before this gate existed, both returning ok:true:
+//
+//   checkPairwiseDistinct([{ role: "PRODUCER", actorId: "alice\u200B" },
+//                          { role: "REV",      actorId: "alice" }])
+//   checkProhibitedActors("REV", "\u0430lice", { producer: "alice" })
+//
+// U+200B is a zero-width space; U+0430 is Cyrillic small a. Each one admits a
+// producer approving its own work. No contract schema constrains an actor id
+// beyond {"type":"string","minLength":1}, so both submit cleanly. (Written as
+// escapes on purpose: this file must contain no character it exists to reject.)
+//
+// Rejected: NFKC-normalize and strip zero-width/bidi controls, then compare.
+// It closes the U+200B case and NOT the Cyrillic one — NFKC does not map
+// U+0430 to U+0061, and telling those apart needs a confusables table this
+// repository does not carry. Rejected: case folding, which closes neither
+// reproduction and additionally MERGES ids that are distinct today.
+//
+// So the gate is on admissibility, not on comparison: confine actor ids to a
+// repertoire in which the confusable pairs above cannot be spelled. Because
+// nothing is normalized, no two ids that are distinct before this change
+// collide after it — the only behavior change is that an id carrying one of
+// these characters now denies where it previously compared unequal and passed.
+//
+// Printable ASCII, no leading or trailing space (an id that differs from
+// another only by surrounding whitespace was a third reproduction).
+const WELL_FORMED_ACTOR_ID = /^[\x21-\x7E](?:[\x20-\x7E]*[\x21-\x7E])?$/;
+
+// Exported so the three SoD sites not yet migrated to this module (work-package
+// -service, handoff-service, capability-registry-service) can adopt one rule
+// rather than each deriving its own — the duplication this module exists to end.
+export function isWellFormedActorId(actorId) {
+  return typeof actorId === "string" && WELL_FORMED_ACTOR_ID.test(actorId);
+}
+
+// A denial that names an invisible character must not itself be invisible.
+function displayActorId(value) {
+  if (typeof value !== "string") return String(value);
+  return [...value]
+    .map((char) => (/[\x20-\x7E]/.test(char) ? char : `\\u${char.codePointAt(0).toString(16).padStart(4, "0")}`))
+    .join("");
 }
 
 // --- Conflicting-role pairs ------------------------------------------------
@@ -200,8 +247,28 @@ export function checkProhibitedActors(role, actorId, history = {}, { ladder = AU
   if (typeof actorId !== "string" || actorId.length === 0) {
     return { ok: false, code: "DENY_MALFORMED_ACTOR", message: "actorId must be a non-empty string" };
   }
+  if (!isWellFormedActorId(actorId)) {
+    return {
+      ok: false,
+      code: "DENY_MALFORMED_ACTOR",
+      message: `actorId is not a well-formed identifier: ${displayActorId(actorId)}`
+    };
+  }
   const keys = ladder[role] ?? [];
   const prohibited = collectProhibited(keys, history);
+  // The history side needs the same gate: a prohibited actor spelled with a
+  // homoglyph fails to match a well-formed claimant just as surely, so
+  // validating only the claimant leaves the exclusion open from the other end.
+  // Roles carrying no ladder collect nothing and so remain unaffected.
+  for (const entry of prohibited) {
+    if (!isWellFormedActorId(entry)) {
+      return {
+        ok: false,
+        code: "DENY_MALFORMED_ACTOR",
+        message: `actor history contains a malformed identifier: ${displayActorId(entry)}`
+      };
+    }
+  }
   if (prohibited.has(actorId)) {
     return { ok: false, code, message: `Separation of duties prohibits actor ${actorId} from role ${role}` };
   }
@@ -233,6 +300,15 @@ export function checkPairwiseDistinct(actors, { code = "DENY_SOD_NOT_DISTINCT" }
     const actorId = typeof entry === "string" ? entry : entry?.actorId;
     const role = typeof entry === "string" ? null : entry?.role ?? null;
     if (!actorId) continue;
+    if (!isWellFormedActorId(actorId)) {
+      return {
+        ok: false,
+        code: "DENY_MALFORMED_ACTOR",
+        message: `actor id is not a well-formed identifier: ${displayActorId(actorId)}`,
+        actorId,
+        roles: role === null ? [] : [role]
+      };
+    }
     if (seen.has(actorId)) {
       const priorRole = seen.get(actorId);
       return {

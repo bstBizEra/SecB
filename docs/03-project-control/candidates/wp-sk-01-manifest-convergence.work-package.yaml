@@ -1,0 +1,201 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_sk_01_manifest_convergence_v1_candidate"
+  record_status: "AUTHORIZED_CANDIDATE"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "The producer of this work package is also its assigned ENGIN. It may not review or accept its own output; REV and QA identities must be distinct."
+    - "The producer has been independently found in error three times on this programme. Acceptance criteria below are written to be machine-checkable for that reason."
+
+work_package_id: "WP-SK-01"
+project_id: "prj_secb_local"
+product_id: "SECB-PRD-SKILLSHUB-001"
+module_id: "MOD-SKILL"
+goal_id: "GATE-SK-01"
+title: "Skill manifest convergence - trust-tier split"
+
+objective: >-
+  Implement ADR-0013: replace the single mixed-tier skill manifest with an
+  author-written skill-package-descriptor and a service-written
+  skill-grant-record, split name into package_name and display_name, and migrate
+  the 22 manifest-carrying packages onto the descriptor.
+
+problem_statement: >-
+  Four descriptions of a skill manifest exist and disagree. Zero of 22 on-disk
+  manifests validate against the governed contract, failing on a shared field.
+  The governed contract mixes fields an author may declare with fields only a
+  promotion may grant, and the resolver reads three of those grants straight from
+  the caller-supplied manifest as its authorization ceiling (DEF-A5). The hub's
+  identity binding depends on a name-equals-directory constraint that only the
+  unenforced schema encodes (DEF-A4).
+
+desired_outcome: >-
+  One authored contract and one granted contract, joined on skill_id@version,
+  with all 22 packages validating against the authored one and no package able
+  to declare its own authorization scope.
+
+non_goals:
+  - "Building intake, evaluation, promotion, or distribution. Those are WP-SK-02 onward."
+  - "Populating the resolver registry. Explicitly gated by the DEF-C3 ruling until Phase 5 completes."
+  - "Adding content_classification. Ruled out by SECB-SEC-DECISION-SKILLSHUB-C3-001 Ruling B."
+  - "Deciding OD-SK-10. ADR-0013 carries it forward unresolved."
+  - "Resolution-time digest verification (DEF-B1, DEF-C2). Phase 5."
+  - "Editing .agents/ - PACK.yaml declares mutation_authorized: false."
+  - "Editing src/mcp/ - concurrent work by another producer."
+
+risk_class: "R3"
+mutation_class: "M2"
+mutation_rationale: >-
+  Isolated non-production mutation. Contracts and package descriptors change; no
+  authoritative ledger is written, no registry is populated, no authority is
+  issued. This is deliberately lower than WP-SK-05, which mints governance
+  decisions and is classified M3.
+
+owners:
+  accountable: "Operator (BizEra), acting as GOV"
+  domain: "ARCHI"
+assignments:
+  - role: "ENGIN"
+    identity: "claude-code-secb-session-2026-08-01"
+  - role: "REV"
+    identity: "UNASSIGNED - must be distinct from ENGIN"
+  - role: "QA"
+    identity: "UNASSIGNED - must be distinct from ENGIN"
+independence_constraints:
+  - "ENGIN may not accept its own evidence."
+  - "REV and QA identities must each differ from ENGIN and from each other."
+  - "npm run validate and the test suite are producer-run checks, not acceptance."
+
+dependencies:
+  - "ADR-0013 (accepted 2026-08-01)"
+  - "SECB-SEC-DECISION-SKILLSHUB-C3-001 (ruled B, 2026-08-01)"
+
+baseline:
+  repository_id: "SecB"
+  branch: "feat/secb-ruflo-command-center"
+  commit_sha: "9924ae0"
+  condition: "Tracked tree clean at authorization"
+
+write_contract:
+  declared_paths:
+    - "contracts/skill-package-descriptor.schema.json"
+    - "contracts/skill-grant-record.schema.json"
+    - "src/contracts/contract-validator.mjs"
+    - "src/registry/skill-resolver.mjs"
+    - "src/skills/skills-hub-service.mjs"
+    - "tools/validate-foundation.mjs"
+    - "docs/templates/skill-manifest.yaml"
+    - "tests/**"
+    - "MANIFEST.json"
+    - "docs/MANIFEST.json"
+  prohibited_paths:
+    - ".agents/**"
+    - "src/mcp/**"
+    - "dashboard/**"
+    - "docs/00-governance/**"
+    - "AGENTS.md"
+    - "docs/AGENTS.md"
+  reserved_symbols:
+    - "HUMAN_PROMOTION"
+    - "GOVERNANCE"
+    - "DENY_*"
+
+allowed_tools: ["read", "write", "edit", "node", "git", "npm run validate", "node --test"]
+allowed_mcp: []
+allowed_network: []
+allowed_models: ["any resolved session model"]
+allowed_skills: []
+allowed_data: ["repository contents at the declared baseline"]
+
+acceptance_criteria:
+  - id: "AC-01"
+    statement: "contracts/skill-package-descriptor.schema.json exists, is draft 2020-12, type object, additionalProperties false, and required is non-empty."
+    proof: "node --test over the contract-validator suite; tools/validate-foundation.mjs schema closure check passes."
+  - id: "AC-02"
+    statement: "contracts/skill-grant-record.schema.json exists with the same closure properties, and its required set contains none of the author-declarable fields listed in ADR-0013."
+    proof: "A test asserts the two schemas' required sets are disjoint apart from the join keys skill_id and version."
+  - id: "AC-03"
+    statement: "package_name is patterned ^[a-z0-9-]{1,64}$ in the descriptor, and display_name is a separate free-text field."
+    proof: "Schema assertion test."
+  - id: "AC-04"
+    statement: "All 22 manifest-carrying packages validate against the descriptor."
+    proof: "A test iterates .agents/skills/*/manifest.yaml, maps each to a descriptor, and validates. Count asserted equal to 22, not merely greater than zero."
+  - id: "AC-05"
+    statement: "The hub's identity binding uses package_name and a package whose descriptor package_name differs from its directory is denied DENY_IDENTITY_MISMATCH."
+    proof: "Existing AC-SKILLS-HUB-06b extended to the new field."
+  - id: "AC-06"
+    statement: "A descriptor carrying any grant field is rejected by the validator rather than ignored."
+    proof: "Negative test submitting a descriptor with project_scopes; asserts a validation error, not a silent drop."
+  - id: "AC-07"
+    statement: "mutation_class is absent from both new contracts."
+    proof: "Schema assertion test."
+  - id: "AC-08"
+    statement: "The resolver computes effective authority ceiling as min(agent, skill) and this is expressed in exactly one place."
+    proof: "Unit test over the ceiling composition; a grep-style test asserts no second implementation."
+  - id: "AC-09"
+    statement: "npm run validate reports zero FAIL, and the full suite excluding tests/mcp-hub-launcher.test.mjs reports zero failures."
+    proof: "Producer-run; recorded as evidence, not as acceptance."
+  - id: "AC-10"
+    statement: "The resolver registry remains empty and no production wiring calls registerSkill."
+    proof: "The DEF-C3 registry gate. A test asserts no non-test caller of registerSkill exists."
+
+test_plan:
+  - "Positive: each of the 22 packages maps and validates."
+  - "Negative: descriptor with a grant field; grant record with an authored field; package_name not matching directory; package_name violating the pattern."
+  - "Regression: the full existing SkillsHub suite, including the AC-SKILLS-HUB-06b/06c identity-binding pins and AC-SKILLS-HUB-11 getSkill unreachability."
+  - "Migration: contract version bump with a migration test per persisted revision, per FR-SKM-006."
+  - "Restart: none applicable - no persisted runtime state is introduced."
+
+review_plan:
+  - "REV: verify the two schemas against ADR-0013 field-by-field, and hunt for any path by which an author-supplied value reaches an authorization decision."
+  - "REV: confirm the 22 migrated descriptors introduce no fabricated owner, source, or purpose values."
+  - "QA: re-run validate and the suite at the delivered commit and confirm AC-01 through AC-10 independently."
+
+security_plan:
+  - "SEC review is owed because this is R3 and touches authorization scope."
+  - "Specific question for SEC: does the descriptor/grant split fully close DEF-A5, or does a residual path remain by which a registered manifest sets its own ceiling."
+  - "Secret scan over all changed files before handoff."
+
+evidence_destination: "SecB Evidence Ledger - accepted by the Evidence authority, not by the producer (FR-SKP-011)"
+
+human_approval_requirements:
+  - "GOV authorization to begin: GRANTED 2026-08-01 by the operator, scoped to Phase 1 and Phase 2 only."
+  - "GOV approval to merge: NOT GRANTED. Required separately."
+  - "GOV approval to populate the resolver registry: NOT GRANTED and explicitly gated until Phase 5 completes."
+
+schedule:
+  execution_window_opens: "2026-08-01"
+  expiry: "Authorization lapses if not started within 30 days, or on any change to ADR-0013."
+budget: "Not tracked at this stage; Phase 3 is the first work package where budget is expected to bind."
+
+checkpoint_rules:
+  - "Checkpoint after the two contracts exist and before any package is migrated."
+  - "If the 22 migrations cannot complete without fabricating a field, STOP and return to ARCHI - that is evidence the tier split is wrong."
+rollback_plan: >-
+  Every change is additive until the validate-foundation pin is updated. Revert
+  is a git revert of the work package's commits; no data migration, no registry
+  state, and no ledger entries are created, so rollback is complete and leaves no
+  residue.
+recovery_rules:
+  - "On interruption, resume from the last checkpoint; no partial state persists outside git."
+integration_rules:
+  - "Serialized merge per house practice. Rebase onto the branch tip before handoff."
+  - "src/mcp is under concurrent work by another producer; conflicts there indicate a scope breach, not a merge to resolve."
+activation_rules:
+  - "None. This work package activates nothing."
+
+learning_obligations:
+  - "Record whether the tier split actually prevented a grant from being author-supplied, or merely relocated the obligation - this is the load-bearing claim of ADR-0013."
+
+status: "AUTHORIZED - NOT STARTED"
+version: "1.0.0-candidate"
+signatures:
+  gov_authorization: "Operator (BizEra), 2026-08-01, scoped to Phase 1-2"
+  archi_design: "ADR-0013, accepted 2026-08-01"
+  sec_precondition: "SECB-SEC-DECISION-SKILLSHUB-C3-001, ruled B, 2026-08-01"
+  rev_acceptance: "PENDING"
+  qa_acceptance: "PENDING"
+reason_codes:
+  - "Implements ADR-0013"
+  - "Closes DEF-A4, DEF-A6, DEF-A7, and structurally addresses DEF-A5"

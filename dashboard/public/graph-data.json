@@ -1,0 +1,5863 @@
+{
+  "generated_at": "2026-07-29T20:25:47.506Z",
+  "total_nodes": 7649,
+  "total_edges": 12660,
+  "communities_count": 571,
+  "top_communities": [
+    {
+      "id": 0,
+      "name": "files",
+      "count": 323,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 1,
+      "name": "mcp-gateway-core.mjs",
+      "count": 95,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 2,
+      "name": "git_ref_map.rs",
+      "count": 93,
+      "color": "#E15759"
+    },
+    {
+      "id": 4,
+      "name": "index.mjs",
+      "count": 87,
+      "color": "#59A14F"
+    },
+    {
+      "id": 3,
+      "name": "cn",
+      "count": 78,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 16,
+      "name": "context-federation-service.mjs",
+      "count": 75,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 5,
+      "name": "conflict.rs",
+      "count": 70,
+      "color": "#EDC948"
+    },
+    {
+      "id": 6,
+      "name": "site-header.tsx",
+      "count": 68,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 7,
+      "name": "AuditEntry",
+      "count": 65,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 8,
+      "name": "files",
+      "count": 63,
+      "color": "#9C755F"
+    },
+    {
+      "id": 9,
+      "name": "strategy.rs",
+      "count": 59,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 40,
+      "name": "branch_access.rs",
+      "count": 58,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 10,
+      "name": "git_object_map.rs",
+      "count": 58,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 11,
+      "name": "hash_bytes",
+      "count": 57,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 12,
+      "name": "TodoItem",
+      "count": 57,
+      "color": "#E15759"
+    },
+    {
+      "id": 13,
+      "name": "wire/format.rs",
+      "count": 56,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 14,
+      "name": "app/page.tsx",
+      "count": 54,
+      "color": "#59A14F"
+    },
+    {
+      "id": 17,
+      "name": "ops-report-generator.mjs",
+      "count": 50,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 18,
+      "name": "utils.rs",
+      "count": 49,
+      "color": "#9C755F"
+    },
+    {
+      "id": 19,
+      "name": "DebouncedEvent",
+      "count": 49,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 20,
+      "name": "properties",
+      "count": 48,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 21,
+      "name": "work-package-service.mjs",
+      "count": 48,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 22,
+      "name": "enum",
+      "count": 47,
+      "color": "#E15759"
+    },
+    {
+      "id": 23,
+      "name": "properties",
+      "count": 45,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 24,
+      "name": "properties",
+      "count": 45,
+      "color": "#59A14F"
+    },
+    {
+      "id": 25,
+      "name": "maintainers/[[...slug]]/page.tsx",
+      "count": 45,
+      "color": "#EDC948"
+    },
+    {
+      "id": 28,
+      "name": "sync_protocol.rs",
+      "count": 44,
+      "color": "#9C755F"
+    },
+    {
+      "id": 27,
+      "name": "iam/session.rs",
+      "count": 44,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 29,
+      "name": "properties",
+      "count": 42,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 15,
+      "name": "validateContract",
+      "count": 42,
+      "color": "#EDC948"
+    },
+    {
+      "id": 48,
+      "name": "handoff-service.mjs",
+      "count": 42,
+      "color": "#9C755F"
+    },
+    {
+      "id": 30,
+      "name": "decode.rs",
+      "count": 40,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 31,
+      "name": "Tenant",
+      "count": 40,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 32,
+      "name": "MergeRequest",
+      "count": 39,
+      "color": "#E15759"
+    },
+    {
+      "id": 33,
+      "name": "dependencies",
+      "count": 38,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 34,
+      "name": "ContentHash",
+      "count": 38,
+      "color": "#59A14F"
+    },
+    {
+      "id": 35,
+      "name": "role.rs",
+      "count": 37,
+      "color": "#EDC948"
+    },
+    {
+      "id": 36,
+      "name": "encode.rs",
+      "count": 36,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 38,
+      "name": "policy.rs",
+      "count": 36,
+      "color": "#9C755F"
+    },
+    {
+      "id": 39,
+      "name": "candidate-source-port.test.mjs",
+      "count": 35,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 41,
+      "name": "Team",
+      "count": 35,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 42,
+      "name": "Manifest",
+      "count": 35,
+      "color": "#E15759"
+    },
+    {
+      "id": 43,
+      "name": "StagedSnapshot",
+      "count": 35,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 45,
+      "name": "src/config.rs",
+      "count": 34,
+      "color": "#EDC948"
+    },
+    {
+      "id": 47,
+      "name": "project-contract-service.mjs",
+      "count": 33,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 46,
+      "name": "AdminState",
+      "count": 33,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 49,
+      "name": "state.rs",
+      "count": 32,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 37,
+      "name": "tree_access.rs",
+      "count": 32,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 50,
+      "name": "Account",
+      "count": 32,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 51,
+      "name": "ReflogEntry",
+      "count": 32,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 52,
+      "name": "TreeState",
+      "count": 32,
+      "color": "#E15759"
+    },
+    {
+      "id": 53,
+      "name": "properties",
+      "count": 31,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 54,
+      "name": "git_hash_map.rs",
+      "count": 31,
+      "color": "#59A14F"
+    },
+    {
+      "id": 56,
+      "name": "five-layer-registry.mjs",
+      "count": 30,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 55,
+      "name": "properties",
+      "count": 30,
+      "color": "#EDC948"
+    },
+    {
+      "id": 57,
+      "name": "motion-config.ts",
+      "count": 29,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 75,
+      "name": "TreeAccessRule",
+      "count": 29,
+      "color": "#EDC948"
+    },
+    {
+      "id": 58,
+      "name": "feature/ignore.rs",
+      "count": 29,
+      "color": "#9C755F"
+    },
+    {
+      "id": 59,
+      "name": "engine.rs",
+      "count": 29,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 44,
+      "name": "Policy",
+      "count": 29,
+      "color": "#59A14F"
+    },
+    {
+      "id": 61,
+      "name": "memory-gateway-service.test.mjs",
+      "count": 28,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 60,
+      "name": "worktree/package.json",
+      "count": 28,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 62,
+      "name": "properties",
+      "count": 27,
+      "color": "#E15759"
+    },
+    {
+      "id": 64,
+      "name": "goal-graph-service.mjs",
+      "count": 26,
+      "color": "#59A14F"
+    },
+    {
+      "id": 66,
+      "name": "knowledge-claim-service.test.mjs",
+      "count": 26,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 65,
+      "name": "SecBSkillsHub",
+      "count": 26,
+      "color": "#EDC948"
+    },
+    {
+      "id": 67,
+      "name": "use-toast.ts",
+      "count": 26,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 69,
+      "name": "GitHash",
+      "count": 26,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 70,
+      "name": "Delta",
+      "count": 26,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 71,
+      "name": "ObjectIndex",
+      "count": 26,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 76,
+      "name": "compute.rs",
+      "count": 25,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 72,
+      "name": "pipeline",
+      "count": 25,
+      "color": "#E15759"
+    },
+    {
+      "id": 73,
+      "name": "secb-mcp-server.mjs",
+      "count": 25,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 74,
+      "name": "project-management-implementation.test.mjs",
+      "count": 25,
+      "color": "#59A14F"
+    },
+    {
+      "id": 77,
+      "name": "package.json",
+      "count": 24,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 79,
+      "name": "InMemoryHashIndex",
+      "count": 24,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 78,
+      "name": "GitPush",
+      "count": 24,
+      "color": "#9C755F"
+    },
+    {
+      "id": 26,
+      "name": "TreeAccessSubject",
+      "count": 24,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 68,
+      "name": "Permission",
+      "count": 24,
+      "color": "#9C755F"
+    },
+    {
+      "id": 80,
+      "name": "scope.rs",
+      "count": 24,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 81,
+      "name": "Tree",
+      "count": 24,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 82,
+      "name": "load_state",
+      "count": 24,
+      "color": "#E15759"
+    },
+    {
+      "id": 83,
+      "name": "properties",
+      "count": 23,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 85,
+      "name": "Release",
+      "count": 23,
+      "color": "#EDC948"
+    },
+    {
+      "id": 118,
+      "name": "enum",
+      "count": 22,
+      "color": "#9C755F"
+    },
+    {
+      "id": 111,
+      "name": "worktree_config.rs",
+      "count": 22,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 86,
+      "name": "ArchiveOptions",
+      "count": 22,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 87,
+      "name": "Snapshot",
+      "count": 22,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 88,
+      "name": "Transport",
+      "count": 22,
+      "color": "#9C755F"
+    },
+    {
+      "id": 89,
+      "name": "minLength",
+      "count": 21,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 91,
+      "name": "properties",
+      "count": 21,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 92,
+      "name": "validate-foundation.mjs",
+      "count": 21,
+      "color": "#E15759"
+    },
+    {
+      "id": 93,
+      "name": "tree_config.rs",
+      "count": 21,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 90,
+      "name": "WorktreeConfig",
+      "count": 21,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 94,
+      "name": ".new",
+      "count": 21,
+      "color": "#59A14F"
+    },
+    {
+      "id": 95,
+      "name": "blob.rs",
+      "count": 21,
+      "color": "#EDC948"
+    },
+    {
+      "id": 96,
+      "name": "Tag",
+      "count": 21,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 97,
+      "name": "required",
+      "count": 20,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 203,
+      "name": "type",
+      "count": 20,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 102,
+      "name": "secb-mcp-server-wiring.mjs",
+      "count": 20,
+      "color": "#E15759"
+    },
+    {
+      "id": 98,
+      "name": "enum",
+      "count": 20,
+      "color": "#9C755F"
+    },
+    {
+      "id": 103,
+      "name": "enforcer.rs",
+      "count": 20,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 99,
+      "name": "DiskStorage",
+      "count": 20,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 100,
+      "name": "SecondBrainService",
+      "count": 20,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 101,
+      "name": "end-to-end-system-flow.test.mjs",
+      "count": 20,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 104,
+      "name": "enum",
+      "count": 19,
+      "color": "#59A14F"
+    },
+    {
+      "id": 105,
+      "name": "enum",
+      "count": 19,
+      "color": "#EDC948"
+    },
+    {
+      "id": 106,
+      "name": "properties",
+      "count": 19,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 109,
+      "name": "risk-registry.mjs",
+      "count": 19,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 110,
+      "name": "goal-rollup-projection.mjs",
+      "count": 19,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 108,
+      "name": "ProjectRegistrationService",
+      "count": 19,
+      "color": "#9C755F"
+    },
+    {
+      "id": 107,
+      "name": "HashMapping",
+      "count": 19,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 112,
+      "name": "large_file.rs",
+      "count": 19,
+      "color": "#E15759"
+    },
+    {
+      "id": 113,
+      "name": "WorktreeEngine",
+      "count": 19,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 114,
+      "name": "properties",
+      "count": 18,
+      "color": "#59A14F"
+    },
+    {
+      "id": 115,
+      "name": "required",
+      "count": 18,
+      "color": "#EDC948"
+    },
+    {
+      "id": 117,
+      "name": "required",
+      "count": 18,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 122,
+      "name": "create-pilot-work-package.mjs",
+      "count": 18,
+      "color": "#E15759"
+    },
+    {
+      "id": 121,
+      "name": "properties",
+      "count": 18,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 120,
+      "name": "properties",
+      "count": 18,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 119,
+      "name": "properties",
+      "count": 18,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 116,
+      "name": "properties",
+      "count": 18,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 123,
+      "name": "execute",
+      "count": 18,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 124,
+      "name": "AccessRequest",
+      "count": 18,
+      "color": "#59A14F"
+    },
+    {
+      "id": 125,
+      "name": ".new",
+      "count": 18,
+      "color": "#EDC948"
+    },
+    {
+      "id": 126,
+      "name": "ServerError",
+      "count": 18,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 127,
+      "name": "enum",
+      "count": 17,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 128,
+      "name": "required",
+      "count": 17,
+      "color": "#9C755F"
+    },
+    {
+      "id": 129,
+      "name": "source_identity",
+      "count": 17,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 130,
+      "name": "required",
+      "count": 17,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 133,
+      "name": "required",
+      "count": 17,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 131,
+      "name": "provenance",
+      "count": 17,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 132,
+      "name": "required",
+      "count": 17,
+      "color": "#E15759"
+    },
+    {
+      "id": 134,
+      "name": "properties",
+      "count": 17,
+      "color": "#59A14F"
+    },
+    {
+      "id": 137,
+      "name": "properties",
+      "count": 17,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 138,
+      "name": "enum",
+      "count": 17,
+      "color": "#9C755F"
+    },
+    {
+      "id": 143,
+      "name": "policy-decision-point.mjs",
+      "count": 17,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 84,
+      "name": "evidence-envelope-service.mjs",
+      "count": 17,
+      "color": "#59A14F"
+    },
+    {
+      "id": 144,
+      "name": "properties",
+      "count": 17,
+      "color": "#59A14F"
+    },
+    {
+      "id": 141,
+      "name": "required",
+      "count": 17,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 142,
+      "name": "properties",
+      "count": 17,
+      "color": "#E15759"
+    },
+    {
+      "id": 135,
+      "name": "properties",
+      "count": 17,
+      "color": "#EDC948"
+    },
+    {
+      "id": 145,
+      "name": "components.json",
+      "count": 17,
+      "color": "#EDC948"
+    },
+    {
+      "id": 146,
+      "name": "command.tsx",
+      "count": 17,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 147,
+      "name": "menubar.tsx",
+      "count": 17,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 140,
+      "name": "CommitWalker",
+      "count": 17,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 148,
+      "name": "GitTransport",
+      "count": 17,
+      "color": "#9C755F"
+    },
+    {
+      "id": 149,
+      "name": "resource.rs",
+      "count": 17,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 150,
+      "name": "WireFlags",
+      "count": 17,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 151,
+      "name": "Scope",
+      "count": 17,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 139,
+      "name": "FileSystemWatcher",
+      "count": 17,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 152,
+      "name": "required",
+      "count": 16,
+      "color": "#E15759"
+    },
+    {
+      "id": 153,
+      "name": "required",
+      "count": 16,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 154,
+      "name": "type",
+      "count": 16,
+      "color": "#59A14F"
+    },
+    {
+      "id": 158,
+      "name": "required",
+      "count": 16,
+      "color": "#9C755F"
+    },
+    {
+      "id": 160,
+      "name": "compilerOptions",
+      "count": 16,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 161,
+      "name": "ruflo-command-bridge.mjs",
+      "count": 16,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 163,
+      "name": "properties",
+      "count": 16,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 162,
+      "name": "properties",
+      "count": 16,
+      "color": "#E15759"
+    },
+    {
+      "id": 157,
+      "name": "required",
+      "count": 16,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 159,
+      "name": "KnowledgeGraph.tsx",
+      "count": 16,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 164,
+      "name": "api/handlers.rs",
+      "count": 16,
+      "color": "#59A14F"
+    },
+    {
+      "id": 165,
+      "name": "revocation",
+      "count": 15,
+      "color": "#EDC948"
+    },
+    {
+      "id": 166,
+      "name": "required",
+      "count": 15,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 167,
+      "name": "required",
+      "count": 15,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 170,
+      "name": "properties",
+      "count": 15,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 156,
+      "name": "properties",
+      "count": 15,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 171,
+      "name": "devDependencies",
+      "count": 15,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 175,
+      "name": "sod-rules.test.mjs",
+      "count": 15,
+      "color": "#EDC948"
+    },
+    {
+      "id": 174,
+      "name": "correlation",
+      "count": 15,
+      "color": "#59A14F"
+    },
+    {
+      "id": 168,
+      "name": "required",
+      "count": 15,
+      "color": "#9C755F"
+    },
+    {
+      "id": 172,
+      "name": "system-settings.mjs",
+      "count": 15,
+      "color": "#E15759"
+    },
+    {
+      "id": 169,
+      "name": "properties",
+      "count": 15,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 176,
+      "name": "RepositoryInfo",
+      "count": 15,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 173,
+      "name": "ui.rs",
+      "count": 15,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 177,
+      "name": "String",
+      "count": 15,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 178,
+      "name": ".new",
+      "count": 15,
+      "color": "#9C755F"
+    },
+    {
+      "id": 179,
+      "name": "inputs",
+      "count": 14,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 180,
+      "name": "required",
+      "count": 14,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 181,
+      "name": "required",
+      "count": 14,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 182,
+      "name": "required",
+      "count": 14,
+      "color": "#E15759"
+    },
+    {
+      "id": 183,
+      "name": "required",
+      "count": 14,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 185,
+      "name": "Swarm.tsx",
+      "count": 14,
+      "color": "#EDC948"
+    },
+    {
+      "id": 188,
+      "name": "form.tsx",
+      "count": 14,
+      "color": "#9C755F"
+    },
+    {
+      "id": 189,
+      "name": "compilerOptions",
+      "count": 14,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 187,
+      "name": "types.rs",
+      "count": 14,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 190,
+      "name": "Resource",
+      "count": 14,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 192,
+      "name": "ServerConfig",
+      "count": 14,
+      "color": "#E15759"
+    },
+    {
+      "id": 193,
+      "name": "Rule",
+      "count": 14,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 194,
+      "name": "GitMirrorService",
+      "count": 14,
+      "color": "#59A14F"
+    },
+    {
+      "id": 195,
+      "name": "GitRemoteService",
+      "count": 14,
+      "color": "#EDC948"
+    },
+    {
+      "id": 186,
+      "name": "SwarmDelegationService",
+      "count": 14,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 196,
+      "name": "required",
+      "count": 13,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 197,
+      "name": "required",
+      "count": 13,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 199,
+      "name": "immutable_version",
+      "count": 13,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 200,
+      "name": "properties",
+      "count": 13,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 202,
+      "name": "properties",
+      "count": 13,
+      "color": "#E15759"
+    },
+    {
+      "id": 201,
+      "name": "workspace",
+      "count": 13,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 136,
+      "name": "type",
+      "count": 13,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 206,
+      "name": "enum",
+      "count": 13,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 207,
+      "name": "properties",
+      "count": 13,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 184,
+      "name": "enum",
+      "count": 13,
+      "color": "#59A14F"
+    },
+    {
+      "id": 208,
+      "name": "carousel.tsx",
+      "count": 13,
+      "color": "#9C755F"
+    },
+    {
+      "id": 204,
+      "name": "devDependencies",
+      "count": 13,
+      "color": "#59A14F"
+    },
+    {
+      "id": 209,
+      "name": "GitRepoBuilder",
+      "count": 13,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 210,
+      "name": "WorktreeToGitConverter",
+      "count": 13,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 198,
+      "name": "import/converter.rs",
+      "count": 13,
+      "color": "#9C755F"
+    },
+    {
+      "id": 211,
+      "name": "GitRepo",
+      "count": 13,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 212,
+      "name": "GrpcServer",
+      "count": 13,
+      "color": "#E15759"
+    },
+    {
+      "id": 213,
+      "name": "GitExportService",
+      "count": 13,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 205,
+      "name": "HealthTracker",
+      "count": 13,
+      "color": "#EDC948"
+    },
+    {
+      "id": 214,
+      "name": "type",
+      "count": 12,
+      "color": "#59A14F"
+    },
+    {
+      "id": 215,
+      "name": "properties",
+      "count": 12,
+      "color": "#EDC948"
+    },
+    {
+      "id": 216,
+      "name": "required",
+      "count": 12,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 217,
+      "name": "allowed",
+      "count": 12,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 219,
+      "name": "type",
+      "count": 12,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 220,
+      "name": "properties",
+      "count": 12,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 222,
+      "name": "properties",
+      "count": 12,
+      "color": "#E15759"
+    },
+    {
+      "id": 221,
+      "name": "type",
+      "count": 12,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 223,
+      "name": "evidence_refs",
+      "count": 12,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 224,
+      "name": "acceptance_criteria",
+      "count": 12,
+      "color": "#59A14F"
+    },
+    {
+      "id": 226,
+      "name": "separation_of_duties",
+      "count": 12,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 225,
+      "name": "validity",
+      "count": 12,
+      "color": "#EDC948"
+    },
+    {
+      "id": 227,
+      "name": "enum",
+      "count": 12,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 231,
+      "name": "execute",
+      "count": 12,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 232,
+      "name": "scripts",
+      "count": 12,
+      "color": "#E15759"
+    },
+    {
+      "id": 228,
+      "name": "ButtonProps",
+      "count": 12,
+      "color": "#9C755F"
+    },
+    {
+      "id": 233,
+      "name": "test_combine_styles",
+      "count": 12,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 230,
+      "name": "AdminError",
+      "count": 12,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 234,
+      "name": "gitattributes.rs",
+      "count": 12,
+      "color": "#59A14F"
+    },
+    {
+      "id": 235,
+      "name": "GitPull",
+      "count": 12,
+      "color": "#EDC948"
+    },
+    {
+      "id": 236,
+      "name": ".resolve",
+      "count": 12,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 237,
+      "name": "core/error.rs",
+      "count": 12,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 238,
+      "name": "GitImportService",
+      "count": 12,
+      "color": "#9C755F"
+    },
+    {
+      "id": 218,
+      "name": "Daemon",
+      "count": 12,
+      "color": "#9C755F"
+    },
+    {
+      "id": 229,
+      "name": "KnowledgeMaturityPipeline",
+      "count": 12,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 239,
+      "name": "properties",
+      "count": 11,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 240,
+      "name": "items",
+      "count": 11,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 242,
+      "name": "properties",
+      "count": 11,
+      "color": "#E15759"
+    },
+    {
+      "id": 241,
+      "name": "properties",
+      "count": 11,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 244,
+      "name": "type",
+      "count": 11,
+      "color": "#59A14F"
+    },
+    {
+      "id": 246,
+      "name": "dependencies",
+      "count": 11,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 245,
+      "name": "required",
+      "count": 11,
+      "color": "#EDC948"
+    },
+    {
+      "id": 247,
+      "name": "rules",
+      "count": 11,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 243,
+      "name": ".from_file",
+      "count": 11,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 248,
+      "name": "squash.rs",
+      "count": 11,
+      "color": "#9C755F"
+    },
+    {
+      "id": 249,
+      "name": "MirrorConfig",
+      "count": 11,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 191,
+      "name": "Self",
+      "count": 11,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 250,
+      "name": "create_snapshot",
+      "count": 11,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 251,
+      "name": ".convert_submodules",
+      "count": 11,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 252,
+      "name": "PullOperation",
+      "count": 11,
+      "color": "#E15759"
+    },
+    {
+      "id": 253,
+      "name": "properties",
+      "count": 10,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 254,
+      "name": "enum",
+      "count": 10,
+      "color": "#59A14F"
+    },
+    {
+      "id": 255,
+      "name": "properties",
+      "count": 10,
+      "color": "#EDC948"
+    },
+    {
+      "id": 256,
+      "name": "properties",
+      "count": 10,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 257,
+      "name": "enum",
+      "count": 10,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 258,
+      "name": "properties",
+      "count": 10,
+      "color": "#9C755F"
+    },
+    {
+      "id": 259,
+      "name": "properties",
+      "count": 10,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 260,
+      "name": "dashboard/package.json",
+      "count": 10,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 262,
+      "name": "required",
+      "count": 10,
+      "color": "#E15759"
+    },
+    {
+      "id": 261,
+      "name": "properties",
+      "count": 10,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 269,
+      "name": "goal-graph-service.test.mjs",
+      "count": 10,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 270,
+      "name": "build-graphify-data.mjs",
+      "count": 10,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 265,
+      "name": "SecBAgentRegistry",
+      "count": 10,
+      "color": "#EDC948"
+    },
+    {
+      "id": 271,
+      "name": "context-menu.tsx",
+      "count": 10,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 272,
+      "name": "dropdown-menu.tsx",
+      "count": 10,
+      "color": "#E15759"
+    },
+    {
+      "id": 263,
+      "name": "include",
+      "count": 10,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 273,
+      "name": "CardProps",
+      "count": 10,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 274,
+      "name": "Commands",
+      "count": 10,
+      "color": "#59A14F"
+    },
+    {
+      "id": 275,
+      "name": "output/format.rs",
+      "count": 10,
+      "color": "#EDC948"
+    },
+    {
+      "id": 276,
+      "name": "id.rs",
+      "count": 10,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 264,
+      "name": "secb-control-plane-bus.mjs",
+      "count": 10,
+      "color": "#59A14F"
+    },
+    {
+      "id": 266,
+      "name": "SecBModuleRecommender",
+      "count": 10,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 267,
+      "name": "SecBMcpServer",
+      "count": 10,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 268,
+      "name": "ProjectWorktreeManager",
+      "count": 10,
+      "color": "#9C755F"
+    },
+    {
+      "id": 278,
+      "name": "required",
+      "count": 9,
+      "color": "#9C755F"
+    },
+    {
+      "id": 277,
+      "name": "properties",
+      "count": 9,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 280,
+      "name": "evaluation",
+      "count": 9,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 279,
+      "name": "cross_harness",
+      "count": 9,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 282,
+      "name": "integrity",
+      "count": 9,
+      "color": "#E15759"
+    },
+    {
+      "id": 281,
+      "name": "items",
+      "count": 9,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 283,
+      "name": "properties",
+      "count": 9,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 284,
+      "name": "properties",
+      "count": 9,
+      "color": "#59A14F"
+    },
+    {
+      "id": 286,
+      "name": "enum",
+      "count": 9,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 285,
+      "name": "items",
+      "count": 9,
+      "color": "#EDC948"
+    },
+    {
+      "id": 288,
+      "name": "App.tsx",
+      "count": 9,
+      "color": "#9C755F"
+    },
+    {
+      "id": 289,
+      "name": "event-normalizer.mjs",
+      "count": 9,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 287,
+      "name": "enum",
+      "count": 9,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 291,
+      "name": "docs/layout.tsx",
+      "count": 9,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 292,
+      "name": "BadgeProps",
+      "count": 9,
+      "color": "#E15759"
+    },
+    {
+      "id": 293,
+      "name": "loading.rs",
+      "count": 9,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 294,
+      "name": "worktree-admin/src/lib.rs",
+      "count": 9,
+      "color": "#59A14F"
+    },
+    {
+      "id": 295,
+      "name": "import/submodule.rs",
+      "count": 9,
+      "color": "#EDC948"
+    },
+    {
+      "id": 290,
+      "name": "memory-consolidation-service.mjs",
+      "count": 9,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 296,
+      "name": "properties",
+      "count": 8,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 297,
+      "name": "required",
+      "count": 8,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 298,
+      "name": "enum",
+      "count": 8,
+      "color": "#9C755F"
+    },
+    {
+      "id": 299,
+      "name": "required",
+      "count": 8,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 300,
+      "name": "enum",
+      "count": 8,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 302,
+      "name": "required",
+      "count": 8,
+      "color": "#E15759"
+    },
+    {
+      "id": 303,
+      "name": "select.tsx",
+      "count": 8,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 304,
+      "name": "table.tsx",
+      "count": 8,
+      "color": "#59A14F"
+    },
+    {
+      "id": 305,
+      "name": "StatCardProps",
+      "count": 8,
+      "color": "#EDC948"
+    },
+    {
+      "id": 307,
+      "name": "items",
+      "count": 7,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 306,
+      "name": "type",
+      "count": 7,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 308,
+      "name": "type",
+      "count": 7,
+      "color": "#9C755F"
+    },
+    {
+      "id": 310,
+      "name": "enum",
+      "count": 7,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 63,
+      "name": "enum",
+      "count": 7,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 312,
+      "name": "source",
+      "count": 7,
+      "color": "#E15759"
+    },
+    {
+      "id": 301,
+      "name": "required",
+      "count": 7,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 155,
+      "name": "required",
+      "count": 7,
+      "color": "#EDC948"
+    },
+    {
+      "id": 313,
+      "name": "enum",
+      "count": 7,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 317,
+      "name": "schemas/event-envelope.schema.json",
+      "count": 7,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 318,
+      "name": "properties",
+      "count": 7,
+      "color": "#9C755F"
+    },
+    {
+      "id": 315,
+      "name": "enum",
+      "count": 7,
+      "color": "#EDC948"
+    },
+    {
+      "id": 314,
+      "name": "enum",
+      "count": 7,
+      "color": "#59A14F"
+    },
+    {
+      "id": 316,
+      "name": "enum",
+      "count": 7,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 309,
+      "name": "required",
+      "count": 7,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 319,
+      "name": "secb-graphify-adapter.mjs",
+      "count": 7,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 321,
+      "name": "changelog/page.tsx",
+      "count": 7,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 322,
+      "name": "format_relative_time",
+      "count": 7,
+      "color": "#E15759"
+    },
+    {
+      "id": 323,
+      "name": "execute",
+      "count": 7,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 324,
+      "name": "execute",
+      "count": 7,
+      "color": "#59A14F"
+    },
+    {
+      "id": 325,
+      "name": "execute",
+      "count": 7,
+      "color": "#EDC948"
+    },
+    {
+      "id": 326,
+      "name": "execute",
+      "count": 7,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 311,
+      "name": "Theme",
+      "count": 7,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 327,
+      "name": "engine/sync.rs",
+      "count": 7,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 320,
+      "name": "mcp-server-deployment.test.mjs",
+      "count": 7,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 328,
+      "name": "enum",
+      "count": 6,
+      "color": "#9C755F"
+    },
+    {
+      "id": 329,
+      "name": "type",
+      "count": 6,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 331,
+      "name": "enum",
+      "count": 6,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 330,
+      "name": "enum",
+      "count": 6,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 332,
+      "name": "enum",
+      "count": 6,
+      "color": "#E15759"
+    },
+    {
+      "id": 333,
+      "name": "roles",
+      "count": 6,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 334,
+      "name": "agent-registration.schema.json",
+      "count": 6,
+      "color": "#59A14F"
+    },
+    {
+      "id": 337,
+      "name": "enum",
+      "count": 6,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 335,
+      "name": "enum",
+      "count": 6,
+      "color": "#EDC948"
+    },
+    {
+      "id": 336,
+      "name": "enum",
+      "count": 6,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 338,
+      "name": "capability-record.schema.json",
+      "count": 6,
+      "color": "#9C755F"
+    },
+    {
+      "id": 339,
+      "name": "context-receipt.schema.json",
+      "count": 6,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 340,
+      "name": "decision-record.schema.json",
+      "count": 6,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 341,
+      "name": "enum",
+      "count": 6,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 342,
+      "name": "evidence_refs",
+      "count": 6,
+      "color": "#E15759"
+    },
+    {
+      "id": 343,
+      "name": "contracts/event-envelope.schema.json",
+      "count": 6,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 344,
+      "name": "contracts/evidence-envelope.schema.json",
+      "count": 6,
+      "color": "#59A14F"
+    },
+    {
+      "id": 345,
+      "name": "handoff-envelope.schema.json",
+      "count": 6,
+      "color": "#EDC948"
+    },
+    {
+      "id": 346,
+      "name": "knowledge-claim.schema.json",
+      "count": 6,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 347,
+      "name": "evidence_refs",
+      "count": 6,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 348,
+      "name": "outcome-receipt.schema.json",
+      "count": 6,
+      "color": "#9C755F"
+    },
+    {
+      "id": 350,
+      "name": "contracts/skill-manifest.schema.json",
+      "count": 6,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 351,
+      "name": "work-package.schema.json",
+      "count": 6,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 352,
+      "name": "lib",
+      "count": 6,
+      "color": "#E15759"
+    },
+    {
+      "id": 353,
+      "name": "docs/MANIFEST.json",
+      "count": 6,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 355,
+      "name": "ruflo-swarm-config.mjs",
+      "count": 6,
+      "color": "#EDC948"
+    },
+    {
+      "id": 356,
+      "name": "v3-swarm-graph-generator.mjs",
+      "count": 6,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 354,
+      "name": "OllamaSecurityScanner",
+      "count": 6,
+      "color": "#59A14F"
+    },
+    {
+      "id": 357,
+      "name": "RepoCardProps",
+      "count": 6,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 358,
+      "name": "execute",
+      "count": 6,
+      "color": "#9C755F"
+    },
+    {
+      "id": 359,
+      "name": "execute",
+      "count": 6,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 360,
+      "name": "execute",
+      "count": 6,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 361,
+      "name": "execute",
+      "count": 6,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 362,
+      "name": "execute",
+      "count": 6,
+      "color": "#E15759"
+    },
+    {
+      "id": 364,
+      "name": "execute",
+      "count": 6,
+      "color": "#59A14F"
+    },
+    {
+      "id": 363,
+      "name": "execute",
+      "count": 6,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 365,
+      "name": "execute",
+      "count": 6,
+      "color": "#EDC948"
+    },
+    {
+      "id": 366,
+      "name": "gitignore.rs",
+      "count": 6,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 367,
+      "name": "merge_branch",
+      "count": 6,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 368,
+      "name": "scope",
+      "count": 5,
+      "color": "#9C755F"
+    },
+    {
+      "id": 370,
+      "name": "Agents.tsx",
+      "count": 5,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 371,
+      "name": "Overview.tsx",
+      "count": 5,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 373,
+      "name": "capabilities",
+      "count": 5,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 372,
+      "name": "secb-rootly-importer.mjs",
+      "count": 5,
+      "color": "#E15759"
+    },
+    {
+      "id": 374,
+      "name": "secb-graph.mjs",
+      "count": 5,
+      "color": "#59A14F"
+    },
+    {
+      "id": 375,
+      "name": "source.config.ts",
+      "count": 5,
+      "color": "#EDC948"
+    },
+    {
+      "id": 369,
+      "name": "auth_middleware",
+      "count": 5,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 376,
+      "name": "execute",
+      "count": 5,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 377,
+      "name": "execute",
+      "count": 5,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 378,
+      "name": "execute",
+      "count": 5,
+      "color": "#9C755F"
+    },
+    {
+      "id": 379,
+      "name": "execute",
+      "count": 5,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 380,
+      "name": "execute",
+      "count": 5,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 381,
+      "name": "execute",
+      "count": 5,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 382,
+      "name": "AccountStatus",
+      "count": 5,
+      "color": "#E15759"
+    },
+    {
+      "id": 349,
+      "name": ".fmt",
+      "count": 5,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 383,
+      "name": "list_dependencies",
+      "count": 5,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 384,
+      "name": "list_ignored",
+      "count": 5,
+      "color": "#59A14F"
+    },
+    {
+      "id": 385,
+      "name": "show_reflog",
+      "count": 5,
+      "color": "#EDC948"
+    },
+    {
+      "id": 386,
+      "name": "approved_tools",
+      "count": 4,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 389,
+      "name": "repository_scopes",
+      "count": 4,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 387,
+      "name": "delegation_rights",
+      "count": 4,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 388,
+      "name": "evidence_obligations",
+      "count": 4,
+      "color": "#9C755F"
+    },
+    {
+      "id": 390,
+      "name": "acceptance_criteria",
+      "count": 4,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 391,
+      "name": "source_references",
+      "count": 4,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 392,
+      "name": "limitations",
+      "count": 4,
+      "color": "#E15759"
+    },
+    {
+      "id": 393,
+      "name": "enum",
+      "count": 4,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 395,
+      "name": "allowed_paths",
+      "count": 4,
+      "color": "#EDC948"
+    },
+    {
+      "id": 396,
+      "name": "prohibited_paths",
+      "count": 4,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 415,
+      "name": "evidence_obligations",
+      "count": 4,
+      "color": "#EDC948"
+    },
+    {
+      "id": 397,
+      "name": "Ledger.tsx",
+      "count": 4,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 400,
+      "name": "event_id",
+      "count": 4,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 394,
+      "name": "event_ingress",
+      "count": 4,
+      "color": "#59A14F"
+    },
+    {
+      "id": 401,
+      "name": "secb-graph-issue-detector.mjs",
+      "count": 4,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 398,
+      "name": "secb-graph-issue-detector.ts",
+      "count": 4,
+      "color": "#9C755F"
+    },
+    {
+      "id": 402,
+      "name": "start-secb-mcp.mjs",
+      "count": 4,
+      "color": "#E15759"
+    },
+    {
+      "id": 403,
+      "name": "format_datetime",
+      "count": 4,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 404,
+      "name": "execute",
+      "count": 4,
+      "color": "#59A14F"
+    },
+    {
+      "id": 405,
+      "name": "GitCompatError",
+      "count": 4,
+      "color": "#EDC948"
+    },
+    {
+      "id": 406,
+      "name": "generate_gitmodules",
+      "count": 4,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 407,
+      "name": "show_log",
+      "count": 4,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 408,
+      "name": "SdkError",
+      "count": 4,
+      "color": "#9C755F"
+    },
+    {
+      "id": 399,
+      "name": "MANIFEST.json",
+      "count": 4,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 409,
+      "name": "unknowns",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 411,
+      "name": "runtime_product_id",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 410,
+      "name": "agent_profile_id",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 412,
+      "name": "runtime_version",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 418,
+      "name": "receipt_id",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 436,
+      "name": "version",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 417,
+      "name": "project_id",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 419,
+      "name": "work_package_id",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 414,
+      "name": "assigned_role",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 413,
+      "name": "allowed_tools",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 416,
+      "name": "freshness_timestamp",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 422,
+      "name": "decision_id",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 428,
+      "name": "version",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 423,
+      "name": "project_id",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 429,
+      "name": "work_package_id",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 426,
+      "name": "session_id",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 420,
+      "name": "actor_id",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 424,
+      "name": "rationale",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 421,
+      "name": "decided_at",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 427,
+      "name": "valid_until",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 425,
+      "name": "reverts",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 438,
+      "name": "version",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 435,
+      "name": "project_id",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 439,
+      "name": "work_package_id",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 464,
+      "name": "actor_id",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 432,
+      "name": "event_type",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 434,
+      "name": "occurred_at",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 437,
+      "name": "source",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 433,
+      "name": "idempotency_key",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 430,
+      "name": "classification",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 431,
+      "name": "content_hash",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 442,
+      "name": "evidence_id",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 449,
+      "name": "version",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 446,
+      "name": "project_id",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 450,
+      "name": "work_package_id",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 448,
+      "name": "session_id",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 440,
+      "name": "actor_id",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 443,
+      "name": "evidence_type",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 444,
+      "name": "observed_at",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 445,
+      "name": "procedure",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 447,
+      "name": "result",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 441,
+      "name": "content_hash",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 455,
+      "name": "handoff_id",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 460,
+      "name": "version",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 462,
+      "name": "work_package_id",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 458,
+      "name": "source_session_id",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 461,
+      "name": "work_completed",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 451,
+      "name": "artifacts",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 454,
+      "name": "evidence_refs",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 456,
+      "name": "limitations",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 459,
+      "name": "unresolved_findings",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 457,
+      "name": "recommended_next_action",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 453,
+      "name": "context_delta",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 452,
+      "name": "content_hash",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 570,
+      "name": "version",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 466,
+      "name": "project_id",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 468,
+      "name": "session_id",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 463,
+      "name": "actor_id",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 469,
+      "name": "statement",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 465,
+      "name": "claimed_at",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 470,
+      "name": "valid_from",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 471,
+      "name": "valid_until",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 467,
+      "name": "retention_policy",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 474,
+      "name": "outcome_id",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 477,
+      "name": "version",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 475,
+      "name": "project_id",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 478,
+      "name": "work_package_id",
+      "count": 3,
+      "color": "#9C755F"
+    },
+    {
+      "id": 476,
+      "name": "session_id",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 472,
+      "name": "actor_id",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 473,
+      "name": "observed_at",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 480,
+      "name": "version",
+      "count": 3,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 479,
+      "name": "objective",
+      "count": 3,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 481,
+      "name": "dashboard/tsconfig.json",
+      "count": 3,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 483,
+      "name": "event_type",
+      "count": 3,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 484,
+      "name": "sonner.tsx",
+      "count": 3,
+      "color": "#59A14F"
+    },
+    {
+      "id": 485,
+      "name": "next.config.mjs",
+      "count": 3,
+      "color": "#EDC948"
+    },
+    {
+      "id": 482,
+      "name": "paths",
+      "count": 3,
+      "color": "#E15759"
+    },
+    {
+      "id": 486,
+      "name": "api.rs",
+      "count": 3,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 487,
+      "name": "worktree-cli/src/main.rs",
+      "count": 3,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 488,
+      "name": "install-claude.sh script",
+      "count": 2,
+      "color": "#9C755F"
+    },
+    {
+      "id": 489,
+      "name": "install-codex.sh script",
+      "count": 2,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 492,
+      "name": "Authorize.tsx",
+      "count": 2,
+      "color": "#E15759"
+    },
+    {
+      "id": 493,
+      "name": "Settings.tsx",
+      "count": 2,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 520,
+      "name": "ast-graphify-benchmark.test.mjs",
+      "count": 2,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 523,
+      "name": "theme-provider.tsx",
+      "count": 2,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 498,
+      "name": "@radix-ui/react-accordion",
+      "count": 2,
+      "color": "#9C755F"
+    },
+    {
+      "id": 499,
+      "name": "@radix-ui/react-alert-dialog",
+      "count": 2,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 500,
+      "name": "@radix-ui/react-checkbox",
+      "count": 2,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 501,
+      "name": "@radix-ui/react-collapsible",
+      "count": 2,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 502,
+      "name": "@radix-ui/react-context-menu",
+      "count": 2,
+      "color": "#E15759"
+    },
+    {
+      "id": 503,
+      "name": "@radix-ui/react-dialog",
+      "count": 2,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 504,
+      "name": "@radix-ui/react-hover-card",
+      "count": 2,
+      "color": "#59A14F"
+    },
+    {
+      "id": 505,
+      "name": "@radix-ui/react-label",
+      "count": 2,
+      "color": "#EDC948"
+    },
+    {
+      "id": 506,
+      "name": "@radix-ui/react-menubar",
+      "count": 2,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 507,
+      "name": "@radix-ui/react-progress",
+      "count": 2,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 508,
+      "name": "@radix-ui/react-scroll-area",
+      "count": 2,
+      "color": "#9C755F"
+    },
+    {
+      "id": 509,
+      "name": "@radix-ui/react-select",
+      "count": 2,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 510,
+      "name": "@radix-ui/react-separator",
+      "count": 2,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 511,
+      "name": "@radix-ui/react-slider",
+      "count": 2,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 512,
+      "name": "@radix-ui/react-switch",
+      "count": 2,
+      "color": "#E15759"
+    },
+    {
+      "id": 513,
+      "name": "@radix-ui/react-toggle",
+      "count": 2,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 514,
+      "name": "@radix-ui/react-tooltip",
+      "count": 2,
+      "color": "#59A14F"
+    },
+    {
+      "id": 521,
+      "name": "@types/mdx",
+      "count": 2,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 490,
+      "name": "clsx",
+      "count": 2,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 491,
+      "name": "cmdk",
+      "count": 2,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 494,
+      "name": "embla-carousel-react",
+      "count": 2,
+      "color": "#59A14F"
+    },
+    {
+      "id": 495,
+      "name": "fumadocs-ui",
+      "count": 2,
+      "color": "#EDC948"
+    },
+    {
+      "id": 496,
+      "name": "input-otp",
+      "count": 2,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 524,
+      "name": "next",
+      "count": 2,
+      "color": "#59A14F"
+    },
+    {
+      "id": 497,
+      "name": "next-themes",
+      "count": 2,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 515,
+      "name": "react-day-picker",
+      "count": 2,
+      "color": "#EDC948"
+    },
+    {
+      "id": 516,
+      "name": "react-hook-form",
+      "count": 2,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 517,
+      "name": "react-icons",
+      "count": 2,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 518,
+      "name": "sonner",
+      "count": 2,
+      "color": "#9C755F"
+    },
+    {
+      "id": 519,
+      "name": "tailwind-merge",
+      "count": 2,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 522,
+      "name": "vaul",
+      "count": 2,
+      "color": "#E15759"
+    },
+    {
+      "id": 525,
+      "name": "zod",
+      "count": 2,
+      "color": "#EDC948"
+    },
+    {
+      "id": 526,
+      "name": "worktree-server/src/main.rs",
+      "count": 2,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 527,
+      "name": "ci.sh",
+      "count": 2,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 528,
+      "name": "install.sh script",
+      "count": 2,
+      "color": "#9C755F"
+    },
+    {
+      "id": 529,
+      "name": "e2e_tests/mod.rs",
+      "count": 2,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 530,
+      "name": "git_compat_tests/mod.rs",
+      "count": 2,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 531,
+      "name": "server_tests/mod.rs",
+      "count": 2,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 532,
+      "name": "install-claude.ps1",
+      "count": 1,
+      "color": "#E15759"
+    },
+    {
+      "id": 533,
+      "name": "install-codex.ps1",
+      "count": 1,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 534,
+      "name": "generate_manifest.py",
+      "count": 1,
+      "color": "#59A14F"
+    },
+    {
+      "id": 535,
+      "name": "validate_pack.py",
+      "count": 1,
+      "color": "#EDC948"
+    },
+    {
+      "id": 536,
+      "name": "vite.config.ts",
+      "count": 1,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 537,
+      "name": "context-federation-stubs.test.mjs",
+      "count": 1,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 538,
+      "name": ".getTime",
+      "count": 1,
+      "color": "#9C755F"
+    },
+    {
+      "id": 540,
+      "name": "aspect-ratio.tsx",
+      "count": 1,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 541,
+      "name": "collapsible.tsx",
+      "count": 1,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 542,
+      "name": "postcss.config.mjs",
+      "count": 1,
+      "color": "#E15759"
+    },
+    {
+      "id": 543,
+      "name": "output/mod.rs",
+      "count": 1,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 544,
+      "name": "worktree-git/src/config/mod.rs",
+      "count": 1,
+      "color": "#59A14F"
+    },
+    {
+      "id": 545,
+      "name": "export/mod.rs",
+      "count": 1,
+      "color": "#EDC948"
+    },
+    {
+      "id": 546,
+      "name": "hash_index/mod.rs",
+      "count": 1,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 547,
+      "name": "import/mod.rs",
+      "count": 1,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 548,
+      "name": "worktree-git/src/lib.rs",
+      "count": 1,
+      "color": "#9C755F"
+    },
+    {
+      "id": 549,
+      "name": "remote/mod.rs",
+      "count": 1,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 550,
+      "name": "access/mod.rs",
+      "count": 1,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 551,
+      "name": "worktree-protocol/src/config/mod.rs",
+      "count": 1,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 552,
+      "name": "core/mod.rs",
+      "count": 1,
+      "color": "#E15759"
+    },
+    {
+      "id": 553,
+      "name": "compat/mod.rs",
+      "count": 1,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 554,
+      "name": "diff/mod.rs",
+      "count": 1,
+      "color": "#59A14F"
+    },
+    {
+      "id": 555,
+      "name": "merge/mod.rs",
+      "count": 1,
+      "color": "#EDC948"
+    },
+    {
+      "id": 556,
+      "name": "feature/mod.rs",
+      "count": 1,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 557,
+      "name": "wire/mod.rs",
+      "count": 1,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 558,
+      "name": "iam/mod.rs",
+      "count": 1,
+      "color": "#9C755F"
+    },
+    {
+      "id": 559,
+      "name": "object/mod.rs",
+      "count": 1,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 560,
+      "name": "worktree-sdk/src/lib.rs",
+      "count": 1,
+      "color": "#4E79A7"
+    },
+    {
+      "id": 561,
+      "name": "api/mod.rs",
+      "count": 1,
+      "color": "#F28E2B"
+    },
+    {
+      "id": 562,
+      "name": "auth/mod.rs",
+      "count": 1,
+      "color": "#E15759"
+    },
+    {
+      "id": 563,
+      "name": "worktree-server/src/engine/mod.rs",
+      "count": 1,
+      "color": "#76B7B2"
+    },
+    {
+      "id": 564,
+      "name": "git/mod.rs",
+      "count": 1,
+      "color": "#59A14F"
+    },
+    {
+      "id": 565,
+      "name": "service/mod.rs",
+      "count": 1,
+      "color": "#EDC948"
+    },
+    {
+      "id": 566,
+      "name": "storage/mod.rs",
+      "count": 1,
+      "color": "#B07AA1"
+    },
+    {
+      "id": 567,
+      "name": "sync/mod.rs",
+      "count": 1,
+      "color": "#FF9DA7"
+    },
+    {
+      "id": 568,
+      "name": "watcher/mod.rs",
+      "count": 1,
+      "color": "#9C755F"
+    },
+    {
+      "id": 569,
+      "name": "install.ps1",
+      "count": 1,
+      "color": "#BAB0AC"
+    },
+    {
+      "id": 539,
+      "name": "useMDXComponents",
+      "count": 1,
+      "color": "#BAB0AC"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "agents_install_install_claude_ps1_agents_install_install_claude",
+      "name": "install-claude.ps1",
+      "file": ".agents/install/install-claude.ps1",
+      "type": "code",
+      "community": 532,
+      "community_name": "install-claude.ps1",
+      "color": "#E15759",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_claude_sh_agents_install_install_claude",
+      "name": "install-claude.sh",
+      "file": ".agents/install/install-claude.sh",
+      "type": "code",
+      "community": 488,
+      "community_name": "install-claude.sh script",
+      "color": "#9C755F",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_claude_sh__entry",
+      "name": "install-claude.sh script",
+      "file": ".agents/install/install-claude.sh",
+      "type": "code",
+      "community": 488,
+      "community_name": "install-claude.sh script",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_codex_ps1_agents_install_install_codex",
+      "name": "install-codex.ps1",
+      "file": ".agents/install/install-codex.ps1",
+      "type": "code",
+      "community": 533,
+      "community_name": "install-codex.ps1",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_codex_sh_agents_install_install_codex",
+      "name": "install-codex.sh",
+      "file": ".agents/install/install-codex.sh",
+      "type": "code",
+      "community": 489,
+      "community_name": "install-codex.sh script",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_install_install_codex_sh__entry",
+      "name": "install-codex.sh script",
+      "file": ".agents/install/install-codex.sh",
+      "type": "code",
+      "community": 489,
+      "community_name": "install-codex.sh script",
+      "color": "#BAB0AC",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema",
+      "name": "architecture-brief.schema.json",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_schema",
+      "name": "$schema",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 10,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_artifact_id",
+      "name": "artifact_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_project_id",
+      "name": "project_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_scope",
+      "name": "scope",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_facts",
+      "name": "facts",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_assumptions",
+      "name": "assumptions",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_unknowns",
+      "name": "unknowns",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_success_criteria",
+      "name": "success_criteria",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 196,
+      "community_name": "required",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 10,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_artifact_id",
+      "name": "artifact_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_artifact_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_project_id",
+      "name": "project_id",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_project_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_objective_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_objective_minlength",
+      "name": "minLength",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_scope",
+      "name": "scope",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 368,
+      "community_name": "scope",
+      "color": "#9C755F",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_scope_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 368,
+      "community_name": "scope",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_scope_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 368,
+      "community_name": "scope",
+      "color": "#9C755F",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_in",
+      "name": "in",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 368,
+      "community_name": "scope",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_out",
+      "name": "out",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 368,
+      "community_name": "scope",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_scope_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_in",
+      "name": "in",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_in_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_in_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_items_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 6,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_out",
+      "name": "out",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_out_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_out_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_facts",
+      "name": "facts",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_facts_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_facts_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_items_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_claim",
+      "name": "claim",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_source_ref",
+      "name": "source_ref",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_items_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_claim",
+      "name": "claim",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_claim_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_source_ref",
+      "name": "source_ref",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_source_ref_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 240,
+      "community_name": "items",
+      "color": "#4E79A7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "name": "assumptions",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_assumptions_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_assumptions_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 239,
+      "community_name": "properties",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "name": "unknowns",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 409,
+      "community_name": "unknowns",
+      "color": "#BAB0AC",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_unknowns_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 409,
+      "community_name": "unknowns",
+      "color": "#BAB0AC",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_unknowns_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 409,
+      "community_name": "unknowns",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "name": "success_criteria",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_success_criteria_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_success_criteria_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_success_criteria_minitems",
+      "name": "minItems",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 214,
+      "community_name": "type",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_properties_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 328,
+      "community_name": "enum",
+      "color": "#9C755F",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_status_enum",
+      "name": "enum",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "code",
+      "community": 328,
+      "community_name": "enum",
+      "color": "#9C755F",
+      "connections": 5,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_draft",
+      "name": "draft",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 328,
+      "community_name": "enum",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_review_required",
+      "name": "review-required",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 328,
+      "community_name": "enum",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_accepted",
+      "name": "accepted",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 328,
+      "community_name": "enum",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_brief_schema_json_ref_superseded",
+      "name": "superseded",
+      "file": ".agents/schemas/architecture-brief.schema.json",
+      "type": "concept",
+      "community": 328,
+      "community_name": "enum",
+      "color": "#9C755F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema",
+      "name": "architecture-decision-record.schema.json",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_schema",
+      "name": "$schema",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 10,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_decision_id",
+      "name": "decision_id",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_title",
+      "name": "title",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_context",
+      "name": "context",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_options",
+      "name": "options",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_decision",
+      "name": "decision",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_consequences",
+      "name": "consequences",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_evidence_refs",
+      "name": "evidence_refs",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_owner",
+      "name": "owner",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 197,
+      "community_name": "required",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 12,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_decision_id",
+      "name": "decision_id",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_decision_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_title",
+      "name": "title",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_title_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_status",
+      "name": "status",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "name": "enum",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 104,
+      "community_name": "enum",
+      "color": "#59A14F",
+      "connections": 7,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_proposed",
+      "name": "proposed",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 104,
+      "community_name": "enum",
+      "color": "#59A14F",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_review_required",
+      "name": "review-required",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 104,
+      "community_name": "enum",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_accepted",
+      "name": "accepted",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 104,
+      "community_name": "enum",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_rejected",
+      "name": "rejected",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 104,
+      "community_name": "enum",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_deprecated",
+      "name": "deprecated",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 104,
+      "community_name": "enum",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_superseded",
+      "name": "superseded",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 104,
+      "community_name": "enum",
+      "color": "#59A14F",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_context",
+      "name": "context",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_context_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "name": "options",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 307,
+      "community_name": "items",
+      "color": "#FF9DA7",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_options_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 307,
+      "community_name": "items",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_options_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 307,
+      "community_name": "items",
+      "color": "#FF9DA7",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_items_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 306,
+      "community_name": "type",
+      "color": "#B07AA1",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_items_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 307,
+      "community_name": "items",
+      "color": "#FF9DA7",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_name",
+      "name": "name",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 307,
+      "community_name": "items",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_summary",
+      "name": "summary",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 307,
+      "community_name": "items",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_name",
+      "name": "name",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_name_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_summary",
+      "name": "summary",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_summary_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "name": "tradeoffs",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_tradeoffs_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_tradeoffs_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 296,
+      "community_name": "properties",
+      "color": "#B07AA1",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_options_minitems",
+      "name": "minItems",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 307,
+      "community_name": "items",
+      "color": "#FF9DA7",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_decision",
+      "name": "decision",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_decision_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "name": "consequences",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 306,
+      "community_name": "type",
+      "color": "#B07AA1",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_consequences_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 306,
+      "community_name": "type",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_consequences_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 306,
+      "community_name": "type",
+      "color": "#B07AA1",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "name": "evidence_refs",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 306,
+      "community_name": "type",
+      "color": "#B07AA1",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_evidence_refs_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 306,
+      "community_name": "type",
+      "color": "#B07AA1",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_evidence_refs_items",
+      "name": "items",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 306,
+      "community_name": "type",
+      "color": "#B07AA1",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_owner",
+      "name": "owner",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_owner_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 215,
+      "community_name": "properties",
+      "color": "#EDC948",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_approver",
+      "name": "approver",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 329,
+      "community_name": "type",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 329,
+      "community_name": "type",
+      "color": "#BAB0AC",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_string",
+      "name": "string",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 329,
+      "community_name": "type",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_json_ref_null",
+      "name": "null",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "concept",
+      "community": 329,
+      "community_name": "type",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_properties_supersedes",
+      "name": "supersedes",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 329,
+      "community_name": "type",
+      "color": "#BAB0AC",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-decision-record.schema.json",
+      "type": "code",
+      "community": 329,
+      "community_name": "type",
+      "color": "#BAB0AC",
+      "connections": 3,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema",
+      "name": "architecture-handoff.schema.json",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 4,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_schema",
+      "name": "$schema",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_required",
+      "name": "required",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 12,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_handoff_id",
+      "name": "handoff_id",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_source_role",
+      "name": "source_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_destination_role",
+      "name": "destination_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_scope",
+      "name": "scope",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_baseline",
+      "name": "baseline",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_artifacts",
+      "name": "artifacts",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_evidence_refs",
+      "name": "evidence_refs",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_json_ref_assumptions",
+      "name": "assumptions",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_unresolved_items",
+      "name": "unresolved_items",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "ref_next_actions",
+      "name": "next_actions",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "concept",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties",
+      "name": "properties",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 12,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_handoff_id",
+      "name": "handoff_id",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_handoff_id_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_source_role",
+      "name": "source_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_source_role_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_destination_role",
+      "name": "destination_role",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 2,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_destination_role_type",
+      "name": "type",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 1,
+      "isGodNode": false
+    },
+    {
+      "id": "agents_schemas_architecture_handoff_schema_properties_objective",
+      "name": "objective",
+      "file": ".agents/schemas/architecture-handoff.schema.json",
+      "type": "code",
+      "community": 23,
+      "community_name": "properties",
+      "color": "#76B7B2",
+      "connections": 2,
+      "isGodNode": false
+    }
+  ],
+  "edges": [
+    {
+      "source": "agents_install_install_claude_sh_agents_install_install_claude",
+      "target": "agents_install_install_claude_sh__entry",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_install_install_codex_sh_agents_install_install_codex",
+      "target": "agents_install_install_codex_sh__entry",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_schema",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema",
+      "target": "agents_schemas_architecture_brief_schema_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_assumptions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_project_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_scope",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_artifact_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_facts",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_success_criteria",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_required",
+      "target": "ref_unknowns",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_artifact_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_facts",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_project_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_scope",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_artifact_id",
+      "target": "agents_schemas_architecture_brief_schema_artifact_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_project_id",
+      "target": "agents_schemas_architecture_brief_schema_project_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_objective",
+      "target": "agents_schemas_architecture_brief_schema_objective_minlength",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_objective",
+      "target": "agents_schemas_architecture_brief_schema_objective_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_scope",
+      "target": "agents_schemas_architecture_brief_schema_scope_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_scope",
+      "target": "agents_schemas_architecture_brief_schema_scope_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_scope",
+      "target": "agents_schemas_architecture_brief_schema_scope_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_required",
+      "target": "ref_in",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_required",
+      "target": "ref_out",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_in",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_scope_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_out",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_in",
+      "target": "agents_schemas_architecture_brief_schema_in_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_in",
+      "target": "agents_schemas_architecture_brief_schema_in_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_in_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_assumptions_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_facts_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_out_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_success_criteria_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_unknowns_items",
+      "target": "agents_schemas_architecture_brief_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_out",
+      "target": "agents_schemas_architecture_brief_schema_out_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_out",
+      "target": "agents_schemas_architecture_brief_schema_out_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_facts",
+      "target": "agents_schemas_architecture_brief_schema_facts_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_facts",
+      "target": "agents_schemas_architecture_brief_schema_facts_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_facts_items",
+      "target": "agents_schemas_architecture_brief_schema_items_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_facts_items",
+      "target": "agents_schemas_architecture_brief_schema_items_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_required",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_claim",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_required",
+      "target": "ref_source_ref",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_claim",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_items_properties",
+      "target": "agents_schemas_architecture_brief_schema_properties_source_ref",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_claim",
+      "target": "agents_schemas_architecture_brief_schema_claim_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_source_ref",
+      "target": "agents_schemas_architecture_brief_schema_source_ref_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "target": "agents_schemas_architecture_brief_schema_assumptions_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_assumptions",
+      "target": "agents_schemas_architecture_brief_schema_assumptions_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "target": "agents_schemas_architecture_brief_schema_unknowns_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_unknowns",
+      "target": "agents_schemas_architecture_brief_schema_unknowns_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "target": "agents_schemas_architecture_brief_schema_success_criteria_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "target": "agents_schemas_architecture_brief_schema_success_criteria_minitems",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_success_criteria",
+      "target": "agents_schemas_architecture_brief_schema_success_criteria_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_properties_status",
+      "target": "agents_schemas_architecture_brief_schema_status_enum",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_accepted",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_draft",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_review_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_brief_schema_status_enum",
+      "target": "agents_schemas_architecture_brief_schema_json_ref_superseded",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_schema",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema",
+      "target": "agents_schemas_architecture_decision_record_schema_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_context",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_decision_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_evidence_refs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_owner",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_title",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "ref_consequences",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "ref_decision",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_required",
+      "target": "ref_options",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_approver",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_context",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_decision",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_decision_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_owner",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_status",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_supersedes",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_title",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_decision_id",
+      "target": "agents_schemas_architecture_decision_record_schema_decision_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_title",
+      "target": "agents_schemas_architecture_decision_record_schema_title_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_status",
+      "target": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_accepted",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_deprecated",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_rejected",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_review_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_superseded",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_status_enum",
+      "target": "ref_proposed",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_context",
+      "target": "agents_schemas_architecture_decision_record_schema_context_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "target": "agents_schemas_architecture_decision_record_schema_options_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "target": "agents_schemas_architecture_decision_record_schema_options_minitems",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_options",
+      "target": "agents_schemas_architecture_decision_record_schema_options_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_options_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_options_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_options_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_consequences_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_evidence_refs_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_tradeoffs_items",
+      "target": "agents_schemas_architecture_decision_record_schema_items_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_required",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_name",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_required",
+      "target": "ref_summary",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_name",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_summary",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_items_properties",
+      "target": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_name",
+      "target": "agents_schemas_architecture_decision_record_schema_name_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_summary",
+      "target": "agents_schemas_architecture_decision_record_schema_summary_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "target": "agents_schemas_architecture_decision_record_schema_tradeoffs_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_tradeoffs",
+      "target": "agents_schemas_architecture_decision_record_schema_tradeoffs_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_decision",
+      "target": "agents_schemas_architecture_decision_record_schema_decision_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "target": "agents_schemas_architecture_decision_record_schema_consequences_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_consequences",
+      "target": "agents_schemas_architecture_decision_record_schema_consequences_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "target": "agents_schemas_architecture_decision_record_schema_evidence_refs_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_evidence_refs",
+      "target": "agents_schemas_architecture_decision_record_schema_evidence_refs_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_owner",
+      "target": "agents_schemas_architecture_decision_record_schema_owner_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_approver",
+      "target": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_null",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_approver_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_string",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_string",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "target": "agents_schemas_architecture_decision_record_schema_json_ref_null",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_decision_record_schema_properties_supersedes",
+      "target": "agents_schemas_architecture_decision_record_schema_supersedes_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_properties",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_required",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_schema",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema",
+      "target": "agents_schemas_architecture_handoff_schema_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_artifacts",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_assumptions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_baseline",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_destination_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_evidence_refs",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_handoff_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "agents_schemas_architecture_handoff_schema_json_ref_scope",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "ref_next_actions",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "ref_source_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_required",
+      "target": "ref_unresolved_items",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_destination_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_handoff_id",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_objective",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties",
+      "target": "agents_schemas_architecture_handoff_schema_properties_source_role",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties_handoff_id",
+      "target": "agents_schemas_architecture_handoff_schema_handoff_id_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties_source_role",
+      "target": "agents_schemas_architecture_handoff_schema_source_role_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_schemas_architecture_handoff_schema_properties_destination_role",
+      "target": "agents_schemas_architecture_handoff_schema_destination_role_type",
+      "relationship": "depends_on"
+    },
+    {
+      "source": "agents_install_install_claude_ps1_agents_install_install_claude",
+      "target": "agents_install_install_claude_sh_agents_install_install_claude",
+      "relationship": "companion_script"
+    },
+    {
+      "source": "agents_install_install_codex_ps1_agents_install_install_codex",
+      "target": "agents_install_install_codex_sh_agents_install_install_codex",
+      "relationship": "companion_script"
+    }
+  ]
+}

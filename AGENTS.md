@@ -30,11 +30,13 @@ The controlled documentation tree is rooted at [`docs/`](docs/). Before beginnin
 
 1. [`docs/README.md`](docs/README.md)
 2. [`docs/00-governance/governance-baseline.md`](docs/00-governance/governance-baseline.md)
-3. [`docs/02-operating-model/universal-work-lifecycle.md`](docs/02-operating-model/universal-work-lifecycle.md)
-4. [`docs/02-operating-model/agent-team-and-sod.md`](docs/02-operating-model/agent-team-and-sod.md)
-5. [`docs/03-project-control/project-contract.md`](docs/03-project-control/project-contract.md)
-6. [`docs/03-project-control/work-package-contract.md`](docs/03-project-control/work-package-contract.md)
-7. Documents and templates directly referenced by the active bounded slice.
+3. [`docs/00-governance/SECB-GOV-SURFACE-001.md`](docs/00-governance/SECB-GOV-SURFACE-001.md) (Governance Surface & High-Logic Agent Protocols)
+4. [`docs/02-operating-model/universal-work-lifecycle.md`](docs/02-operating-model/universal-work-lifecycle.md)
+5. [`docs/02-operating-model/agent-team-and-sod.md`](docs/02-operating-model/agent-team-and-sod.md)
+6. [`docs/03-project-control/project-contract.md`](docs/03-project-control/project-contract.md)
+7. [`docs/03-project-control/work-package-contract.md`](docs/03-project-control/work-package-contract.md)
+8. [`docs/12-execution/08-bopen-engineering-loop.md`](docs/12-execution/08-bopen-engineering-loop.md) (Agentic Engineering Loop and EBIV)
+9. Documents and templates directly referenced by the active bounded slice.
 
 Changes under `docs/**` also follow [`docs/AGENTS.md`](docs/AGENTS.md). The repository-level [`MANIFEST.json`](MANIFEST.json) is the canonical local build inventory; [`docs/MANIFEST.json`](docs/MANIFEST.json) inventories the imported documentation pack.
 
@@ -120,3 +122,30 @@ stakeholder-capability-mapping · system-context-boundaries
    `skill-revocation-ledger`) remain the eventual runtime registry; this
    file-based registry is the bootstrap surface until those are wired
    (SEC/GOV-gated).
+## Engineering loop binding amendment — 2026-08-08
+
+**Amendment ID:** SECB-AGENTS-AMD-003
+**Requested by:** Operator, 2026-08-08
+**Status:** DRAFT until merged to `main` by the operator; EFFECTIVE thereafter
+**Scope:** Local repository work only. This amendment extends the working rules above.
+
+### Loop binding
+
+Bounded slices under the pre-authorized implementation paths of AMD-002 §1 execute under [`BOPEN-ENG-LOOP-001`](docs/12-execution/08-bopen-engineering-loop.md): `GOAL` → `PLAN` → `ACT` → `VERIFY` → `DONE`. A slice that skips a stage has not run the loop, whatever its result.
+
+### Panel obligation
+
+The VERIFY stage runs the three lenses of [`BOPEN-ENG-PANEL-001`](docs/12-execution/09-panel-review-and-rubric.md) — Staff Architect, Security & Edge-Case, Performance & QA — and records the rubric score in the slice notes.
+
+Efficiency obligations and their two bounding invariants are in [`BOPEN-ENG-EFFICIENCY-001`](docs/12-execution/10-inner-loop-efficiency.md); baseline skills and ADR obligations are in [`BOPEN-ENG-CAP-001`](docs/12-execution/11-agent-capability-baseline.md).
+
+### Non-authority clause
+
+A rubric score, a panel verdict, and an ADR draft create no authority. They do not merge, approve, activate, accept evidence, promote a skill, or admit a memory. A slice scoring 100 is a slice awaiting operator merge review.
+
+The retained hard gates of AMD-002 are unchanged and are not restated here. Where this amendment and a retained hard gate appear to conflict, the gate governs.
+
+### What this amendment does not do
+
+It does not activate the loop documents. They remain `DRAFT / NOT EFFECTIVE` under the bootstrap boundary until human GOV approves them. This amendment binds worker-agent behaviour to a specification; it does not confer effectiveness on the specification.
+

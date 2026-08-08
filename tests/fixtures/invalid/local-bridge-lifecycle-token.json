@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "lifecycle_event_id": "brlife_session_alpha_001",
+  "subject_type": "SESSION",
+  "subject_id": "brsess_windows_alpha_001",
+  "from_state": "ABSENT",
+  "to_state": "ACTIVE",
+  "decision_status": "AUTHORIZED",
+  "authority_reference": "caller_claimed_authority",
+  "occurred_at": "2026-07-31T08:02:02Z",
+  "authorization_token": "prohibited"
+}

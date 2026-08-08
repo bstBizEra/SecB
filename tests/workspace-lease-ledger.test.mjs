@@ -451,41 +451,84 @@ test(`byte-identity: lease primitive and all OTHER contracts unchanged vs ${BASE
     "src/control/workspace-lease-policy.mjs",
     "src/control/write-set-policy.mjs"
   ];
-  // Every contract schema EXCEPT the newly added workspace-lease one must be
-  // byte-identical to the base commit — proof this slice touched no other schema.
-  // (memory-record.schema.json is ALSO excluded: it postdates ${BASE} entirely
-  // — added by MOD-MEM S2, an unrelated later slice — so it cannot be diffed
-  // against a commit where the path does not yet exist; that addition is
-  // proven additive-only by its own contract-validator.test.mjs coverage.
-  // skill-promotion.schema.json is ALSO excluded for the same reason: it was
-  // added by MOD-SKILL S2, another unrelated later slice, and does not exist at
-  // ${BASE}; its additive-only nature is proven by its own ledger + contract
-  // coverage. integration-queue-entry.schema.json is ALSO excluded for the same
-  // reason: it was added by MOD-INTEG S1, another unrelated later slice, and
-  // does not exist at ${BASE}; its additive-only nature is proven by its own
-  // ledger + contract coverage.
+  // Every contract schema EXCEPT the ones named below must be byte-identical to
+  // the base commit — proof this slice touched no other schema.
   //
-  // project-contract.schema.json is excluded for a DIFFERENT reason: unlike the
-  // above it DID exist at ${BASE}, but it is deliberately REVISED by the later,
-  // separately-scoped schema-alignment slice (bst/schema-align-project-contract)
-  // that reconciles the strict schema with the Option-A rich Project Contract
-  // shape signed NORMATIVE in secb-gov-001-w3c-contract-signing-002.md. That
-  // revision is out of THIS additive lease slice's remit; its correctness is
-  // proven by tests/project-contract-schema-alignment.test.mjs (rich fixtures
-  // validate; extra-field + type violations still reject) and by
-  // tools/validate-foundation.mjs (additionalProperties:false, identity fields,
-  // draft 2020-12). The byte-identity guard therefore still bites on every OTHER
-  // schema in contracts/ — tamper detection is not dropped, only relocated to
-  // shape-based coverage for this one intentionally-aligned file.)
+  // Two exemptions, for genuinely different reasons:
+  //
+  // workspace-lease.schema.json is this slice's own addition.
+  //
+  // project-contract.schema.json DID exist at ${BASE} and is deliberately
+  // REVISED by the separately-scoped schema-alignment slice
+  // (bst/schema-align-project-contract) reconciling the strict schema with the
+  // Option-A rich Project Contract shape signed NORMATIVE in
+  // secb-gov-001-w3c-contract-signing-002.md. Out of THIS slice's remit; its
+  // correctness is proven by tests/project-contract-schema-alignment.test.mjs
+  // and by tools/validate-foundation.mjs. Tamper detection is relocated to
+  // shape-based coverage for that one file, not dropped.
+  //
+  // agent-registration.schema.json is a third case: it existed at ${BASE} and
+  // was authorized-modified afterwards by 42c2190, a1742ad, 5a8367e and c8f2c1d
+  // (Ruflo plugin candidate hardening / operational gating). Exempting it from
+  // the ref diff alone would drop it from coverage, so it carries an explicit
+  // blob pin at the end of this test instead.
+  const exempt = new Set([
+    "workspace-lease.schema.json",
+    "project-contract.schema.json",
+    "agent-registration.schema.json",
+    // decision-record.schema.json: authorized-modified by f3ac99a (WP-SK-R1 /
+    // DEF-R1). Exempted from the ref diff, pinned explicitly below.
+    "decision-record.schema.json"
+  ]);
+
+  // Schemas that POSTDATE ${BASE} are skipped structurally rather than by name.
+  // This list used to be maintained by hand — memory-record, skill-promotion
+  // and integration-queue-entry were each appended as their slice landed — and
+  // the failure mode when someone forgot was not a red assertion but a CRASH:
+  // `git rev-parse ${BASE}:<path>` fatals on a path that does not exist there,
+  // so the guard died before comparing anything and reported nothing, in a way
+  // indistinguishable from passing. A schema added after ${BASE} was never in
+  // this pin's remit; absence at the ref is the honest test for that, and it
+  // cannot go stale the way a literal list does.
+  const compared = [];
+  const postdating = [];
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "workspace-lease.schema.json" || file === "memory-record.schema.json" || file === "skill-promotion.schema.json" || file === "integration-queue-entry.schema.json" || file === "project-contract.schema.json") continue;
+    if (exempt.has(file)) continue;
     guarded.push(`contracts/${file}`);
   }
   for (const rel of guarded) {
-    const baseBlob = execFileSync("git", ["rev-parse", `${BASE}:${rel}`], { cwd: root, encoding: "utf8" }).trim();
+    let baseBlob;
+    try {
+      baseBlob = execFileSync("git", ["rev-parse", `${BASE}:${rel}`], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch {
+      postdating.push(rel);
+      continue;
+    }
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, baseBlob, `${rel} blob differs from ${BASE}`);
+    compared.push(rel);
   }
+  // A guard that skips everything is a guard that proves nothing, so say how
+  // much it actually covered and refuse to pass on an empty comparison.
+  assert.ok(
+    compared.length > 0,
+    `guard compared nothing against ${BASE} — every guarded path resolved as postdating it`
+  );
+  console.log(`  byte-identity vs ${BASE}: compared ${compared.length}, skipped ${postdating.length} postdating (${postdating.map((p) => p.replace("contracts/", "")).join(", ") || "none"})`);
+  // The one contract exempted above for authorized modification, pinned to its
+  // post-c8f2c1d blob so unauthorized drift still fails here.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "contracts/agent-registration.schema.json")], { cwd: root, encoding: "utf8" }).trim(),
+    "eb8db8f1cf10da664dbcc8319bec98a288a4bdd8",
+    "agent-registration.schema.json drifted from its authorized blob"
+  );
+  // decision-record.schema.json, exempted above for the same reason: pinned to
+  // its post-f3ac99a blob so unauthorized drift still fails here.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "contracts/decision-record.schema.json")], { cwd: root, encoding: "utf8" }).trim(),
+    "1b283c0805d540359ca4711e4d7a5b2e25af571c",
+    "decision-record.schema.json drifted from its authorized blob"
+  );
   // Sanity: the reused lease primitive and base ledger are still present intact.
   const primitive = readFileSync(resolve(root, "src/control/workspace-lease-policy.mjs"), "utf8");
   assert.ok(primitive.includes("export function mintLease"), "lease primitive still exports mintLease");

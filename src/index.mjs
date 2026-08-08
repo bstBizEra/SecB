@@ -114,3 +114,24 @@ export {
   intersectWithParent,
   withinCeiling
 } from "./services/non-escalation-comparator.mjs";
+
+// Harness-neutral runtime provider plugin candidate registry
+export {
+  RuntimeProviderPluginRegistry,
+  RuntimeProviderPluginRegistryError
+} from "./runtime/runtime-provider-plugin-registry.mjs";
+
+export {
+  RUFLO_RUNTIME_PROVIDER_PLUGIN,
+  RUFLO_RUNTIME_PROVIDER_PLUGIN_FINGERPRINT,
+  RufloRuntimeProviderCandidate
+} from "./runtime/providers/ruflo-runtime-provider-plugin.mjs";
+
+// Ruflo runtime provider integration
+export {
+  RUFLO_ADAPTERS,
+  RUFLO_SWARM_ADAPTER,
+  RUFLO_CODER_ADAPTER,
+  RUFLO_REVIEWER_ADAPTER,
+  createRufloAdapterRegistration
+} from "./registry/ruflo-adapters.mjs";

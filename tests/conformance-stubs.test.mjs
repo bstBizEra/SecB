@@ -392,14 +392,37 @@ test("V-013 skill: skill lifecycle through SkillsHub", () => {
     decision_id: "d_promo", version: 1,
     project_id: "prj_v013", work_package_id: "wp_v013", session_id: "ses_v013",
     actor_id: "human-gov", decision_type: "GOVERNANCE", outcome: "PROMOTE_SKILL",
+    subject: { kind: "SKILL_VERSION", id: "SKILL-V013", version: "1.0.0",
+               grant: { project_scopes: ["prj_v013"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" } },
     rationale: "Skill promotion after independent review", authority_ref: "grant_gov",
     evidence_refs: ["ev_skill_eval"], decided_at: "2026-07-19T00:00:00Z",
     valid_from: "2026-07-19T00:00:00Z", valid_until: "2026-12-31T00:00:00Z"
   }, { expectedSequence: 0, idempotencyKey: "v013_promo" });
+
+    // WP-SK-R1: a promotion now names the skill it promotes, so the revoked
+    // fixture needs its own decision rather than borrowing SKILL-V013's. That
+    // is the binding working - one decision, one skill - and it is the reason
+    // this test previously shared one.
+
+  promotions.appendDecision({
+    decision_id: "d_promo_revoked", version: 1,
+    project_id: "prj_v013", work_package_id: "wp_v013", session_id: "ses_v013",
+    actor_id: "human-gov", decision_type: "GOVERNANCE", outcome: "PROMOTE_SKILL",
+    subject: { kind: "SKILL_VERSION", id: "SKILL-V013-REVOKED", version: "1.0.0",
+               grant: { project_scopes: ["prj_v013"], supported_runtimes: ["claude-code"], max_data_classification: "INTERNAL" } },
+    rationale: "Skill promotion after independent review", authority_ref: "grant_gov",
+    evidence_refs: ["ev_skill_eval"], decided_at: "2026-07-19T00:00:00Z",
+    valid_from: "2026-07-19T00:00:00Z", valid_until: "2026-12-31T00:00:00Z"
+  }, { expectedSequence: 1, idempotencyKey: "v013_promo-revoked" });
   // strongest lookup contract: resolveEffective at a trusted instant, so
   // reverted or expired promotion decisions deny registration
   const resolver = new SkillResolver({
-    decisionLookup: (ref) => promotions.resolveEffective(ref, { at: "2026-07-19T12:00:00Z" }).decision
+    decisionLookup: (ref) => promotions.resolveEffective(ref, { at: "2026-07-19T12:00:00Z" }).decision,
+    // WP-SK-R2 / DEF-R3: evidence_refs are now resolved, not counted. The
+    // fixture must therefore model evidence that exists - previously it cited
+    // references nothing checked, which is the defect the control closes.
+    evidenceLookup: (ref) => (ref === "ev_skill_1" ? { evidence_id: ref, verification_status: "VERIFIED" } : null),
+    now: () => "2026-07-19T12:00:00Z"
   });
   const manifest = (overrides = {}) => ({
     skill_id: "SKILL-V013",
@@ -458,7 +481,7 @@ test("V-013 skill: skill lifecycle through SkillsHub", () => {
   resolver.registerSkill(manifest({
     skill_id: "SKILL-V013-REVOKED",
     approval_history: [
-      { decision_id: "d_promo", decision_type: "HUMAN_PROMOTION", approved_by: "human-gov", approved_at: "2026-07-19T00:00:00Z" },
+      { decision_id: "d_promo_revoked", decision_type: "HUMAN_PROMOTION", approved_by: "human-gov", approved_at: "2026-07-19T00:00:00Z" },
       { decision_id: "d_revoke", decision_type: "REVOCATION", approved_by: "human-gov", approved_at: "2026-07-19T01:00:00Z" }
     ]
   }));

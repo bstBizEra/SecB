@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   CLAUDE_CODE_ADAPTER,
   CODEX_ADAPTER,
+  GEMINI_CLI_ADAPTER,
+  KIMI_CLI_ADAPTER,
   GENERIC_ADAPTER,
   KNOWN_ADAPTERS,
   createAdapterRegistration
@@ -46,8 +48,10 @@ test("all adapters are frozen", () => {
 test("KNOWN_ADAPTERS maps product names to their adapters", () => {
   assert.equal(KNOWN_ADAPTERS["claude-code"], CLAUDE_CODE_ADAPTER);
   assert.equal(KNOWN_ADAPTERS["codex-cli"], CODEX_ADAPTER);
+  assert.equal(KNOWN_ADAPTERS["gemini-cli"], GEMINI_CLI_ADAPTER);
+  assert.equal(KNOWN_ADAPTERS["kimi-cli"], KIMI_CLI_ADAPTER);
   assert.equal(KNOWN_ADAPTERS["generic-agent"], GENERIC_ADAPTER);
-  assert.equal(Object.keys(KNOWN_ADAPTERS).length, 3);
+  assert.equal(Object.keys(KNOWN_ADAPTERS).length, 5);
 });
 
 test("createAdapterRegistration produces a unique registerable record", () => {

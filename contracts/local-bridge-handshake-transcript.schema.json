@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/local-bridge-handshake-transcript.schema.json",
+  "title": "SecB Local Bridge Handshake Transcript",
+  "description": "Algorithm-neutral, non-secret material to be bound by a future mutually authenticated local-bridge proof. Validation grants no authority, authenticates no party, and authorizes no session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "handshake_id",
+    "purpose",
+    "harness_installation_id",
+    "runtime_deployment_id",
+    "service_instance_id",
+    "authority_domain_id",
+    "locator_id",
+    "installation_key_id",
+    "service_key_id",
+    "endpoint_binding_id",
+    "client_nonce",
+    "service_nonce",
+    "client_supported_protocol_versions",
+    "service_supported_protocol_versions",
+    "selected_protocol_version",
+    "requested_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "handshake_id": {
+      "type": "string",
+      "pattern": "^bhs_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "purpose": {
+      "const": "SECB_LOCAL_BRIDGE_SESSION"
+    },
+    "harness_installation_id": {
+      "type": "string",
+      "pattern": "^inst_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "runtime_deployment_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "service_instance_id": {
+      "type": "string",
+      "pattern": "^svc_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "authority_domain_id": {
+      "type": "string",
+      "pattern": "^authdom_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "locator_id": {
+      "type": "string",
+      "pattern": "^brloc_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "installation_key_id": {
+      "type": "string",
+      "description": "Opaque public identifier only; never private proof material.",
+      "pattern": "^key_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "service_key_id": {
+      "type": "string",
+      "description": "Opaque public identifier only; never private proof material.",
+      "pattern": "^key_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "endpoint_binding_id": {
+      "type": "string",
+      "description": "Opaque identifier for the independently validated endpoint binding; it is not an endpoint address or credential.",
+      "pattern": "^epbind_[A-Za-z0-9][A-Za-z0-9._-]{15,127}$"
+    },
+    "client_nonce": {
+      "type": "string",
+      "description": "Fresh public challenge material encoded without defining a proof algorithm.",
+      "pattern": "^[A-Za-z0-9_-]{43,128}$"
+    },
+    "service_nonce": {
+      "type": "string",
+      "description": "Fresh public challenge material encoded without defining a proof algorithm.",
+      "pattern": "^[A-Za-z0-9_-]{43,128}$"
+    },
+    "client_supported_protocol_versions": {
+      "$ref": "#/$defs/protocolVersions"
+    },
+    "service_supported_protocol_versions": {
+      "$ref": "#/$defs/protocolVersions"
+    },
+    "selected_protocol_version": {
+      "$ref": "#/$defs/protocolVersion"
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "protocolVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,5}$"
+    },
+    "protocolVersions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/protocolVersion"
+      }
+    }
+  }
+}

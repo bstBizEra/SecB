@@ -1,0 +1,181 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_post_verdict_delta_rev_request_001_v1_candidate"
+  record_status: "DRAFT_CANDIDATE"
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: >-
+    Operator instruction, 2026-08-04, following
+    SECB-ASSURANCE-REV-FRESHNESS-001. Three pull requests out of ten need
+    reviewer attention, and in every case only a named subset of each.
+  producer_runtime: "Claude Code"
+  limitations:
+    - "The producer of this packet did not write any of the three pull requests and is not their producer. It has no stake in their outcome beyond having classified them."
+    - "The producer DOES have a stake in the freshness rule these three are being judged under, because PR #137 is subject to the same rule. No exception is proposed for #137 anywhere in this packet."
+    - "Each verdict already issued stands. This packet asks about the delta after it, not about the work it approved."
+
+handoff:
+  handoff_id: "HANDOFF-POST-VERDICT-DELTA-001"
+  sequence: 1
+  source_agent_instance_id: "claude-code-secb-session-2026-08-03"
+  source_session_id: "bfb2c907-d860-4d79-a475-042b1ebdf7ee"
+  destination_role: "REV — must not be the producer of the PR under review in each item"
+  project_id: "prj_secb_local"
+
+  objective: >-
+    Review only what landed on three pull requests AFTER their independent
+    verdicts. Not the pull requests. Not the verdicts. The delta.
+
+  why_this_is_small: >-
+    Ten pull requests presented on GitHub as an unreviewed backlog. Independent
+    verdicts exist for all ten; nine were invisible because a reviewer's commit
+    sits inside the branch it reviews, and one was on a ref namespace git does
+    not fetch by default.
+
+    Freshness was then measured rather than assumed: each PR's three-dot
+    proposal against main was compared at its reviewed commit and at its head,
+    with controls confirming the comparison can report both same and different.
+    Four propose byte-identical or code-identical changes to what was approved.
+    One has a verdict that no longer applies to what is open. Three changed, and
+    those three are below.
+
+    Method and results: docs/04-assurance/rev-freshness-confirmation-001.md and
+    docs/04-assurance/rev-evidence-at-risk-001.md.
+
+  items:
+    - item_id: "PVD-68"
+      pull_request: 68
+      branch: "bst/mod-gov-s3-pdp-grant-shape-fix-001"
+      verdict_at: "2ee971c"
+      verdict: "APPROVE_WITH_NOTES"
+      head: "5d499ff"
+      classification: "substantive code after the verdict"
+      scope:
+        - "037da18 — validate grant.history VALUE shape, not just key names. Touches src/control/policy-decision-point.mjs and tests/policy-decision-point.test.mjs."
+        - "65342e6 — validate grant.roles ELEMENT shape, not just container type. Same two files."
+        - "5d499ff — re-pin policy-decision-point.mjs in tests/conformance-v020-governance.test.mjs."
+      why: >-
+        This is the ONLY one of the three whose post-verdict work is real
+        logic. Both commits harden grant-shape validation on a policy decision
+        point - an authorization surface - and the APPROVE_WITH_NOTES covers
+        neither.
+
+        The re-pin at 5d499ff is mechanical and follows from the two code
+        commits; it is in scope so the reviewer can confirm the new hash
+        matches what those commits produce, not to judge the re-pin on its own.
+      not_in_scope: >-
+        Everything up to and including 2ee971c. That was reviewed and the
+        verdict stands.
+
+    - item_id: "PVD-91"
+      pull_request: 91
+      branch: "bst/mod-runtime-s1-checkpoint-ordering-fix-001"
+      verdict_at: "611a095"
+      verdict: "APPROVE_FOR_MERGE"
+      head: "b7f9be8"
+      classification: "byte-identity guard scope narrowed after approval"
+      scope:
+        - "One change, in tests/integration-queue-ledger.test.mjs, inside the post-verdict Fold main merge b7f9be8."
+      the_change: |
+        -    "src/ledger/checkpoint-ledger.mjs",
+        +  // src/ledger/checkpoint-ledger.mjs is intentionally EXCLUDED here by
+        +  // mod-runtime-s1-checkpoint-ordering-fix-001: an authorized, disclosed
+        +  // cross-cutting fix (resolveLatest content-order bug + a
+        +  // preWriteCheck-based regression/actor_id gate), not drift this guard
+        +  // should protect against.
+      why: >-
+        The exclusion is the CORRECT mechanism and is not presumed to be a
+        defect. A branch that legitimately changes a file must exclude or re-pin
+        it, or every guard covering that file fails. WP-GOV-VF1 did exactly this
+        under an authorized slice, and its seven re-pins were reviewed. The
+        exclusion here is disclosed in a comment naming the branch and the
+        reason.
+
+        What is being asked is only whether the exclusion is justified and
+        correctly bounded, given that it landed AFTER the approval of the work
+        it protects, and that a guard which no longer covers a file cannot
+        report that the file drifted.
+      questions:
+        - "Is checkpoint-ledger.mjs genuinely changed by THIS branch, so that exclusion is the right response rather than a re-pin?"
+        - "Would a re-pin have been strictly better here? A re-pin keeps the file protected at a new value; an exclusion removes it from protection entirely. WP-GOV-VF1 chose re-pin for the same situation."
+        - "Do the other files this guard covers remain covered?"
+      not_in_scope: >-
+        Everything up to and including 611a095, and the fold's adoption of
+        main's values elsewhere. The merge was checked for content present in
+        neither parent: at the point checked it adopted main's value and
+        invented nothing.
+
+    - item_id: "PVD-94"
+      pull_request: 94
+      branch: "bst/mod-wspace-s2-overlap-case-fix-001"
+      verdict_at: "3f79b33"
+      verdict: "APPROVE_WITH_NOTES, target d902e94"
+      head: "23b8bf4"
+      classification: "byte-identity guard scope narrowed after approval, in TWO guards"
+      scope:
+        - "tests/integration-collision-forecast.test.mjs — src/control/overlap-policy.mjs removed from the protected set."
+        - "tests/integration-queue-ledger.test.mjs — the same file removed from a second guard's protected set."
+      the_change: |
+        -    "src/control/overlap-policy.mjs",
+        +  // src/control/overlap-policy.mjs is intentionally EXCLUDED here by
+        +  // mod-wspace-s2-overlap-case-fix-001: a second independent review found a
+        +  // real case-sensitivity gap (src/Foo.js vs src/foo.js silently classified
+        +  // as no-collision) with live blast radius through THIS exact consumer
+        +  // (forecastCollision passes write-sets to evaluateOverlap unmodified).
+        +  // That fix is an authorized, disclosed cross-cutting change to this file --
+        +  // not drift this guard should protect against. The other four files remain
+        +  // fully protected.
+      why: >-
+        Same reading as PVD-91: correct mechanism, disclosed, but sequenced
+        after the approval. Two guards rather than one, and the comment itself
+        asserts "the other four files remain fully protected", which is a
+        checkable claim rather than a judgement.
+      questions:
+        - "Same three as PVD-91, for each of the two guards."
+        - "The comment claims the other four files remain fully protected. Verify that claim rather than accept it."
+      not_in_scope: "Everything up to and including 3f79b33."
+
+  checks:
+    - "npm run validate                 # expect 0"
+    - "node --test tests/*.test.mjs     # one PRE-EXISTING failure on main is expected; see limitations"
+    - "For PVD-91 and PVD-94: confirm each guard still fails when its remaining protected files are perturbed. An exclusion that accidentally empties or disables a guard is the failure mode worth probing, and it is not visible from the diff."
+
+  limitations:
+    - "RUN IN A CHECKOUT THAT HAS node_modules. A fresh worktree without it returns exit 1 for unrelated reasons; the producer of this packet reported that false baseline three times before catching it."
+    - "One test on main is ALREADY RED and is not from any of these branches: the byte-identity guard on reused primitives at origin/main @ 0aa13f8. One failure is expected."
+    - "The freshness classification behind this packet compares diff payloads, so a change that removes a line in one place and adds the identical line elsewhere reads as identical. That tolerance for code motion is deliberate and is a real blind spot."
+
+  risks:
+    - >-
+      THE PRODUCER OF THIS PACKET CLASSIFIED THESE THREE AS NARROW. If that
+      classification is wrong, this packet talks a reviewer out of looking at
+      the rest of each pull request. The classification rests on a
+      diff-of-proposals comparison whose controls are recorded and can be
+      re-run; a reviewer who does not trust it should re-run the comparison
+      before accepting the narrowed scope, not after.
+    - >-
+      Guard scope is the worst thing in this backlog to land unreviewed, which
+      is why PVD-91 and PVD-94 are here rather than being waved through as
+      merge hygiene.
+
+  recommended_next_action: >-
+    Take the three items independently; they share a shape but not a producer.
+
+    For PVD-91 and PVD-94, answer the questions rather than the diff - the
+    diffs are five and eight lines and reading them is not the work. The work is
+    deciding whether removing a file from a tamper-detection guard, after the
+    approval of the work that guard protects, is acceptable here.
+
+    Return a verdict as a record, and file it somewhere a reader of the pull
+    request can find. Nine of the ten verdicts in this repository were not
+    findable that way, and one existed only on a local ref until 2026-08-04.
+
+  context_delta: >-
+    Four pull requests - #88, #110, #73, #69 - propose byte-identical or
+    code-identical changes to what was already approved and need no reviewer
+    attention. #60's verdict names a commit that is now an ancestor of main, so
+    its recorded approval does not describe what is open; that one needs
+    re-scoping, not reviewing.
+
+    All 21 review refs were published to origin on 2026-08-04. They are durable
+    now, but still not fetched by default - the refspec is in
+    docs/04-assurance/rev-evidence-at-risk-001.md.

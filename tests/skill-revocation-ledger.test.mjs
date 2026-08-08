@@ -556,20 +556,35 @@ test("no hardcoded test-ID / decisionId branching in skill-revocation-ledger.mjs
 // --- byte-identity guard: reused primitives + siblings + resolver untouched -
 
 const BYTE_IDENTITY_BASELINE = "0aa13f8"; // origin/main tip this branch was cut from
+// Three files are compared against ratified blobs below rather than against the
+// baseline ref, because each was authorized-modified after it:
+//
+//   sod-rules.mjs                  9d4da11 (actor ids admissibility-gated),
+//                                  ratified by the operator 2026-08-08
+//   skill-resolver.mjs             e0e556a, f3ac99a, 44285f8
+//   decision-record.schema.json    f3ac99a (WP-SK-R1 / DEF-R1)
+//
+// They are removed from this list AND pinned below. Removing without pinning
+// would drop them from coverage entirely, which is the failure this guard
+// exists to catch rather than commit.
 const PROTECTED_SOURCE_FILES = [
   "src/control/approval-binding.mjs",
-  "src/control/sod-rules.mjs",
   "src/control/risk-registry.mjs",
   "src/ledger/durable-ledger.mjs",
   "src/ledger/skill-promotion-ledger.mjs",
   "src/registry/skill-candidate-registry.mjs",
-  "src/registry/skill-resolver.mjs",
   "src/gateway/capability-registry-service.mjs",
   "src/contracts/reserved-delimiters.mjs",
-  "contracts/decision-record.schema.json",
   "contracts/skill-manifest.schema.json",
   "contracts/skill-promotion.schema.json"
 ];
+
+// path -> the blob this branch is authorized to carry.
+const RATIFIED_BLOBS = Object.freeze({
+  "src/control/sod-rules.mjs": "0cb83353ac1e8e9dd1c8d3bfd34a4a4d04fb389f",
+  "src/registry/skill-resolver.mjs": "f8d7f9c225d3291ea8c00acda6cacbccfffb5170",
+  "contracts/decision-record.schema.json": "1b283c0805d540359ca4711e4d7a5b2e25af571c"
+});
 
 function gitBlobHashAtRef(ref, path) {
   return execFileSync("git", ["rev-parse", `${ref}:${path}`], { encoding: "utf8" }).trim();
@@ -581,6 +596,11 @@ function gitWorkingBlobHash(path) {
 test(`byte-identity: reused primitives, the S1/S2 siblings, and skill-resolver.mjs are byte-identical to origin/main @ ${BYTE_IDENTITY_BASELINE}`, () => {
   for (const path of PROTECTED_SOURCE_FILES) {
     assert.equal(gitWorkingBlobHash(path), gitBlobHashAtRef(BYTE_IDENTITY_BASELINE, path), `${path} drifted from origin/main @ ${BYTE_IDENTITY_BASELINE}`);
+  }
+  // The three lifted out of the baseline comparison above. Relocated, not
+  // dropped: each still fails here on any further drift.
+  for (const [path, blob] of Object.entries(RATIFIED_BLOBS)) {
+    assert.equal(gitWorkingBlobHash(path), blob, `${path} drifted from its ratified blob`);
   }
 });
 

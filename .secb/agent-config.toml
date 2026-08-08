@@ -1,0 +1,61 @@
+# =============================================================================
+# SecB - Governed Agent Configuration (.secb/agent-config.toml)
+# =============================================================================
+
+[core]
+project_id = "secb-ruflo-workspace"
+governance_baseline = "3.0.0-rc1"
+classification_floor = "INTERNAL"
+max_classification_ceiling = "RESTRICTED"
+
+[profiles.dev]
+approval_policy = "on-request"
+classification_ceiling = "CONFIDENTIAL"
+sod_required = false
+
+[profiles.governed_prod]
+approval_policy = "untrusted"
+classification_ceiling = "RESTRICTED"
+sod_required = true
+n5_gate_reviewers = 3
+
+[agents.coder]
+type = "coder"
+permitted_roles = ["ENGIN"]
+max_classification = "INTERNAL"
+workload_prefix = "agt-coder"
+
+[agents.security_architect]
+type = "security-architect"
+permitted_roles = ["GOV", "independent_review"]
+max_classification = "RESTRICTED"
+workload_prefix = "agt-sec-arch"
+
+[agents.reviewer]
+type = "reviewer"
+permitted_roles = ["QA", "independent_review"]
+max_classification = "CONFIDENTIAL"
+workload_prefix = "agt-reviewer"
+
+[agents.tester]
+type = "tester"
+permitted_roles = ["QA"]
+max_classification = "INTERNAL"
+workload_prefix = "agt-tester"
+
+[agents.architect]
+type = "architect"
+permitted_roles = ["ENGIN", "GOV"]
+max_classification = "RESTRICTED"
+workload_prefix = "agt-architect"
+
+[mcp_servers.secb-mcp]
+command = "node"
+args = ["tools/start-secb-mcp.mjs"]
+enabled = true
+startup_timeout_sec = 60.0
+
+[mcp_servers.claude-flow]
+command = "node"
+args = ["c:/laragon/www/ruflo/bin/cli.js", "mcp", "start"]
+startup_timeout_sec = 60.0

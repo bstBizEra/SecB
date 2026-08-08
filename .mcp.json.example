@@ -1,0 +1,36 @@
+{
+  "$comment": [
+    "Copy to .mcp.json (which is gitignored — it is local client state, not source).",
+    "",
+    "Why this file exists: .mcp.json and .vscode/mcp.json previously registered the",
+    "SecB MCP server as `npx -y secb-agent-registry@latest`. That package name is",
+    "unpublished, and npx resolves against the public registry here (no .npmrc, no",
+    "private mirror), so the name was claimable by anyone — after which `-y` would",
+    "fetch and execute it without a prompt. Both files are gitignored, so the",
+    "corrected form lived on one machine and nowhere in the repository; the next",
+    "person wiring up MCP had nothing to copy and the npx form was what they would",
+    "have found. This file is the corrected form, in the repository, on purpose.",
+    "",
+    "The command below routes through the local dispatcher instead, which removes",
+    "the resolution path entirely. `secb mcp serve` still refuses to start without",
+    "SECB_MCP_DEPLOYMENT_AUTHORIZED=operator: that gate lives in",
+    "tools/run-secb-mcp-server.mjs and the dispatcher does not reach past it, so",
+    "registering the server is not the same as activating it (working rule 5).",
+    "",
+    "The args path is relative and resolves against the client's working directory.",
+    "Clients that launch servers from the project root need no change; anywhere",
+    "else, make it absolute. Only the entry point is affected — tools/secb.mjs",
+    "resolves its own targets against the repository root, so subcommands behave",
+    "identically from any directory."
+  ],
+  "mcpServers": {
+    "secb": {
+      "command": "node",
+      "args": [
+        "tools/secb.mjs",
+        "mcp",
+        "serve"
+      ]
+    }
+  }
+}

@@ -22,6 +22,8 @@ import { SkillResolver } from "../src/registry/skill-resolver.mjs";
 import { WorkPackageContractService } from "../src/services/work-package-service.mjs";
 import { ProjectContractService } from "../src/project/project-contract-service.mjs";
 import { EventLedger, EvidenceLedger } from "../src/ledger/governed-ledgers.mjs";
+import { InvocationRateLimiter } from "../src/mcp/invocation-rate-limiter.mjs";
+import { AgentEnrollmentService } from "../src/services/agent-enrollment-service.mjs";
 
 // The single operator-authorization message. Reused by the skeleton entry so
 // the missing-authorization failure reads identically whether the guard trips
@@ -31,6 +33,8 @@ export const OPERATOR_AUTH_MESSAGE =
 
 export const DEPLOYMENT_ENV_FLAG = "SECB_MCP_DEPLOYMENT_AUTHORIZED";
 export const DEPLOYMENT_ENV_VALUE = "operator";
+export const ENROLLMENT_ENV_FLAG = "SECB_MCP_AGENT_ENROLLMENT_AUTHORIZED";
+export const ENROLLMENT_ENV_VALUE = "operator";
 export const SEED_VERSION = "1";
 const CLASSIFICATION_CEILINGS = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"];
 
@@ -200,7 +204,9 @@ export function composeServices({
   invocationLog,
   eventLedgerPath,
   evidenceLedgerPath,
+  agentEnrollment = null,
   classificationCeiling = "INTERNAL",
+  rateLimiter = null,
   now = () => new Date()
 }) {
   if (!registry || typeof registry.resolve !== "function") {
@@ -224,8 +230,9 @@ export function composeServices({
     evidenceLedger: new EvidenceLedger({ filePath: resolve(evidenceLedgerPath) }),
     skillResolver: new SkillResolver({ decisionLookup: () => null })
   };
+  if (agentEnrollment !== null) services.agentEnrollment = agentEnrollment;
 
-  return new SecBMcpServer({ services, invocationLog, classificationCeiling, now });
+  return new SecBMcpServer({ services, invocationLog, classificationCeiling, rateLimiter, now });
 }
 
 // ---------------------------------------------------------------------------
@@ -242,13 +249,39 @@ export function resolveDeploymentConfig({ argv = [], env = {} } = {}) {
   const pick = (flag, envKey) => argValue(argv, flag) ?? env[envKey];
   return {
     authorized: env[DEPLOYMENT_ENV_FLAG] === DEPLOYMENT_ENV_VALUE,
+    enrollmentAuthorized: env[ENROLLMENT_ENV_FLAG] === ENROLLMENT_ENV_VALUE,
     seedPath: pick("--seed", "SECB_MCP_REGISTRY_SEED"),
     ledgerPath: pick("--ledger", "SECB_MCP_INVOCATION_LEDGER"),
+    enrollmentLedgerPath: pick("--enrollment-ledger", "SECB_MCP_AGENT_ENROLLMENT_LEDGER"),
     callerInstanceId: pick("--caller", "SECB_MCP_CALLER_INSTANCE"),
     eventLedgerPath: pick("--event-ledger", "SECB_MCP_EVENT_LEDGER"),
     evidenceLedgerPath: pick("--evidence-ledger", "SECB_MCP_EVIDENCE_LEDGER"),
-    classificationCeiling: pick("--ceiling", "SECB_MCP_CLASSIFICATION_CEILING") ?? "INTERNAL"
+    classificationCeiling: pick("--ceiling", "SECB_MCP_CLASSIFICATION_CEILING") ?? "INTERNAL",
+    rateLimitPerMinute: pick("--rate-limit", "SECB_MCP_RATE_LIMIT_PER_MINUTE")
   };
+}
+
+/**
+ * Resolve the S8 invocation limit. Absent means the default; the literal "off"
+ * is the only way to disable it, because the spec lists rate limiting as a MUST
+ * for servers and opting out should have to be typed. Anything else that is not
+ * a positive integer is a typed denial rather than a silent fallback to the
+ * default — "12O" quietly becoming 120 is exactly how a limit stops meaning
+ * what its operator believes it means.
+ */
+export function resolveRateLimiter(rateLimitPerMinute, { now } = {}) {
+  if (rateLimitPerMinute === undefined || rateLimitPerMinute === null || rateLimitPerMinute === "") {
+    return new InvocationRateLimiter({ now });
+  }
+  const raw = String(rateLimitPerMinute).trim();
+  if (raw.toLowerCase() === "off") return null;
+  if (!/^[0-9]+$/.test(raw) || Number(raw) < 1) {
+    throw new DeploymentError(
+      "DENY_RATE_LIMIT_INVALID",
+      `Rate limit must be a positive integer or "off"; received ${JSON.stringify(rateLimitPerMinute)}`
+    );
+  }
+  return new InvocationRateLimiter({ maxPerWindow: Number(raw), windowMs: 60_000, now });
 }
 
 // The activation guard. Returns a servable { server, callerInstanceId } only
@@ -270,16 +303,27 @@ export function prepareDeployment({ argv = [], env = {}, now = () => new Date() 
   const registry = seedRegistry(loadRegistrySeed(config.seedPath));
 
   const invocationLog = createInvocationLedgerWriter(config.ledgerPath);
+  const agentEnrollment = config.enrollmentAuthorized
+    ? new AgentEnrollmentService({
+        registry,
+        ledgerWriter: createInvocationLedgerWriter(config.enrollmentLedgerPath)
+      })
+    : null;
+  // Returned as well as installed: the hub must hand this SAME instance to the
+  // upstream proxy, or each dispatch path grants its own full budget.
+  const rateLimiter = resolveRateLimiter(config.rateLimitPerMinute);
   const server = composeServices({
     registry,
     invocationLog,
     eventLedgerPath: config.eventLedgerPath,
     evidenceLedgerPath: config.evidenceLedgerPath,
+    agentEnrollment,
     classificationCeiling: config.classificationCeiling,
+    rateLimiter,
     now
   });
 
-  return { server, callerInstanceId: config.callerInstanceId, config };
+  return { server, callerInstanceId: config.callerInstanceId, config, rateLimiter };
 }
 
 // Convenience: prepare and serve over stdio. Used by the CLI entry.

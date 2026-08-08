@@ -1,0 +1,250 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_sk_vs_01_first_resolvable_skill_v1_candidate"
+  record_status: "WITHDRAWN_BY_PRODUCER"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "The producer of this work package is also its assigned ENGIN. It may not review or accept its own output."
+    - "The producer has been returned by independent review five consecutive rounds, twice for asserting in a governance record that a control had a property the code did not have. Acceptance criteria below are written to be machine-checkable, and each must be shown to FAIL when its control is removed before it is claimed."
+    - "The producer has four times asserted that something did not exist when it did - most recently DecisionLedger, which exists and is already exercised end-to-end by tests/conformance-stubs.test.mjs. Absence claims in this document should be re-derived, not trusted."
+
+withdrawal:
+  withdrawn_at: "2026-08-02"
+  withdrawn_by: "producer, before authorization - no signature was given"
+  reason: >-
+    Its central acceptance criterion is built on a premise that is false.
+    AC-VS-01 claimed that constructing the governed manifest from a decision
+    rather than from package content closes DEF-A5. DEF-R1 shows the hole is not
+    in who writes the manifest: contracts/decision-record.schema.json cannot name
+    a skill, so SkillResolver checks only that a decision with the claimed id
+    exists and is typed GOVERNANCE. One decision authorizes any skill at any
+    scope - reproduced by registering an unrelated skill and a self-widened
+    RESTRICTED grant off a single decision. The producer was looking at the wrong
+    end of the chain.
+  other_falsified_content:
+    - "AC-VS-01 is also unimplementable as written: a decision record has no field able to carry project_scopes, supported_runtimes or max_data_classification, and contracts/** was prohibited by this work package - so its own STOP checkpoint fires on its own central criterion."
+    - "The rollback plan asserted that appending a REVOCATION reverts the promotion. REVOCATION is not in the DecisionLedger decision_type enum, and resolveSkill did not consult the ledger at all. AC-VS-08 was unsatisfiable at the time of writing. WP-SK-R2 has since made the resolution-time half true; the enum half remains false."
+    - "schedule.expiry lapsed the authorization on any change to the DEF-C3 ruling, while proceeding required amending that ruling - the work package triggered its own lapse clause."
+    - "The premise that it does not depend on the contract tier split is wrong: skill-grant-record.schema.json is the only shape that can express RESTRICTED_PUBLICATION, which the lifecycle requires before general publication."
+  retained_because: >-
+    The record of a proposal that reached a signature request on a false premise
+    is evidence about how this programme fails, and deleting it would remove the
+    only trace. It is marked WITHDRAWN rather than removed.
+  superseded_by: >-
+    Nothing yet. A first-promotion work package needs DEF-R1 closed first, which
+    is a contract change and belongs to ARCHI.
+
+work_package_id: "WP-SK-VS-01"
+project_id: "prj_secb_local"
+product_id: "SECB-PRD-SKILLSHUB-001"
+module_id: "MOD-SKILL"
+goal_id: "GATE-SK-07"
+title: "First resolvable skill - vertical slice"
+
+objective: >-
+  Make ONE skill resolvable end to end through governance, so that
+  secb_skill_hub_search returns a real authorized result for the first time.
+
+problem_statement: >-
+  Zero skills are consumable. Every component on the path exists and is tested -
+  DecisionLedger, appendDecision, resolveEffective, SkillResolver.registerSkill,
+  the fail-closed hub gate, the MCP tool - and tests/conformance-stubs.test.mjs
+  V-013 already drives the whole chain to ALLOW. What is missing is production
+  wiring: both wirings pass `decisionLookup: () => null`, nothing calls
+  registerSkill outside tests, and no governance decision exists for any skill.
+
+  Separately, the programme has spent five review rounds on a contract tier split
+  that no runtime path consumes. The resolver still validates against the legacy
+  skill-manifest contract. That work is a design improvement to an unused
+  surface; it is not on the path to a working SkillsHub, and this work package
+  does not depend on it.
+
+desired_outcome: >-
+  One low-risk skill resolves ALLOW for an authorized caller and is withheld from
+  an unauthorized one, on the strength of a real governance decision that
+  resolves in the DecisionLedger.
+
+non_goals:
+  - "The contract tier split. AC-05, AC-08, risk_class re-tiering, the tier-separation control rewrite, and DEF-D8/DEF-D9 are findings pending ruling, NOT blockers for this slice."
+  - "Building intake, an evaluation runner, or the distribution service. This slice mints ONE decision by hand under GOV authorization; it does not automate promotion."
+  - "Editing .agents/ - PACK.yaml declares mutation_authorized: false."
+  - "Editing src/mcp/ - concurrent work by another producer. The one DEF-C3 call-site fix this slice depends on is REPORTED to that producer, not made here."
+  - "Publishing more than one skill. The corpus stays at zero-plus-one."
+
+risk_class: "R3"
+mutation_class: "M3"
+mutation_rationale: >-
+  M3, not M2. This slice mints a GOVERNANCE decision into the DecisionLedger - an
+  authoritative append-only system of record - and populates the resolver
+  registry. WP-SK-01 was M2 because it wrote only contracts. Writing a governance
+  decision is integration-candidate creation at minimum. GOV should set this
+  class rather than accept the producer's proposal: an agent may not self-upgrade
+  mutation authority, and proposing one is the closest a producer may come.
+
+owners:
+  accountable: "Operator (BizEra), acting as GOV"
+  domain: "SKILL"
+assignments:
+  - role: "ENGIN"
+    identity: "claude-code-secb-session-2026-08-02"
+  - role: "REV"
+    identity: "UNASSIGNED - must be distinct from ENGIN"
+  - role: "QA"
+    identity: "UNASSIGNED - must be distinct from ENGIN"
+  - role: "SEC"
+    identity: "UNASSIGNED - required because this opens the DEF-A8 registry gate"
+independence_constraints:
+  - "ENGIN may not accept its own evidence."
+  - "The human who signs the pilot promotion decision may not be the producer."
+  - "Producer-run validate and suite are evidence, never acceptance."
+
+dependencies:
+  - "SECB-SEC-DECISION-SKILLSHUB-C3-001, ruled B on 2026-08-01, whose condition 2 requires the call-site fix and whose registry gate this slice opens."
+  - "contracts/decision-record.schema.json - already requires work_package_id on every decision, so the pilot promotion cannot be minted outside an authorized work package. This one."
+
+superseded_planning:
+  supersedes: "The horizontal critical path in SECB-PRD-SKILLSHUB-001 section 15 (WP-SK-01 through 12, sequenced contract-first)."
+  reason: >-
+    The plan was drawn from the contract downward and did not contain the three
+    things actually missing - wiring, a caller, and a decision. Five review rounds
+    went into a surface nothing consumes. The remaining horizontal work packages
+    are demoted to a backlog and are not blockers.
+  wp_sk_01_status: >-
+    Its GOV authorization LAPSED by its own terms. WP-SK-01 sets
+    "Authorization lapses ... on any change to ADR-0013", and commit b20b66c
+    appended two corrections to that ADR. Its delivered increment stands as
+    committed work under review; it is not authorized to continue.
+
+baseline:
+  repository_id: "SecB"
+  branch: "feat/secb-ruflo-command-center"
+  commit_sha: "b5d21e9"
+  condition: "Tracked tree carries one uncommitted change belonging to another producer (docs/12-execution/05-work-package-lifecycle.md). Re-pin before starting."
+
+write_contract:
+  declared_paths:
+    - "src/skills/**"
+    - "src/registry/skill-resolver.mjs"
+    - "tools/secb-mcp-server-wiring.mjs"
+    - "tools/secb-skills.mjs"
+    - "tests/**"
+    - "MANIFEST.json"
+    - "docs/03-project-control/candidates/**"
+  prohibited_paths:
+    - ".agents/**"
+    - "src/mcp/**"
+    - "dashboard/**"
+    - "docs/00-governance/**"
+    - "docs/adr/**"
+    - "contracts/**"
+    - "AGENTS.md"
+    - "docs/AGENTS.md"
+  write_set_note: >-
+    src/skills/** is declared as a directory this time. WP-SK-01 declared a
+    single file there and the producer then added a new one, which REV was asked
+    to rule on as a breach or a drafting gap. contracts/** is PROHIBITED here on
+    purpose: this slice must work against the contract as it stands, and any urge
+    to change a contract to make the slice pass is a signal to stop.
+
+allowed_tools: ["read", "write", "edit", "node", "git", "npm run validate", "node --test"]
+allowed_mcp: []
+allowed_network: []
+allowed_skills: []
+allowed_data: ["repository contents at the declared baseline"]
+
+acceptance_criteria:
+  - id: "AC-VS-01"
+    statement: "A promotion path constructs the governed manifest from a governance decision and accepted evidence. It reads NO grant field from package content."
+    proof: "A test supplies a package manifest declaring project_scopes, supported_runtimes and max_data_classification, and asserts the produced governed manifest's values come from the decision and not from the package. This is the DEF-A5 control for this slice, and it works against the legacy contract without the tier split."
+  - id: "AC-VS-02"
+    statement: "registerSkill has exactly ONE production caller: the promotion path."
+    proof: "Extend the AC-10 walk to assert one caller rather than zero, and assert it is the promotion module. Verified by adding a second caller and confirming the test fails."
+  - id: "AC-VS-03"
+    statement: "Both wirings bind decisionLookup to a real DecisionLedger through resolveEffective at a trusted instant, never to a constant."
+    proof: "A test asserts no wiring contains `decisionLookup: () => null`. Verified by reverting one wiring and confirming failure."
+  - id: "AC-VS-04"
+    statement: "One pilot skill resolves ALLOW through SecBSkillsHub for a caller in scope, with a real decision in the ledger."
+    proof: "End-to-end test: mint decision, promote, search, assert count 1 and the skill body is returned."
+  - id: "AC-VS-05"
+    statement: "A fabricated promotion is refused. A manifest claiming a HUMAN_PROMOTION whose decision_id does not resolve in the ledger is rejected at registration."
+    proof: "Negative test asserting DENY_UNAPPROVED_PUBLICATION."
+  - id: "AC-VS-06"
+    statement: "A reverted or expired decision denies. resolveEffective at an instant after expiry must not authorize."
+    proof: "Negative test at an instant past valid_until."
+  - id: "AC-VS-07"
+    statement: "An out-of-scope caller is withheld the pilot skill, and the withheld tally stays invariant to the query."
+    proof: "Existing AC-SKILLS-HUB-06a extended to cover a populated registry - the oracle regression must hold when there is something real to hide."
+  - id: "AC-VS-08"
+    statement: "Revoking the pilot decision denies the next resolution with no restart."
+    proof: "Append a REVOCATION, assert the next resolveSkill denies."
+  - id: "AC-VS-09"
+    statement: "The pilot package carries no contradiction between its declared authority ceiling and its own controls."
+    proof: "13 of 22 packages declare a cap permitting mutation (A2/A3) while their own controls.repository_mutation says prohibited, and 3 declare R0 with A2. The pilot MUST be chosen from the 9 R0/A1 packages that are internally consistent. A test asserts the chosen pilot is not in the contradictory set."
+  - id: "AC-VS-10"
+    statement: "npm run validate exits 0 and the suite exits 0, both judged by EXIT CODE."
+    proof: "Producer-run, recorded as evidence not acceptance. A grep for a FAIL status is not evidence - validate-foundation.mjs throws and never emits one (DEF-M1)."
+
+test_plan:
+  - "Positive: the full chain to ALLOW, mirroring tests/conformance-stubs.test.mjs V-013 but through the production wiring rather than a test-local resolver."
+  - "Negative: fabricated promotion; expired decision; revoked decision; out-of-scope project, runtime and data class; grant field sourced from package content."
+  - "Regression: the entire existing SkillsHub suite, including the identity-binding pins, the withheld-count oracle pin, and AC-SKILLS-HUB-11 getSkill unreachability."
+  - "Sabotage: for EVERY control added, remove it and confirm the suite exits 1, then restore and confirm exit 0. A control that has not been seen to fail is not evidence (DEF-M1)."
+
+review_plan:
+  - "REV: hunt for any path by which package content reaches a grant field in a registered manifest. That is the whole safety claim of this slice."
+  - "REV: confirm the pilot decision was signed by someone other than the producer."
+  - "QA: re-run validate and the suite at the delivered commit by exit code, and independently re-run the sabotage matrix."
+
+security_plan:
+  - "SEC review is REQUIRED before merge, not after: this slice opens the DEF-A8 registry gate, which the DEF-C3 ruling made a gated action."
+  - "SEC question 1: with the registry populated, does the DEF-C3 classification inversion become live? The ruling's condition 2 requires the call-site fix; that fix is in src/mcp and is prohibited to this producer. If it has not landed, SEC must decide whether the slice may proceed with one skill or must wait."
+  - "SEC question 2: does the promotion path fully close DEF-A5 for the legacy contract, or does a residual path remain by which package content reaches a scope field?"
+  - "Secret scan over all changed files before handoff."
+
+evidence_destination: "SecB Evidence Ledger - accepted by the Evidence authority, not by the producer"
+
+human_approval_requirements:
+  - "GOV authorization to begin: NOT GRANTED. Required before any file is written."
+  - "GOV signature on the pilot promotion decision: NOT GRANTED. This is the human promotion the whole lifecycle exists to protect and may not be minted by the producer."
+  - "SEC clearance to populate the resolver registry: NOT GRANTED. This is the DEF-A8 gate."
+  - "GOV approval to merge: NOT GRANTED."
+
+schedule:
+  execution_window_opens: "On GOV authorization"
+  expiry: "Authorization lapses if not started within 30 days, or on any change to the DEF-C3 ruling."
+budget: "Not tracked. This slice is small by construction; if it grows, that is evidence the scope was wrong."
+
+checkpoint_rules:
+  - "Checkpoint after the promotion path exists and before any decision is minted."
+  - "Checkpoint before the first registerSkill call in production wiring - that call is the DEF-A8 gate crossing."
+  - "STOP if the slice cannot be completed without changing a contract. contracts/** is prohibited, and the urge to change one is the signal that this slice is being used to justify the tier work rather than to deliver a working skill."
+rollback_plan: >-
+  Two reversible layers. The code is a git revert. The minted decision is an
+  append-only ledger entry that cannot be deleted - it is reverted by appending a
+  REVOCATION, which AC-VS-08 already requires to be tested. Rollback therefore
+  exercises a control rather than bypassing one.
+recovery_rules:
+  - "On interruption before the gate crossing, resume from the last checkpoint; no ledger state exists yet."
+  - "On interruption after, the ledger is authoritative and the revocation path is the only way back."
+integration_rules:
+  - "Rebase onto the branch tip before handoff. src/mcp conflicts indicate a scope breach, not a merge to resolve."
+activation_rules:
+  - "This slice activates one skill for one project scope. It does not declare the SkillsHub operational, and MOD-SKILL remains QUEUED - partial."
+
+learning_obligations:
+  - "Record whether the promotion path actually prevented package content from reaching a grant field, or merely relocated the obligation. That is the load-bearing claim, and the producer has been wrong about exactly this class of claim five times."
+  - "Record how much of the 12-work-package horizontal plan turned out to be necessary once one skill actually worked."
+
+status: "WITHDRAWN - DO NOT AUTHORIZE"
+version: "1.0.0-candidate"
+signatures:
+  gov_authorization: "PENDING"
+  gov_pilot_decision_signature: "PENDING"
+  sec_registry_gate_clearance: "PENDING"
+  rev_acceptance: "PENDING"
+  qa_acceptance: "PENDING"
+reason_codes:
+  - "Delivers GATE-SK-07's core: one skill published from accepted evidence through human promotion"
+  - "Supersedes the contract-first sequencing in PRD section 15"
+  - "Opens the DEF-A8 registry gate under SEC clearance"

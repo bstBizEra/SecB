@@ -1,0 +1,185 @@
+# =============================================================================
+# SecB × Ruflo Swarm Agent Configuration
+# =============================================================================
+# Adapted from Ruflo v3.32.9 for SecB Governed Control Plane.
+# Place in .agents/config.toml or .codex/config.toml
+# =============================================================================
+
+# =============================================================================
+# Core Settings
+# =============================================================================
+
+# Model selection - the AI model to use for code generation
+model = "claude-sonnet-4-6"
+
+# Approval policy - governed by SecB AuthorityEngine (A0..A5)
+approval_policy = "on-request"
+
+# Sandbox mode controls file system access (isolated worktrees governed by SecB)
+sandbox_mode = "workspace-write"
+
+# Web search
+web_search = "cached"
+
+# =============================================================================
+# Project Documentation
+# =============================================================================
+
+project_doc_max_bytes = 65536
+project_doc_fallback_filenames = [
+  "AGENTS.md",
+  "TEAM_GUIDE.md",
+  ".agents.md"
+]
+
+# =============================================================================
+# Features
+# =============================================================================
+
+[features]
+child_agents_md = true
+shell_snapshot = true
+request_rule = true
+remote_compaction = true
+
+# =============================================================================
+# MCP Servers (SecB Control Plane + Ruflo Swarm Executor)
+# =============================================================================
+
+[mcp_servers.secb]
+command = "node"
+args = ["src/mcp/secb-mcp-server.mjs"]
+enabled = true
+tool_timeout_sec = 120
+
+[mcp_servers.claude-flow]
+command = "npx"
+args = ["-y", "@claude-flow/cli@latest"]
+enabled = true
+tool_timeout_sec = 120
+
+[mcp_servers.graphify]
+command = "python"
+args = ["-m", "graphify.serve", "graphify-out/graph.json"]
+enabled = true
+tool_timeout_sec = 120
+
+
+# =============================================================================
+# Profiles
+# =============================================================================
+
+[profiles.dev]
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+web_search = "live"
+
+[profiles.safe]
+approval_policy = "untrusted"
+sandbox_mode = "read-only"
+web_search = "disabled"
+
+[profiles.ci]
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+web_search = "cached"
+
+# =============================================================================
+# History & Shell
+# =============================================================================
+
+[history]
+persistence = "save-all"
+
+[shell_environment_policy]
+inherit = "core"
+exclude = ["*_KEY", "*_SECRET", "*_TOKEN", "*_PASSWORD"]
+
+# =============================================================================
+# Security Settings (SecB Governed Boundaries)
+# =============================================================================
+
+[security]
+input_validation = true
+path_traversal_prevention = true
+secret_scanning = true
+cve_scanning = true
+max_file_size = 10485760
+blocked_patterns = ["\\.env$", "credentials\\.json$", "\\.pem$", "\\.key$"]
+
+# =============================================================================
+# Performance Settings
+# =============================================================================
+
+[performance]
+max_agents = 8
+task_timeout = 300
+memory_limit = "512MB"
+cache_enabled = true
+cache_ttl = 3600
+parallel_execution = true
+
+# =============================================================================
+# Logging Settings
+# =============================================================================
+
+[logging]
+level = "info"
+format = "pretty"
+destination = "stdout"
+
+# =============================================================================
+# Neural Intelligence & AgentDB Memory
+# =============================================================================
+
+[neural]
+sona_enabled = true
+hnsw_enabled = true
+hnsw_m = 16
+hnsw_ef_construction = 200
+hnsw_ef_search = 100
+pattern_learning = true
+learning_rate = 0.01
+
+# =============================================================================
+# Swarm Orchestration Settings
+# =============================================================================
+
+[swarm]
+default_topology = "hierarchical"
+default_strategy = "specialized"
+consensus = "raft"
+anti_drift = true
+checkpoint_interval = 10
+
+# =============================================================================
+# Hooks Configuration (Connected to SecB Event Normalizer)
+# =============================================================================
+
+[hooks]
+enabled = true
+pre_task = true
+post_task = true
+train_on_edit = true
+
+# =============================================================================
+# Background Workers
+# =============================================================================
+
+[workers]
+enabled = true
+
+[workers.audit]
+enabled = true
+priority = "critical"
+interval = 300
+
+[workers.optimize]
+enabled = true
+priority = "high"
+interval = 600
+
+[workers.consolidate]
+enabled = true
+priority = "low"
+interval = 1800

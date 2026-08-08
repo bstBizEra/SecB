@@ -23,10 +23,20 @@ export function serveStdio(server, { callerInstanceId, input = process.stdin, ou
       write({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
       return;
     }
+    // handle() is synchronous for the governed core and asynchronous for the
+    // upstream proxy that wraps it. Awaiting a non-promise is a no-op, so the
+    // core's ordering is unchanged: it still resolves in the same microtask.
     try {
-      write(server.handle(message, { callerInstanceId }));
-    } catch (error) {
-      write({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32603, message: `Internal error: ${error.message}` } });
+      const answer = server.handle(message, { callerInstanceId });
+      if (answer && typeof answer.then === "function") {
+        answer.then(write, () => {
+          write({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32603, message: "Internal error", data: { code: "DENY_INTERNAL_ERROR" } } });
+        });
+      } else {
+        write(answer);
+      }
+    } catch {
+      write({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32603, message: "Internal error", data: { code: "DENY_INTERNAL_ERROR" } } });
     }
   });
   return rl;

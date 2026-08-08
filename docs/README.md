@@ -41,6 +41,11 @@ Where both packs cover a topic, the operating-model document is the intended suc
 - [Work package lifecycle](12-execution/05-work-package-lifecycle.md)
 - [Parallel execution](12-execution/06-parallel-execution.md)
 - [Context and handoff](12-execution/07-context-and-handoff.md)
+- [bOPEN Engineering Loop](12-execution/08-bopen-engineering-loop.md)
+- [Engineering Loop Specification](12-execution/ENGINEERING-LOOP.md)
+- [Panel review and rubric](12-execution/09-panel-review-and-rubric.md)
+- [Inner-loop efficiency](12-execution/10-inner-loop-efficiency.md)
+- [Agent capability baseline](12-execution/11-agent-capability-baseline.md)
 
 ### 13 — Skills
 
@@ -92,6 +97,10 @@ Where both packs cover a topic, the operating-model document is the intended suc
 - [Project contract](03-project-control/project-contract.md)
 - [Work package contract](03-project-control/work-package-contract.md)
 - [Self-pilot](03-project-control/self-pilot.md)
+- [Agent Registry, MCP Gateway, CLI and Live Operations PRD](03-project-control/candidates/secb-agent-registry-mcp-gateway-prd-001.md) *(DRAFT / NOT EFFECTIVE)*
+- [SkillsHub intake, evaluation, promotion and distribution PRD](03-project-control/candidates/secb-skillshub-prd-001.md) *(DRAFT / NOT EFFECTIVE / DEFECT-REGISTERED — current-state discovery, not a settled requirements candidate)*
+- [SkillsHub PRD open defect register](03-project-control/candidates/skillshub-prd-defect-register-001.md) *(DRAFT / NOT EFFECTIVE / OPEN)*
+- [SkillsHub DEF-C3 SEC decision request](03-project-control/candidates/skillshub-def-c3-sec-decision-001.md) *(DRAFT / AWAITING SEC RULING)*
 - Candidates and effective records: [`03-project-control/`](03-project-control/)
 
 ### 04 — Assurance
@@ -140,6 +149,12 @@ Legacy 0001/0002 each have two files (pre-existing duplication, retained unchang
 - [ADR-0005: Failure is a learning transition](adr/0005-failure-is-a-learning-transition.md) *(v0.1)*
 - [ADR-0006: Harness-neutral authority](adr/0006-harness-neutral-authority.md) *(v0.1)*
 - [ADR-0007: Serialized integration](adr/0007-serialized-integration.md) *(v0.1)*
+- [ADR-0008: Root AGENTS adoption](adr/0008-root-agents-adoption.md) *(PROPOSED / NOT DECIDED)*
+- [ADR-0009: MCP upstream fronting](adr/0009-mcp-upstream-fronting.md) *(PROPOSED / NOT DECIDED)*
+- [ADR-0010: Canonical five-layer registry persistence](adr/0010-canonical-five-layer-registry-persistence.md) *(PROPOSED / NOT DECIDED)*
+- [ADR-0011: Single MCP invocation enforcement pipeline](adr/0011-single-mcp-invocation-enforcement-pipeline.md) *(PROPOSED / NOT DECIDED)*
+- [ADR-0012: Authenticated local stdio-to-IPC bridge](adr/0012-authenticated-local-stdio-ipc-bridge.md) *(PROPOSED / NOT DECIDED)*
+- [ADR-0013: Skill manifest convergence by trust tier](adr/0013-skill-manifest-trust-tier-split.md) *(ACCEPTED — DRAFT / NOT EFFECTIVE)*
 
 ## Operating model docs at docs root
 

@@ -25,6 +25,10 @@
 20. IMPROVE — update goals, controls, tools and workflows
 ```
 
+## Inner Engineering Loop Binding
+
+Steps 10-12 (EXECUTE, SELF-VERIFY, REVIEW) operate under the **[bOPEN Engineering Loop (BOPEN-ENG-LOOP-001)](08-bopen-engineering-loop.md)** state machine (`GOAL` ➔ `PLAN` ➔ `ACT` ➔ `VERIFY` ➔ `V == Spec ? DONE : PLAN`) with Evidence-Based Independent Verification (`BOPEN-GOV-EBIV-001`).
+
 ## Loop invariants
 
 - Every state has an accountable owner.
@@ -33,3 +37,4 @@
 - Every failure has a learning disposition.
 - Every completion has an outcome receipt.
 - Every promoted skill has evaluation and revocation controls.
+

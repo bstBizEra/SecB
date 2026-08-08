@@ -1,0 +1,207 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_sk_r1_decision_subject_binding_v1_candidate"
+  record_status: "AUTHORIZED"
+  authorized_by: "Operator (BizEra), 2026-08-03"
+  authorization_note: >-
+    Given in session. The producer flagged that a contract change approved in one
+    word, transcribed by the agent into its own work package, is the pattern this
+    project's controls exist to catch, and asked for confirmation. The operator
+    reaffirmed. Recorded that way - flagged, reaffirmed, proceeded - rather than
+    as a clean signature, because the sequence is the part a later reader needs.
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer is also the assigned ENGIN and may not accept its own evidence."
+    - "The producer is the party that benefits from SkillsHub being switched on, and therefore has a stake in this defect being closed. The design below is ARCHI's from an independent analysis earlier in this session, not the producer's preference."
+
+work_package_id: "WP-SK-R1"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-SKILL"
+title: "Bind a governance decision to what it authorizes (DEF-R1)"
+
+objective: >-
+  Make a promotion decision name the skill and version it promotes, so that one
+  decision stops being a master key for every skill registered after it.
+
+problem_statement: >-
+  DEF-R1, reproduced by running and recorded at
+  docs/04-assurance/skillshub-walking-skeleton-001.md.
+
+  contracts/decision-record.schema.json carries 15 properties and none of them
+  can name a skill, a scope, a runtime or a data class. SkillResolver's
+  resolvedDecision projection reads only `id` and `type`, and its two check sites
+  compare the ledger's answer against the CALLER'S OWN CLAIM - which detects a
+  miswired lookup, not an unauthorized skill.
+
+  Measured, not argued. Against one legitimately-minted HUMAN_PROMOTION:
+
+    the skill it was minted for              -> ALLOW
+    a completely unrelated skill             -> ALLOW
+    a manifest that widened its own scope to
+    three projects and raised its own class
+    to RESTRICTED                            -> ALLOW
+
+  The chain is otherwise sound: evidence that does not resolve is refused
+  DENY_UNVERIFIED_EVIDENCE, and a decision that does not resolve is refused
+  DENY_UNAPPROVED_PUBLICATION. What is missing is not the requirement for a
+  decision - it is any requirement that the decision name what it authorizes.
+
+  This blocks the only remaining route to a non-zero SkillsHub on this branch.
+  Every other gate is passable with the actors this project has; none of the
+  three - appendEvidence, appendDecision, registerSkill - requires separation of
+  duties here. Wiring it today would switch on the capability and the master key
+  in the same commit.
+
+risk_class: "R3"
+mutation_class: "M3"
+status: "AUTHORIZED"
+
+baseline:
+  target_branch: "feat/secb-ruflo-command-center"
+  baseline_commit: "a53c0e6"
+  contract_state: "decision-record.schema.json: 15 properties, 14 required"
+  guards: >-
+    This branch carries NO byte-identity guard pinning tools/validate-foundation.mjs -
+    verified, zero test files pin it here. main does, in seven files, which is why
+    the same change there needed WP-GOV-VF1. That does not apply on this branch.
+
+design: >-
+  From the independent ARCHI options analysis earlier in this session, which
+  compared four mechanisms and probed the weakest one to destruction.
+
+  Add a typed `subject` to contracts/decision-record.schema.json. OPTIONAL at the
+  schema level so no existing decision record is invalidated; MANDATORY at the
+  resolver, which denies when it is absent.
+
+  That asymmetry is the whole design. Ajv is not the gate - the resolver is. A
+  pre-existing decision stays perfectly valid for its own purpose and simply
+  becomes unable to promote a skill. A per-decision_type conditional-required
+  would NOT achieve this, because GOVERNANCE is used for far more than skill
+  promotion and it would break unrelated records.
+
+  Shape:
+
+    subject:
+      kind:    SKILL_VERSION | WORK_PACKAGE | PROJECT_CONTRACT | ...
+      id:      the object identifier
+      version: required when kind is SKILL_VERSION
+      grant:   project_scopes, supported_runtimes, max_data_classification
+
+  `version` is required for SKILL_VERSION because registerSkill keys on
+  skill_id@version and rejects duplicates: without it, an attacker registering a
+  widened 0.1.0 BEFORE the legitimate one simply wins.
+
+  `grant` is inline and readable rather than a constraint digest. The digest
+  variant was probed and works, but it costs a canonicalization spec that must be
+  implemented identically at mint and check time, makes a mismatch
+  undiagnosable, and asks the operator to sign an opaque hash on this
+  programme's first promotion.
+
+rejected_alternative: >-
+  Narrowing with the EXISTING project_id / work_package_id fields was probed and
+  REJECTED, and the rejection should be explicit rather than banked as partial
+  credit.
+
+  It catches exactly one case: a manifest scoped to a project set that EXCLUDES
+  its own authorizing decision's project. No attacker constructs that - scope
+  widening is strictly additive, and `includes()` is satisfied by a superset. The
+  one case it catches is a misconfiguration.
+
+  Its danger is not that it fails. It is that it looks like a closure, and the
+  register would then carry DEF-R1 as mitigated. A closure claim a probe
+  falsifies is worse than an open defect, because the open defect stays in view.
+
+scope:
+  - "contracts/decision-record.schema.json - add `subject` to properties, NOT to required."
+  - "src/registry/skill-resolver.mjs - widen the resolvedDecision projection (it is the choke point; both check sites read through it) and compare subject against the registered manifest at both. New deny codes DENY_UNBOUND_SUBJECT and DENY_SUBJECT_MISMATCH."
+  - "tools/validate-foundation.mjs - update the exact-set PROPERTY pin for decision-record. The pin will fail the moment `subject` is added, which is the pin doing its job; updating it is a deliberate one-line act, not a workaround."
+  - "src/skills/skills-hub-service.mjs - add the two new deny codes to DENY_CODES so they keep their type through the withheld tally rather than bucketing as DENY_UNRESOLVED."
+  - "tests - both arms for every case."
+  - "Fixtures: a valid decision-record carrying a subject, and invalid ones."
+
+non_scope:
+  - "NO wiring. Both production lookups stay decisionLookup: () => null. This package closes the defect; switching SkillsHub on is a separate decision with its own evidence."
+  - "DEF-R4 - OutcomeLedger.appendOutcome has the identical unbound shape, comparing a decision id against the caller's own claim while both contracts require project_id and work_package_id and nothing compares them. It is NOT skill-scoped and needs its own item. Named here so closing DEF-R1 is not mistaken for closing the class."
+  - "NO adoption of main's skill-promotion mechanism. It closes DEF-R1 structurally and better, and it needs a REV, which the operator ruled fail-closed on 2026-08-03. That route stays available and is not foreclosed by this one - when the resolver later migrates onto a grant record, this comparison re-points at its fields. The check moves; the shape survives."
+  - "NO change to appendDecision. It gains no separation-of-duties gate here."
+
+acceptance_criteria:
+  - id: "AC-R1-01"
+    statement: "A decision carrying a matching subject still promotes its skill."
+    verification: "The positive arm. resolveSkill returns ALLOW for the skill the decision names. A fail-closed change can always be made to pass by denying everything; this is what makes the negative arms mean anything."
+  - id: "AC-R1-02"
+    statement: "THE THREE CASES FROM THE WALKING SKELETON NOW DENY."
+    verification: >-
+      Re-run docs/04-assurance/skillshub-walking-skeleton-001.md's reproduction
+      unchanged except for the subject. An unrelated skill, and a manifest that
+      widened its own project_scopes or raised its own max_data_classification,
+      must return DENY_SUBJECT_MISMATCH where they returned ALLOW. Record both
+      the before and after codes; the before is already published.
+  - id: "AC-R1-03"
+    statement: "A decision with NO subject cannot promote a skill, and remains valid for every other purpose."
+    verification: >-
+      DENY_UNBOUND_SUBJECT at the resolver, AND the same record still passes
+      validateContract('decisionRecord', ...). Both assertions, because the first
+      without the second would mean the schema change had broken existing
+      records.
+  - id: "AC-R1-04"
+    statement: "No existing decision record is invalidated."
+    verification: "Every fixture under tests/fixtures/valid/ that is a decision record still validates, unchanged. Expected count of invalidated records: zero."
+  - id: "AC-R1-05"
+    statement: "The exact-set property pin catches the new field."
+    verification: >-
+      Before updating it, confirm `npm run validate` exits 1 with
+      schema.properties.exact.contracts/decision-record.schema.json. Then update
+      the pin and confirm exit 0. The failure is evidence the pin works; skipping
+      that observation wastes the only free proof this change offers.
+  - id: "AC-R1-06"
+    statement: "The new deny codes keep their type through the hub's withheld tally."
+    verification: "DENY_SUBJECT_MISMATCH and DENY_UNBOUND_SUBJECT appear in withheld_reasons under their own names, and a genuinely unknown code still buckets as DENY_UNRESOLVED - the control that proves the allow-list is still working."
+  - id: "AC-R1-07"
+    statement: "Every check is shown failing when it should."
+    verification: "Sabotage matrix with raw exit codes, plus a control run proving the new assertions are what catch each mutation. Validation is claimed by exit code, never by grepping output for a status string."
+
+roles:
+  ENGIN: "unassigned — the producer prepared this and may not accept its own evidence"
+  REV: "unassigned — must not be the producer"
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted. subject is an authorization-bearing field on the most central contract in the tree."
+  GOV: "authorizes. This is a contract change on decision-record, R3."
+
+allowed_paths:
+  - "contracts/decision-record.schema.json"
+  - "src/registry/skill-resolver.mjs"
+  - "src/skills/skills-hub-service.mjs"
+  - "tools/validate-foundation.mjs"
+  - "tests/skill-decision-subject*.test.mjs"
+  - "tests/fixtures/valid/decision-record-with-subject.json"
+  - "tests/fixtures/invalid/decision-record-subject-*.json"
+
+prohibited_paths:
+  - "tools/secb-mcp-server-wiring.mjs"
+  - "tools/secb-skills.mjs"
+  - "src/ledger/**"
+  - "src/mcp/**"
+  - ".agents/**"
+  - "MANIFEST.json"
+
+evidence_obligations:
+  - "The AC-R1-02 before/after table against the published walking-skeleton codes."
+  - "The AC-R1-05 two-step: validate exit 1 before the pin update, exit 0 after."
+  - "The AC-R1-07 sabotage matrix with its control column."
+  - "A count of decision records invalidated. Expected: zero. Any other number stops the work."
+
+valid_until: "2026-11-03T00:00:00Z"
+
+authority_note: >-
+  This is a change to contracts/decision-record.schema.json, which nearly every
+  governed act in this tree flows through. It is R3 and it is a GOV decision, not
+  a producer one.
+
+  What makes it small is the asymmetry: optional in the schema, mandatory at the
+  consumer. Zero existing records break; every decision minted from now on either
+  says what it authorizes or authorizes no skill. What makes it worth doing is
+  that the alternative was measured - one decision, three ALLOWs, two of which
+  should not have been.

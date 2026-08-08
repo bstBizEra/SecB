@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/local-bridge-frame.schema.json",
+  "title": "SecB Local Bridge Frame Header",
+  "description": "Algorithm-neutral metadata for one length-bounded candidate local-bridge frame. Payload transport and parsing are outside this inert contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "frame_id",
+    "connection_id",
+    "session_id",
+    "request_id",
+    "message_type",
+    "sequence",
+    "trace_id",
+    "protocol_version",
+    "declared_payload_bytes"
+  ],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "frame_id": {
+      "type": "string",
+      "pattern": "^brfrm_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "connection_id": {
+      "type": "string",
+      "pattern": "^brconn_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^brsess_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "request_id": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "message_type": {
+      "enum": [
+        "INITIALIZE",
+        "REQUEST",
+        "RESPONSE",
+        "CANCEL",
+        "EOF",
+        "ERROR",
+        "HEARTBEAT"
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^trace_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "protocol_version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,5}$"
+    },
+    "declared_payload_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1048576
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "enum": ["INITIALIZE", "REQUEST", "RESPONSE", "CANCEL"]
+          }
+        },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "message_type": {
+            "enum": ["EOF", "HEARTBEAT"]
+          }
+        },
+        "required": ["message_type"]
+      },
+      "then": {
+        "properties": {
+          "request_id": { "type": "null" },
+          "declared_payload_bytes": { "const": 0 }
+        }
+      }
+    }
+  ]
+}

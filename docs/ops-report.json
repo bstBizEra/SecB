@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>SecB Ops Report</title>
+<style>body{font-family:system-ui,sans-serif;margin:24px;color:#1b2530}table{border-collapse:collapse;width:100%}
+td,th{border:1px solid #ccd;padding:4px 8px;font-size:13px;text-align:left}code{font-family:ui-monospace,monospace;font-size:12px}
+.banner{background:#eef2f5;border:1px solid #ccd;padding:10px 14px;margin-bottom:18px}
+.withheld{color:#8a6d1a;font-style:italic}.fail{background:#fbeaea;border:1px solid #d99;padding:12px}</style>
+</head><body><div class="banner"><b>SecB Live Operations Report</b> · snapshot only — re-verify head hash before acting<br>
+generated 2026-07-26T16:45:01.570Z · ceiling <b>INTERNAL</b> (report handles as INTERNAL) ·
+events 0 @ <code>0000000000000000000000000000000000000000000000000000000000000000</code> ·
+evidence 0 @ <code>0000000000000000000000000000000000000000000000000000000000000000</code></div><h2>Events (0)</h2><table><tr><th>#</th><th>id</th><th>type</th><th>actor</th><th>recorded at (ledger claim)</th><th>class</th><th>payload</th><th>content hash</th></tr></table>
+<h2>Evidence (0)</h2><table><tr><th>#</th><th>id</th><th>type</th><th>actor</th><th>recorded at (ledger claim)</th><th>class</th><th>payload</th><th>content hash</th></tr></table>
+<p><small>This report is not evidence and never asks for credentials. "Verified" attests internal chain consistency, not provenance. Re-verify the head hash against the ledger before acting.</small></p>
+</body></html>

@@ -1,0 +1,196 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_wp_gov_vf1_rev_round2_001_v1_candidate"
+  record_status: "WITHDRAWN"
+  withdrawn_at: "2026-08-04"
+  withdrawn_by: "Producer (Claude Code), on operator instruction to cut what is not necessary"
+  withdrawal_reason: >-
+    This packet asks an independent reviewer for a full round to correct comment
+    text that the same reviewer rated LOW, on a commit measured to change no
+    executable logic and no pinned hash. Nine of ten open pull requests are
+    already stale under the frozen-SHA rule; spending a tenth round here spends
+    reviewer attention where it is worth least.
+
+    The packet is left intact below rather than deleted, because its embedded
+    proof is the evidence that withdrawing is safe. Withdrawing the round does
+    NOT close REV-VF1-N02. The guards still carry provenance text naming the
+    wrong work package. The finding stays open in
+    wp-gov-vf1-rev-verdict-001.md, and the fix stays available at 7a975f0 on
+    fix/validate-foundation-exact-pins for whoever next has an authorized reason
+    to touch those seven files.
+  superseded_note: >-
+    PR #136 is closed. PR #137 carries the reviewed commit 5d97c4cb exactly.
+  source_template: "docs/templates/handoff-envelope.yaml"
+  source: >-
+    Producer-initiated, 2026-08-04. Round 2 exists because the producer pushed a
+    commit AFTER the round-1 verdict. REV's own condition in
+    WP-GOV-VF1-REV-001 reads: the target SHA stays frozen and any later commit
+    needs a new round. This packet is that round, requested by the party that
+    caused the need for it.
+  producer_runtime: "Claude Code"
+  limitations:
+    - "Producer (Claude Code) authored both the round-1 change and this correction, and may not review either."
+    - "This packet asks for review of ONE commit. It does not re-open round 1 and does not ask REV to revisit any round-1 finding."
+
+handoff:
+  handoff_id: "HANDOFF-WP-GOV-VF1-REV-002"
+  sequence: 2
+  predecessor: "HANDOFF-WP-GOV-VF1-REV-001"
+  source_agent_instance_id: "claude-code-secb-session-2026-08-03"
+  source_session_id: "bfb2c907-d860-4d79-a475-042b1ebdf7ee"
+  destination_role: "REV (Codex identity per docs/03-project-control/candidates/agents/, distinct from producer)"
+  project_id: "prj_secb_local"
+  work_package_id: "WP-GOV-VF1"
+
+  objective: >-
+    Review a single commit, 7a975f0, which corrects the provenance text REV
+    itself raised as REV-VF1-N02. It is a text-only change to the seven
+    byte-identity guards.
+
+  why_this_is_separate: >-
+    Round 1 approved 5d97c4cb. The producer then pushed 7a975f0 to the same
+    branch, which silently moved PR #136 off the approved target. That is the
+    thing REV's frozen-SHA condition exists to prevent, and the producer walked
+    into it.
+
+    Rather than ask REV to bless a moved target, the approved commit was pushed
+    to its own branch and opened as PR #137, which is 5d97c4cb exactly. PR #136
+    remains open carrying 7a975f0 and is the subject of this packet.
+
+  authorized_scope:
+    - "Exactly one commit: 7a975f0 relative to 5d97c4cb66547b08fcc811cae08aae8a6c905f50."
+    - "7 files, +18/-18. All seven are the guard test files; no source file, contract, or tool is touched."
+    - "Read-only review. Findings as records."
+
+  the_change: >-
+    Round 1's re-pin left the guards' comments claiming the pinned blob was the
+    post-MOD-MEM-S2 blob. It is not - it is the post-WP-GOV-VF1 blob. Three of
+    the seven also carried a spliced comment fragment where a sentence had been
+    cut mid-line: "closing DEF-M2). // blob so any UNAUTHORIZED further drift".
+
+    7a975f0 corrects the provenance name in the comments and in the assertion
+    message strings, and repairs the three spliced fragments. Ten of the
+    eighteen changed lines are assertion MESSAGES - the string passed as the
+    second argument to assert - not assertion logic.
+
+  producer_evidence: >-
+    The producer's claim is that this commit changes no executable logic and no
+    pinned hash. That claim was not asserted; it was measured, and the
+    measurement carries its own controls.
+
+    Method: strip every comment and every string literal from both revisions of
+    all seven files and compare what remains. A pinned hash IS a string literal
+    and would be stripped, so hashes are additionally extracted and compared
+    unstripped.
+
+    Result:
+
+      files whose stripped logic differs : 0
+      files whose pinned hashes differ   : 0
+      control - stripper detects a logic change : FIRES
+      control - hash extractor detects a change : FIRES
+      exit 0
+
+    Both controls are load-bearing. Without them the two zeros are equally
+    consistent with "nothing changed" and "the comparison is dead".
+
+    Coverage was checked rather than assumed: the set of files the commit
+    touches and the set the proof covers were compared, and the count of files
+    the commit touches but the proof does not is zero.
+
+    The script is not committed. It is reproduced in full below so REV can run
+    it without trusting this record.
+
+  script: |
+    import { execFileSync } from "node:child_process";
+    const FILES = ["cadence-policy","event-family-policy","kpi-registry","overlap-policy",
+                   "replay-assembler","scorecard-assembler","write-set-policy"]
+      .map((n) => "tests/" + n + ".test.mjs");
+    const show = (rev, f) => execFileSync("git", ["show", rev + ":" + f], { encoding: "utf8" });
+    const BLOCK = new RegExp("/\\*[\\s\\S]*?\\*/", "g");
+    const LINE  = new RegExp("//[^\\n]*", "g");
+    const DQ    = new RegExp('"(?:[^"\\\\\\n]|\\\\.)*"', "g");
+    const SQ    = new RegExp("'(?:[^'\\\\\\n]|\\\\.)*'", "g");
+    const TPL   = new RegExp("`(?:[^`\\\\]|\\\\.)*`", "g");
+    const WS    = new RegExp("\\s+", "g");
+    const SHA1  = new RegExp("\\b[0-9a-f]{40}\\b", "g");
+    const strip = (s) => s.replace(BLOCK,"").replace(LINE,"").replace(TPL,"T")
+                          .replace(DQ,"S").replace(SQ,"S").replace(WS," ").trim();
+    const hashes = (s) => (s.match(SHA1) || []).sort().join(",");
+    let logicDiff = 0, hashDiff = 0;
+    for (const f of FILES) {
+      const a = show("5d97c4cb", f), b = show("7a975f0", f);
+      if (strip(a) !== strip(b)) logicDiff += 1;
+      if (hashes(a) !== hashes(b)) hashDiff += 1;
+    }
+    const ctlLogic = strip("const a = 1;") !== strip("const a = 2;");
+    const ctlHash  = hashes("x " + "a".repeat(40)) !== hashes("x " + "b".repeat(40));
+    console.log({ logicDiff, hashDiff, ctlLogic, ctlHash });
+    process.exit(logicDiff === 0 && hashDiff === 0 && ctlLogic && ctlHash ? 0 : 1);
+
+  checks:
+    - "Run the script above. Expect logicDiff 0, hashDiff 0, both controls FIRES, exit 0."
+    - "git diff --name-only 5d97c4cb 7a975f0   # expect exactly the seven guard files"
+    - "node --test on the seven guard files at 7a975f0   # expect 7/7 pass"
+    - "AC-VF1-06 need NOT be re-run. It is a claim about the validator blob, and that blob is byte-identical across these two commits - verified: 1cf857089d483f133f6d5fb724319e60bea961f8 at both. If REV disagrees that this inference is sound, re-running it is the right call."
+
+  what_the_producer_is_least_sure_of:
+    - >-
+      THE PRODUCER MISREPORTED THIS COMMIT ONCE ALREADY. Its commit message
+      claims a comment-only diff. Ten of the eighteen lines are assertion
+      message strings, which are not comments. The producer read the commit
+      output instead of its own control's output. The correction was made by PR
+      comment rather than by force-pushing a branch under review. A reviewer
+      should treat the commit message as unreliable and the proof above as the
+      claim actually being made.
+    - >-
+      The stripper is a REGEX, not a parser. It is sound for these files, whose
+      strings contain no comment-like sequences and whose comments contain no
+      unbalanced quotes, but it is not sound in general. If REV prefers, the
+      same conclusion follows from reading eighteen lines by eye - the diff is
+      small enough that the mechanical proof is a convenience, not a necessity.
+    - >-
+      REV-VF1-N01 IS NOT FIXED BY THIS COMMIT AND IS NOT MEANT TO BE. The
+      comment claiming the maintenance cost is "one line per deliberate contract
+      change" still stands in tools/validate-foundation.mjs, understating the
+      real cost by a factor of eight. Correcting it changes that file's blob and
+      invalidates all seven pins, forcing a third authorized re-pin round for
+      one sentence. The accurate figure lives in the WP-GOV-VF1 record. Whether
+      that trade is acceptable is a judgement, and it is REV's or the
+      operator's, not the producer's.
+
+  risks:
+    - >-
+      LOW BY CONTENT, NOT BY PROCESS. The diff is text. The reason it needs a
+      round at all is that the producer moved a frozen target, and reviewing it
+      is what keeps that from becoming a precedent where a producer can amend an
+      approved PR as long as the change looks harmless.
+    - >-
+      If REV approves this, PR #136 and PR #137 both become mergeable and they
+      overlap. Landing #137 first makes #136 reduce to just this commit; landing
+      #136 first makes #137 empty. The order is the operator's to choose and
+      should be recorded, not left to whichever is clicked first.
+
+  recommended_next_action: >-
+    Run the script rather than reading its recorded output, confirm the file set,
+    and return a verdict as a record.
+
+    If APPROVE: say explicitly which PR the operator should land first, because
+    the producer has an interest in that answer and should not be the one giving
+    it.
+
+    If REJECT: the correction can be abandoned entirely at no cost. PR #137
+    carries the approved change without it, and the wrong provenance text
+    remains a recorded finding rather than a silent one.
+
+  context_delta: >-
+    Discovered while preparing this packet and outside its scope, reported
+    because a reviewer looking at the queue will see it: EIGHT other pull
+    requests are open, numbered 60 through 110, aged 13 to 14 days, totalling
+    roughly 5,700 added lines, and GitHub records NO REVIEW on any of them.
+
+    GitHub also records no review on #136, because the round-1 verdict was
+    returned as a record in this repository and never as a GitHub review. So the
+    absence of a GitHub review is not by itself evidence that a PR is unreviewed.
+    Whether those eight are genuinely unreviewed is a question for the operator,
+    not a finding.

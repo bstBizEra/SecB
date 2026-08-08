@@ -434,24 +434,34 @@ test(`byte-identity: files read but not modified are unchanged vs main @ ${BASE_
   const guarded = [
     DOC_REL,                              // doctrine source of the catalog
     "src/control/risk-registry.mjs",      // house registry pattern consulted
-    "tests/risk-registry.test.mjs",       // doc-parity test pattern consulted
-    "package.json"                        // scripts consulted
+    "tests/risk-registry.test.mjs"        // doc-parity test pattern consulted
   ];
   for (const rel of guarded) {
     const baseBlob = execFileSync("git", ["rev-parse", `${BASE_COMMIT}:${rel}`], { cwd: root, encoding: "utf8" }).trim();
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, baseBlob, `${rel} blob differs from base`);
   }
+  // package.json was authorized-modified by cbe93cb (secb-graph CLI), 31ddfef
+  // (skills hub), fe64aac (MCP upstream tooling) and c4025c5 (secb dispatcher
+  // bin + script), so it is no longer blob-identical to the base commit. Pinned
+  // rather than dropped: an unauthorized script or bin entry still fails here.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "package.json")], { cwd: root, encoding: "utf8" }).trim(),
+    "fc108a6b46be8007a8a2ae3e1371be4155e82510",
+    "package.json pinned to its post-c4025c5 blob"
+  );
   // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
   // workspace-lease schema registration, 16->17 schemas), then again by
-  // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), so it is
-  // no longer blob-identical to the base commit. Pin it to its post-MOD-MEM-S2
-  // blob so any UNAUTHORIZED further drift of the validator still fails this
-  // guard.
+  // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), then by
+  // this branch: c4025c5 (reverse manifest-completeness check over the four
+  // AMD-002 paths) and 61940ac (expectedSchemas reconciled to the union of both
+  // merge parents, 35 contracts; all three pin maps extended to match). Pinned
+  // to its post-61940ac blob so any UNAUTHORIZED further drift of the validator
+  // still fails this guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "dbd4d10883e7724aa75301fc7f3b5c9528089726",
-    "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
+    "7bc1c5ef89551520413be1c15e5bbcaa93389f7e",
+    "validate-foundation.mjs pinned to its post-61940ac blob"
   );
   // Sanity: the guarded doctrine doc still contains a KPI this suite pins, so
   // the guard is protecting the right file.

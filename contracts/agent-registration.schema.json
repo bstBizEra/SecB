@@ -23,6 +23,18 @@
     "provider_id": { "type": "string", "minLength": 1 },
     "runtime_product_id": { "type": "string", "minLength": 1 },
     "runtime_deployment_id": { "type": "string", "minLength": 1 },
+    "runtime_provider_plugin_id": {
+      "type": "string",
+      "pattern": "^runtime-provider-[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "runtime_provider_plugin_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "runtime_provider_plugin_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
     "agent_profile_id": { "type": "string", "minLength": 1 },
     "agent_instance_id": { "type": "string", "minLength": 1 },
     "runtime_version": { "type": "string", "minLength": 1 },
@@ -58,6 +70,11 @@
       "items": { "type": "string", "minLength": 1 },
       "default": []
     },
+    "project_scopes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "default": []
+    },
     "environment_scopes": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },
@@ -83,5 +100,10 @@
     "lifecycle_state": {
       "enum": ["PENDING", "ACTIVE", "DEACTIVATED", "TERMINATED"]
     }
+  },
+  "dependentRequired": {
+    "runtime_provider_plugin_id": ["runtime_provider_plugin_version", "runtime_provider_plugin_fingerprint"],
+    "runtime_provider_plugin_version": ["runtime_provider_plugin_id", "runtime_provider_plugin_fingerprint"],
+    "runtime_provider_plugin_fingerprint": ["runtime_provider_plugin_id", "runtime_provider_plugin_version"]
   }
 }

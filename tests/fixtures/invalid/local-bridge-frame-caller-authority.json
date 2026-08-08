@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "frame_id": "brfrm_alpha_request_001",
+  "connection_id": "brconn_alpha_001",
+  "session_id": "brsess_alpha_001",
+  "request_id": "mcp-request-001",
+  "message_type": "REQUEST",
+  "sequence": 1,
+  "trace_id": "trace_bridge_alpha_001",
+  "protocol_version": "2",
+  "declared_payload_bytes": 256,
+  "effective_agent_instance_id": "caller-selected-agent"
+}

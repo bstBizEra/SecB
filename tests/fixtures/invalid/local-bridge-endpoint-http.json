@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "locator_id": "brloc_http_alpha_001",
+  "service_instance_id": "svc_windows_alpha_001",
+  "authority_domain_id": "authdom_local_alpha_001",
+  "transport": "http",
+  "owner_scope": "CURRENT_USER",
+  "endpoint_name": "http://127.0.0.1:3000/mcp",
+  "service_key_id": "key_service_alpha_001",
+  "service_public_key_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "bridge_protocol_version": "1",
+  "issued_at": "2026-07-31T08:00:00Z",
+  "expires_at": "2026-07-31T08:05:00Z"
+}

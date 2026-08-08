@@ -302,17 +302,36 @@ test("retrieve honestly filters TTL-expired records (computed, not stored, no pr
 
 // --- Wrap-not-modify guard -------------------------------------------------
 
-test("GUARD: temporal-ledgers.mjs and sod-rules.mjs are byte-identical to main (no admission-policy change)", () => {
-  // Normalize platform line-ending translation (git stores LF; the working
-  // tree may check out CRLF) so the guard compares tracked content honestly.
+test("GUARD: temporal-ledgers.mjs and sod-rules.mjs match the reviewed boundary digests", () => {
   const normalize = (text) => text.replace(/\r\n/g, "\n");
-  // src/control/sod-rules.mjs is intentionally EXCLUDED here by
-  // mod-gov-s1-sod-rules-hardening-fix-001: an authorized, disclosed
-  // cross-cutting fix to this shared primitive, not a violation of this
-  // module's own wrap-not-modify discipline.
+  // Mechanism from main: compare against `git show main:<path>` rather than a
+  // hardcoded digest, so the guard cannot go stale the way the old pins did.
+  //
+  // main also EXCLUDED src/control/sod-rules.mjs here, under
+  // mod-gov-s1-sod-rules-hardening-fix-001. That exclusion is not inherited.
+  // It authorizes main's own cross-cutting fix to the primitive; this branch
+  // made a SEPARATE, still-unratified change to the same file at 9d4da11,
+  // which deliberately left this guard red and queued it at f161746. Adopting
+  // main's exclusion would silence the signal for our change while leaving
+  // main's rationale attached to it — the branch would read as mergeable
+  // precisely where it is not.
+  //
+  // temporal-ledgers.mjs is still compared live against main — untouched by
+  // this branch and required to stay that way.
   for (const path of ["src/ledger/temporal-ledgers.mjs"]) {
     const onMain = execFileSync("git", ["show", `main:${path}`], { cwd: REPO_ROOT, encoding: "utf8" });
     const onBranch = readFileSync(resolve(REPO_ROOT, path), "utf8");
-    assert.equal(normalize(onBranch), normalize(onMain), `${path} must be untouched vs main (wrap-not-modify)`);
+    assert.equal(normalize(onBranch), normalize(onMain), `${path} must be untouched vs main (wrap-not-modify, R3+ hard line)`);
   }
+  // sod-rules.mjs can no longer be compared against main: both parents changed
+  // it — main under mod-gov-s1-sod-rules-hardening-fix-001, this branch under
+  // 9d4da11, which closed a self-approval bypass in actor-id comparison.
+  // 9d4da11 refused to re-pin this guard itself ("it needs an owner who is
+  // neither of us"); the operator ratified it on 2026-08-08. Pinned to that
+  // ratified blob so the guard still bites on anything further.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(REPO_ROOT, "src/control/sod-rules.mjs")], { cwd: REPO_ROOT, encoding: "utf8" }).trim(),
+    "0cb83353ac1e8e9dd1c8d3bfd34a4a4d04fb389f",
+    "sod-rules.mjs drifted from its operator-ratified blob"
+  );
 });

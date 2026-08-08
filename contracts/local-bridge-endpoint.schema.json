@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/local-bridge-endpoint.schema.json",
+  "title": "SecB Local Bridge Endpoint Locator",
+  "description": "Non-secret discovery metadata for a candidate current-user-only local SecB IPC endpoint. This contract grants no authority and carries no credential material.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "locator_id",
+    "service_instance_id",
+    "authority_domain_id",
+    "transport",
+    "owner_scope",
+    "endpoint_name",
+    "service_key_id",
+    "service_public_key_fingerprint",
+    "bridge_protocol_version",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "locator_id": {
+      "type": "string",
+      "pattern": "^brloc_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "service_instance_id": {
+      "type": "string",
+      "pattern": "^svc_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "authority_domain_id": {
+      "type": "string",
+      "pattern": "^authdom_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "transport": {
+      "type": "string",
+      "enum": [
+        "windows_named_pipe",
+        "unix_domain_socket"
+      ]
+    },
+    "owner_scope": {
+      "const": "CURRENT_USER"
+    },
+    "endpoint_name": {
+      "type": "string",
+      "description": "Logical name only. The platform adapter derives the pipe/socket path inside its approved current-user namespace.",
+      "pattern": "^secb-[a-f0-9]{32}$"
+    },
+    "service_key_id": {
+      "type": "string",
+      "description": "Public key identifier only; never secret or private key material.",
+      "pattern": "^key_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "service_public_key_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "bridge_protocol_version": {
+      "const": "1"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

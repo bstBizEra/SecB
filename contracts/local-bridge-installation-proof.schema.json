@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/local-bridge-installation-proof.schema.json",
+  "title": "SecB Local Bridge Installation Proof Envelope",
+  "description": "Algorithm-neutral envelope for ephemeral public verifier input bound to one handshake. It contains no private key, reusable credential, authority, or accepted verification result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "proof_id",
+    "purpose",
+    "handshake_id",
+    "harness_installation_id",
+    "runtime_deployment_id",
+    "installation_key_id",
+    "service_instance_id",
+    "service_key_id",
+    "authority_domain_id",
+    "locator_id",
+    "endpoint_binding_id",
+    "client_nonce",
+    "service_nonce",
+    "selected_protocol_version",
+    "proof_profile_id",
+    "proof_material_class",
+    "proof_value",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "proof_id": {
+      "type": "string",
+      "pattern": "^brproof_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "purpose": { "const": "SECB_INSTALLATION_POSSESSION_PROOF" },
+    "handshake_id": {
+      "type": "string",
+      "pattern": "^bhs_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "harness_installation_id": {
+      "type": "string",
+      "pattern": "^inst_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "runtime_deployment_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "installation_key_id": {
+      "type": "string",
+      "pattern": "^key_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "service_instance_id": {
+      "type": "string",
+      "pattern": "^svc_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "service_key_id": {
+      "type": "string",
+      "pattern": "^key_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "authority_domain_id": {
+      "type": "string",
+      "pattern": "^authdom_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "locator_id": {
+      "type": "string",
+      "pattern": "^brloc_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "endpoint_binding_id": {
+      "type": "string",
+      "pattern": "^epbind_[A-Za-z0-9][A-Za-z0-9._-]{15,127}$"
+    },
+    "client_nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43,128}$"
+    },
+    "service_nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43,128}$"
+    },
+    "selected_protocol_version": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,5}$"
+    },
+    "proof_profile_id": {
+      "type": "string",
+      "description": "Opaque identifier for a future SEC-approved proof profile; this schema selects no algorithm.",
+      "pattern": "^proofprofile_[A-Za-z0-9][A-Za-z0-9._-]{7,95}$"
+    },
+    "proof_material_class": {
+      "const": "EPHEMERAL_PUBLIC_VERIFIER_INPUT"
+    },
+    "proof_value": {
+      "type": "string",
+      "description": "Ephemeral public verifier input. Test fixtures are synthetic and no cryptographic interpretation is performed here.",
+      "pattern": "^[A-Za-z0-9_-]{43,512}$"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,104 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_secb_mcp_p4_operator_tooling_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_INDEPENDENT_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Claude ENGIN producer verification, 2026-07-30"
+  producer_runtime: "Claude"
+  producer_actor_id: "claude-engin-secb-mcp-p4-operator-tooling"
+  risk_class: "R2"
+  limitations:
+    - "Producer evidence is not independent REV, QA, SEC, GOV, acceptance, integration, release, or activation authority."
+    - "This record does not assert that the SecB MCP server is conformant or operational; it records what the producer observed."
+    - "No push, merge, promotion, deployment, release, or activation is authorized or performed."
+    - "The MCP hub remains unactivated: no MCP client configuration points at it."
+
+handoff:
+  handoff_id: "HANDOFF-SECB-MCP-P4-OPERATOR-TOOLING-CLAUDE-PRODUCER-VERIFY"
+  source_role: "ENGIN_PRODUCER"
+  destination_role: "INDEPENDENT_REV"
+  branch: "feat/secb-ruflo-command-center"
+  current_main_parent: "e8eb4ec5231dea29ee24a255de5fd6035bc78f91"
+  branch_merge_base: "4fef2f1758cbb0539d6a37e54fef8527c0f8981f"
+  implementation_parent: "1718f2b214f4ff2c8202239d585ae00f87e82e74"
+  implementation_commit: "fe64aacfa9defba3ab6549fd2714ff078f5b8fdb"
+  advisory_decision: "PRODUCER_VERIFY_ONLY_INDEPENDENT_REVIEW_REQUIRED"
+  scope: >-
+    Phase 4 operator tooling for the SecB MCP server, replacing the two
+    bizera-win-mcp-hub operator scripts. Reassigned from Codex to Claude on
+    explicit operator instruction; the Codex lane in CODEX-TASK-BRIEF.md is
+    superseded, not merely unclaimed.
+
+  changes:
+    - "tools/secb-mcp-config.mjs: generate an MCP client config (codex TOML, claude JSON, raw json) from the upstream registry. Prints to stdout only; replaces install.ps1, which wrote into the live client config and so conflated generation with activation."
+    - "tools/secb-mcp-doctor.mjs: static per-upstream health report. Resolves the spawn plan, then checks command-on-PATH and absolute-path args without spawning. Replaces verify_install.py, which proved an upstream by launching it."
+    - "Network access is opt-in via --probe; sse/http upstreams are otherwise reported unresolved rather than contacted."
+    - "src/mcp/upstream-registry.mjs: HOST_UNREACHABLE detail no longer hardcodes 'windows'. The same branch also catches a wsl-runtime upstream resolved from plain linux, where both the named runtime and the interop rationale were wrong. Verdict semantics unchanged."
+    - "tools/validate-foundation.mjs: schema allowlist split into governed contracts (contracts/) and subsystem-internal schemas (src/**/schemas/), each asserted for set equality. See gate_impact below."
+    - "MANIFEST.json: +37 previously uninventoried tracked files, closing the repository inventory gap to zero."
+    - "package.json: secb:mcp-config and secb:mcp-doctor script and bin aliases."
+
+  gate_impact:
+    gate: "tools/validate-foundation.mjs (npm run validate, prerequisite of npm test)"
+    why_flagged: >-
+      A deterministic validation gate was modified. Under AGENTS.md
+      advise-and-proceed rule 3 this is prepared, not activated, and is marked
+      for GOV ratification at merge review rather than self-accepted.
+    before: >-
+      Every MANIFEST entry ending .schema.json had to set-equal one hardcoded
+      contracts/ allowlist. Inventorying a subsystem schema therefore failed the
+      contract check, which is why two tracked subsystem schemas had remained
+      absent from MANIFEST.
+    after: >-
+      Two allowlists, each asserted for set equality: contracts/ (17 governed
+      contracts) and src/**/schemas/ (2 subsystem schemas).
+    net_effect: >-
+      Strictly stronger, not weaker. An unexpected addition or omission now fails
+      closed in either category; previously subsystem schemas were outside the
+      gate entirely because none could be inventoried. An intermediate variant
+      that merely narrowed the filter to contracts/ WOULD have weakened the gate
+      and was discarded for that reason.
+    verified: >-
+      Injecting contracts/bogus.schema.json and src/events/schemas/bogus.schema.json
+      each drove exit 1; removal restored exit 0.
+
+  advisory_decisions:
+    - id: "P4-AD-01"
+      decision: "startup_timeout_sec emitted as a constant 60, not derived from the registry timeout_ms field."
+      rationale: "timeout_ms is a per-request ceiling per the registry schema; reusing it as a startup budget would make one field mean two things. 60s because npx/uvx entries cold-fetch their package on first run."
+      risk: "LOW — a client-side value the operator can edit after pasting."
+    - id: "P4-AD-02"
+      decision: "TOML paths emitted as literal strings, falling back to escaped basic strings when a value contains a single quote."
+      rationale: "Literal strings keep Windows backslashes verbatim. resolveUpstream shell-quotes the bridged inner command, so single quotes are the normal Windows-host case; a literal string cannot contain one."
+      risk: "LOW — output parsed by an independent TOML parser across all host and flag combinations."
+    - id: "P4-AD-03"
+      decision: "An indeterminate check reports unknown, never unreachable."
+      rationale: "Windows PATH cannot be read from WSL. Reporting a working upstream as broken is the failure mode that makes a diagnostic untrustworthy."
+      risk: "LOW — conservative direction; a genuine failure is still reported."
+    - id: "P4-AD-04"
+      decision: "Reachable sse/http upstreams are emitted with a url key plus a client-version caveat, rather than omitted."
+      rationale: "Withholding a resolvable upstream loses information the registry declares. Client support for url upstreams is version-dependent and is stated as such."
+      risk: "LOW — every sse/http upstream in the current registry is disabled, so the path is presently unexercised in production data."
+
+  checks:
+    scope_note: "Run after the final change in the slice, per AGENTS.md working rule 6."
+    full_suite: "npm test — 789 tests, 784 pass, 0 fail, 5 skipped, exit 0 (baseline at 1718f2b: 726/721/0/5; +63 = 29 config + 34 doctor tests added)"
+    foundation: "node tools/validate-foundation.mjs — exit 0, 701 checks, 0 FAIL, 398 unique manifest paths"
+    diff_check: "git diff --check — clean"
+    manifest_inventory: "398 entries, 398 unique, 0 tracked code files missing, 0 entries absent from disk"
+    mcp_dependency_closure: "50 files reachable from the five MCP entry points; 0 missing from MANIFEST"
+    cli_wsl: "Both CLIs run from WSL. Doctor reports 8 ok, 1 unreachable, 7 disabled."
+    cross_check: "Doctor's static verdicts match what tools/start-secb-mcp-hub.mjs independently observed by actually spawning upstreams (8 up, windows-mcp HOST_UNREACHABLE, 7 skipped disabled)."
+    hub_after_registry_edit: "Hub re-verified post-change: initialize OK, tools/list returns 83 tools (36 native + 47 fronted)."
+    probe_paths: "Real fetch exercised against a dead loopback port (ECONNREFUSED -> unreachable) and a short-lived local listener (HTTP 204 -> ok). Loopback only; no external egress."
+
+  producer_defects_found_and_fixed:
+    - "src/mcp/upstream-registry.mjs HOST_UNREACHABLE detail named the wrong runtime for a wsl-runtime upstream resolved from linux (pre-existing, Phase 3)."
+    - "secb-mcp-doctor --timeout-ms accepted 1.5 and 30s, truncating them to 1 and 30 via parseInt (producer's own defect, found by its own test)."
+
+  residuals:
+    - "P4-R1-WINDOWS-UNVERIFIED: neither CLI has been executed from Windows PowerShell, and the --host windows resolution path is therefore unverified end to end. /proc/sys/fs/binfmt_misc/WSLInterop is absent in the producer environment, so Windows execution is impossible here by any means, not merely untried. Requires a run from a Windows host."
+    - "P4-R2-URL-UPSTREAM-UNEXERCISED: every sse/http upstream in .secb/mcp-upstreams.json is disabled, so the url emission path and the --probe path are covered by tests and synthetic registries only, not by production registry data."
+    - "P4-R3-DUPLICATE-ENVELOPE-SCHEMA: contracts/event-envelope.schema.json and src/events/schemas/event-envelope.schema.json share a basename. docs/AGENTS.md requires one authoritative definition per contract. Not investigated or changed in this slice; flagged for its own review."
+    - "P4-R4-GATE-RATIFICATION: the validate-foundation change is a validation-gate modification carried on a branch and awaiting GOV ratification at merge, per advise-and-proceed rule 3."
+    - "P4-R5-CODEX-LANE-SUPERSEDED: CODEX-TASK-BRIEF.md assigned these four files to Codex. If Codex executes that brief unchanged it will recreate them and collide. The brief has been annotated as superseded in the same slice."
+    - "Project, repository, branch, human authority freshness, egress, credential handles, durable evidence, data-class, and activation gates remain external controls."

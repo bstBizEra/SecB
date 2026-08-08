@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/runtime-provider-plugin.schema.json",
+  "title": "SecB Runtime Provider Plugin Descriptor",
+  "description": "Author-declarable capabilities and hard prohibitions for a runtime integration plugin. This descriptor is never an authority grant or activation record.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plugin_id",
+    "plugin_version",
+    "provider_id",
+    "runtime_product_id",
+    "display_name",
+    "purpose",
+    "implementation",
+    "capabilities",
+    "security",
+    "boundaries",
+    "ui",
+    "evidence_obligations",
+    "candidate_status"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "plugin_id": {
+      "type": "string",
+      "pattern": "^runtime-provider-[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "plugin_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "provider_id": { "type": "string", "pattern": "^PROVIDER-[A-Z0-9-]+$" },
+    "runtime_product_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "display_name": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["module", "export_name"],
+      "properties": {
+        "module": {
+          "type": "string",
+          "pattern": "^src/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\\.mjs$",
+          "description": "Normalized repository-relative module path. Dot segments, absolute paths, and encoded separators are not permitted."
+        },
+        "export_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deployment_types", "operations", "event_types"],
+      "properties": {
+        "deployment_types": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["local_sidecar", "remote_api", "container", "sandbox"] }
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "observe_agent_lifecycle",
+              "observe_task_outcome",
+              "observe_execution_completion",
+              "inspect_health",
+              "dispatch_bounded_execution",
+              "request_pause",
+              "request_cancel",
+              "request_steer",
+              "request_quarantine"
+            ]
+          }
+        },
+        "event_types": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maximum_input_classification", "network_access", "credential_mode", "output_trust"],
+      "properties": {
+        "maximum_input_classification": { "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"] },
+        "network_access": { "enum": ["none", "loopback", "policy_bounded"] },
+        "credential_mode": { "enum": ["none", "brokered"] },
+        "output_trust": { "const": "UNTRUSTED_CANDIDATE" }
+      }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_source",
+        "may_issue_authority",
+        "may_self_authorize",
+        "may_accept_evidence",
+        "may_admit_memory",
+        "may_promote_knowledge",
+        "may_publish_skills",
+        "may_merge_protected_branch",
+        "may_release",
+        "may_activate",
+        "owns_secb_work_state"
+      ],
+      "properties": {
+        "authority_source": { "const": "SECB" },
+        "may_issue_authority": { "const": false },
+        "may_self_authorize": { "const": false },
+        "may_accept_evidence": { "const": false },
+        "may_admit_memory": { "const": false },
+        "may_promote_knowledge": { "const": false },
+        "may_publish_skills": { "const": false },
+        "may_merge_protected_branch": { "const": false },
+        "may_release": { "const": false },
+        "may_activate": { "const": false },
+        "owns_secb_work_state": { "const": false }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "surface"],
+      "properties": {
+        "mode": { "enum": ["none", "projection"] },
+        "surface": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidence_obligations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "candidate_status": { "enum": ["DRAFT", "CANDIDATE"] }
+  }
+}

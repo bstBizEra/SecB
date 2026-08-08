@@ -161,6 +161,52 @@ test("prepareDeployment refuses when no caller instance is asserted", () => {
   }
 });
 
+test("agent enrollment is opt-in and requires its own durable ledger", () => {
+  const dir = scratch();
+  try {
+    const disabled = prepareDeployment({ env: baseEnv(dir) });
+    const request = {
+      provider_id: "openai",
+      runtime_product_id: "codex",
+      runtime_deployment_id: "codex-windows",
+      agent_profile_id: "codex-engineer",
+      runtime_version: "1.0.0",
+      deployment_location: "local",
+      public_key_fingerprint: `sha256:${"b".repeat(64)}`,
+      idempotency_key: "deploy-enroll-001"
+    };
+    const call = (server) => server.handle({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "secb_agent_registration_propose", arguments: request }
+    });
+    assert.equal(call(disabled.server).error.data.code, "DENY_ENROLLMENT_DISABLED");
+
+    assert.throws(
+      () => prepareDeployment({
+        env: baseEnv(dir, { SECB_MCP_AGENT_ENROLLMENT_AUTHORIZED: "operator" })
+      }),
+      (error) => error.code === "DENY_LEDGER_PATH"
+    );
+
+    const enrollmentLedger = join(dir, "agent-enrollment.jsonl");
+    const enabled = prepareDeployment({
+      env: baseEnv(dir, {
+        SECB_MCP_AGENT_ENROLLMENT_AUTHORIZED: "operator",
+        SECB_MCP_AGENT_ENROLLMENT_LEDGER: enrollmentLedger
+      })
+    });
+    const result = call(enabled.server).result.data;
+    assert.equal(result.evaluation_status, "CANDIDATE");
+    assert.equal(result.lifecycle_state, "PENDING");
+    assert.equal(enabled.server.resolveCaller(result.agent_instance_id).resolved, false);
+    assert.match(readFileSync(enrollmentLedger, "utf8"), /AGENT_ENROLLMENT_PROPOSED/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Invocation ledger — append-only, fail-closed on write failure.
 // ---------------------------------------------------------------------------
@@ -224,7 +270,7 @@ test("wired end-to-end: initialize + tools/list + a read tool call, audited", as
 
     const byId = new Map(responses.map((r) => [r.id, r]));
     assert.equal(byId.get(1).result.protocolVersion, PINNED_PROTOCOL_VERSION);
-    assert.equal(byId.get(2).result.tools.length, 9);
+    assert.equal(byId.get(2).result.tools.length, 38);
     const call = byId.get(3).result;
     assert.equal(call.content_disposition, "data_untrusted");
     assert.equal(call.tool, "secb_ledger_verify_summary");
@@ -244,6 +290,21 @@ test("wired end-to-end: initialize + tools/list + a read tool call, audited", as
     assert.equal(entry.caller, SEEDED_CALLER);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("stdio sanitizes synchronous and asynchronous internal failures", async () => {
+  for (const handle of [
+    () => { throw new Error("database password=do-not-leak"); },
+    async () => { throw new Error("async token=do-not-leak"); }
+  ]) {
+    const responses = await roundTrip({ handle }, "inst_ok", [
+      { jsonrpc: "2.0", id: 91, method: "tools/call", params: { name: "x", arguments: {} } }
+    ]);
+    assert.equal(responses[0].error.code, -32603);
+    assert.equal(responses[0].error.message, "Internal error");
+    assert.equal(responses[0].error.data.code, "DENY_INTERNAL_ERROR");
+    assert.equal(JSON.stringify(responses[0]).includes("do-not-leak"), false);
   }
 });
 

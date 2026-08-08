@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/agent-enrollment-request.schema.json",
+  "title": "SecB Agent Enrollment Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provider_id",
+    "runtime_product_id",
+    "runtime_deployment_id",
+    "agent_profile_id",
+    "runtime_version",
+    "deployment_location",
+    "public_key_fingerprint",
+    "idempotency_key"
+  ],
+  "properties": {
+    "provider_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "runtime_product_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "runtime_deployment_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "agent_profile_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "runtime_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "deployment_location": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "public_key_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{8,160}$"
+    }
+  }
+}

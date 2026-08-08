@@ -1,0 +1,249 @@
+schema_version: "0.1"
+record_metadata:
+  record_id: "wp_gov_sod1_producer_identity_v1_candidate"
+  record_status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
+  source_template: "docs/templates/work-package.yaml"
+  producer_runtime: "Claude Code"
+  prepared_as: "SARCHI — architecture and design. SARCHI does not authorize; GOV does."
+  source: >-
+    The last of the three items SkillsHub cannot resolve without a decision.
+    Evidence at docs/04-assurance/skillshub-wiring-refusal-001.md addenda.
+  limitations:
+    - "Producer prepared this and may not accept its own evidence."
+    - "NO CODE WRITTEN. The check that consumes this field already exists and already refuses without it."
+    - "The producer flagged twice that the operator queue holds unsigned records and that another package is document production rather than progress. The operator reaffirmed both times. Recorded as flagged, reaffirmed, proceeded."
+
+work_package_id: "WP-GOV-SOD1"
+version: 1
+project_id: "prj_secb_local"
+module_id: "MOD-GOV"
+title: "Record who produced a skill, so separation of duties can be evaluated"
+
+objective: >-
+  Add a producer identity to the governed record that promotes a skill, so the
+  existing separation-of-duties check can return an answer instead of refusing.
+
+problem_statement: >-
+  Measured across this branch's contracts:
+
+    skill-grant-record          no actor field at all
+    skill-manifest              no actor field at all
+    skill-package-descriptor    authority_ceiling_cap only
+    decision-record             actor_id, authority_ref
+    approval_history[]          decision_id, decision_type, approved_by, approved_at
+
+  Approvers are recorded. THE PRODUCER IS RECORDED NOWHERE.
+
+  Separation of duties therefore cannot be evaluated. src/skills/separation-of-duties.mjs
+  returns UNVERIFIABLE for every manifest this repository can currently produce,
+  and src/skills/promotion-evaluator.mjs treats that as a block, so every
+  promotion is inadmissible. That is the correct behaviour and it is why nothing
+  can be wired.
+
+the_workaround_does_not_exist: >-
+  Deriving the producer from git was measured and does not work here.
+
+    distinct git authors across all of .agents/skills
+      BizEra <ounkhamvilay@gmail.com>
+      Vibe Agent <agent@bie.dev>
+
+    PRs #140 (candidate), #142 (SEC), #143 (REV), #144 (QA)
+      all four: author = BizEra <ounkhamvilay@gmail.com>
+
+  Twenty-two packages, two identities, and producer and all three reviewers
+  indistinguishable in git. Git identity in this repository is a MACHINE
+  identity, not an ACTOR identity. A check reading git log would compare a value
+  to itself and report SATISFIED for a promotion authored, reviewed and approved
+  by one party - the exact failure the check exists to prevent, reintroduced by
+  the shortcut around it.
+
+  The reviewer records name distinct identities in their BODIES, which is why
+  the body is where identity lives and commit metadata is not.
+
+precedent: >-
+  main's contracts/skill-promotion.schema.json already requires the triple:
+
+    producer_actor_id, independent_review_actor_id, governance_actor_id
+
+  alongside bound_action and bound_object_version. This branch has no
+  equivalent. Whatever this package decides should be able to converge with that
+  shape rather than invent a third vocabulary.
+
+open_design_question: >-
+  WHICH RECORD CARRIES IT. The producer does not choose, because the three
+  answers distribute trust differently and that is a governance judgement.
+
+    skill-package-descriptor   the author declares themselves. Cheapest, and it
+                               is SELF-ATTESTATION - the party whose separation
+                               is being checked supplies the value being checked.
+    skill-grant-record         governance asserts who produced. Stronger, and it
+                               requires governance to know, which today it learns
+                               only from the author.
+    decision-record.subject    the promotion decision names the producer, which
+                               is where main puts it and where the DEF-R1 subject
+                               binding already lives.
+
+  The producer's only observation, offered as fact rather than preference: the
+  check reads `producerActorId` as a caller argument today, so ALL THREE work
+  without changing src/skills/separation-of-duties.mjs. The difference is
+  entirely about who is trusted to say it.
+
+  A second question the authorizer should settle in the same ruling: whether a
+  MISSING producer must remain a hard block after the field exists, or whether
+  legacy records without it are grandfathered. The producer recommends no
+  grandfathering and notes it is an interested party - grandfathering would make
+  its own unwired modules reachable sooner.
+
+risk_class: "R3"
+mutation_class: "M3"
+status: "IMPLEMENTED_AWAITING_ACCEPTANCE"
+
+baseline:
+  target_branch: "feat/secb-ruflo-command-center"
+  baseline_commit: "a45cef1"
+  blast_radius: >-
+    Measured:
+      .ndjson ledger files anywhere in the tree                     0
+      callers of SkillResolver.registerSkill in src/ or tools/      0
+      callers of evaluatePromotion in src/ or tools/                0
+      skill-grant-record fixtures under tests/fixtures/valid/       to be counted by the implementer
+
+    Adding a REQUIRED field is the direction that CAN break existing records,
+    unlike WP-GOV-R5 which relaxes one. The count above must be completed before
+    the field is made required, and if it is non-zero the authorizer should
+    decide between a migration and an optional-with-resolver-enforcement shape,
+    which is what WP-SK-R1 did for `subject`.
+
+scope:
+  - "contracts/<the record chosen above>.schema.json - add the producer identity."
+  - "src/skills/promotion-evaluator.mjs - read it from the chosen record instead of taking it as a caller argument."
+  - "tools/validate-foundation.mjs - the exact-set pins will fail on the contract change. Updating them is the pin working."
+  - "tests - both arms, and the UNVERIFIABLE-to-SATISFIED transition demonstrated on real data."
+
+non_scope:
+  - "NO wiring. This makes separation of duties EVALUABLE; it does not switch anything on. DEF-R5 and the trust root remain ahead of that."
+  - "NO change to src/skills/separation-of-duties.mjs. It already accepts the identity and already refuses without it; that is the point."
+  - "NO adoption of main's full actor triple unless the authorizer asks. independent_review_actor_id and governance_actor_id are recoverable from approval_history today; producer is the only one that is not."
+
+acceptance_criteria:
+  - id: "AC-SOD1-01"
+    statement: "A promotion carrying a distinct producer becomes ADMISSIBLE."
+    verification: >-
+      evaluatePromotion returns ADMISSIBLE where it returns DENY_SOD_UNVERIFIABLE
+      today. The positive arm, and the first time any promotion in this
+      repository has been admissible.
+  - id: "AC-SOD1-02"
+    statement: "A promotion whose producer also approved is still INADMISSIBLE."
+    verification: >-
+      DENY_SOD_VIOLATED. Without this, AC-SOD1-01 is satisfied by a change that
+      simply stops checking.
+  - id: "AC-SOD1-03"
+    statement: "A record without the field does not silently pass."
+    verification: >-
+      DENY_SOD_UNVERIFIABLE, unless the authorizer rules for grandfathering, in
+      which case the ruling and its reason are recorded in the contract itself
+      rather than in a comment.
+  - id: "AC-SOD1-04"
+    statement: "The count of existing records invalidated is stated, whatever it is."
+    verification: "Explicit number. Zero is a finding; non-zero is a migration."
+  - id: "AC-SOD1-05"
+    statement: "The exact-set pin catches the contract change."
+    verification: "validate exits 1 naming the changed schema before the pin is updated, 0 after."
+  - id: "AC-SOD1-06"
+    statement: "Every check is shown failing when it should."
+    verification: "Sabotage matrix with raw exit codes and a control column."
+
+roles:
+  ENGIN: "unassigned — producer may not accept its own evidence"
+  REV: "unassigned — must not be the producer"
+  QA: "unassigned — must not be the producer or REV"
+  SEC: "consulted. This decides whether the repository can tell an author from an approver."
+  GOV: "authorizes, and must answer both open questions before code."
+
+allowed_paths:
+  - "contracts/skill-grant-record.schema.json"
+  - "contracts/skill-package-descriptor.schema.json"
+  - "contracts/decision-record.schema.json"
+  - "src/skills/promotion-evaluator.mjs"
+  - "tools/validate-foundation.mjs"
+  - "tests/promotion-evaluator.test.mjs"
+  - "tests/separation-of-duties.test.mjs"
+  - "tests/fixtures/valid/**"
+  - "tests/fixtures/invalid/**"
+
+prohibited_paths:
+  - "src/skills/separation-of-duties.mjs"
+  - "src/registry/skill-resolver.mjs"
+  - "tools/secb-skills.mjs"
+  - "tools/secb-mcp-server-wiring.mjs"
+  - "src/ledger/**"
+  - ".agents/**"
+
+evidence_obligations:
+  - "The AC-SOD1-01/02 pair with raw codes."
+  - "The AC-SOD1-04 count, stated explicitly."
+  - "The AC-SOD1-06 matrix with its control column."
+  - "A demonstration that the UNVERIFIABLE-to-SATISFIED transition happens on a real record, not only on a fixture."
+
+valid_until: "2026-11-05T00:00:00Z"
+
+authority_note: >-
+  R3 and M3: a change to a governed contract, in the field that decides whether
+  this repository can distinguish an author from an approver.
+
+  What makes it necessary is that the alternative was measured and does not
+  exist. What makes it consequential is that it is the last of the three items
+  standing between SkillsHub and being wireable - and that is a reason to be
+  more careful with it, not less. Nothing here asks for the wiring.
+
+implementation:
+  built_at: "2026-08-07, on operator instruction to proceed"
+  authority_note: >-
+    THE TWO OPEN QUESTIONS WERE ANSWERED BY THE PRODUCER, NOT BY GOV. The
+    operator directed the work; it did not rule on the questions, and this
+    record still carries no signature. The answers used are the producer's own
+    recommendations, already on file with the producer's interest in each
+    disclosed:
+
+      which record carries it   skill-grant-record, NOT the descriptor.
+                                Self-attestation by the party whose separation
+                                is being checked is not separation of duties.
+      grandfathering            none. A missing producer stays a hard block.
+                                The producer recommended this AGAINST its own
+                                interest - grandfathering would make its unwired
+                                modules reachable sooner.
+
+    A reader who disagrees with either should treat the code as reversible: it
+    adds an optional field and one comparison, and nothing consumes it.
+
+  what_changed:
+    - "contracts/skill-grant-record.schema.json - producer_actor_id added as OPTIONAL, shape identical to main's skill-promotion.schema.json so the two converge rather than diverging into a third vocabulary."
+    - "src/skills/promotion-evaluator.mjs - reads grant.producer_actor_id. The caller argument survives only to detect a DISAGREEMENT, refused as DENY_PRODUCER_CONFLICT rather than resolved by preferring a side."
+    - "tools/validate-foundation.mjs - the exact-set property pin updated."
+    - "tests/promotion-evaluator.test.mjs - fixtures record the producer in the grant; four cases added."
+
+  acceptance_criteria_met:
+    AC-SOD1-01: >-
+      A promotion carrying a distinct producer is ADMISSIBLE. First time any
+      promotion in this repository has been.
+    AC-SOD1-02: "A producer who also approved is still DENY_SOD_VIOLATED."
+    AC-SOD1-03: >-
+      A grant with no producer_actor_id is DENY_SOD_UNVERIFIABLE, and stays so
+      however the caller names itself. No grandfathering.
+    AC-SOD1-04: >-
+      Records invalidated: ZERO. The field is optional in the schema, so the
+      existing skill-grant-record fixture still validates - checked, not
+      assumed. This is the WP-SK-R1 pattern: optional at the contract,
+      mandatory at the consumer.
+    AC-SOD1-05: >-
+      The pin fired before it was updated - schema.properties.exact for
+      skill-grant-record, "property set is exactly 11 names" - then exit 0
+      after. The failure is the free evidence the pin works.
+    AC-SOD1-06: >-
+      Sabotage, each anchor asserted to land: caller argument wins over the
+      record 15/1; conflict check disabled 15/1; empty producer admitted 13/3.
+
+  not_done:
+    - "Nothing consumes evaluatePromotion. This makes separation of duties EVALUABLE; it switches nothing on."
+    - "DEF-R5 remains ahead of any wiring: a governance decision still cannot record a refusal."
+    - "The descriptor and decision-record alternatives were not implemented. If GOV rules for either, this change is one optional field to move."
