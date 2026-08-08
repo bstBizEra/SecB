@@ -149,7 +149,51 @@ and reports it indistinguishably from a guard that passed.
 
 ---
 
-## 7. Status fields
+## 7. Addendum — dispositions applied, 2026-08-08
+
+The operator authorized the re-pin after this packet was written. Classes A and C
+were carried out at `d38116c`; Class B was not.
+
+```text
+npm test  1977 tests · 1967 pass · 5 fail · 5 skipped     (was 1975 · 1952 · 18)
+node tools/validate-foundation.mjs  PASS
+```
+
+All five remaining failures name `src/control/sod-rules.mjs` — Class B, and the
+file that is supposed to be red.
+
+**Class A** — re-pinned, each pin recording its authorization chain rather than
+only a new hash. Where a guard compared against a base commit instead of a
+literal, the file was lifted out of the ref diff and given an explicit blob pin:
+relocated, not dropped. An earlier pass dropped two of them — the comment said
+"pinned explicitly below" and no pin followed — which is the exact failure this
+packet was written to prevent, caught and fixed before the commit.
+
+**Class C** — fixed as logic, not as a pin. The hand-maintained list of schemas
+postdating `0c0f3d2` is replaced by the structural test (absence at the ref),
+which cannot go stale, plus an assertion that the comparison set is non-empty and
+a log line stating how much was covered. A guard that skips everything can no
+longer pass quietly.
+
+**Class B** — untouched, still red in all five guards, its pins the only ones
+left holding old values. Ratifying an R3+ wrap-not-modify change is not a worker
+agent's to do under AMD-002.
+
+**Bite proof.** Every re-pinned file was drifted, its guards re-run, then
+restored:
+
+| File | fail count: baseline → drifted → restored |
+|---|---|
+| `package.json` | 0 → 7 → 0 |
+| `tools/validate-foundation.mjs` | 0 → 7 → 0 |
+| `src/contracts/contract-validator.mjs` | 0 → 3 → 0 |
+| `src/registry/runtime-registry.mjs` | 0 → 1 → 0 |
+| `src/registry/adapters.mjs` | 0 → 1 → 0 |
+| `contracts/agent-registration.schema.json` | 0 → 3 → 0 |
+| `contracts/decision-record.schema.json` | 0 → 6 → 0 |
+| `src/registry/skill-resolver.mjs` | 1 → 1 → 1 by count — it shares a test with a Class B guard already red, so it was proven by the assertion message switching to `skill-resolver` on drift and back on restore |
+
+## 8. Status fields
 
 ```yaml
 truth_status: verified_true      # counts and attributions read from the suite
