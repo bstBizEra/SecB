@@ -122,12 +122,25 @@ stakeholder-capability-mapping · system-context-boundaries
    `skill-revocation-ledger`) remain the eventual runtime registry; this
    file-based registry is the bootstrap surface until those are wired
    (SEC/GOV-gated).
+
 ## Engineering loop binding amendment — 2026-08-08
 
-**Amendment ID:** SECB-AGENTS-AMD-003
+**Amendment ID:** SECB-AGENTS-AMD-004
 **Requested by:** Operator, 2026-08-08
 **Status:** DRAFT until merged to `main` by the operator; EFFECTIVE thereafter
 **Scope:** Local repository work only. This amendment extends the working rules above.
+
+> **Errata, 2026-08-08.** This amendment first landed numbered AMD-003. That
+> number was already taken by an exact-SHA delegated-merge policy candidate
+> (candidate commit `d57fdd6c`) which had by then passed independent review
+> (`SECB-AGENTS-AMD-003-REV-002`), QA (`QA_PASS_WITH_NOTES_CANDIDATE_ONLY`) and
+> SEC (`SEC_PASS_TECHNICAL_CANDIDATE`), and was awaiting only human GOV
+> disposition. AMD-003 looked free because it was checked against `main`, and
+> the incumbent lived on unmerged branches — a claim about a ref mistaken for a
+> claim about the repository. This one was renumbered rather than the incumbent:
+> three independent review records bind to AMD-003 by exact ID and SHA, and
+> invalidating them to keep a number would be the wrong trade. AMD-003 remains
+> reserved for that candidate.
 
 ### Loop binding
 
@@ -148,4 +161,3 @@ The retained hard gates of AMD-002 are unchanged and are not restated here. Wher
 ### What this amendment does not do
 
 It does not activate the loop documents. They remain `DRAFT / NOT EFFECTIVE` under the bootstrap boundary until human GOV approves them. This amendment binds worker-agent behaviour to a specification; it does not confer effectiveness on the specification.
-

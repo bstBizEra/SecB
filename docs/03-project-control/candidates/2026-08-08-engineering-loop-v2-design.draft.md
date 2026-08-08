@@ -59,7 +59,7 @@ recorded as a source, never introduced as a second loop identity, per the
   machine is the base this design extends, not revises.
 - Three new documents: `09-panel-review-and-rubric.md`,
   `10-inner-loop-efficiency.md`, `11-agent-capability-baseline.md`.
-- One new `AGENTS.md` amendment: `SECB-AGENTS-AMD-003`.
+- One new `AGENTS.md` amendment: `SECB-AGENTS-AMD-004`.
 - Inventory and index updates: `MANIFEST.json`, `docs/MANIFEST.json`,
   `docs/README.md`, `docs/SOURCE-TRACEABILITY.md`.
 
@@ -212,7 +212,7 @@ dependency, the authority model, or a breaking contract.
 
 ---
 
-## 7. `AGENTS.md` — `SECB-AGENTS-AMD-003`
+## 7. `AGENTS.md` — `SECB-AGENTS-AMD-004`
 
 Appended as a new section, following the shape of `SECB-AGENTS-AMD-002`. No
 existing text is modified.
@@ -281,7 +281,7 @@ reported:
 2. **Inherited draft status.** The new documents are `DRAFT / NOT EFFECTIVE`
    under the Phase 0 bootstrap boundary. Their existence satisfies required-reading
    availability; it does not activate the loop.
-3. **Amendment effectiveness.** `SECB-AGENTS-AMD-003` is DRAFT until the operator
+3. **Amendment effectiveness.** `SECB-AGENTS-AMD-004` is DRAFT until the operator
    merges it. Until then the loop binding is prepared, not in force.
 4. **Branch.** All work stays on `feat/secb-ruflo-command-center`. No agent merge
    to `main`.

@@ -31,7 +31,7 @@ dated 2026-08-07.
 | Panel review and grading rubric | BOPEN-ENG-PANEL-001 (score made advisory, not a merge gate) |
 | Feedback latency and token cost | BOPEN-ENG-EFFICIENCY-001 (bounded by two SecB invariants not present in the source) |
 | Core engineering skills, ADR engine | BOPEN-ENG-CAP-001 (skills mapped to existing definitions; ADRs bound to the existing docs/adr/ convention) |
-| Loop binding | SECB-AGENTS-AMD-003 |
+| Loop binding | SECB-AGENTS-AMD-004 |
 
 Five of the twelve source mechanisms were **not adopted**. The reasons are part of
 the record:

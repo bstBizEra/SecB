@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extend `BOPEN-ENG-LOOP-001` with three new execution documents and bind the resulting loop to worker-agent behaviour through `SECB-AGENTS-AMD-003`.
+**Goal:** Extend `BOPEN-ENG-LOOP-001` with three new execution documents and bind the resulting loop to worker-agent behaviour through `SECB-AGENTS-AMD-004`.
 
 **Architecture:** Purely additive documentation work. `08-bopen-engineering-loop.md` is never edited; three sibling documents (`09`, `10`, `11`) extend it, and one appended `AGENTS.md` amendment makes the loop normative. Both manifests are updated in the same commit as the file they inventory, per AMD-002 §2.
 
@@ -42,7 +42,7 @@ Bumping `AGENTS.md` alone would desynchronise it from three artifacts that share
 | `docs/12-execution/09-panel-review-and-rubric.md` | How VERIFY is conducted: three review lenses, their authority boundaries, the advisory rubric |
 | `docs/12-execution/10-inner-loop-efficiency.md` | Latency budgets and token-cost layers, plus the two SecB invariants that bound them |
 | `docs/12-execution/11-agent-capability-baseline.md` | Eight baseline skills mapped to existing definitions, the nine-layer matrix, ADR obligations |
-| `AGENTS.md` | Appended `SECB-AGENTS-AMD-003` binding the loop to worker agents |
+| `AGENTS.md` | Appended `SECB-AGENTS-AMD-004` binding the loop to worker agents |
 | `MANIFEST.json`, `docs/MANIFEST.json` | Inventory of the three new documents |
 | `docs/README.md` | Index links under "12 — Execution" |
 | `docs/SOURCE-TRACEABILITY.md` | URE-Loop v0.9 recorded as source input, with the exclusion table |
@@ -134,7 +134,7 @@ Expected: no output before the echo — no modified tracked files remain.
 
 **Interfaces:**
 - Consumes: the VERIFY stage defined in `08-bopen-engineering-loop.md` §3.4; `BOPEN-GOV-EBIV-001` role separation.
-- Produces: artifact ID `BOPEN-ENG-PANEL-001`, referenced by Task 4 (ADR obligations) and Task 5 (AMD-003 clause 2). The three lens names are exactly **Staff Architect**, **Security & Edge-Case**, **Performance & QA**.
+- Produces: artifact ID `BOPEN-ENG-PANEL-001`, referenced by Task 4 (ADR obligations) and Task 5 (AMD-004 clause 2). The three lens names are exactly **Staff Architect**, **Security & Edge-Case**, **Performance & QA**.
 
 - [ ] **Step 1: Write the failing check — inventory the file before it exists**
 
@@ -505,7 +505,7 @@ merge writes Accepted."
 
 ---
 
-## Task 5: `AGENTS.md` — `SECB-AGENTS-AMD-003`
+## Task 5: `AGENTS.md` — `SECB-AGENTS-AMD-004`
 
 **Files:**
 - Modify: `AGENTS.md` (append one section at end of file; insert one line into the required-reading chain at lines 29–38)
@@ -541,7 +541,7 @@ No other entry changes text or relative order.
 
 ## Engineering loop binding amendment — 2026-08-08
 
-**Amendment ID:** SECB-AGENTS-AMD-003
+**Amendment ID:** SECB-AGENTS-AMD-004
 **Requested by:** Operator, 2026-08-08
 **Status:** DRAFT until merged to `main` by the operator; EFFECTIVE thereafter
 **Scope:** Local repository work only. This amendment extends the working rules above.
@@ -588,7 +588,7 @@ Expected: `tests 1188 · pass 1179 · fail 2 · skipped 7`, the same two boundar
 git add AGENTS.md
 git commit -m "feat(secb): bind the loop to worker agents, and say plainly that the score decides nothing
 
-AMD-003 makes GOAL/PLAN/ACT/VERIFY the shape a bounded slice takes rather than a
+AMD-004 makes GOAL/PLAN/ACT/VERIFY the shape a bounded slice takes rather than a
 document describing one, and puts the panel obligation at VERIFY. The clause that
 matters most is the one that grants nothing: a rubric score, a panel verdict and
 an ADR draft do not merge, approve, activate, accept evidence, promote a skill or
@@ -643,7 +643,7 @@ dated 2026-08-07.
 | Panel review and grading rubric | BOPEN-ENG-PANEL-001 (score made advisory, not a merge gate) |
 | Feedback latency and token cost | BOPEN-ENG-EFFICIENCY-001 (bounded by two SecB invariants not present in the source) |
 | Core engineering skills, ADR engine | BOPEN-ENG-CAP-001 (skills mapped to existing definitions; ADRs bound to the existing docs/adr/ convention) |
-| Loop binding | SECB-AGENTS-AMD-003 |
+| Loop binding | SECB-AGENTS-AMD-004 |
 
 Five of the twelve source mechanisms were **not adopted**. The reasons are part of
 the record:
