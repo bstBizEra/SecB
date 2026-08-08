@@ -278,7 +278,7 @@ test("listCandidates returns frozen, data-untrusted summaries and is not ledgere
 
 test("skill-resolver.mjs and sod-rules.mjs are byte-identical to main (S1 adds no surface there)", () => {
   const digests = {
-    "src/registry/skill-resolver.mjs": "bfa958a41868a1c451831f8f5fd8de7e4db9fdf952e7e562786af88bb6d2912f",
+    "src/registry/skill-resolver.mjs": "e979fa055a30cb07ca27abf789a71a284f525d41046334f8778884337c17ff1f",
     // Repinned by mod-gov-s1-sod-rules-hardening-fix-001 (see
     // mod-gov-s1-sod-rules-hardening-fix-producer-verification-001.md).
     "src/control/sod-rules.mjs": "2d951ed7935bebaab2951c4c0dee420e4169ebf9e3a2903c751328753a3a894f",

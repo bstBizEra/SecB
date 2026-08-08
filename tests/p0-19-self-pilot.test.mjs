@@ -241,8 +241,12 @@ const PINNED_BLOBS = Object.freeze({
   "src/services/context-federation-service.mjs": "7eb57a289b8331d5576703c5c656624c98f1c029",
   "src/services/context-retrieval-policy.mjs": "a7ba0120fc6a0e3b7469f264e52ea4d0c76ec7ff",
   "src/services/evidence-envelope-service.mjs": "62359eb1a209cbb868332f4f324e1e0cb203644f",
-  "src/registry/runtime-registry.mjs": "d6e1ce8897940901a9a9b8d339676d0abae67c35",
-  "src/registry/adapters.mjs": "34269ca2767b60d0c511373fe19c84bbe393cee7",
+  // Re-pinned after 61940ac: keeps this branch's provider-binding assert AND
+  // main's case-fold normalized-id check, rather than one or the other.
+  "src/registry/runtime-registry.mjs": "a27031b6e0b70f9c2bc04687ef7dd5ebce6761b6",
+  // Re-pinned after 61940ac: this branch's adapter work predates the merge and
+  // arrived with it; the pin follows the reconciled file rather than dropping it.
+  "src/registry/adapters.mjs": "70ef9947cc5483dd76d05acba7ec7d17f8f7c689",
   "src/host/host-runtime-agent.mjs": "fbbec1dccb9e09dc639c07f86fea336ba4e00370",
   "src/ledger/durable-ledger.mjs": "6be08fc14ff31a7c871c5e86888af42285d40529",
   "src/ledger/governed-ledgers.mjs": "32ff590386574311ff5fcdce846b40bcfe2a1f07",
@@ -253,7 +257,9 @@ const PINNED_BLOBS = Object.freeze({
   "src/live/event-family-policy.mjs": "47ebc9bb7e5190c6f0f78232884379b3c284248d",
   "src/live/replay-assembler.mjs": "6ba6e4b143ad3662c7dc2f364a8ff665002667d6",
   "src/contracts/canonical-fingerprint.mjs": "721e99032ce7040312e77138c8f156b649fd996e",
-  "src/contracts/contract-validator.mjs": "306a3d23ef748ffb987cd35d9ab4cf60264f32bc"
+  // Re-pinned after 61940ac: the registration map is the union of both merge
+  // parents (24 ours + 20 main -> 31, nothing dropped, nothing invented).
+  "src/contracts/contract-validator.mjs": "dc1e32cadc8eec45b2c34acf1828cc8c7f44dbab"
 });
 
 // git blob hash: sha1("blob <byteLength>\0" + content). CRLF normalized to LF

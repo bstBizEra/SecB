@@ -463,14 +463,23 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
   const guarded = [
     "src/control/write-set-policy.mjs",
     "src/services/context-federation-service.mjs",
-    "src/control/risk-registry.mjs",
-    "package.json"
+    "src/control/risk-registry.mjs"
+    
   ];
   for (const rel of guarded) {
     const baseBlob = execFileSync("git", ["rev-parse", `${BASE}:${rel}`], { cwd: root, encoding: "utf8" }).trim();
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, baseBlob, `${rel} blob differs from ${BASE}`);
   }
+  // package.json was authorized-modified by cbe93cb (secb-graph CLI), 31ddfef
+  // (skills hub), fe64aac (MCP upstream tooling) and c4025c5 (secb dispatcher
+  // bin + script), so it is no longer blob-identical to the base commit. Pinned
+  // rather than dropped: an unauthorized script or bin entry still fails here.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "package.json")], { cwd: root, encoding: "utf8" }).trim(),
+    "fc108a6b46be8007a8a2ae3e1371be4155e82510",
+    "package.json pinned to its post-c4025c5 blob"
+  );
   // tools/validate-foundation.mjs was authorized-modified by MOD-WSPACE-S3 (G6
   // workspace-lease schema registration, 16->17 schemas), then again by
   // MOD-MEM S2 (memory-record schema registration, 17->18 schemas), so it is
@@ -479,8 +488,8 @@ test("byte-identity: reused/consulted sources are unchanged vs main @ c52db71", 
   // validator still fails.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "dbd4d10883e7724aa75301fc7f3b5c9528089726",
-    "validate-foundation.mjs pinned to its post-MOD-MEM-S2 blob"
+    "7bc1c5ef89551520413be1c15e5bbcaa93389f7e",
+    "validate-foundation.mjs pinned to its post-61940ac blob"
   );
   // Sanity: the reused primitive actually still exports the containment evaluator
   // this module leans on, so the guard protects the right thing.

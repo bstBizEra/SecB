@@ -720,8 +720,8 @@ const PINNED_BLOBS = Object.freeze({
   // additive edit to validate-foundation.mjs. Pin tracks the post-MOD-MEM-S2
   // blob so this guard still detects any UNAUTHORIZED further drift of the
   // validator.
-  "tools/validate-foundation.mjs": "dbd4d10883e7724aa75301fc7f3b5c9528089726",
-  "package.json": "6f91499257a6c441558840e2bfd6acb421e2b0a0"
+  "tools/validate-foundation.mjs": "7bc1c5ef89551520413be1c15e5bbcaa93389f7e",
+  "package.json": "fc108a6b46be8007a8a2ae3e1371be4155e82510"
 });
 
 // git blob hash: sha1("blob <byteLength>\x00" + content). CRLF normalized to LF

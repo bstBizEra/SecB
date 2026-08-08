@@ -645,7 +645,12 @@ test(`byte-identity: all OTHER contract schemas and sibling ledgers unchanged vs
   // tools/validate-foundation.mjs. This guard still bites on every OTHER schema,
   // so tamper detection is not dropped — only relocated for this aligned file.
   for (const file of readdirSync(resolve(root, "contracts")).filter((f) => f.endsWith(".schema.json"))) {
-    if (file === "integration-queue-entry.schema.json" || file === "project-contract.schema.json") continue;
+    // agent-registration.schema.json is exempted from the ref diff for a
+    // different reason than project-contract: it was authorized-modified after
+    // BASE by 42c2190, a1742ad, 5a8367e and c8f2c1d (Ruflo plugin candidate
+    // hardening / operational gating). It keeps an explicit blob pin at the end
+    // of this test, so it is relocated out of the ref comparison, not dropped.
+    if (file === "integration-queue-entry.schema.json" || file === "project-contract.schema.json" || file === "agent-registration.schema.json" || file === "decision-record.schema.json") continue;
     try {
       execFileSync("git", ["cat-file", "-e", `${BASE}:contracts/${file}`], { cwd: root, encoding: "utf8" });
     } catch {
@@ -658,6 +663,20 @@ test(`byte-identity: all OTHER contract schemas and sibling ledgers unchanged vs
     const worktreeBlob = execFileSync("git", ["hash-object", resolve(root, rel)], { cwd: root, encoding: "utf8" }).trim();
     assert.equal(worktreeBlob, baseBlob, `${rel} blob differs from ${BASE}`);
   }
+  // The one contract exempted above for authorized modification, pinned to its
+  // post-c8f2c1d blob so unauthorized drift still fails here.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "contracts/agent-registration.schema.json")], { cwd: root, encoding: "utf8" }).trim(),
+    "eb8db8f1cf10da664dbcc8319bec98a288a4bdd8",
+    "agent-registration.schema.json drifted from its authorized blob"
+  );
+  // decision-record.schema.json, exempted above for the same reason: pinned to
+  // its post-f3ac99a blob so unauthorized drift still fails here.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(root, "contracts/decision-record.schema.json")], { cwd: root, encoding: "utf8" }).trim(),
+    "1b283c0805d540359ca4711e4d7a5b2e25af571c",
+    "decision-record.schema.json drifted from its authorized blob"
+  );
   // Sanity: DurableLedger's preWriteCheck hook this slice depends on is still
   // present, and this slice did not need to touch it.
   const base = readFileSync(resolve(root, "src/ledger/durable-ledger.mjs"), "utf8");

@@ -52,6 +52,14 @@ const IDS = Object.freeze({
   session: "ses_modruntime_s3"
 });
 
+test("decision-record.schema.json is pinned to its post-f3ac99a blob", () => {
+  assert.equal(
+    gitWorkingBlobHash("contracts/decision-record.schema.json"),
+    "1b283c0805d540359ca4711e4d7a5b2e25af571c",
+    "decision-record.schema.json drifted from its authorized blob"
+  );
+});
+
 function identity(overrides = {}) {
   return {
     decisionId: "dec_approval_001",
@@ -741,7 +749,29 @@ test("F4 byte-identity: protected source files are byte-identical to main @ beeb
 // assertion still holds; only this one file's blob comparison is exempted, so
 // this guard still bites on every OTHER contract — tamper detection is relocated,
 // not dropped.
-const ALIGNED_CONTRACTS = new Set(["contracts/project-contract.schema.json"]);
+// contracts/agent-registration.schema.json is exempted from the REF comparison
+// for a different reason again: it was authorized-modified by 42c2190, a1742ad,
+// 5a8367e and c8f2c1d (Ruflo plugin candidate hardening and operational
+// gating), all of which postdate both baselines. Exempting it from the ref
+// diff without more would drop it from coverage, so it carries an explicit blob
+// pin below instead — relocated, not dropped, on the same principle as
+// project-contract above.
+const ALIGNED_CONTRACTS = new Set([
+  "contracts/project-contract.schema.json",
+  "contracts/agent-registration.schema.json",
+  // decision-record.schema.json was authorized-modified by f3ac99a (WP-SK-R1 /
+  // DEF-R1: bind a governance decision to what it authorizes). Same treatment —
+  // out of the ref diff, into an explicit pin.
+  "contracts/decision-record.schema.json"
+]);
+
+test("agent-registration.schema.json is pinned to its post-c8f2c1d blob", () => {
+  assert.equal(
+    gitWorkingBlobHash("contracts/agent-registration.schema.json"),
+    "eb8db8f1cf10da664dbcc8319bec98a288a4bdd8",
+    "agent-registration.schema.json drifted from its authorized blob"
+  );
+});
 
 test("F4 byte-identity: every contracts/*.json is byte-identical to main @ beebfe8 AND @ 71b9d41 (same file set)", () => {
   const baseContracts = contractPathsAt(BYTE_IDENTITY_BASELINES[0]);
