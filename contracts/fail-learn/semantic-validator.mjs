@@ -195,19 +195,32 @@ export function validateExperienceEvidenceAdmissibility(experience, sourceEviden
 export function validateIndependentKnowledgeReview(knowledge, experienceDoc) {
   const violations = [];
   if (knowledge?.maturity_state !== "K1") return { valid: true, violations };
-  const disqualified = new Set([knowledge.author_actor_id]);
-  if (experienceDoc) {
-    if (experienceDoc.source_actor_id) disqualified.add(experienceDoc.source_actor_id);
-    if (experienceDoc.reviewer_status?.checker_id) disqualified.add(experienceDoc.reviewer_status.checker_id);
+  // Rework round 02 (SEC-FL-WP1-N001): a K1 knowledge document always cites at
+  // least one experience_refs entry (schema-required, nonempty_reference_list),
+  // so a caller that resolves and passes that experience document is always
+  // possible in principle. Previously, omitting experienceDoc entirely made the
+  // author/experience-actor collision invisible (this function silently fell
+  // back to checking only knowledge.author_actor_id). Fail CLOSED instead: a K1
+  // claim cannot be certified independent without the source experience
+  // actually being supplied for cross-checking.
+  if (!experienceDoc) {
+    violations.push({
+      check: "independent_knowledge_review",
+      message: `knowledge ${knowledge.knowledge_id} claims K1 but no source Experience Record was supplied to validateIndependentKnowledgeReview for independence cross-checking -- a K1 claim cannot be verified independent of the reporting/checking actor without resolving and passing the cited experience_refs document; this call fails closed rather than silently skipping the author/experience-actor collision check (SEC-FL-WP1-N001)`
+    });
+    return { valid: false, violations };
   }
+  const disqualified = new Set([knowledge.author_actor_id]);
+  if (experienceDoc.source_actor_id) disqualified.add(experienceDoc.source_actor_id);
+  if (experienceDoc.reviewer_status?.checker_id) disqualified.add(experienceDoc.reviewer_status.checker_id);
   const independentApproval = (knowledge.reviewers || []).some((r) => r.verdict === "APPROVED" && !disqualified.has(r.reviewer_id));
   if (!independentApproval) {
     violations.push({
       check: "independent_knowledge_review",
-      message: `knowledge ${knowledge.knowledge_id} claims K1 but has no APPROVED reviewer independent of the author (${knowledge.author_actor_id})${experienceDoc ? ` or the source experience's actor/checker (${experienceDoc.source_actor_id}, ${experienceDoc.reviewer_status?.checker_id})` : ""}`
+      message: `knowledge ${knowledge.knowledge_id} claims K1 but has no APPROVED reviewer independent of the author (${knowledge.author_actor_id}) or the source experience's actor/checker (${experienceDoc.source_actor_id}, ${experienceDoc.reviewer_status?.checker_id})`
     });
   }
-  return { valid: violations.length === 0, violations };
+  return { valid: independentApproval, violations };
 }
 
 /**
@@ -231,31 +244,65 @@ export function validateNoDerivationFromDeprecatedKnowledge(skill, knowledgeDoc)
 
 /**
  * SCEN-10 / matrix row 4 ("undeclared side effect or permission rejects").
- * Walks every declared test case category and asserts every observed side
- * effect and permission_class is a member of the manifest's declared sets.
+ * Walks every declared test case category and asserts every OBSERVED value
+ * in each of the SIX declared_permissions categories is a member of the
+ * manifest's corresponding declared set: declared_side_effects,
+ * action_classes, tools, mcp_servers, filesystem_paths, network_hosts.
  * declared_side_effects can never legally contain CREDENTIAL_ACTION and
  * action_classes can never legally contain a hard-deny class (schema-level
  * exclusion, see common.schema.json declarable_* enums) -- so any test case
  * that observes CREDENTIAL_ACCESS or claims a hard-deny permission_class is
  * automatically undeclared and rejected here.
+ *
+ * Rework round 02 (SEC-FL-WP1-001): prior to this round, only
+ * declared_side_effects and action_classes were checked (2 of 6 categories);
+ * tools/mcp_servers/filesystem_paths/network_hosts had no "observed"
+ * counterpart field anywhere in the contract, so a narrow, innocuous-looking
+ * manifest (e.g. action_classes=[READ_ONLY], declared_side_effects=[NONE])
+ * could smuggle broad, unexamined tool/MCP-server/filesystem/network access
+ * past this check entirely (SEC's reviewer demonstrated this with an SSRF-
+ * style network_hosts + sensitive filesystem_paths + raw exec tools probe --
+ * see vectors/negative/neg-32-scenario10-manifest-smuggling-network-and-filesystem.json).
+ * All six categories are now walked symmetrically. tools/mcp_servers use
+ * exact-string set membership (same style as the original two categories);
+ * filesystem_paths and network_hosts likewise use exact-string membership,
+ * NOT prefix/subnet/CIDR containment -- a declared "/etc" would NOT cover an
+ * observed "/etc/passwd" under this check, and a declared "*.internal.corp"
+ * would not itself expand as a wildcard. That prefix/wildcard-matching
+ * semantics question is deliberately left to WP7 (Skill Foundry) runtime
+ * enforcement design, not decided here at the WP1 contract-shape layer.
  */
 export function validateNoUndeclaredSideEffectsOrPermissions(skill) {
   const violations = [];
-  const declaredEffects = new Set(skill?.capability_manifest?.declared_permissions?.declared_side_effects || []);
-  const declaredClasses = new Set(skill?.capability_manifest?.declared_permissions?.action_classes || []);
+  const declared = skill?.capability_manifest?.declared_permissions || {};
+  const declaredEffects = new Set(declared.declared_side_effects || []);
+  const declaredClasses = new Set(declared.action_classes || []);
+  const declaredTools = new Set(declared.tools || []);
+  const declaredMcpServers = new Set(declared.mcp_servers || []);
+  const declaredFilesystemPaths = new Set(declared.filesystem_paths || []);
+  const declaredNetworkHosts = new Set(declared.network_hosts || []);
   const allCases = [
     ...(skill?.tests?.positive_cases || []),
     ...(skill?.tests?.negative_cases || []),
     ...(skill?.tests?.regression_cases || []),
     ...(skill?.tests?.policy_denial_cases || [])
   ];
+  const CATEGORY_CHECKS = [
+    { field: "observed_side_effects", declaredSet: declaredEffects, check: "no_undeclared_side_effects", declaredName: "declared_permissions.declared_side_effects" },
+    { field: "observed_tools", declaredSet: declaredTools, check: "no_undeclared_tools", declaredName: "declared_permissions.tools" },
+    { field: "observed_mcp_servers", declaredSet: declaredMcpServers, check: "no_undeclared_mcp_servers", declaredName: "declared_permissions.mcp_servers" },
+    { field: "observed_filesystem_paths", declaredSet: declaredFilesystemPaths, check: "no_undeclared_filesystem_paths", declaredName: "declared_permissions.filesystem_paths" },
+    { field: "observed_network_hosts", declaredSet: declaredNetworkHosts, check: "no_undeclared_network_hosts", declaredName: "declared_permissions.network_hosts" }
+  ];
   for (const testCase of allCases) {
-    for (const effect of testCase.observed_side_effects || []) {
-      if (!declaredEffects.has(effect)) {
-        violations.push({
-          check: "no_undeclared_side_effects",
-          message: `skill ${skill.skill_id} test case ${testCase.case_id} observed side effect ${effect}, which is not in capability_manifest.declared_permissions.declared_side_effects (${[...declaredEffects].join(", ") || "<empty>"})`
-        });
+    for (const { field, declaredSet, check, declaredName } of CATEGORY_CHECKS) {
+      for (const observedValue of testCase[field] || []) {
+        if (!declaredSet.has(observedValue)) {
+          violations.push({
+            check,
+            message: `skill ${skill.skill_id} test case ${testCase.case_id} ${field} includes ${observedValue}, which is not in capability_manifest.${declaredName} (${[...declaredSet].join(", ") || "<empty>"})`
+          });
+        }
       }
     }
     if (testCase.permission_class && !declaredClasses.has(testCase.permission_class)) {

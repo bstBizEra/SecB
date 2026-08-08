@@ -89,16 +89,21 @@
         "redaction_policy": "redact-v1",
         "retention_policy": "retain-90d",
         "admissibility_status": "admissible",
+        "redaction_attestation": {
+          "redaction_applied": true,
+          "mechanism": "DENYLIST_PATTERN",
+          "policy_version": "redaction-policy-v1"
+        },
         "integrity_signature": {
           "algorithm": "ED25519",
           "key_id": "key-evidence-01",
           "trust_domain": "secb.trust.evidence",
           "canonical_form": "SECB_CANONICAL_JSON_V1",
-          "signed_digest": "sha256:f85b170d61604020fc5fb4ec855b445e16d6fdecc66c73f7007db4979291f05e",
-          "signature_value": "sig-f85b170d61604020fc5fb4ec855b445e16d6fdecc66c73f7007db4979291"
+          "signed_digest": "sha256:74107d2150af99d183d8e1bbc2d709efbba7b10ef62ac8d784524d913b2a2147",
+          "signature_value": "sig-74107d2150af99d183d8e1bbc2d709efbba7b10ef62ac8d784524d913b2a"
         }
       },
-      "evidence_id": "fev_f85b170d61604020fc5fb4ec855b445e16d6fdecc66c73f7007db4979291f05e"
+      "evidence_id": "fev_74107d2150af99d183d8e1bbc2d709efbba7b10ef62ac8d784524d913b2a2147"
     }
   }
 }

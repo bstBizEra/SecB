@@ -1,15 +1,15 @@
 {
-  "vector_id": "pos-02-scenario2-cancelled-no-mutation",
-  "description": "A cancelled (not denied) attempt still evidences no committed mutation and no affected resources -- evidence capture never performed the action.",
+  "vector_id": "neg-34-scenario3-sanitized-message-case-variation-now-caught",
+  "description": "sanitized_message embeds a case-varied api_key trigger ('API_KEY:' rather than 'api_key=') -- SEC-FL-WP1-002's own demonstrated bypass of the original lowercase-only denylist regex. Rework round 02 hardens the pattern to match trigger keywords case-insensitively, so this is now caught at the schema layer where it previously passed clean.",
   "scenario_refs": [
-    "SCEN-02"
+    "SCEN-03"
   ],
   "matrix_row_refs": [
     "ROW-1"
   ],
   "expected": {
-    "ajv": "PASS",
-    "semantic": "PASS"
+    "ajv": "FAIL",
+    "semantic": "N/A"
   },
   "documents": {
     "envelope": {
@@ -38,17 +38,19 @@
         "input_digest": "sha256:40aca46cb9ebb03e5e09864ab8b89d6fd9c968845befcd5769970cdcac1830f6"
       },
       "decision": {
-        "result": "cancelled",
+        "result": "denied",
         "policy_decision_id": "pdp-dec-01",
         "policy_bundle_digest": "sha256:0380584c1e86e983bb67d9604e52bd5a00fd9fdbd822e91df9599808aff8f8db",
-        "matched_rules": [],
-        "fail_closed_applied": false
+        "matched_rules": [
+          "rule-deny-protected-branch"
+        ],
+        "fail_closed_applied": true
       },
       "failure": {
-        "failure_class": "TRANSIENT_FAILURE",
+        "failure_class": "POLICY_DENIAL_EXPECTED",
         "error_type": "PolicyDenial",
         "error_code": "E_POLICY_DENY",
-        "sanitized_message": "policy denied write to protected branch",
+        "sanitized_message": "leaked API_KEY: abc123def456",
         "stacktrace_reference": "encref:trace-01:sha256:4e2fbe7ae9c5146f4b7b0ba834f1e270843120629abed25b2d9a9de8ab51b23f",
         "severity": "low"
       },
@@ -97,11 +99,11 @@
           "key_id": "key-evidence-01",
           "trust_domain": "secb.trust.evidence",
           "canonical_form": "SECB_CANONICAL_JSON_V1",
-          "signed_digest": "sha256:5f8e3a69382306be0f2f6500cf67ab9ab0ab6bd9032ccc0ec4f468b1db679b32",
-          "signature_value": "sig-5f8e3a69382306be0f2f6500cf67ab9ab0ab6bd9032ccc0ec4f468b1db67"
+          "signed_digest": "sha256:049ed740c59425a714867368f0f3a0969bf093e1e2f7c3ef6c5cb22e847ff56e",
+          "signature_value": "sig-049ed740c59425a714867368f0f3a0969bf093e1e2f7c3ef6c5cb22e847f"
         }
       },
-      "evidence_id": "fev_5f8e3a69382306be0f2f6500cf67ab9ab0ab6bd9032ccc0ec4f468b1db679b32"
+      "evidence_id": "fev_049ed740c59425a714867368f0f3a0969bf093e1e2f7c3ef6c5cb22e847ff56e"
     }
   }
 }

@@ -13,9 +13,16 @@
     "skill": {
       "schema_version": "1.0",
       "maturity_state": "S0",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
       "knowledge_ref": {
-        "ref_id": "know_948c7c5bd1b5f65fd1c3f80abf0fd24eff80e007737b519d831c94b2c045c0ac",
-        "digest": "sha256:a62f4f4903cdb315a6848ae2146779296d4ab396747a23d834111de05fea25c6"
+        "ref_id": "know_2e00eaced773e0828d47f4a5c8376a36c8f151b8b762dac00dfa79b75b57c728",
+        "digest": "sha256:057afd339d0961625296e4f9d1a9908646861efc5f90329ec6bb0b24d0491391"
       },
       "knowledge_maturity_at_binding": "K1",
       "capability_manifest": {
@@ -66,6 +73,10 @@
       "tests": {
         "positive_cases": [
           {
+            "observed_tools": [],
+            "observed_mcp_servers": [],
+            "observed_filesystem_paths": [],
+            "observed_network_hosts": [],
             "case_id": "pos-1",
             "description": "opens a PR instead of writing directly",
             "expected_result": "ALLOW",
@@ -78,6 +89,10 @@
         ],
         "negative_cases": [
           {
+            "observed_tools": [],
+            "observed_mcp_servers": [],
+            "observed_filesystem_paths": [],
+            "observed_network_hosts": [],
             "case_id": "neg-1",
             "description": "direct protected-branch write attempt is still denied",
             "expected_result": "DENY",
@@ -89,14 +104,14 @@
         "policy_denial_cases": []
       },
       "created_at": "2026-07-20T18:35:00.000Z",
-      "skill_id": "skill_5c3ce178e3f1556bc4860dbff769279caf66119b2611cc72b05e3c032df65787",
+      "skill_id": "skill_0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa3606",
       "signature": {
         "algorithm": "ED25519",
         "key_id": "key-skill-01",
         "trust_domain": "secb.trust.skill",
         "canonical_form": "SECB_CANONICAL_JSON_V1",
-        "signed_digest": "sha256:5c3ce178e3f1556bc4860dbff769279caf66119b2611cc72b05e3c032df65787",
-        "signature_value": "sig-5c3ce178e3f1556bc4860dbff769279caf66119b2611cc72b05e3c032df6"
+        "signed_digest": "sha256:0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa3606",
+        "signature_value": "sig-0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa"
       }
     },
     "skillKnowledge": {
@@ -125,14 +140,14 @@
       ],
       "evidence_refs": [
         {
-          "ref_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
-          "digest": "sha256:8d5f68143af52650abb2e352ffa162ed217de2ab57f9420fd5a4df9c26bac065"
+          "ref_id": "fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae",
+          "digest": "sha256:1c2b1ad57d26c50807e9aa1f1d4eaf64bacaae5e92f3d6803cf29fbb71bab44f"
         }
       ],
       "experience_refs": [
         {
-          "ref_id": "exp_53d61422972ad1bbf064067c4eba95afec9fe3e7d40d321044083f80f2b58b98",
-          "digest": "sha256:283f0b4acbbcd5bbb33a8b6fdc07a5f29fe7ea77137e6b53fd7e1d2f76db6fd7"
+          "ref_id": "exp_a81baa14e71c94a873275eda7ffc6cbeaf0fb757927128dd70eada92e3967477",
+          "digest": "sha256:7120c05609ab00fc44c7ba5be74e5afb0b7d7b90a8e63e1caf36c5e51014c8ca"
         }
       ],
       "reviewers": [
@@ -151,8 +166,13 @@
       },
       "supersedes": null,
       "superseded_by": null,
+      "redaction_attestation": {
+        "redaction_applied": true,
+        "mechanism": "DENYLIST_PATTERN",
+        "policy_version": "redaction-policy-v1"
+      },
       "created_at": "2026-07-20T18:30:00.000Z",
-      "knowledge_id": "know_948c7c5bd1b5f65fd1c3f80abf0fd24eff80e007737b519d831c94b2c045c0ac"
+      "knowledge_id": "know_2e00eaced773e0828d47f4a5c8376a36c8f151b8b762dac00dfa79b75b57c728"
     }
   }
 }

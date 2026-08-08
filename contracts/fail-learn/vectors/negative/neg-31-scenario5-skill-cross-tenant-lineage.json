@@ -1,15 +1,15 @@
 {
-  "vector_id": "neg-20-scenario11-negative-case-expects-allow",
-  "description": "A negative_cases entry declares expected_result ALLOW -- the item schema for negative/policy-denial cases closes the enum to DENY/ERROR only, so ALLOW is not a legal value here at all.",
+  "vector_id": "neg-31-scenario5-skill-cross-tenant-lineage",
+  "description": "Skill Candidate declares Tenant B scope while its cited Knowledge Artifact (skillKnowledge) is scoped to Tenant A -- same class of defect REV-001 demonstrated for Knowledge, reproduced for Skill Candidate's newly-added scope field. Before rework round 02 Skill Candidate had no scope field at all, so this exact mismatch was not even schema-expressible.",
   "scenario_refs": [
-    "SCEN-11"
+    "SCEN-05"
   ],
   "matrix_row_refs": [
     "ROW-4"
   ],
   "expected": {
-    "ajv": "FAIL",
-    "semantic": "N/A"
+    "ajv": "PASS",
+    "semantic": "FAIL"
   },
   "documents": {
     "skill": {
@@ -17,10 +17,10 @@
       "maturity_state": "S0",
       "scope": {
         "organization_id": "org-alpha",
-        "tenant_id": "tenant-a",
-        "project_id": "proj-01",
+        "tenant_id": "tenant-b",
+        "project_id": "proj-02",
         "work_package_id": "wp1-fail-learn",
-        "session_id": "sess-01"
+        "session_id": "sess-02"
       },
       "knowledge_ref": {
         "ref_id": "know_2e00eaced773e0828d47f4a5c8376a36c8f151b8b762dac00dfa79b75b57c728",
@@ -96,8 +96,8 @@
             "observed_filesystem_paths": [],
             "observed_network_hosts": [],
             "case_id": "neg-1",
-            "description": "mislabeled case",
-            "expected_result": "ALLOW",
+            "description": "direct protected-branch write attempt is still denied",
+            "expected_result": "DENY",
             "observed_side_effects": [],
             "permission_class": "EXECUTION_WRITE"
           }
@@ -106,15 +106,75 @@
         "policy_denial_cases": []
       },
       "created_at": "2026-07-20T18:35:00.000Z",
-      "skill_id": "skill_a7e46ba319bfb113c519617d2b51c6ee341a2552e6fd15a400c988ee1d3b999a",
+      "skill_id": "skill_f759a42c8a411bcfe6b98578e491c06f888ca1cd99036c8e968cfc461dfdf9d4",
       "signature": {
         "algorithm": "ED25519",
         "key_id": "key-skill-01",
         "trust_domain": "secb.trust.skill",
         "canonical_form": "SECB_CANONICAL_JSON_V1",
-        "signed_digest": "sha256:a7e46ba319bfb113c519617d2b51c6ee341a2552e6fd15a400c988ee1d3b999a",
-        "signature_value": "sig-a7e46ba319bfb113c519617d2b51c6ee341a2552e6fd15a400c988ee1d3b"
+        "signed_digest": "sha256:f759a42c8a411bcfe6b98578e491c06f888ca1cd99036c8e968cfc461dfdf9d4",
+        "signature_value": "sig-f759a42c8a411bcfe6b98578e491c06f888ca1cd99036c8e968cfc461dfd"
       }
+    },
+    "skillKnowledge": {
+      "schema_version": "1.0",
+      "maturity_state": "K1",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "applicability": "any git_mutation targeting a protected branch",
+      "symptoms": [
+        "write denied on protected branch"
+      ],
+      "diagnosis": "policy correctly enforces protected-branch write denial",
+      "verified_cause": "protected_branch action_class hard-deny rule",
+      "resolution": "route the change through a pull request instead of a direct write",
+      "prevention": "document the protected-branch workflow for agents",
+      "unsafe_shortcuts": [
+        "do not attempt to bypass by disabling the policy bundle"
+      ],
+      "permissions_required": [
+        "READ_ONLY"
+      ],
+      "evidence_refs": [
+        {
+          "ref_id": "fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae",
+          "digest": "sha256:1c2b1ad57d26c50807e9aa1f1d4eaf64bacaae5e92f3d6803cf29fbb71bab44f"
+        }
+      ],
+      "experience_refs": [
+        {
+          "ref_id": "exp_a81baa14e71c94a873275eda7ffc6cbeaf0fb757927128dd70eada92e3967477",
+          "digest": "sha256:7120c05609ab00fc44c7ba5be74e5afb0b7d7b90a8e63e1caf36c5e51014c8ca"
+        }
+      ],
+      "reviewers": [
+        {
+          "reviewer_id": "agent-reviewer-01",
+          "reviewed_at": "2026-07-20T18:40:00.000Z",
+          "verdict": "APPROVED"
+        }
+      ],
+      "author_actor_id": "agent-producer-01",
+      "confidence": "high",
+      "validity": {
+        "valid_from": "2026-07-20T18:30:00.000Z",
+        "review_due": "2027-01-20T18:30:00.000Z",
+        "valid_until": null
+      },
+      "supersedes": null,
+      "superseded_by": null,
+      "redaction_attestation": {
+        "redaction_applied": true,
+        "mechanism": "DENYLIST_PATTERN",
+        "policy_version": "redaction-policy-v1"
+      },
+      "created_at": "2026-07-20T18:30:00.000Z",
+      "knowledge_id": "know_2e00eaced773e0828d47f4a5c8376a36c8f151b8b762dac00dfa79b75b57c728"
     }
   }
 }

@@ -31,6 +31,30 @@ function refTo(idValue) {
   return { ref_id: idValue, digest: hash(`ref-of-${idValue}`) };
 }
 
+// Rework round 02 (SEC-FL-WP1-002): default, honest redaction attestation --
+// a real denylist-pattern check does run on sanitized_message (and only
+// there), so DENYLIST_PATTERN/true is the accurate default claim for the
+// clean base documents built below. Vectors that need a different claim
+// (or a lying/false one) override this explicitly.
+function defaultRedactionAttestation() {
+  return { redaction_applied: true, mechanism: "DENYLIST_PATTERN", policy_version: "redaction-policy-v1" };
+}
+
+// Rework round 02 (SEC-FL-WP1-001): every Skill Candidate test case now
+// requires observed_tools/observed_mcp_servers/observed_filesystem_paths/
+// observed_network_hosts alongside the original observed_side_effects/
+// permission_class. This helper keeps every test-case literal below from
+// having to spell out four empty-array defaults every time.
+function testCase(fields) {
+  return {
+    observed_tools: [],
+    observed_mcp_servers: [],
+    observed_filesystem_paths: [],
+    observed_network_hosts: [],
+    ...fields
+  };
+}
+
 const TENANT_A = { organization_id: "org-alpha", tenant_id: "tenant-a", project_id: "proj-01", work_package_id: "wp1-fail-learn", session_id: "sess-01" };
 const TENANT_B = { organization_id: "org-alpha", tenant_id: "tenant-b", project_id: "proj-02", work_package_id: "wp1-fail-learn", session_id: "sess-02" };
 
@@ -106,7 +130,8 @@ function buildEnvelope(overrides = {}) {
       contains_secrets: false,
       redaction_policy: "redact-v1",
       retention_policy: "retain-90d",
-      admissibility_status: "admissible"
+      admissibility_status: "admissible",
+      redaction_attestation: defaultRedactionAttestation()
     }
   };
   const merged = deepMerge(base, overrides);
@@ -147,6 +172,7 @@ function buildExperience(overrides = {}, sourceEnvelope) {
     confidence: "medium",
     reviewer_status: { status: "UNREVIEWED", checker_id: null, checker_distinct_from_actor: false },
     source_actor_id: ACTOR_PRODUCER.actor_id,
+    redaction_attestation: defaultRedactionAttestation(),
     created_at: "2026-07-20T18:25:00.000Z"
   };
   const merged = deepMerge(base, overrides);
@@ -175,6 +201,7 @@ function buildKnowledge(overrides = {}, sourceExperience) {
     validity: { valid_from: "2026-07-20T18:30:00.000Z", review_due: "2027-01-20T18:30:00.000Z", valid_until: null },
     supersedes: null,
     superseded_by: null,
+    redaction_attestation: defaultRedactionAttestation(),
     created_at: "2026-07-20T18:30:00.000Z"
   };
   const merged = deepMerge(base, overrides);
@@ -186,6 +213,11 @@ function buildSkill(overrides = {}, sourceKnowledge) {
   const base = {
     schema_version: "1.0",
     maturity_state: "S0",
+    // Rework round 02 (REV-001): Skill Candidate gained its own tenant scope
+    // field this round. Defaults to inheriting the source Knowledge
+    // Artifact's scope (the honest, consistent case); vectors that need a
+    // cross-tenant mismatch override this explicitly.
+    scope: sourceKnowledge.scope,
     knowledge_ref: refTo(sourceKnowledge.knowledge_id),
     knowledge_maturity_at_binding: "K1",
     capability_manifest: {
@@ -213,8 +245,8 @@ function buildSkill(overrides = {}, sourceKnowledge) {
     experience_refs: [],
     known_limitations: [],
     tests: {
-      positive_cases: [{ case_id: "pos-1", description: "opens a PR instead of writing directly", expected_result: "ALLOW", observed_side_effects: ["FILE_WRITE", "GIT_COMMIT"], permission_class: "EXECUTION_WRITE" }],
-      negative_cases: [{ case_id: "neg-1", description: "direct protected-branch write attempt is still denied", expected_result: "DENY", observed_side_effects: [], permission_class: "EXECUTION_WRITE" }],
+      positive_cases: [testCase({ case_id: "pos-1", description: "opens a PR instead of writing directly", expected_result: "ALLOW", observed_side_effects: ["FILE_WRITE", "GIT_COMMIT"], permission_class: "EXECUTION_WRITE" })],
+      negative_cases: [testCase({ case_id: "neg-1", description: "direct protected-branch write attempt is still denied", expected_result: "DENY", observed_side_effects: [], permission_class: "EXECUTION_WRITE" })],
       regression_cases: [],
       policy_denial_cases: []
     },
@@ -377,7 +409,7 @@ neg("neg-11-matrixrow2-invalid-evidence-remains-x0", "Experience claims X1 while
   { ajv: "PASS", semantic: "FAIL" });
 
 // SCEN-08 -------------------------------------------------------------------
-pos("pos-08-scenario8-reviewed-lineage-advances-k1", "K1 knowledge carries an APPROVED reviewer independent of both the author and the source experience's actor/checker.", ["SCEN-08"], ["ROW-3"],
+pos("pos-08-scenario8-reviewed-lineage-advances-k1", "K1 knowledge carries an APPROVED reviewer independent of both the author and the source experience's actor/checker. Also (rework round 02, REV-001) the first positive proof that Knowledge's own scope.tenant_id is genuinely checked against its cited experience's scope, not merely present.", ["SCEN-08", "SCEN-05"], ["ROW-3"],
   { knowledge: cleanKnowledgeK1, knowledgeExperience: cleanExperienceX1 });
 
 neg("neg-12-scenario8-knowledge-self-reviewed", "The only APPROVED reviewer on a K1 claim is the knowledge's own author -- schema cannot compare reviewer_id to author_actor_id; the semantic validator rejects it.", ["SCEN-08"], ["ROW-3"],
@@ -408,19 +440,19 @@ neg("neg-17-scenario9-knowledge-snapshot-lie", "Skill claims knowledge_maturity_
 pos("pos-10-scenario10-manifest-and-tests-compile", "Every test case's observed_side_effects and permission_class are subsets of the manifest's declared sets -- manifest and tests compile cleanly.", ["SCEN-10"], ["ROW-4"], { skill: cleanSkillS0, skillKnowledge: cleanKnowledgeK1 });
 
 neg("neg-18-scenario10-undeclared-side-effect", "A test case observes NETWORK_CALL, which the manifest never declared (only FILE_WRITE/GIT_COMMIT are declared) -- undeclared side effect rejects.", ["SCEN-10"], ["ROW-4"],
-  { skill: buildSkill({ tests: { positive_cases: [{ case_id: "pos-1", description: "unexpected outbound call observed", expected_result: "ALLOW", observed_side_effects: ["FILE_WRITE", "NETWORK_CALL"], permission_class: "EXECUTION_WRITE" }] } }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 },
+  { skill: buildSkill({ tests: { positive_cases: [testCase({ case_id: "pos-1", description: "unexpected outbound call observed", expected_result: "ALLOW", observed_side_effects: ["FILE_WRITE", "NETWORK_CALL"], permission_class: "EXECUTION_WRITE" })] } }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 },
   { ajv: "PASS", semantic: "FAIL" });
 
 neg("neg-19-matrixrow4-undeclared-permission-class", "A test case exercises permission_class PROTECTED_BRANCH, a hard-deny class the manifest can never declare -- undeclared permission rejects.", ["SCEN-10"], ["ROW-4"],
-  { skill: buildSkill({ tests: { negative_cases: [{ case_id: "neg-1", description: "attempted protected-branch escalation observed and denied", expected_result: "DENY", observed_side_effects: [], permission_class: "PROTECTED_BRANCH" }] } }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 },
+  { skill: buildSkill({ tests: { negative_cases: [testCase({ case_id: "neg-1", description: "attempted protected-branch escalation observed and denied", expected_result: "DENY", observed_side_effects: [], permission_class: "PROTECTED_BRANCH" })] } }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 },
   { ajv: "PASS", semantic: "FAIL" });
 
 // SCEN-11 -----------------------------------------------------------------------
 pos("pos-11-scenario11-negative-tests-fail-closed", "All negative_cases and policy_denial_cases expect DENY/ERROR, never ALLOW.", ["SCEN-11"], ["ROW-4"],
-  { skill: buildSkill({ tests: { negative_cases: [{ case_id: "neg-1", description: "direct write still denied", expected_result: "DENY", observed_side_effects: [], permission_class: "EXECUTION_WRITE" }], policy_denial_cases: [{ case_id: "pol-1", description: "policy bundle denies escalation attempt", expected_result: "DENY", observed_side_effects: [], permission_class: "EXECUTION_WRITE" }], regression_cases: [{ case_id: "reg-1", description: "prior fix still holds", expected_result: "ALLOW", observed_side_effects: ["FILE_WRITE"], permission_class: "EXECUTION_WRITE" }] } }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 });
+  { skill: buildSkill({ tests: { negative_cases: [testCase({ case_id: "neg-1", description: "direct write still denied", expected_result: "DENY", observed_side_effects: [], permission_class: "EXECUTION_WRITE" })], policy_denial_cases: [testCase({ case_id: "pol-1", description: "policy bundle denies escalation attempt", expected_result: "DENY", observed_side_effects: [], permission_class: "EXECUTION_WRITE" })], regression_cases: [testCase({ case_id: "reg-1", description: "prior fix still holds", expected_result: "ALLOW", observed_side_effects: ["FILE_WRITE"], permission_class: "EXECUTION_WRITE" })] } }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 });
 
 neg("neg-20-scenario11-negative-case-expects-allow", "A negative_cases entry declares expected_result ALLOW -- the item schema for negative/policy-denial cases closes the enum to DENY/ERROR only, so ALLOW is not a legal value here at all.", ["SCEN-11"], ["ROW-4"],
-  { skill: buildSkill({ tests: { negative_cases: [{ case_id: "neg-1", description: "mislabeled case", expected_result: "ALLOW", observed_side_effects: [], permission_class: "EXECUTION_WRITE" }] } }, cleanKnowledgeK1) },
+  { skill: buildSkill({ tests: { negative_cases: [testCase({ case_id: "neg-1", description: "mislabeled case", expected_result: "ALLOW", observed_side_effects: [], permission_class: "EXECUTION_WRITE" })] } }, cleanKnowledgeK1) },
   { ajv: "FAIL", semantic: "N/A" });
 
 // SCEN-12 -------------------------------------------------------------------------
@@ -439,7 +471,7 @@ neg("neg-22-scenario12-illegal-rollback-resume", "ROLLED_BACK -> S3 attempts to 
   { ajv: "PASS", semantic: "FAIL" });
 
 // SCEN-13 -------------------------------------------------------------------------
-pos("pos-14-scenario13-full-lineage-traceability", "Skill -> Knowledge -> Experience -> Evidence: every hop's ref_id matches the next document's own id.", ["SCEN-13"], [],
+pos("pos-14-scenario13-full-lineage-traceability", "Skill -> Knowledge -> Experience -> Evidence: every hop's ref_id matches the next document's own id. Also (rework round 02, REV-001) the first positive proof that Skill Candidate's own scope.tenant_id is genuinely checked against its full knowledge/experience/evidence lineage, not merely present.", ["SCEN-13", "SCEN-05"], [],
   { skill: cleanSkillS0, skillKnowledge: cleanKnowledgeK1, skillKnowledgeExperience: cleanExperienceX1, skillEvidenceForLineage: cleanEvidence });
 
 neg("neg-23-scenario13-lineage-break-knowledge-mismatch", "skill.knowledge_ref.ref_id does not match the supplied knowledge document's own knowledge_id -- a spliced/broken chain.", ["SCEN-13"], [],
@@ -490,6 +522,85 @@ neg("neg-28-transition-table-missing-object-type", "A transition table missing t
 neg("neg-29-bonus-sod-producer-equals-checker", "Skill's checker_actor_id equals its own builder_identity.actor_id -- the same identity cannot satisfy both sides of a required separation (P0 plan section 7).", ["SOD-P0-SEC7"], [],
   { skill: buildSkill({ checker_actor_id: ACTOR_BUILDER.actor_id }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 },
   { ajv: "PASS", semantic: "FAIL" });
+
+// =============================================================================
+// Rework round 02 (02-rework-001-defect-correction.yaml): new vectors added to
+// close REV-001 and SEC-FL-WP1-001/002. Numbering continues from neg-29/pos-19.
+// =============================================================================
+
+// --- REV-001 (tenant lineage: Knowledge and Skill Candidate, not just Experience) ---
+
+pos("pos-20-scenario3-redaction-attestation-explicit-external-scanner", "governance.redaction_attestation explicitly claims an EXTERNAL_SECRET_SCANNER mechanism (not just the default DENYLIST_PATTERN every other envelope vector uses) -- the attestation shape accepts any of the closed mechanism values, not only the one mechanism this package's own schema-layer guard actually implements.", ["SCEN-03"], ["ROW-1"],
+  { envelope: buildEnvelope({ sequence: 5, governance: { redaction_attestation: { redaction_applied: true, mechanism: "EXTERNAL_SECRET_SCANNER", policy_version: "redaction-policy-v2" } } }) });
+
+neg("neg-30-scenario5-knowledge-cross-tenant-lineage", "Knowledge Artifact declares Tenant B scope while citing (via knowledgeExperience) an Experience Record scoped to Tenant A. Reproduces REV-001's own mutation of pos-08 exactly: same author/reviewers/evidence/experience_refs as the clean K1 case, content-address digest recomputed automatically by buildKnowledge (not hand-tampered), isolating scope.tenant_id as the one property under test. Before rework round 02 this passed both ajv and the semantic layer as fully conformant K1 knowledge -- validateTenantLineageConsistency was never called for documents.knowledge.", ["SCEN-05"], ["ROW-3"],
+  {
+    knowledge: buildKnowledge(
+      { maturity_state: "K1", scope: TENANT_B, reviewers: [{ reviewer_id: ACTOR_REVIEWER.actor_id, reviewed_at: "2026-07-20T18:40:00.000Z", verdict: "APPROVED" }], confidence: "high" },
+      cleanExperienceX1
+    ),
+    knowledgeExperience: cleanExperienceX1
+  },
+  { ajv: "PASS", semantic: "FAIL" });
+
+neg("neg-31-scenario5-skill-cross-tenant-lineage", "Skill Candidate declares Tenant B scope while its cited Knowledge Artifact (skillKnowledge) is scoped to Tenant A -- same class of defect REV-001 demonstrated for Knowledge, reproduced for Skill Candidate's newly-added scope field. Before rework round 02 Skill Candidate had no scope field at all, so this exact mismatch was not even schema-expressible.", ["SCEN-05"], ["ROW-4"],
+  { skill: buildSkill({ scope: TENANT_B }, cleanKnowledgeK1), skillKnowledge: cleanKnowledgeK1 },
+  { ajv: "PASS", semantic: "FAIL" });
+
+// --- SEC-FL-WP1-001 (manifest capability-smuggling: 4 of 6 categories unchecked) ---
+
+neg("neg-32-scenario10-manifest-smuggling-network-and-filesystem", "Manifest declares only READ_ONLY / [NONE] (matched exactly by the test case's own observed_side_effects/permission_class, so the original two-category check finds nothing to flag), but the SAME test case's newly-required observed_tools/observed_mcp_servers/observed_filesystem_paths/observed_network_hosts fields report raw exec tools (curl/ssh/scp/nc), an unreviewed MCP server, SSH-key-directory and secrets-mount filesystem access, and cloud-metadata SSRF-style network hosts (169.254.169.254, metadata.google.internal) -- none of which the manifest declares. Reproduces SEC-FL-WP1-001's own adversarial probe verbatim (same network_hosts/filesystem_paths/tools values). Before rework round 02 these four fields did not exist anywhere in the contract, so this smuggling was not even schema-expressible, let alone checkable.", ["SCEN-10"], ["ROW-4"],
+  {
+    skill: buildSkill(
+      {
+        capability_manifest: {
+          declared_permissions: {
+            action_classes: ["READ_ONLY"],
+            declared_side_effects: ["NONE"],
+            tools: [],
+            mcp_servers: [],
+            filesystem_paths: [],
+            network_hosts: []
+          }
+        },
+        tests: {
+          positive_cases: [testCase({
+            case_id: "pos-1",
+            description: "narrow read-only manifest, but this test case observes smuggled broad capability access",
+            expected_result: "ALLOW",
+            observed_side_effects: ["NONE"],
+            permission_class: "READ_ONLY",
+            observed_tools: ["curl", "ssh", "scp", "nc"],
+            observed_mcp_servers: ["arbitrary-unreviewed-mcp-server"],
+            observed_filesystem_paths: ["/etc", "/root/.ssh", "/var/run/secrets"],
+            observed_network_hosts: ["169.254.169.254", "metadata.google.internal", "0.0.0.0"]
+          })],
+          negative_cases: [testCase({
+            case_id: "neg-1",
+            description: "matching non-smuggling denial case, declared only so tests.negative_cases (minItems 1) is satisfied",
+            expected_result: "DENY",
+            observed_side_effects: ["NONE"],
+            permission_class: "READ_ONLY"
+          })],
+          regression_cases: [],
+          policy_denial_cases: []
+        }
+      },
+      cleanKnowledgeK1
+    ),
+    skillKnowledge: cleanKnowledgeK1
+  },
+  { ajv: "PASS", semantic: "FAIL" });
+
+// --- SEC-FL-WP1-002 (secret leakage: redaction_applied attestation, denylist hardening) ---
+
+neg("neg-33-scenario3-admissible-envelope-claims-no-redaction", "governance.admissibility_status is admissible, but governance.redaction_attestation.redaction_applied is false -- rework round 02 (SEC-FL-WP1-002) closes this: an admissible envelope can no longer confess that no redaction step was ever claimed to run.", ["SCEN-03"], ["ROW-1"],
+  { envelope: buildEnvelope({ governance: { redaction_attestation: { redaction_applied: false, mechanism: "NONE", policy_version: "redaction-policy-v1" } } }) },
+  { ajv: "FAIL", semantic: "N/A" });
+
+neg("neg-34-scenario3-sanitized-message-case-variation-now-caught", "sanitized_message embeds a case-varied api_key trigger ('API_KEY:' rather than 'api_key=') -- SEC-FL-WP1-002's own demonstrated bypass of the original lowercase-only denylist regex. Rework round 02 hardens the pattern to match trigger keywords case-insensitively, so this is now caught at the schema layer where it previously passed clean.", ["SCEN-03"], ["ROW-1"],
+  { envelope: buildEnvelope({ failure: { sanitized_message: "leaked API_KEY: abc123def456" } }) },
+  { ajv: "FAIL", semantic: "N/A" });
 
 // ---------------------------------------------------------------------------
 for (const v of positives) writeFileSync(path.join(OUT.positive, `${v.vector_id}.json`), JSON.stringify(v, null, 2) + "\n");

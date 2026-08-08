@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://secb.local/contracts/fail-learn/v1/skill-candidate.schema.json",
   "title": "SecB Skill Candidate (WP1 deliverable 5)",
-  "description": "Formalizes SECB-FAIL-LEARN-001 section 10 (Skill formation, S0..S3) as strict JSON Schema. Matrix row 4: positive proof 'Manifest and tests compile'; negative proof 'Undeclared side effect or permission rejects'. WP1 authors the CONTRACT SHAPE across the whole S0..RETIRED lifecycle so lineage/precondition rules are expressible, but WP1 does NOT implement Skill Foundry, evaluation execution, security review, or promotion (WP7/WP8, explicitly prohibited for this dispatch) -- fields like evaluation_evidence_refs, security_review_ref, checker_actor_id are contract slots a later work package populates and enforces at runtime; here they are only schema-required to be present/non-empty at the right maturity_state. LIMITATIONS deferred to semantic-validator.mjs: (1) whether any tests.*.observed_side_effects or permission_class value is genuinely outside capability_manifest.declared_permissions (validateNoUndeclaredSideEffectsOrPermissions, SCEN-10 / matrix row 4); (2) whether knowledge_maturity_at_binding honestly reflects the referenced Knowledge Artifact's real maturity_state, including the deprecated-knowledge case (validateNoDerivationFromDeprecatedKnowledge, SCEN-14); (3) full evidence/experience/knowledge/evidence lineage-chain resolution (validateFullLineageTraceability, SCEN-13); (4) checker_actor_id vs builder_identity.actor_id separation-of-duties (validateSkillProducerCheckerSeparation).",
+  "description": "Formalizes SECB-FAIL-LEARN-001 section 10 (Skill formation, S0..S3) as strict JSON Schema. Matrix row 4: positive proof 'Manifest and tests compile'; negative proof 'Undeclared side effect or permission rejects'. WP1 authors the CONTRACT SHAPE across the whole S0..RETIRED lifecycle so lineage/precondition rules are expressible, but WP1 does NOT implement Skill Foundry, evaluation execution, security review, or promotion (WP7/WP8, explicitly prohibited for this dispatch) -- fields like evaluation_evidence_refs, security_review_ref, checker_actor_id are contract slots a later work package populates and enforces at runtime; here they are only schema-required to be present/non-empty at the right maturity_state. LIMITATIONS deferred to semantic-validator.mjs: (1) whether any tests.*.observed_side_effects, observed_tools, observed_mcp_servers, observed_filesystem_paths, observed_network_hosts, or permission_class value is genuinely outside capability_manifest.declared_permissions -- all SIX declared_permissions categories, symmetrically, as of rework round 02 (SEC-FL-WP1-001) (validateNoUndeclaredSideEffectsOrPermissions, SCEN-10 / matrix row 4); (2) whether knowledge_maturity_at_binding honestly reflects the referenced Knowledge Artifact's real maturity_state, including the deprecated-knowledge case (validateNoDerivationFromDeprecatedKnowledge, SCEN-14); (3) full evidence/experience/knowledge/evidence lineage-chain resolution (validateFullLineageTraceability, SCEN-13); (4) checker_actor_id vs builder_identity.actor_id separation-of-duties (validateSkillProducerCheckerSeparation); (5) whether scope.tenant_id genuinely matches the cited Knowledge Artifact's (and, when supplied, its lineage's) scope -- added rework round 02 (REV-001) (validateTenantLineageConsistency, SCEN-05).",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "skill_id", "maturity_state", "knowledge_ref", "knowledge_maturity_at_binding",
+    "schema_version", "skill_id", "maturity_state", "scope", "knowledge_ref", "knowledge_maturity_at_binding",
     "capability_manifest", "source", "builder_identity", "owner_actor_id", "checker_actor_id",
     "provenance", "signature", "evaluation_evidence_refs", "tests", "created_at"
   ],
@@ -14,6 +14,10 @@
     "schema_version": { "const": "1.0" },
     "skill_id": { "type": "string", "pattern": "^skill_[0-9a-f]{64}$" },
     "maturity_state": { "enum": ["S0", "S1", "S2", "S3", "SUSPENDED", "ROLLED_BACK", "RETIRED", "QUARANTINED"] },
+    "scope": {
+      "description": "Added rework round 02 (REV-001): a Skill Candidate is itself a tenant-scoped record, not merely a document that transitively inherits scope through its knowledge_ref -- the schema previously had no field here at all, which REV-001 found to contradict common.schema.json's tenant_scope $def description outright ('derived records (Experience/Knowledge/Skill) declare the SAME tenant_id as the evidence they cite'). semantic-validator.mjs's validateTenantLineageConsistency now genuinely cross-checks this against the referenced Knowledge Artifact (and, when supplied, its own experience/evidence lineage) -- see run-validation.mjs's runSemanticChecks.",
+      "$ref": "common.schema.json#/$defs/tenant_scope"
+    },
     "knowledge_ref": { "$ref": "common.schema.json#/$defs/reference" },
     "knowledge_maturity_at_binding": {
       "description": "Producer's claim about the referenced Knowledge Artifact's maturity_state at the moment this Skill Candidate was minted. Section 10: knowledge becomes a Skill Candidate only from verified (K1) knowledge. Schema forces the claim itself to be K1 (structural); semantic-validator.mjs cross-checks the claim against the actual referenced document to catch a lie (SCEN-09, SCEN-14).",
@@ -90,28 +94,37 @@
   },
   "$defs": {
     "test_case_allow_capable": {
+      "description": "Added rework round 02 (SEC-FL-WP1-001): observed_tools/observed_mcp_servers/observed_filesystem_paths/observed_network_hosts are required siblings of observed_side_effects/permission_class, one per remaining declared_permissions category, so all six categories are symmetrically observable and checkable -- previously only two of six had any 'observed' counterpart at all.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["case_id", "description", "expected_result", "observed_side_effects", "permission_class"],
+      "required": ["case_id", "description", "expected_result", "observed_side_effects", "permission_class", "observed_tools", "observed_mcp_servers", "observed_filesystem_paths", "observed_network_hosts"],
       "properties": {
         "case_id": { "$ref": "common.schema.json#/$defs/identifier" },
         "description": { "type": "string", "minLength": 1, "maxLength": 1024 },
         "expected_result": { "enum": ["ALLOW", "DENY", "ERROR"] },
         "observed_side_effects": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/side_effect_class" } },
-        "permission_class": { "$ref": "common.schema.json#/$defs/action_class" }
+        "permission_class": { "$ref": "common.schema.json#/$defs/action_class" },
+        "observed_tools": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identifier" } },
+        "observed_mcp_servers": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identifier" } },
+        "observed_filesystem_paths": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/canonical_path" } },
+        "observed_network_hosts": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 253 } }
       }
     },
     "test_case_deny_only": {
-      "description": "SCEN-11: negative/policy-denial cases must remain fail-closed -- expected_result cannot ever be ALLOW here, closed at the enum level regardless of maturity_state.",
+      "description": "SCEN-11: negative/policy-denial cases must remain fail-closed -- expected_result cannot ever be ALLOW here, closed at the enum level regardless of maturity_state. Added rework round 02 (SEC-FL-WP1-001): same observed_tools/observed_mcp_servers/observed_filesystem_paths/observed_network_hosts fields as test_case_allow_capable, for the same reason.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["case_id", "description", "expected_result", "observed_side_effects", "permission_class"],
+      "required": ["case_id", "description", "expected_result", "observed_side_effects", "permission_class", "observed_tools", "observed_mcp_servers", "observed_filesystem_paths", "observed_network_hosts"],
       "properties": {
         "case_id": { "$ref": "common.schema.json#/$defs/identifier" },
         "description": { "type": "string", "minLength": 1, "maxLength": 1024 },
         "expected_result": { "enum": ["DENY", "ERROR"] },
         "observed_side_effects": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/side_effect_class" } },
-        "permission_class": { "$ref": "common.schema.json#/$defs/action_class" }
+        "permission_class": { "$ref": "common.schema.json#/$defs/action_class" },
+        "observed_tools": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identifier" } },
+        "observed_mcp_servers": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/identifier" } },
+        "observed_filesystem_paths": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/canonical_path" } },
+        "observed_network_hosts": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 253 } }
       }
     }
   },

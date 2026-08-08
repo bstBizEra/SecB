@@ -59,11 +59,11 @@
         "error_type": { "$ref": "common.schema.json#/$defs/identifier" },
         "error_code": { "$ref": "common.schema.json#/$defs/identifier" },
         "sanitized_message": {
-          "description": "Structural (not semantic) secret guard: forbids common secret-shaped substrings. This is a best-effort schema-layer defense, not a substitute for the WP2 redaction/secret-scan control.",
+          "description": "Structural (not semantic) secret guard: forbids common secret-shaped substrings. This is a best-effort schema-layer defense, not a substitute for the WP2 redaction/secret-scan control. Hardened in rework round 02 (SEC-FL-WP1-002) to match keyword trigger words case-insensitively (e.g. 'API_KEY:' is now caught, not just 'api_key='). STILL-DEFERRED, NOT fixed by this hardening (would require real entropy-based secret detection, out of WP1 schema-pattern reach): (1) a keyword with a non-standard separator or spacing, e.g. 'the secret_key is abcdef...' with no '=' or ':' immediately after the keyword; (2) a bare high-entropy secret (AWS key, JWT, etc.) with no trigger keyword nearby at all. See governance.redaction_attestation for the companion contract-level attestation hook that names this gap explicitly rather than leaving it contract-silent.",
           "type": "string",
           "minLength": 1,
           "maxLength": 4096,
-          "pattern": "^(?!.*(?:BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|api[_-]?key\\s*[=:]|secret[_-]?key\\s*[=:]|Bearer [A-Za-z0-9._-]{10,}|password\\s*[=:]|Authorization:\\s*Basic)).*$"
+          "pattern": "^(?!.*(?:BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|[aA][pP][iI][_-]?[kK][eE][yY]\\s*[=:]|[sS][eE][cC][rR][eE][tT][_-]?[kK][eE][yY]\\s*[=:]|[Bb][eE][aA][rR][eE][rR] [A-Za-z0-9._-]{10,}|[pP][aA][sS][sS][wW][oO][rR][dD]\\s*[=:]|[Aa]uthorization:\\s*[Bb]asic)).*$"
         },
         "stacktrace_reference": {
           "description": "Must be an encrypted-object reference, never raw stack text (section 6: 'stacktrace_reference: encrypted-object-reference').",
@@ -122,7 +122,7 @@
     "governance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["security_classification", "contains_secrets", "redaction_policy", "retention_policy", "admissibility_status", "integrity_signature"],
+      "required": ["security_classification", "contains_secrets", "redaction_policy", "retention_policy", "admissibility_status", "integrity_signature", "redaction_attestation"],
       "properties": {
         "security_classification": { "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"] },
         "contains_secrets": {
@@ -132,7 +132,11 @@
         "redaction_policy": { "$ref": "common.schema.json#/$defs/identifier" },
         "retention_policy": { "$ref": "common.schema.json#/$defs/identifier" },
         "admissibility_status": { "enum": ["pending", "admissible", "inadmissible", "superseded"] },
-        "integrity_signature": { "$ref": "common.schema.json#/$defs/signature_envelope" }
+        "integrity_signature": { "$ref": "common.schema.json#/$defs/signature_envelope" },
+        "redaction_attestation": {
+          "description": "Added rework round 02 (SEC-FL-WP1-002). See common.schema.json#/$defs/redaction_attestation for the full limitation note. Enforced here: an envelope cannot be marked admissible while its own redaction_attestation.redaction_applied is false (see this schema's allOf) -- this closes the 'contract-silent' gap without claiming real secret-content verification.",
+          "$ref": "common.schema.json#/$defs/redaction_attestation"
+        }
       }
     }
   },
@@ -157,6 +161,11 @@
       "description": "If no mutation was committed there can be no affected resources to report, independent of decision.result (covers cancelled/timed_out/partially_completed cases with mutation_committed=false too).",
       "if": { "type": "object", "required": ["outcome"], "properties": { "outcome": { "type": "object", "required": ["mutation_committed"], "properties": { "mutation_committed": { "const": false } } } } },
       "then": { "type": "object", "properties": { "outcome": { "type": "object", "properties": { "affected_resources": { "type": "array", "maxItems": 0 } } } } }
+    },
+    {
+      "description": "Rework round 02 (SEC-FL-WP1-002): an envelope cannot be marked admissible while confessing no redaction step was ever claimed to run. This does NOT prove a secret is absent (see redaction_attestation's own description) -- it only closes the narrower, WP1-appropriate gap that an admissible record could omit the claim entirely.",
+      "if": { "type": "object", "required": ["governance"], "properties": { "governance": { "type": "object", "required": ["admissibility_status"], "properties": { "admissibility_status": { "const": "admissible" } } } } },
+      "then": { "type": "object", "properties": { "governance": { "type": "object", "required": ["redaction_attestation"], "properties": { "redaction_attestation": { "type": "object", "required": ["redaction_applied"], "properties": { "redaction_applied": { "const": true } } } } } } }
     }
   ]
 }

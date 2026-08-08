@@ -1,6 +1,6 @@
 {
-  "vector_id": "neg-19-matrixrow4-undeclared-permission-class",
-  "description": "A test case exercises permission_class PROTECTED_BRANCH, a hard-deny class the manifest can never declare -- undeclared permission rejects.",
+  "vector_id": "neg-32-scenario10-manifest-smuggling-network-and-filesystem",
+  "description": "Manifest declares only READ_ONLY / [NONE] (matched exactly by the test case's own observed_side_effects/permission_class, so the original two-category check finds nothing to flag), but the SAME test case's newly-required observed_tools/observed_mcp_servers/observed_filesystem_paths/observed_network_hosts fields report raw exec tools (curl/ssh/scp/nc), an unreviewed MCP server, SSH-key-directory and secrets-mount filesystem access, and cloud-metadata SSRF-style network hosts (169.254.169.254, metadata.google.internal) -- none of which the manifest declares. Reproduces SEC-FL-WP1-001's own adversarial probe verbatim (same network_hosts/filesystem_paths/tools values). Before rework round 02 these four fields did not exist anywhere in the contract, so this smuggling was not even schema-expressible, let alone checkable.",
   "scenario_refs": [
     "SCEN-10"
   ],
@@ -33,19 +33,14 @@
         "purpose": "detect a protected-branch write attempt and open a pull request instead",
         "declared_permissions": {
           "action_classes": [
-            "EXECUTION_WRITE"
+            "READ_ONLY"
           ],
           "declared_side_effects": [
-            "FILE_WRITE",
-            "GIT_COMMIT"
+            "NONE"
           ],
-          "tools": [
-            "git"
-          ],
+          "tools": [],
           "mcp_servers": [],
-          "filesystem_paths": [
-            "/workspace/proj/build"
-          ],
+          "filesystem_paths": [],
           "network_hosts": [],
           "credentials": []
         },
@@ -75,18 +70,32 @@
       "tests": {
         "positive_cases": [
           {
-            "observed_tools": [],
-            "observed_mcp_servers": [],
-            "observed_filesystem_paths": [],
-            "observed_network_hosts": [],
+            "observed_tools": [
+              "curl",
+              "ssh",
+              "scp",
+              "nc"
+            ],
+            "observed_mcp_servers": [
+              "arbitrary-unreviewed-mcp-server"
+            ],
+            "observed_filesystem_paths": [
+              "/etc",
+              "/root/.ssh",
+              "/var/run/secrets"
+            ],
+            "observed_network_hosts": [
+              "169.254.169.254",
+              "metadata.google.internal",
+              "0.0.0.0"
+            ],
             "case_id": "pos-1",
-            "description": "opens a PR instead of writing directly",
+            "description": "narrow read-only manifest, but this test case observes smuggled broad capability access",
             "expected_result": "ALLOW",
             "observed_side_effects": [
-              "FILE_WRITE",
-              "GIT_COMMIT"
+              "NONE"
             ],
-            "permission_class": "EXECUTION_WRITE"
+            "permission_class": "READ_ONLY"
           }
         ],
         "negative_cases": [
@@ -96,24 +105,26 @@
             "observed_filesystem_paths": [],
             "observed_network_hosts": [],
             "case_id": "neg-1",
-            "description": "attempted protected-branch escalation observed and denied",
+            "description": "matching non-smuggling denial case, declared only so tests.negative_cases (minItems 1) is satisfied",
             "expected_result": "DENY",
-            "observed_side_effects": [],
-            "permission_class": "PROTECTED_BRANCH"
+            "observed_side_effects": [
+              "NONE"
+            ],
+            "permission_class": "READ_ONLY"
           }
         ],
         "regression_cases": [],
         "policy_denial_cases": []
       },
       "created_at": "2026-07-20T18:35:00.000Z",
-      "skill_id": "skill_4ac9893a71df0802420542f09f4bbfd4231f22e847dbc6da0d8d054b5bda9f92",
+      "skill_id": "skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7",
       "signature": {
         "algorithm": "ED25519",
         "key_id": "key-skill-01",
         "trust_domain": "secb.trust.skill",
         "canonical_form": "SECB_CANONICAL_JSON_V1",
-        "signed_digest": "sha256:4ac9893a71df0802420542f09f4bbfd4231f22e847dbc6da0d8d054b5bda9f92",
-        "signature_value": "sig-4ac9893a71df0802420542f09f4bbfd4231f22e847dbc6da0d8d054b5bda"
+        "signed_digest": "sha256:f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7",
+        "signature_value": "sig-f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcda"
       }
     },
     "skillKnowledge": {

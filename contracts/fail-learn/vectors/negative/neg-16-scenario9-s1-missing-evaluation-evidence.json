@@ -15,9 +15,16 @@
     "skill": {
       "schema_version": "1.0",
       "maturity_state": "S1",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
       "knowledge_ref": {
-        "ref_id": "know_948c7c5bd1b5f65fd1c3f80abf0fd24eff80e007737b519d831c94b2c045c0ac",
-        "digest": "sha256:a62f4f4903cdb315a6848ae2146779296d4ab396747a23d834111de05fea25c6"
+        "ref_id": "know_2e00eaced773e0828d47f4a5c8376a36c8f151b8b762dac00dfa79b75b57c728",
+        "digest": "sha256:057afd339d0961625296e4f9d1a9908646861efc5f90329ec6bb0b24d0491391"
       },
       "knowledge_maturity_at_binding": "K1",
       "capability_manifest": {
@@ -68,6 +75,10 @@
       "tests": {
         "positive_cases": [
           {
+            "observed_tools": [],
+            "observed_mcp_servers": [],
+            "observed_filesystem_paths": [],
+            "observed_network_hosts": [],
             "case_id": "pos-1",
             "description": "opens a PR instead of writing directly",
             "expected_result": "ALLOW",
@@ -80,6 +91,10 @@
         ],
         "negative_cases": [
           {
+            "observed_tools": [],
+            "observed_mcp_servers": [],
+            "observed_filesystem_paths": [],
+            "observed_network_hosts": [],
             "case_id": "neg-1",
             "description": "direct protected-branch write attempt is still denied",
             "expected_result": "DENY",
@@ -91,14 +106,14 @@
         "policy_denial_cases": []
       },
       "created_at": "2026-07-20T18:35:00.000Z",
-      "skill_id": "skill_8bd2ac39950e10ad012a4efeac83fe91469c6e18a5f6fd3c1f88164a235392ef",
+      "skill_id": "skill_9f50d4030090f592ea22afcf8bc4df4bc94ca45aad2e0aff60c9ba0942b8e1ed",
       "signature": {
         "algorithm": "ED25519",
         "key_id": "key-skill-01",
         "trust_domain": "secb.trust.skill",
         "canonical_form": "SECB_CANONICAL_JSON_V1",
-        "signed_digest": "sha256:8bd2ac39950e10ad012a4efeac83fe91469c6e18a5f6fd3c1f88164a235392ef",
-        "signature_value": "sig-8bd2ac39950e10ad012a4efeac83fe91469c6e18a5f6fd3c1f88164a2353"
+        "signed_digest": "sha256:9f50d4030090f592ea22afcf8bc4df4bc94ca45aad2e0aff60c9ba0942b8e1ed",
+        "signature_value": "sig-9f50d4030090f592ea22afcf8bc4df4bc94ca45aad2e0aff60c9ba0942b8"
       }
     }
   }

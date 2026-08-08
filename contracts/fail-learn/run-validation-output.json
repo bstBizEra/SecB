@@ -10,11 +10,11 @@
   },
   "schema_compile_warnings": [],
   "counts": {
-    "positive_total": 19,
-    "positive_pass": 19,
+    "positive_total": 20,
+    "positive_pass": 20,
     "positive_unexpected": 0,
-    "negative_total": 29,
-    "negative_correctly_rejected": 29,
+    "negative_total": 34,
+    "negative_correctly_rejected": 34,
     "negative_unexpected": 0
   },
   "positive_results": [
@@ -183,7 +183,8 @@
       "vector_id": "pos-08-scenario8-reviewed-lineage-advances-k1",
       "kind": "positive",
       "scenario_refs": [
-        "SCEN-08"
+        "SCEN-08",
+        "SCEN-05"
       ],
       "matrix_row_refs": [
         "ROW-3"
@@ -317,7 +318,8 @@
       "vector_id": "pos-14-scenario13-full-lineage-traceability",
       "kind": "positive",
       "scenario_refs": [
-        "SCEN-13"
+        "SCEN-13",
+        "SCEN-05"
       ],
       "matrix_row_refs": [],
       "expected": {
@@ -423,6 +425,29 @@
       "kind": "positive",
       "scenario_refs": [],
       "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-20-scenario3-redaction-attestation-explicit-external-scanner",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
       "expected": {
         "ajv": "PASS",
         "semantic": "PASS"
@@ -607,7 +632,7 @@
       "semanticViolationSummary": [
         {
           "check": "content_address_integrity",
-          "message": "evidence_id suffix (8ebfc8affaec85d724a6da0b419b8a0559968e19db7e57dea3f1396c05941d54) does not match recomputed canonical digest (0f5cb8c938daa9af864394caff94c2a19357c7a44e604308508d59b1b1db5ce7) -- document was mutated after the id was minted, or the id was never genuinely content-addressed"
+          "message": "evidence_id suffix (96d19bb23f58fe610965f59e19ee2cbc05e8c354bad07f384149f8df558a60d1) does not match recomputed canonical digest (e40baff190215fa54be700224460c8a1c897f040563a61e7466b2e653f3eed2e) -- document was mutated after the id was minted, or the id was never genuinely content-addressed"
         }
       ]
     },
@@ -692,11 +717,11 @@
       "semanticViolationSummary": [
         {
           "check": "no_self_attestation_advancement",
-          "message": "experience exp_bf21ce1aac3b7af3df4e00e8c25d46f932ba61cab0c3c6f1e66870aa1f643d63 claims maturity_state X1 but reviewer_status.checker_id equals source_actor_id (agent-producer-01) -- self-attestation cannot advance past X0, regardless of the checker_distinct_from_actor flag's declared value"
+          "message": "experience exp_8f1d14c28aaf928bd8ada1ac801a1f4feae44803925f36df3bf70bfc8c1d42ea claims maturity_state X1 but reviewer_status.checker_id equals source_actor_id (agent-producer-01) -- self-attestation cannot advance past X0, regardless of the checker_distinct_from_actor flag's declared value"
         },
         {
           "check": "checker_not_original_evidence_actor",
-          "message": "experience exp_bf21ce1aac3b7af3df4e00e8c25d46f932ba61cab0c3c6f1e66870aa1f643d63 claims X1 via checker agent-producer-01, but that same actor_id produced the original Failure Evidence Envelope fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f -- the original agent cannot verify its own causal explanation"
+          "message": "experience exp_8f1d14c28aaf928bd8ada1ac801a1f4feae44803925f36df3bf70bfc8c1d42ea claims X1 via checker agent-producer-01, but that same actor_id produced the original Failure Evidence Envelope fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae -- the original agent cannot verify its own causal explanation"
         }
       ]
     },
@@ -730,7 +755,7 @@
       "semanticViolationSummary": [
         {
           "check": "no_self_attestation_advancement",
-          "message": "experience exp_1d593e4f9aedb12a63caa291d2d8f26a36e44a07aadb44b234c708ce6e7ad6cc claims maturity_state X1 but reviewer_status.checker_id equals source_actor_id (agent-producer-01) -- self-attestation cannot advance past X0, regardless of the checker_distinct_from_actor flag's declared value"
+          "message": "experience exp_0b27f77affcf92950cb2a7bbfd1756ddd92358f930a8b4fcf499e28da98af803 claims maturity_state X1 but reviewer_status.checker_id equals source_actor_id (agent-producer-01) -- self-attestation cannot advance past X0, regardless of the checker_distinct_from_actor flag's declared value"
         }
       ]
     },
@@ -758,7 +783,7 @@
       "semanticViolationSummary": [
         {
           "check": "experience_evidence_admissibility",
-          "message": "experience exp_0dbccdc84f5c494adcce51010e55a8613a69ce9f16e8da272674a01086d759ae claims maturity_state X1 but cites evidence with governance.admissibility_status != admissible (fev_24c161902cc41ad0e3bf32be0c823aab07a28f2e16973e166314163b6c1c2871) -- invalid evidence must remain X0"
+          "message": "experience exp_adcebe4d953a1fc86dc6af360e3055cd52ee2e1488396627567e0a1761c17a4a claims maturity_state X1 but cites evidence with governance.admissibility_status != admissible (fev_0675507f82a8bf43b7cbd1823f6245e91245a4afd15cfd39b204ce822a831bc2) -- invalid evidence must remain X0"
         }
       ]
     },
@@ -786,7 +811,7 @@
       "semanticViolationSummary": [
         {
           "check": "independent_knowledge_review",
-          "message": "knowledge know_ce5466f8299867fdf4170fe895b4d983f3db2d9a775c72797d668f01e4117ab4 claims K1 but has no APPROVED reviewer independent of the author (agent-producer-01) or the source experience's actor/checker (agent-producer-01, agent-checker-01)"
+          "message": "knowledge know_45bd428a22fa19497e088c3790cde82ec70049f1ca9569ad43cafe03cd76817c claims K1 but has no APPROVED reviewer independent of the author (agent-producer-01) or the source experience's actor/checker (agent-producer-01, agent-checker-01)"
         }
       ]
     },
@@ -820,7 +845,7 @@
       "semanticViolationSummary": [
         {
           "check": "independent_knowledge_review",
-          "message": "knowledge know_784b2497dd4bb66ad65a50b2e347f0c03ccf69dd6e2bdd5118b80ded7bd6d010 claims K1 but has no APPROVED reviewer independent of the author (agent-producer-01)"
+          "message": "knowledge know_bf4fe4e791ed241bee013adcc268d4802279d760d2ba4bde36e863e3f824b6b4 claims K1 but no source Experience Record was supplied to validateIndependentKnowledgeReview for independence cross-checking -- a K1 claim cannot be verified independent of the reporting/checking actor without resolving and passing the cited experience_refs document; this call fails closed rather than silently skipping the author/experience-actor collision check (SEC-FL-WP1-N001)"
         }
       ]
     },
@@ -854,7 +879,7 @@
       "semanticViolationSummary": [
         {
           "check": "content_address_integrity",
-          "message": "knowledge_id suffix (b8cad833889c2f0ea0b4af35ca997f37ac8149d90c72adb0339ea0af07727e91) does not match recomputed canonical digest (80caa2252fa6475abc779464fbdda41576259608ca79d8850f2aa062aa302203) -- document was mutated after the id was minted, or the id was never genuinely content-addressed"
+          "message": "knowledge_id suffix (4534d6106c8caab4852a272d0c18ab2e44434b812a040c02f56fa9d78ef1dcf6) does not match recomputed canonical digest (ce734128abadb8e20179488f3bbdf9781491376f03ebfb3408d2489e32b4ff0d) -- document was mutated after the id was minted, or the id was never genuinely content-addressed"
         }
       ]
     },
@@ -940,7 +965,7 @@
       "semanticViolationSummary": [
         {
           "check": "no_derivation_from_non_k1_knowledge",
-          "message": "skill skill_5c3ce178e3f1556bc4860dbff769279caf66119b2611cc72b05e3c032df65787 claims knowledge_maturity_at_binding=K1 for knowledge know_b8cad833889c2f0ea0b4af35ca997f37ac8149d90c72adb0339ea0af07727e91, but that knowledge's actual maturity_state is K0 -- deprecated, superseded, rejected, or unreviewed (K0) knowledge cannot produce a new skill candidate"
+          "message": "skill skill_0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa3606 claims knowledge_maturity_at_binding=K1 for knowledge know_4534d6106c8caab4852a272d0c18ab2e44434b812a040c02f56fa9d78ef1dcf6, but that knowledge's actual maturity_state is K0 -- deprecated, superseded, rejected, or unreviewed (K0) knowledge cannot produce a new skill candidate"
         }
       ]
     },
@@ -968,7 +993,7 @@
       "semanticViolationSummary": [
         {
           "check": "no_undeclared_side_effects",
-          "message": "skill skill_92f9dc59589fbf896a859f620ab154b19ba9c2c9438ed5735087db2c5aead317 test case pos-1 observed side effect NETWORK_CALL, which is not in capability_manifest.declared_permissions.declared_side_effects (FILE_WRITE, GIT_COMMIT)"
+          "message": "skill skill_d6d5f7f0a0a477131a1726a394e88d51806858fe5e5ea87ce90bb6dc5ada4240 test case pos-1 observed_side_effects includes NETWORK_CALL, which is not in capability_manifest.declared_permissions.declared_side_effects (FILE_WRITE, GIT_COMMIT)"
         }
       ]
     },
@@ -996,7 +1021,7 @@
       "semanticViolationSummary": [
         {
           "check": "no_undeclared_permission_class",
-          "message": "skill skill_0ed2dccf3f01a31d57c456c69749802ece8599a651a5f41888c336938423f59c test case neg-1 exercises permission_class PROTECTED_BRANCH, which is not in capability_manifest.declared_permissions.action_classes (EXECUTION_WRITE)"
+          "message": "skill skill_4ac9893a71df0802420542f09f4bbfd4231f22e847dbc6da0d8d054b5bda9f92 test case neg-1 exercises permission_class PROTECTED_BRANCH, which is not in capability_manifest.declared_permissions.action_classes (EXECUTION_WRITE)"
         }
       ]
     },
@@ -1103,7 +1128,7 @@
       "semanticViolationSummary": [
         {
           "check": "full_lineage_traceability",
-          "message": "skill.knowledge_ref.ref_id (know_0000000000000000000000000000000000000000000000000000000000000000) does not match the supplied knowledge document's knowledge_id (know_948c7c5bd1b5f65fd1c3f80abf0fd24eff80e007737b519d831c94b2c045c0ac)"
+          "message": "skill.knowledge_ref.ref_id (know_0000000000000000000000000000000000000000000000000000000000000000) does not match the supplied knowledge document's knowledge_id (know_2e00eaced773e0828d47f4a5c8376a36c8f151b8b762dac00dfa79b75b57c728)"
         }
       ]
     },
@@ -1129,7 +1154,7 @@
       "semanticViolationSummary": [
         {
           "check": "no_derivation_from_non_k1_knowledge",
-          "message": "skill skill_5c3ce178e3f1556bc4860dbff769279caf66119b2611cc72b05e3c032df65787 claims knowledge_maturity_at_binding=K1 for knowledge know_06f2a156e16a9e627647c12de54bab0c34aa4177789af339b4d4a49ffbd83d10, but that knowledge's actual maturity_state is DEPRECATED -- deprecated, superseded, rejected, or unreviewed (K0) knowledge cannot produce a new skill candidate"
+          "message": "skill skill_0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa3606 claims knowledge_maturity_at_binding=K1 for knowledge know_89083d409938635d27f97e9b3fa46284fe240eaf9ccb3edd9eb72ef896d44f45, but that knowledge's actual maturity_state is DEPRECATED -- deprecated, superseded, rejected, or unreviewed (K0) knowledge cannot produce a new skill candidate"
         }
       ]
     },
@@ -1261,9 +1286,191 @@
       "semanticViolationSummary": [
         {
           "check": "skill_producer_checker_separation",
-          "message": "skill skill_6b945b647a59f7f3e6cf120b2013e47b9121c35b9e86f9f259ead17579f62a76: checker_actor_id equals builder_identity.actor_id (agent-builder-01) -- producer and independent checker must be distinct identities"
+          "message": "skill skill_43ef86276582247527234df07742113e9b3b0226ef47fe2c182ced39c875aebd: checker_actor_id equals builder_identity.actor_id (agent-builder-01) -- producer and independent checker must be distinct identities"
         }
       ]
+    },
+    {
+      "vector_id": "neg-30-scenario5-knowledge-cross-tenant-lineage",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [
+        "ROW-3"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "tenant_lineage_consistency",
+          "message": "child record scope.tenant_id (tenant-b) does not match a cited parent record's scope.tenant_id (tenant-a) -- cross-tenant lineage"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-31-scenario5-skill-cross-tenant-lineage",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "tenant_lineage_consistency",
+          "message": "child record scope.tenant_id (tenant-b) does not match a cited parent record's scope.tenant_id (tenant-a) -- cross-tenant lineage"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-32-scenario10-manifest-smuggling-network-and-filesystem",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-10"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes curl, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes ssh, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes scp, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes nc, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_mcp_servers",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_mcp_servers includes arbitrary-unreviewed-mcp-server, which is not in capability_manifest.declared_permissions.mcp_servers (<empty>)"
+        },
+        {
+          "check": "no_undeclared_filesystem_paths",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_filesystem_paths includes /etc, which is not in capability_manifest.declared_permissions.filesystem_paths (<empty>)"
+        },
+        {
+          "check": "no_undeclared_filesystem_paths",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_filesystem_paths includes /root/.ssh, which is not in capability_manifest.declared_permissions.filesystem_paths (<empty>)"
+        },
+        {
+          "check": "no_undeclared_filesystem_paths",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_filesystem_paths includes /var/run/secrets, which is not in capability_manifest.declared_permissions.filesystem_paths (<empty>)"
+        },
+        {
+          "check": "no_undeclared_network_hosts",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_network_hosts includes 169.254.169.254, which is not in capability_manifest.declared_permissions.network_hosts (<empty>)"
+        },
+        {
+          "check": "no_undeclared_network_hosts",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_network_hosts includes metadata.google.internal, which is not in capability_manifest.declared_permissions.network_hosts (<empty>)"
+        },
+        {
+          "check": "no_undeclared_network_hosts",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_network_hosts includes 0.0.0.0, which is not in capability_manifest.declared_permissions.network_hosts (<empty>)"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-33-scenario3-admissible-envelope-claims-no-redaction",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 2
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-34-scenario3-sanitized-message-case-variation-now-caught",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
     }
   ]
 }

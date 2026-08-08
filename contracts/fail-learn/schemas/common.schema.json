@@ -42,7 +42,7 @@
       "items": { "$ref": "#/$defs/reference" }
     },
     "tenant_scope": {
-      "description": "Binds a record to its tenant/project/session boundary (SECB-FAIL-LEARN-001 section 14: 'Tenant A SHALL NOT read Tenant B records'). The schema layer requires the fields to be PRESENT; it cannot enforce that a consumer actually respects the boundary at read/write time (that is a runtime authorization concern, WP2/WP3), and it cannot prove a downstream record's scope was genuinely DERIVED from its declared upstream evidence rather than independently fabricated -- semantic-validator.mjs (validateTenantLineageConsistency) checks that derived records (Experience/Knowledge/Skill) declare the SAME tenant_id as the evidence they cite.",
+      "description": "Binds a record to its tenant/project/session boundary (SECB-FAIL-LEARN-001 section 14: 'Tenant A SHALL NOT read Tenant B records'). The schema layer requires the fields to be PRESENT; it cannot enforce that a consumer actually respects the boundary at read/write time (that is a runtime authorization concern, WP2/WP3), and it cannot prove a downstream record's scope was genuinely DERIVED from its declared upstream evidence rather than independently fabricated -- semantic-validator.mjs (validateTenantLineageConsistency) checks that derived records (Experience/Knowledge/Skill) declare the SAME tenant_id as the evidence they cite. As of rework round 02 (REV-001), this is genuinely wired in run-validation.mjs's runSemanticChecks for all three derived kinds (Experience against its source evidence, Knowledge against its cited experience, Skill -- which gained its own scope field in this same rework round -- against its cited knowledge/experience/evidence lineage), not only for Experience Records as in the original WP1 cut.",
       "type": "object",
       "additionalProperties": false,
       "required": ["organization_id", "tenant_id", "project_id", "work_package_id", "session_id"],
@@ -52,6 +52,20 @@
         "project_id": { "$ref": "#/$defs/identifier" },
         "work_package_id": { "$ref": "#/$defs/identifier" },
         "session_id": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "redaction_attestation": {
+      "description": "WP1-appropriate contract-level HOOK for secret/content redaction, added in rework round 02 (SEC-FL-WP1-002). This is a self-declared CLAIM that a redaction/secret-scan step ran before the record was sealed and by what mechanism/policy version -- it is NOT a verified guarantee and semantic-validator.mjs does NOT verify the claim's truth (real content-level secret detection -- entropy analysis, credential-shape libraries, etc. -- is legitimately WP2 runtime scope and out of reach for a JSON Schema + semantic-validator design layer). Its purpose is narrower and cheaper: an admissible/advanced record can no longer omit the claim entirely, so WP2 has a contract slot to populate and audit rather than needing another schema iteration later.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["redaction_applied", "mechanism", "policy_version"],
+      "properties": {
+        "redaction_applied": { "type": "boolean" },
+        "mechanism": {
+          "description": "What (if anything) performed the claimed redaction. NONE is a legal, honest value for a record that has not been scanned -- the schema forces the claim to be made either way, it does not force the claim to be true.",
+          "enum": ["NONE", "DENYLIST_PATTERN", "ENTROPY_SCAN", "EXTERNAL_SECRET_SCANNER", "MANUAL_REVIEW"]
+        },
+        "policy_version": { "$ref": "#/$defs/identifier" }
       }
     },
     "actor": {

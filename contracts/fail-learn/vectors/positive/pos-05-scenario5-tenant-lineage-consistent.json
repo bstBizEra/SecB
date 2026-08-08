@@ -17,8 +17,8 @@
       "maturity_state": "X0",
       "source_evidence_refs": [
         {
-          "ref_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
-          "digest": "sha256:8d5f68143af52650abb2e352ffa162ed217de2ab57f9420fd5a4df9c26bac065"
+          "ref_id": "fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae",
+          "digest": "sha256:1c2b1ad57d26c50807e9aa1f1d4eaf64bacaae5e92f3d6803cf29fbb71bab44f"
         }
       ],
       "scope": {
@@ -50,8 +50,13 @@
         "checker_distinct_from_actor": false
       },
       "source_actor_id": "agent-producer-01",
+      "redaction_attestation": {
+        "redaction_applied": true,
+        "mechanism": "DENYLIST_PATTERN",
+        "policy_version": "redaction-policy-v1"
+      },
       "created_at": "2026-07-20T18:25:00.000Z",
-      "experience_id": "exp_d2257fb3360e167711a337da5d5914ebfd90d8b78bf73c5c47d4460262c1e611"
+      "experience_id": "exp_9e8e1fbdd74acde0c10d65a44352678d2f783393408c88cefba56b0c55d7f95d"
     },
     "experienceSourceEvidence": [
       {
@@ -131,16 +136,21 @@
           "redaction_policy": "redact-v1",
           "retention_policy": "retain-90d",
           "admissibility_status": "admissible",
+          "redaction_attestation": {
+            "redaction_applied": true,
+            "mechanism": "DENYLIST_PATTERN",
+            "policy_version": "redaction-policy-v1"
+          },
           "integrity_signature": {
             "algorithm": "ED25519",
             "key_id": "key-evidence-01",
             "trust_domain": "secb.trust.evidence",
             "canonical_form": "SECB_CANONICAL_JSON_V1",
-            "signed_digest": "sha256:1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f",
-            "signature_value": "sig-1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692"
+            "signed_digest": "sha256:8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae",
+            "signature_value": "sig-8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e"
           }
         },
-        "evidence_id": "fev_1345c562623f52a8bebbee1148082f804813888bac2dd0146ca3e24b2692f97f"
+        "evidence_id": "fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae"
       }
     ]
   }

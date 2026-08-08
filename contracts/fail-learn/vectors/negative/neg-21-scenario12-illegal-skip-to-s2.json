@@ -12,7 +12,7 @@
   "documents": {
     "transitionRequest": {
       "object_type": "SkillCandidate",
-      "object_id": "skill_5c3ce178e3f1556bc4860dbff769279caf66119b2611cc72b05e3c032df65787",
+      "object_id": "skill_0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa3606",
       "from_state": "S0",
       "to_state": "S2",
       "triggering_event_type": "skill.promoted",

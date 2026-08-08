@@ -9,7 +9,7 @@
     "schema_version", "experience_id", "maturity_state", "source_evidence_refs", "scope", "classification",
     "intended_outcome", "observed_outcome", "contributing_conditions", "immediate_cause", "systemic_factors",
     "containment", "workaround", "proposed_prevention", "reproducibility", "confidence", "reviewer_status",
-    "source_actor_id", "created_at"
+    "source_actor_id", "redaction_attestation", "created_at"
   ],
   "properties": {
     "schema_version": { "const": "1.0" },
@@ -54,6 +54,10 @@
       }
     },
     "source_actor_id": { "$ref": "common.schema.json#/$defs/identifier" },
+    "redaction_attestation": {
+      "description": "Added rework round 02 (SEC-FL-WP1-002). Experience Record's intended_outcome/observed_outcome/immediate_cause/contributing_conditions/systemic_factors/containment/workaround/proposed_prevention are the exact free-text narrative fields SEC's review named as carrying zero secret-pattern guard (unlike the envelope's failure.sanitized_message). This field is a self-declared attestation only -- see common.schema.json#/$defs/redaction_attestation for the full limitation note; it is not verified by semantic-validator.mjs.",
+      "$ref": "common.schema.json#/$defs/redaction_attestation"
+    },
     "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
   },
   "allOf": [

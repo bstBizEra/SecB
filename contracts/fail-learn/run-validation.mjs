@@ -142,6 +142,12 @@ function runSemanticChecks(documents) {
   if (documents.knowledge) {
     violations.push(...sv.validateContentAddressIntegrity(documents.knowledge, "knowledge_id", ["knowledge_id"]).violations);
     violations.push(...sv.validateIndependentKnowledgeReview(documents.knowledge, documents.knowledgeExperience).violations);
+    // Rework round 02 (REV-001): previously wired only for Experience Records.
+    // Knowledge's tenant lineage is checked against its cited source experience.
+    const knowledgeLineageDocs = asArray(documents.knowledgeExperience);
+    if (knowledgeLineageDocs.length > 0) {
+      violations.push(...sv.validateTenantLineageConsistency(documents.knowledge.scope, knowledgeLineageDocs).violations);
+    }
   }
 
   if (documents.skill) {
@@ -153,6 +159,13 @@ function runSemanticChecks(documents) {
     }
     if (documents.skillKnowledge && documents.skillKnowledgeExperience && documents.skillEvidenceForLineage) {
       violations.push(...sv.validateFullLineageTraceability(documents.skill, documents.skillKnowledge, documents.skillKnowledgeExperience, documents.skillEvidenceForLineage).violations);
+    }
+    // Rework round 02 (REV-001): Skill Candidate gained its own `scope` field
+    // this round; check it against whichever lineage documents the vector
+    // supplies (knowledge at minimum, plus experience/evidence when present).
+    const skillLineageDocs = [documents.skillKnowledge, documents.skillKnowledgeExperience, documents.skillEvidenceForLineage].filter(Boolean);
+    if (skillLineageDocs.length > 0) {
+      violations.push(...sv.validateTenantLineageConsistency(documents.skill.scope, skillLineageDocs).violations);
     }
   }
 
@@ -201,7 +214,15 @@ function runVector(kind, file) {
   } else if (expected.ajv === "PASS" && expected.semantic === "FAIL") {
     matches = actual.ajv === "PASS" && actual.semantic === "FAIL";
   } else {
-    matches = actual.ajv === "FAIL" || actual.semantic === "FAIL";
+    // Rework round 02 (REV-004): this was a loose OR-condition ("either check
+    // failing counts as a match") that none of the shipped negative vectors
+    // exercised -- dead code against the current fixture set, but a latent
+    // "correct outcome, wrong cause" trap for a future fixture authored with
+    // an `expected` shape outside the two well-defined negative patterns.
+    // Fail loudly instead of guessing: every negative vector's `expected`
+    // must be one of {ajv:FAIL,semantic:FAIL}, {ajv:FAIL,semantic:N/A}, or
+    // {ajv:PASS,semantic:FAIL}.
+    throw new Error(`Vector ${vector.vector_id || file} (kind=negative) declares an unrecognized expected shape ${JSON.stringify(expected)} -- fix the fixture's \`expected\` field rather than relying on a loose fallback match (REV-004).`);
   }
 
   return {

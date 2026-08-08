@@ -1,8 +1,8 @@
 {
-  "vector_id": "neg-12-scenario8-knowledge-self-reviewed",
-  "description": "The only APPROVED reviewer on a K1 claim is the knowledge's own author -- schema cannot compare reviewer_id to author_actor_id; the semantic validator rejects it.",
+  "vector_id": "neg-30-scenario5-knowledge-cross-tenant-lineage",
+  "description": "Knowledge Artifact declares Tenant B scope while citing (via knowledgeExperience) an Experience Record scoped to Tenant A. Reproduces REV-001's own mutation of pos-08 exactly: same author/reviewers/evidence/experience_refs as the clean K1 case, content-address digest recomputed automatically by buildKnowledge (not hand-tampered), isolating scope.tenant_id as the one property under test. Before rework round 02 this passed both ajv and the semantic layer as fully conformant K1 knowledge -- validateTenantLineageConsistency was never called for documents.knowledge.",
   "scenario_refs": [
-    "SCEN-08"
+    "SCEN-05"
   ],
   "matrix_row_refs": [
     "ROW-3"
@@ -17,10 +17,10 @@
       "maturity_state": "K1",
       "scope": {
         "organization_id": "org-alpha",
-        "tenant_id": "tenant-a",
-        "project_id": "proj-01",
+        "tenant_id": "tenant-b",
+        "project_id": "proj-02",
         "work_package_id": "wp1-fail-learn",
-        "session_id": "sess-01"
+        "session_id": "sess-02"
       },
       "applicability": "any git_mutation targeting a protected branch",
       "symptoms": [
@@ -50,13 +50,13 @@
       ],
       "reviewers": [
         {
-          "reviewer_id": "agent-producer-01",
+          "reviewer_id": "agent-reviewer-01",
           "reviewed_at": "2026-07-20T18:40:00.000Z",
           "verdict": "APPROVED"
         }
       ],
       "author_actor_id": "agent-producer-01",
-      "confidence": "medium",
+      "confidence": "high",
       "validity": {
         "valid_from": "2026-07-20T18:30:00.000Z",
         "review_due": "2027-01-20T18:30:00.000Z",
@@ -70,7 +70,7 @@
         "policy_version": "redaction-policy-v1"
       },
       "created_at": "2026-07-20T18:30:00.000Z",
-      "knowledge_id": "know_45bd428a22fa19497e088c3790cde82ec70049f1ca9569ad43cafe03cd76817c"
+      "knowledge_id": "know_2653206e510c92a13746158bbdda5e6cc368afa1e70947dd7c11f0d75860e9a9"
     },
     "knowledgeExperience": {
       "schema_version": "1.0",

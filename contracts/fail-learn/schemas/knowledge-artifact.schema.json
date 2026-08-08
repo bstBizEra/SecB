@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://secb.local/contracts/fail-learn/v1/knowledge-artifact.schema.json",
   "title": "SecB Knowledge Artifact (WP1 deliverable 4)",
-  "description": "Formalizes SECB-FAIL-LEARN-001 section 9 (KCS v6-inspired knowledge lifecycle, K0/K1) as strict JSON Schema. Matrix row 3: positive proof 'Reviewed lineage advances to K1'; negative proof 'Missing reviewer, scope, or evidence rejects'. LIMITATION deferred to semantic-validator.mjs: whether any reviewer_id in `reviewers` is actually distinct from author_actor_id or from the source Experience Record's source_actor_id/checker_id -- JSON Schema without $data cannot compare a nested array element's field against a sibling top-level field's value. validateIndependentKnowledgeReview performs that cross-field/cross-document comparison (SCEN-08). validateNoDerivationFromDeprecatedKnowledge (SCEN-14) is likewise semantic-only: it is exercised from the Skill Candidate side (a skill candidate's knowledge_maturity_at_binding claim is cross-checked against this document's actual maturity_state).",
+  "description": "Formalizes SECB-FAIL-LEARN-001 section 9 (KCS v6-inspired knowledge lifecycle, K0/K1) as strict JSON Schema. Matrix row 3: positive proof 'Reviewed lineage advances to K1'; negative proof 'Missing reviewer, scope, or evidence rejects'. LIMITATIONS deferred to semantic-validator.mjs: (1) whether any reviewer_id in `reviewers` is actually distinct from author_actor_id or from the source Experience Record's source_actor_id/checker_id -- JSON Schema without $data cannot compare a nested array element's field against a sibling top-level field's value. validateIndependentKnowledgeReview performs that cross-field/cross-document comparison (SCEN-08); as of rework round 02 (SEC-FL-WP1-N001) a K1 claim with no source Experience Record supplied to the check fails CLOSED rather than silently skipping the author/experience-actor cross-check, so the caller can no longer bypass independence verification merely by omitting the optional experienceDoc argument. (2) whether scope.tenant_id genuinely matches the cited Experience Record's scope -- validateTenantLineageConsistency, genuinely wired for Knowledge as of rework round 02 (REV-001; the original WP1 cut wired this only for Experience Records despite this same description claiming otherwise -- see 02-rework-001-defect-correction.yaml). validateNoDerivationFromDeprecatedKnowledge (SCEN-14) is likewise semantic-only: it is exercised from the Skill Candidate side (a skill candidate's knowledge_maturity_at_binding claim is cross-checked against this document's actual maturity_state).",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version", "knowledge_id", "maturity_state", "scope", "applicability", "symptoms", "diagnosis",
     "verified_cause", "resolution", "prevention", "unsafe_shortcuts", "permissions_required",
     "evidence_refs", "experience_refs", "reviewers", "author_actor_id", "confidence", "validity",
-    "supersedes", "superseded_by", "created_at"
+    "supersedes", "superseded_by", "redaction_attestation", "created_at"
   ],
   "properties": {
     "schema_version": { "const": "1.0" },
@@ -53,6 +53,10 @@
     },
     "supersedes": { "oneOf": [ { "type": "null" }, { "$ref": "common.schema.json#/$defs/reference" } ] },
     "superseded_by": { "oneOf": [ { "type": "null" }, { "$ref": "common.schema.json#/$defs/reference" } ] },
+    "redaction_attestation": {
+      "description": "Added rework round 02 (SEC-FL-WP1-002). Knowledge Artifact's applicability/diagnosis/verified_cause/resolution/prevention are the exact free-text fields (up to 4096 chars each) SEC's review named as carrying zero secret-pattern guard. Self-declared attestation only -- see common.schema.json#/$defs/redaction_attestation for the full limitation note; not verified by semantic-validator.mjs.",
+      "$ref": "common.schema.json#/$defs/redaction_attestation"
+    },
     "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
   },
   "allOf": [

@@ -1,8 +1,8 @@
 {
-  "vector_id": "pos-02-scenario2-cancelled-no-mutation",
-  "description": "A cancelled (not denied) attempt still evidences no committed mutation and no affected resources -- evidence capture never performed the action.",
+  "vector_id": "pos-20-scenario3-redaction-attestation-explicit-external-scanner",
+  "description": "governance.redaction_attestation explicitly claims an EXTERNAL_SECRET_SCANNER mechanism (not just the default DENYLIST_PATTERN every other envelope vector uses) -- the attestation shape accepts any of the closed mechanism values, not only the one mechanism this package's own schema-layer guard actually implements.",
   "scenario_refs": [
-    "SCEN-02"
+    "SCEN-03"
   ],
   "matrix_row_refs": [
     "ROW-1"
@@ -17,7 +17,7 @@
       "occurred_at": "2026-07-20T18:20:00.000Z",
       "captured_at": "2026-07-20T18:20:05.000Z",
       "clock_source": "secb-trusted-clock-01",
-      "sequence": 1,
+      "sequence": 5,
       "scope": {
         "organization_id": "org-alpha",
         "tenant_id": "tenant-a",
@@ -38,14 +38,16 @@
         "input_digest": "sha256:40aca46cb9ebb03e5e09864ab8b89d6fd9c968845befcd5769970cdcac1830f6"
       },
       "decision": {
-        "result": "cancelled",
+        "result": "denied",
         "policy_decision_id": "pdp-dec-01",
         "policy_bundle_digest": "sha256:0380584c1e86e983bb67d9604e52bd5a00fd9fdbd822e91df9599808aff8f8db",
-        "matched_rules": [],
-        "fail_closed_applied": false
+        "matched_rules": [
+          "rule-deny-protected-branch"
+        ],
+        "fail_closed_applied": true
       },
       "failure": {
-        "failure_class": "TRANSIENT_FAILURE",
+        "failure_class": "POLICY_DENIAL_EXPECTED",
         "error_type": "PolicyDenial",
         "error_code": "E_POLICY_DENY",
         "sanitized_message": "policy denied write to protected branch",
@@ -89,19 +91,19 @@
         "admissibility_status": "admissible",
         "redaction_attestation": {
           "redaction_applied": true,
-          "mechanism": "DENYLIST_PATTERN",
-          "policy_version": "redaction-policy-v1"
+          "mechanism": "EXTERNAL_SECRET_SCANNER",
+          "policy_version": "redaction-policy-v2"
         },
         "integrity_signature": {
           "algorithm": "ED25519",
           "key_id": "key-evidence-01",
           "trust_domain": "secb.trust.evidence",
           "canonical_form": "SECB_CANONICAL_JSON_V1",
-          "signed_digest": "sha256:5f8e3a69382306be0f2f6500cf67ab9ab0ab6bd9032ccc0ec4f468b1db679b32",
-          "signature_value": "sig-5f8e3a69382306be0f2f6500cf67ab9ab0ab6bd9032ccc0ec4f468b1db67"
+          "signed_digest": "sha256:0dd8473958e48539e806052d064febd611c78fc8b9da1f9b700968541aab3ddd",
+          "signature_value": "sig-0dd8473958e48539e806052d064febd611c78fc8b9da1f9b700968541aab"
         }
       },
-      "evidence_id": "fev_5f8e3a69382306be0f2f6500cf67ab9ab0ab6bd9032ccc0ec4f468b1db679b32"
+      "evidence_id": "fev_0dd8473958e48539e806052d064febd611c78fc8b9da1f9b700968541aab3ddd"
     }
   }
 }
