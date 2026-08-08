@@ -1,0 +1,32 @@
+{
+  "vector_id": "pos-12-scenario12-legal-suspend-transition",
+  "description": "S2 -> SUSPENDED is a legal edge in the maturity transition table.",
+  "scenario_refs": [
+    "SCEN-12"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "PASS"
+  },
+  "documents": {
+    "transitionRequest": {
+      "object_type": "SkillCandidate",
+      "object_id": "skill_90dc5f62b62a4a109baa5da90de07f9905d85ccfc92b64ae23aaefe93dea6b11",
+      "from_state": "S2",
+      "to_state": "SUSPENDED",
+      "triggering_event_type": "skill.suspended",
+      "evidence_refs": [
+        {
+          "ref_id": "suspend-evidence-01",
+          "digest": "sha256:0c5d268e36af79d0ec4197b192cf8fd71b92fdc279c4abc9a53b5d7ea0bc0b98"
+        }
+      ],
+      "actor": {
+        "actor_id": "agent-reviewer-01",
+        "actor_type": "agent",
+        "role": "reviewer"
+      }
+    }
+  }
+}

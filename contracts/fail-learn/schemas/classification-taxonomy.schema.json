@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/fail-learn/v1/classification-taxonomy.schema.json",
+  "title": "SecB Fail-Learn Classification Taxonomy (WP1 deliverable 2)",
+  "description": "Schema for the versioned, closed registry that classifies failure_class values (SECB-FAIL-LEARN-001 section 5). This registry is the single source of truth for which classes are positive-control evidence (a correctly denied request is NOT a control malfunction, section 5 final sentence) and which require security-event routing. The filled-in canonical instance lives at data/classification-taxonomy.instance.json. Cross-document use: semantic-validator.mjs loads this instance (not a per-vector-supplied copy) to resolve failure_class -> is_positive_control when checking a Failure Evidence Envelope's decision/failure consistency (SCEN-01).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "taxonomy_version", "closed", "entries"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "taxonomy_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "closed": {
+      "description": "MUST be true. This taxonomy is closed -- entries.failure_class values are drawn from common.schema.json#/$defs/failure_class and no free-text failure classes are permitted anywhere in this contract set.",
+      "const": true
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "failure_class",
+          "category",
+          "default_severity",
+          "is_positive_control",
+          "requires_security_event_routing",
+          "description"
+        ],
+        "properties": {
+          "failure_class": { "$ref": "common.schema.json#/$defs/failure_class" },
+          "category": {
+            "description": "Coarse grouping, aligned to the informal v0.1 docs/templates/failure-evidence-envelope.yaml classification prefixes (F-AUTH/F-TECH/F-DEP/F-EVID/F-QUAL/F-SEC/F-OPS/F-OUT/F-KNOW/F-SKILL), so this formal taxonomy is traceable to the pre-existing informal template rather than silently orphaning it.",
+            "enum": ["F-AUTH", "F-TECH", "F-DEP", "F-EVID", "F-QUAL", "F-SEC", "F-OPS", "F-OUT", "F-KNOW", "F-SKILL"]
+          },
+          "default_severity": { "enum": ["low", "medium", "high", "critical"] },
+          "is_positive_control": {
+            "description": "True only for classes that represent a correctly-working control (denial-as-designed or a passed negative test), never a malfunction.",
+            "type": "boolean"
+          },
+          "requires_security_event_routing": { "type": "boolean" },
+          "description": { "type": "string", "minLength": 1, "maxLength": 2048 }
+        },
+        "allOf": [
+          {
+            "description": "SECURITY_EVENT is never positive-control.",
+            "if": { "properties": { "failure_class": { "const": "SECURITY_EVENT" } }, "required": ["failure_class"] },
+            "then": { "properties": { "is_positive_control": { "const": false }, "requires_security_event_routing": { "const": true } } }
+          },
+          {
+            "description": "Positive-control classes never route as a security event by default.",
+            "if": { "properties": { "is_positive_control": { "const": true } }, "required": ["is_positive_control"] },
+            "then": { "properties": { "requires_security_event_routing": { "const": false } } }
+          }
+        ]
+      }
+    }
+  }
+}

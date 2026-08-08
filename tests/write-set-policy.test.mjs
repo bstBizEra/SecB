@@ -482,8 +482,8 @@ test("byte-identity: files read but not modified are unchanged vs main @ 71b9d41
   // validator still fails this guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "cadc8b2a133aefd4b794e9f9226365ca33a0e510",
-    "validate-foundation.mjs pinned to its post-position-fix blob"
+    "0b9a48e6c793d7c984e23d2824482ea2db80ba94",
+    "validate-foundation.mjs pinned to its post-fail-learn blob"
   );
   // Sanity: the guarded source actually still contains the pathSubset the parity
   // oracle mirrors, so the guard is protecting the right thing.

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/fail-learn/v1/experience-record.schema.json",
+  "title": "SecB Experience Record (WP1 deliverable 3)",
+  "description": "Formalizes SECB-FAIL-LEARN-001 section 8 (Experience lifecycle, X0/X1) as strict JSON Schema. Matrix row 2: positive proof 'Independent corroboration advances'; negative proof 'Self-attestation and invalid evidence remain X0'. LIMITATIONS deferred to semantic-validator.mjs: (1) whether checker_id is ACTUALLY distinct from the reporting actor_id / from the source evidence's actor_id -- this schema can only require the checker_distinct_from_actor FLAG to be internally consistent with maturity_state (a producer can still lie about the flag; validateNoSelfAttestationAdvancement re-derives distinctness from the raw ids and rejects a lie); (2) whether every referenced source_evidence_refs entry is actually admissible (validateExperienceEvidenceAdmissibility resolves the referenced Failure Evidence Envelope's governance.admissibility_status); (3) whether scope.tenant_id genuinely matches the cited evidence's scope (validateTenantLineageConsistency).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "experience_id", "maturity_state", "source_evidence_refs", "scope", "classification",
+    "intended_outcome", "observed_outcome", "contributing_conditions", "immediate_cause", "systemic_factors",
+    "containment", "workaround", "proposed_prevention", "reproducibility", "confidence", "reviewer_status",
+    "source_actor_id", "redaction_attestation", "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "experience_id": { "type": "string", "pattern": "^exp_[0-9a-f]{64}$" },
+    "maturity_state": { "enum": ["X0", "X1", "QUARANTINED", "REJECTED"] },
+    "source_evidence_refs": { "$ref": "common.schema.json#/$defs/nonempty_reference_list" },
+    "scope": { "$ref": "common.schema.json#/$defs/tenant_scope" },
+    "classification": { "$ref": "common.schema.json#/$defs/failure_class" },
+    "intended_outcome": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "observed_outcome": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "contributing_conditions": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 1024 } },
+    "immediate_cause": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "systemic_factors": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 1024 } },
+    "containment": { "type": "string", "minLength": 1, "maxLength": 2048 },
+    "workaround": { "type": "string", "maxLength": 2048 },
+    "proposed_prevention": { "type": "string", "minLength": 1, "maxLength": 2048 },
+    "reproducibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_refs"],
+      "properties": {
+        "status": {
+          "description": "The five accepted X0->X1 bases from section 8, plus NOT_ATTEMPTED/ATTEMPTED which cannot advance a record past X0.",
+          "enum": [
+            "NOT_ATTEMPTED", "ATTEMPTED",
+            "DETERMINISTIC_REPRODUCTION", "INDEPENDENT_EVIDENCE_CORROBORATION",
+            "INDEPENDENT_CHECKER_CONFIRMATION", "FORENSIC_SINGLETON_EVIDENCE", "NEGATIVE_CONTROL"
+          ]
+        },
+        "evidence_refs": { "$ref": "common.schema.json#/$defs/reference_list" }
+      }
+    },
+    "confidence": { "enum": ["low", "medium", "high"] },
+    "reviewer_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "checker_id", "checker_distinct_from_actor"],
+      "properties": {
+        "status": { "enum": ["UNREVIEWED", "SELF_ATTESTED", "CHECKER_CONFIRMED", "REJECTED"] },
+        "checker_id": { "oneOf": [ { "type": "null" }, { "$ref": "common.schema.json#/$defs/identifier" } ] },
+        "checker_distinct_from_actor": { "type": "boolean" }
+      }
+    },
+    "source_actor_id": { "$ref": "common.schema.json#/$defs/identifier" },
+    "redaction_attestation": {
+      "description": "Added rework round 02 (SEC-FL-WP1-002). Experience Record's intended_outcome/observed_outcome/immediate_cause/contributing_conditions/systemic_factors/containment/workaround/proposed_prevention are the exact free-text narrative fields SEC's review named as carrying zero secret-pattern guard (unlike the envelope's failure.sanitized_message). This field is a self-declared attestation only -- see common.schema.json#/$defs/redaction_attestation for the full limitation note; it is not verified by semantic-validator.mjs.",
+      "$ref": "common.schema.json#/$defs/redaction_attestation"
+    },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "allOf": [
+    {
+      "description": "X0 -> X1 requires one of the five accepted reproduction/corroboration bases (section 8 numbered list). NOT_ATTEMPTED/ATTEMPTED can never carry maturity_state X1.",
+      "if": { "type": "object", "required": ["maturity_state"], "properties": { "maturity_state": { "const": "X1" } } },
+      "then": {
+        "type": "object",
+        "properties": {
+          "reproducibility": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": ["DETERMINISTIC_REPRODUCTION", "INDEPENDENT_EVIDENCE_CORROBORATION", "INDEPENDENT_CHECKER_CONFIRMATION", "FORENSIC_SINGLETON_EVIDENCE", "NEGATIVE_CONTROL"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "SCEN-07 / matrix row 2 negative proof (schema layer): an honestly-flagged self-attestation (checker_distinct_from_actor=false) can never carry maturity_state X1. The adversarial case -- checker_distinct_from_actor falsely set true while checker_id actually equals source_actor_id -- is caught only by semantic-validator.mjs (validateNoSelfAttestationAdvancement), not by this schema.",
+      "if": { "type": "object", "required": ["reviewer_status"], "properties": { "reviewer_status": { "type": "object", "required": ["checker_distinct_from_actor"], "properties": { "checker_distinct_from_actor": { "const": false } } } } },
+      "then": { "type": "object", "properties": { "maturity_state": { "enum": ["X0", "QUARANTINED", "REJECTED"] } } }
+    },
+    {
+      "description": "X1 via INDEPENDENT_CHECKER_CONFIRMATION requires reviewer_status.status = CHECKER_CONFIRMED and a distinct checker.",
+      "if": {
+        "type": "object",
+        "required": ["maturity_state", "reproducibility"],
+        "properties": {
+          "maturity_state": { "const": "X1" },
+          "reproducibility": { "type": "object", "required": ["status"], "properties": { "status": { "const": "INDEPENDENT_CHECKER_CONFIRMATION" } } }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "reviewer_status": { "type": "object", "properties": { "status": { "const": "CHECKER_CONFIRMED" }, "checker_distinct_from_actor": { "const": true } } }
+        }
+      }
+    }
+  ]
+}

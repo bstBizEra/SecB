@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/fail-learn/v1/transitions.schema.json",
+  "title": "SecB Fail-Learn Events, Transitions, and Compatibility Rules (WP1 deliverable 6)",
+  "description": "Binds the five WP1 contracts (Failure Evidence Envelope, Experience Record, Knowledge Artifact, Skill Candidate) and the classification taxonomy into one maturity lattice. Three shapes are defined: (1) event_envelope, the schema-bound event shape for the minimum event families in SECB-FAIL-LEARN-001 section 12; (2) transition_request, the shape asking 'may object X move from state A to state B'; (3) transition_table, the schema for the versioned, data-driven legality table (data/maturity-transition-table.json) that answers that question. This file intentionally does NOT try to express legality via a giant JSON Schema if/then chain across four object types x up to eight states each -- that is unwieldy and untestable in the way this project's own src/control/state-machine.mjs already avoids it (a frozen JS table, not schema conditionals). The legality table is instead a first-class, schema-validated DATA artifact, and semantic-validator.mjs's validateTransitionLegality(objectType, fromState, toState) is the single place that consults it. This mirrors, at the fail-learn layer, the STATE_MACHINES table already implemented for Project/WorkPackage/Session/Evidence objects in src/control/state-machine.mjs -- WP1 does not touch that file; it is a distinct, non-conflicting table for the four new fail-learn object types.",
+  "$defs": {
+    "event_type": {
+      "description": "Closed vocabulary, exactly the minimum event families named in section 12.",
+      "enum": [
+        "operation.requested", "policy.decision.rendered", "operation.authorized", "operation.denied", "operation.failed",
+        "failure.evidence.captured", "failure.evidence.validated",
+        "experience.candidate.created", "experience.classified", "experience.reproduction.requested",
+        "experience.reproduced", "experience.corroborated",
+        "lesson.candidate.created", "knowledge.reviewed", "knowledge.approved", "knowledge.deprecated",
+        "skill.candidate.created", "skill.evaluation.completed", "skill.security_review.completed",
+        "skill.pilot.authorized", "skill.promoted", "skill.execution.completed",
+        "skill.regression.detected", "skill.suspended", "skill.rolled_back"
+      ]
+    },
+    "event_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "event_id", "event_type", "occurred_at", "scope", "subject_ref", "actor", "evidence_refs", "payload_digest"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "event_id": { "type": "string", "pattern": "^evt_[0-9a-f]{64}$" },
+        "event_type": { "$ref": "#/$defs/event_type" },
+        "occurred_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+        "scope": { "$ref": "common.schema.json#/$defs/tenant_scope" },
+        "subject_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["object_type", "object_id", "previous_maturity_state", "new_maturity_state"],
+          "properties": {
+            "object_type": { "$ref": "common.schema.json#/$defs/object_type" },
+            "object_id": { "$ref": "common.schema.json#/$defs/identifier" },
+            "previous_maturity_state": { "oneOf": [ { "type": "null" }, { "type": "string", "minLength": 1 } ] },
+            "new_maturity_state": { "type": "string", "minLength": 1 }
+          }
+        },
+        "actor": { "$ref": "common.schema.json#/$defs/actor" },
+        "evidence_refs": { "$ref": "common.schema.json#/$defs/reference_list" },
+        "payload_digest": { "$ref": "common.schema.json#/$defs/sha256_digest" }
+      }
+    },
+    "transition_request": {
+      "description": "Requests permission for object_id (of object_type) to move from from_state to to_state. Legality is resolved by semantic-validator.mjs against data/maturity-transition-table.json -- this schema only bounds the request's own shape.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "object_id", "from_state", "to_state", "triggering_event_type", "evidence_refs", "actor"],
+      "properties": {
+        "object_type": { "$ref": "common.schema.json#/$defs/object_type" },
+        "object_id": { "$ref": "common.schema.json#/$defs/identifier" },
+        "from_state": { "type": "string", "minLength": 1 },
+        "to_state": { "type": "string", "minLength": 1 },
+        "triggering_event_type": { "$ref": "#/$defs/event_type" },
+        "evidence_refs": { "$ref": "common.schema.json#/$defs/nonempty_reference_list" },
+        "actor": { "$ref": "common.schema.json#/$defs/actor" }
+      }
+    },
+    "transition_table": {
+      "description": "Versioned, closed, data-driven legality table. Exactly the four fail-learn object types; every state listed for an object type must be a key with an (possibly empty) array of legal successor states.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "table_version", "object_types"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "table_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "object_types": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["FailureEvidence", "Experience", "Knowledge", "SkillCandidate"],
+          "properties": {
+            "FailureEvidence": { "$ref": "#/$defs/edge_map" },
+            "Experience": { "$ref": "#/$defs/edge_map" },
+            "Knowledge": { "$ref": "#/$defs/edge_map" },
+            "SkillCandidate": { "$ref": "#/$defs/edge_map" }
+          }
+        }
+      }
+    },
+    "edge_map": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$comment": "This document is a $defs library, not a single-instance schema. run-validation.mjs compiles it and references transitions.schema.json#/$defs/event_envelope, #/$defs/transition_request, and #/$defs/transition_table as three distinct top-level checks."
+}

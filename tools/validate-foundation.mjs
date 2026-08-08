@@ -97,7 +97,21 @@ const schemaFiles = allSchemaFiles.filter(isFlatContract);
 const nestedContractSchemas = allSchemaFiles.filter((file) => file.startsWith("contracts/") && !isFlatContract(file));
 const subsystemSchemaFiles = allSchemaFiles.filter((file) => !file.startsWith("contracts/"));
 
-const NESTED_CONTRACT_SCHEMAS = [];
+// WP1 fail-learn design-layer schemas. They live under contracts/ because they
+// ARE contracts for that work package, but they are not part of the governed
+// 35-contract set: nothing in the runtime validates against them, they carry
+// their own validator (contracts/fail-learn/run-validation.mjs) and their own
+// conformance vectors, and the slice is explicitly unwired. Listing them here
+// is what keeps that a stated position rather than an accident of nesting.
+const NESTED_CONTRACT_SCHEMAS = [
+  "contracts/fail-learn/schemas/common.schema.json",
+  "contracts/fail-learn/schemas/classification-taxonomy.schema.json",
+  "contracts/fail-learn/schemas/failure-evidence-envelope.schema.json",
+  "contracts/fail-learn/schemas/experience-record.schema.json",
+  "contracts/fail-learn/schemas/knowledge-artifact.schema.json",
+  "contracts/fail-learn/schemas/skill-candidate.schema.json",
+  "contracts/fail-learn/schemas/transitions.schema.json"
+];
 assert(
   nestedContractSchemas.length === NESTED_CONTRACT_SCHEMAS.length &&
     NESTED_CONTRACT_SCHEMAS.every((file) => nestedContractSchemas.includes(file)),

@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "table_version": "1.0.0",
+  "object_types": {
+    "FailureEvidence": {
+      "F0": ["E0", "QUARANTINED"],
+      "E0": ["E1", "QUARANTINED"],
+      "E1": ["QUARANTINED"],
+      "QUARANTINED": []
+    },
+    "Experience": {
+      "X0": ["X1", "QUARANTINED", "REJECTED"],
+      "X1": ["QUARANTINED"],
+      "QUARANTINED": [],
+      "REJECTED": []
+    },
+    "Knowledge": {
+      "K0": ["K1", "REJECTED", "QUARANTINED"],
+      "K1": ["DEPRECATED", "SUPERSEDED"],
+      "DEPRECATED": [],
+      "SUPERSEDED": [],
+      "REJECTED": [],
+      "QUARANTINED": []
+    },
+    "SkillCandidate": {
+      "S0": ["S1", "QUARANTINED", "RETIRED"],
+      "S1": ["S2", "QUARANTINED", "RETIRED"],
+      "S2": ["S3", "SUSPENDED", "ROLLED_BACK", "RETIRED"],
+      "S3": ["SUSPENDED", "ROLLED_BACK", "RETIRED"],
+      "SUSPENDED": ["S2", "S3", "ROLLED_BACK", "RETIRED"],
+      "ROLLED_BACK": ["RETIRED"],
+      "RETIRED": [],
+      "QUARANTINED": []
+    }
+  },
+  "notes": [
+    "F0 and E0 have no edge to K1/S1/S2/S3 anywhere in this table -- they belong to a different object_type entirely, which structurally enforces SECB-FAIL-LEARN-001 section 4's 'F0 and E0 MUST NOT transition directly to K1, S1, S2, or S3' as a fact about the table shape (no cross-object-type edges exist at all in this data model), not merely as an omitted same-type edge.",
+    "SkillCandidate S0 has no direct edge to S2 or S3 -- a candidate cannot skip evaluation (S1) or signed approval (S2) (SCEN-12).",
+    "SkillCandidate ROLLED_BACK has no edge to S2 or S3 -- a rolled-back skill cannot resume at its prior maturity; it can only be RETIRED or (outside this table, as a NEW SkillCandidate object with a new skill_id) re-enter at S0 (SCEN-12 negative proof).",
+    "Knowledge K1 has no edge back to K0 -- interpretation may be revised via a NEW superseding Knowledge Artifact (section 9), never by regressing the sealed one.",
+    "This table governs ONLY the four fail-learn object types (FailureEvidence/Experience/Knowledge/SkillCandidate) defined by WP1. It does not modify, replace, or interact with src/control/state-machine.mjs's pre-existing STATE_MACHINES table for Project/WorkPackage/Session/Evidence, which is a separate, already-implemented lifecycle for different object types."
+  ]
+}

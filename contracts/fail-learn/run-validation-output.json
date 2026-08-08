@@ -1,0 +1,1476 @@
+{
+  "schema_version": "1.0",
+  "record_kind": "FAIL_LEARN_WP1_RUN_VALIDATION_RESULT",
+  "ajv_options": {
+    "strict": true,
+    "strictTypes": true,
+    "strictTuples": true,
+    "allErrors": true,
+    "formats": "ajv-formats bound"
+  },
+  "schema_compile_warnings": [],
+  "counts": {
+    "positive_total": 20,
+    "positive_pass": 20,
+    "positive_unexpected": 0,
+    "negative_total": 34,
+    "negative_correctly_rejected": 34,
+    "negative_unexpected": 0
+  },
+  "positive_results": [
+    {
+      "vector_id": "pos-01-scenario1-clean-denial-fail-closed",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-01"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-02-scenario2-cancelled-no-mutation",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-02"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-03-scenario3-secrets-absent-clean",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-04-scenario4-content-address-clean",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-04"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-05-scenario5-tenant-lineage-consistent",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-06-scenario6-reconstructable-evidence",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-06"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-07-scenario7-independent-checker-advances-x1",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-07"
+      ],
+      "matrix_row_refs": [
+        "ROW-2"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-08-scenario8-reviewed-lineage-advances-k1",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-08",
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [
+        "ROW-3"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-09-scenario9-s1-with-evaluation-evidence",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-09"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-10-scenario10-manifest-and-tests-compile",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-10"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-11-scenario11-negative-tests-fail-closed",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-11"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-12-scenario12-legal-suspend-transition",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-12"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-13-scenario12-legal-rollback-transition",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-12"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-14-scenario13-full-lineage-traceability",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-13",
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-15-scenario14-active-knowledge-spawns-candidate",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-14"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-16-scenario15-outcome-event-execution-completed",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-15"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-17-scenario15-outcome-event-regression-detected",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-15"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-18-taxonomy-instance-conformant",
+      "kind": "positive",
+      "scenario_refs": [],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-19-transition-table-conformant",
+      "kind": "positive",
+      "scenario_refs": [],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "pos-20-scenario3-redaction-attestation-explicit-external-scanner",
+      "kind": "positive",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": []
+    }
+  ],
+  "negative_results": [
+    {
+      "vector_id": "neg-01-scenario1-denied-missing-matched-rules",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-01"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 2
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-02-scenario1-denial-misclassified-as-defect",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-01"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "failure_classification_consistency",
+          "message": "envelope reports a clean policy denial (fail_closed_applied=true, matched_rules non-empty) but classifies it as IMPLEMENTATION_DEFECT, which the taxonomy marks is_positive_control=false -- a correctly denied request must not be reported as a control malfunction"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-03-scenario2-denied-with-mutation-committed",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-02"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 3
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-04-scenario3-contains-secrets-true",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-05-scenario3-sanitized-message-secret-pattern",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-06-scenario4-tampered-after-seal",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-04"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "content_address_integrity",
+          "message": "evidence_id suffix (96d19bb23f58fe610965f59e19ee2cbc05e8c354bad07f384149f8df558a60d1) does not match recomputed canonical digest (e40baff190215fa54be700224460c8a1c897f040563a61e7466b2e653f3eed2e) -- document was mutated after the id was minted, or the id was never genuinely content-addressed"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-07-scenario5-cross-tenant-lineage",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "tenant_lineage_consistency",
+          "message": "child record scope.tenant_id (tenant-b) does not match a cited parent record's scope.tenant_id (tenant-a) -- cross-tenant lineage"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-08-scenario6-unreconstructable-empty-evidence",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-06"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 5
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-09-scenario7-self-attestation-flag-lie",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-07"
+      ],
+      "matrix_row_refs": [
+        "ROW-2"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "no_self_attestation_advancement",
+          "message": "experience exp_8f1d14c28aaf928bd8ada1ac801a1f4feae44803925f36df3bf70bfc8c1d42ea claims maturity_state X1 but reviewer_status.checker_id equals source_actor_id (agent-producer-01) -- self-attestation cannot advance past X0, regardless of the checker_distinct_from_actor flag's declared value"
+        },
+        {
+          "check": "checker_not_original_evidence_actor",
+          "message": "experience exp_8f1d14c28aaf928bd8ada1ac801a1f4feae44803925f36df3bf70bfc8c1d42ea claims X1 via checker agent-producer-01, but that same actor_id produced the original Failure Evidence Envelope fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae -- the original agent cannot verify its own causal explanation"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-10-scenario7-self-attestation-honestly-flagged",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-07"
+      ],
+      "matrix_row_refs": [
+        "ROW-2"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "experience",
+          "schema": "experience-record.schema.json",
+          "count": 5
+        }
+      ],
+      "semanticViolationSummary": [
+        {
+          "check": "no_self_attestation_advancement",
+          "message": "experience exp_0b27f77affcf92950cb2a7bbfd1756ddd92358f930a8b4fcf499e28da98af803 claims maturity_state X1 but reviewer_status.checker_id equals source_actor_id (agent-producer-01) -- self-attestation cannot advance past X0, regardless of the checker_distinct_from_actor flag's declared value"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-11-matrixrow2-invalid-evidence-remains-x0",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-07"
+      ],
+      "matrix_row_refs": [
+        "ROW-2"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "experience_evidence_admissibility",
+          "message": "experience exp_adcebe4d953a1fc86dc6af360e3055cd52ee2e1488396627567e0a1761c17a4a claims maturity_state X1 but cites evidence with governance.admissibility_status != admissible (fev_0675507f82a8bf43b7cbd1823f6245e91245a4afd15cfd39b204ce822a831bc2) -- invalid evidence must remain X0"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-12-scenario8-knowledge-self-reviewed",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-08"
+      ],
+      "matrix_row_refs": [
+        "ROW-3"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "independent_knowledge_review",
+          "message": "knowledge know_45bd428a22fa19497e088c3790cde82ec70049f1ca9569ad43cafe03cd76817c claims K1 but has no APPROVED reviewer independent of the author (agent-producer-01) or the source experience's actor/checker (agent-producer-01, agent-checker-01)"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-13-matrixrow3-knowledge-missing-reviewer",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-08"
+      ],
+      "matrix_row_refs": [
+        "ROW-3"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "knowledge",
+          "schema": "knowledge-artifact.schema.json",
+          "count": 3
+        }
+      ],
+      "semanticViolationSummary": [
+        {
+          "check": "independent_knowledge_review",
+          "message": "knowledge know_bf4fe4e791ed241bee013adcc268d4802279d760d2ba4bde36e863e3f824b6b4 claims K1 but no source Experience Record was supplied to validateIndependentKnowledgeReview for independence cross-checking -- a K1 claim cannot be verified independent of the reporting/checking actor without resolving and passing the cited experience_refs document; this call fails closed rather than silently skipping the author/experience-actor collision check (SEC-FL-WP1-N001)"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-14-matrixrow3-knowledge-missing-scope",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-08"
+      ],
+      "matrix_row_refs": [
+        "ROW-3"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "knowledge",
+          "schema": "knowledge-artifact.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": [
+        {
+          "check": "content_address_integrity",
+          "message": "knowledge_id suffix (4534d6106c8caab4852a272d0c18ab2e44434b812a040c02f56fa9d78ef1dcf6) does not match recomputed canonical digest (ce734128abadb8e20179488f3bbdf9781491376f03ebfb3408d2489e32b4ff0d) -- document was mutated after the id was minted, or the id was never genuinely content-addressed"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-15-matrixrow3-knowledge-missing-evidence",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-08"
+      ],
+      "matrix_row_refs": [
+        "ROW-3"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "knowledge",
+          "schema": "knowledge-artifact.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-16-scenario9-s1-missing-evaluation-evidence",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-09"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "skill",
+          "schema": "skill-candidate.schema.json",
+          "count": 3
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-17-scenario9-knowledge-snapshot-lie",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-09"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "no_derivation_from_non_k1_knowledge",
+          "message": "skill skill_0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa3606 claims knowledge_maturity_at_binding=K1 for knowledge know_4534d6106c8caab4852a272d0c18ab2e44434b812a040c02f56fa9d78ef1dcf6, but that knowledge's actual maturity_state is K0 -- deprecated, superseded, rejected, or unreviewed (K0) knowledge cannot produce a new skill candidate"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-18-scenario10-undeclared-side-effect",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-10"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "no_undeclared_side_effects",
+          "message": "skill skill_d6d5f7f0a0a477131a1726a394e88d51806858fe5e5ea87ce90bb6dc5ada4240 test case pos-1 observed_side_effects includes NETWORK_CALL, which is not in capability_manifest.declared_permissions.declared_side_effects (FILE_WRITE, GIT_COMMIT)"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-19-matrixrow4-undeclared-permission-class",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-10"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "no_undeclared_permission_class",
+          "message": "skill skill_4ac9893a71df0802420542f09f4bbfd4231f22e847dbc6da0d8d054b5bda9f92 test case neg-1 exercises permission_class PROTECTED_BRANCH, which is not in capability_manifest.declared_permissions.action_classes (EXECUTION_WRITE)"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-20-scenario11-negative-case-expects-allow",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-11"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "skill",
+          "schema": "skill-candidate.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-21-scenario12-illegal-skip-to-s2",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-12"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "transition_legality",
+          "message": "SkillCandidate cannot transition from S0 to S2 -- not a legal edge in maturity-transition-table.json"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-22-scenario12-illegal-rollback-resume",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-12"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "transition_legality",
+          "message": "SkillCandidate cannot transition from ROLLED_BACK to S3 -- not a legal edge in maturity-transition-table.json"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-23-scenario13-lineage-break-knowledge-mismatch",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-13"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "full_lineage_traceability",
+          "message": "skill.knowledge_ref.ref_id (know_0000000000000000000000000000000000000000000000000000000000000000) does not match the supplied knowledge document's knowledge_id (know_2e00eaced773e0828d47f4a5c8376a36c8f151b8b762dac00dfa79b75b57c728)"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-24-scenario14-deprecated-knowledge-spawns-candidate",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-14"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "no_derivation_from_non_k1_knowledge",
+          "message": "skill skill_0a5d0fc91a04e278a6fe901b242db7a63f0f45f0737c9bee98db2c2ed8fa3606 claims knowledge_maturity_at_binding=K1 for knowledge know_89083d409938635d27f97e9b3fa46284fe240eaf9ccb3edd9eb72ef896d44f45, but that knowledge's actual maturity_state is DEPRECATED -- deprecated, superseded, rejected, or unreviewed (K0) knowledge cannot produce a new skill candidate"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-25-scenario15-event-type-not-in-closed-enum",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-15"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "event",
+          "schema": "transitions.schema.json#/$defs/event_envelope",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-26-taxonomy-missing-entry",
+      "kind": "negative",
+      "scenario_refs": [],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "taxonomy",
+          "schema": "classification-taxonomy.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-27-taxonomy-security-event-marked-positive-control",
+      "kind": "negative",
+      "scenario_refs": [],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "taxonomy",
+          "schema": "classification-taxonomy.schema.json",
+          "count": 4
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-28-transition-table-missing-object-type",
+      "kind": "negative",
+      "scenario_refs": [],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "transitionTableSubject",
+          "schema": "transitions.schema.json#/$defs/transition_table",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-29-bonus-sod-producer-equals-checker",
+      "kind": "negative",
+      "scenario_refs": [
+        "SOD-P0-SEC7"
+      ],
+      "matrix_row_refs": [],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "skill_producer_checker_separation",
+          "message": "skill skill_43ef86276582247527234df07742113e9b3b0226ef47fe2c182ced39c875aebd: checker_actor_id equals builder_identity.actor_id (agent-builder-01) -- producer and independent checker must be distinct identities"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-30-scenario5-knowledge-cross-tenant-lineage",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [
+        "ROW-3"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "tenant_lineage_consistency",
+          "message": "child record scope.tenant_id (tenant-b) does not match a cited parent record's scope.tenant_id (tenant-a) -- cross-tenant lineage"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-31-scenario5-skill-cross-tenant-lineage",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-05"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "tenant_lineage_consistency",
+          "message": "child record scope.tenant_id (tenant-b) does not match a cited parent record's scope.tenant_id (tenant-a) -- cross-tenant lineage"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-32-scenario10-manifest-smuggling-network-and-filesystem",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-10"
+      ],
+      "matrix_row_refs": [
+        "ROW-4"
+      ],
+      "expected": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "actual": {
+        "ajv": "PASS",
+        "semantic": "FAIL"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [],
+      "semanticViolationSummary": [
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes curl, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes ssh, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes scp, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_tools",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_tools includes nc, which is not in capability_manifest.declared_permissions.tools (<empty>)"
+        },
+        {
+          "check": "no_undeclared_mcp_servers",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_mcp_servers includes arbitrary-unreviewed-mcp-server, which is not in capability_manifest.declared_permissions.mcp_servers (<empty>)"
+        },
+        {
+          "check": "no_undeclared_filesystem_paths",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_filesystem_paths includes /etc, which is not in capability_manifest.declared_permissions.filesystem_paths (<empty>)"
+        },
+        {
+          "check": "no_undeclared_filesystem_paths",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_filesystem_paths includes /root/.ssh, which is not in capability_manifest.declared_permissions.filesystem_paths (<empty>)"
+        },
+        {
+          "check": "no_undeclared_filesystem_paths",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_filesystem_paths includes /var/run/secrets, which is not in capability_manifest.declared_permissions.filesystem_paths (<empty>)"
+        },
+        {
+          "check": "no_undeclared_network_hosts",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_network_hosts includes 169.254.169.254, which is not in capability_manifest.declared_permissions.network_hosts (<empty>)"
+        },
+        {
+          "check": "no_undeclared_network_hosts",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_network_hosts includes metadata.google.internal, which is not in capability_manifest.declared_permissions.network_hosts (<empty>)"
+        },
+        {
+          "check": "no_undeclared_network_hosts",
+          "message": "skill skill_f6fe741e0699d7250d4fa1a6dea969b2b58d1a47f5f4ac593d20aa4dbcdaa0a7 test case pos-1 observed_network_hosts includes 0.0.0.0, which is not in capability_manifest.declared_permissions.network_hosts (<empty>)"
+        }
+      ]
+    },
+    {
+      "vector_id": "neg-33-scenario3-admissible-envelope-claims-no-redaction",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 2
+        }
+      ],
+      "semanticViolationSummary": []
+    },
+    {
+      "vector_id": "neg-34-scenario3-sanitized-message-case-variation-now-caught",
+      "kind": "negative",
+      "scenario_refs": [
+        "SCEN-03"
+      ],
+      "matrix_row_refs": [
+        "ROW-1"
+      ],
+      "expected": {
+        "ajv": "FAIL",
+        "semantic": "N/A"
+      },
+      "actual": {
+        "ajv": "FAIL",
+        "semantic": "PASS"
+      },
+      "matches": true,
+      "ajvThrew": null,
+      "semanticThrew": null,
+      "ajvErrorSummary": [
+        {
+          "document": "envelope",
+          "schema": "failure-evidence-envelope.schema.json",
+          "count": 1
+        }
+      ],
+      "semanticViolationSummary": []
+    }
+  ]
+}

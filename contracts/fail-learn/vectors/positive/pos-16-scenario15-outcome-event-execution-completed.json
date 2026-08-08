@@ -1,0 +1,45 @@
+{
+  "vector_id": "pos-16-scenario15-outcome-event-execution-completed",
+  "description": "A well-formed skill.execution.completed event validates against the closed event vocabulary.",
+  "scenario_refs": [
+    "SCEN-15"
+  ],
+  "matrix_row_refs": [],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "PASS"
+  },
+  "documents": {
+    "event": {
+      "schema_version": "1.0",
+      "event_id": "evt_4d340cf15d14ae8372776fda1f4a43da3c6f1c49a6cf06d515fdd540e9df2fb0",
+      "event_type": "skill.execution.completed",
+      "occurred_at": "2026-07-20T19:00:00.000Z",
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "subject_ref": {
+        "object_type": "SkillCandidate",
+        "object_id": "skill_90dc5f62b62a4a109baa5da90de07f9905d85ccfc92b64ae23aaefe93dea6b11",
+        "previous_maturity_state": "S1",
+        "new_maturity_state": "S1"
+      },
+      "actor": {
+        "actor_id": "agent-reviewer-01",
+        "actor_type": "agent",
+        "role": "reviewer"
+      },
+      "evidence_refs": [
+        {
+          "ref_id": "execution-log-01",
+          "digest": "sha256:ad0ac806699f81d0d44503b835f548e9a1c0143a987fc30616cd3d807c8bc5ef"
+        }
+      ],
+      "payload_digest": "sha256:6003d042ebbc326ffb28aceec18c4236289022b54162e3af6c7b9c027e8a07bd"
+    }
+  }
+}

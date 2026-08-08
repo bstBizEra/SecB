@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://secb.local/contracts/fail-learn/v1/common.schema.json",
+  "title": "SecB Fail-Learn Common Definitions (WP1)",
+  "description": "Shared $defs for the SECB-FAIL-LEARN-001 / SECB-FAIL-LEARN-P0-001 WP1 contract set (Failure Evidence Envelope, classification taxonomy, Experience Record, Knowledge Artifact, Skill Candidate, transitions). This is a NEW namespace under contracts/fail-learn/ -- it does not modify or replace the pre-existing generic contracts/evidence-envelope.schema.json, contracts/knowledge-claim.schema.json, or contracts/skill-manifest.schema.json, and it formalizes (does not silently replace) the informal v0.1 docs/templates/failure-evidence-envelope.yaml, docs/templates/knowledge-candidate.yaml, and docs/templates/skill-candidate.yaml. CROSS-FIELD AND CROSS-DOCUMENT LIMITATION: JSON Schema (Draft 2020-12, without the non-portable $data keyword) cannot compare the VALUE of one property against a sibling property's value, and cannot resolve a $ref by ID across separate documents supplied out-of-band. Every such constraint named in the WP1 task (self-attestation detection, tenant lineage consistency, cross-document digest/lineage binding, transition-table legality, undeclared side-effect/permission detection) is enforced by the companion semantic-validator.mjs, not by this schema layer alone. Schema-only validation is never sufficient by itself for this contract set.",
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sha256_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "content_address_suffix": {
+      "description": "Lowercase hex SHA-256 suffix used by content-addressed object ids (e.g. fev_<suffix>). The schema layer can only bound the SYNTAX of the suffix; it cannot recompute the digest over the sibling document to prove the id is genuinely content-addressed -- that recomputation is performed by semantic-validator.mjs (validateContentAddressIntegrity), which is also how it detects tampering (SCEN-04).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref_id", "digest"],
+      "properties": {
+        "ref_id": { "$ref": "#/$defs/identifier" },
+        "digest": { "$ref": "#/$defs/sha256_digest" }
+      }
+    },
+    "nonempty_reference_list": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/reference" }
+    },
+    "reference_list": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reference" }
+    },
+    "tenant_scope": {
+      "description": "Binds a record to its tenant/project/session boundary (SECB-FAIL-LEARN-001 section 14: 'Tenant A SHALL NOT read Tenant B records'). The schema layer requires the fields to be PRESENT; it cannot enforce that a consumer actually respects the boundary at read/write time (that is a runtime authorization concern, WP2/WP3), and it cannot prove a downstream record's scope was genuinely DERIVED from its declared upstream evidence rather than independently fabricated -- semantic-validator.mjs (validateTenantLineageConsistency) checks that derived records (Experience/Knowledge/Skill) declare the SAME tenant_id as the evidence they cite. As of rework round 02 (REV-001), this is genuinely wired in run-validation.mjs's runSemanticChecks for all three derived kinds (Experience against its source evidence, Knowledge against its cited experience, Skill -- which gained its own scope field in this same rework round -- against its cited knowledge/experience/evidence lineage), not only for Experience Records as in the original WP1 cut.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["organization_id", "tenant_id", "project_id", "work_package_id", "session_id"],
+      "properties": {
+        "organization_id": { "$ref": "#/$defs/identifier" },
+        "tenant_id": { "$ref": "#/$defs/identifier" },
+        "project_id": { "$ref": "#/$defs/identifier" },
+        "work_package_id": { "$ref": "#/$defs/identifier" },
+        "session_id": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "redaction_attestation": {
+      "description": "WP1-appropriate contract-level HOOK for secret/content redaction, added in rework round 02 (SEC-FL-WP1-002). This is a self-declared CLAIM that a redaction/secret-scan step ran before the record was sealed and by what mechanism/policy version -- it is NOT a verified guarantee and semantic-validator.mjs does NOT verify the claim's truth (real content-level secret detection -- entropy analysis, credential-shape libraries, etc. -- is legitimately WP2 runtime scope and out of reach for a JSON Schema + semantic-validator design layer). Its purpose is narrower and cheaper: an admissible/advanced record can no longer omit the claim entirely, so WP2 has a contract slot to populate and audit rather than needing another schema iteration later.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["redaction_applied", "mechanism", "policy_version"],
+      "properties": {
+        "redaction_applied": { "type": "boolean" },
+        "mechanism": {
+          "description": "What (if anything) performed the claimed redaction. NONE is a legal, honest value for a record that has not been scanned -- the schema forces the claim to be made either way, it does not force the claim to be true.",
+          "enum": ["NONE", "DENYLIST_PATTERN", "ENTROPY_SCAN", "EXTERNAL_SECRET_SCANNER", "MANUAL_REVIEW"]
+        },
+        "policy_version": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "actor_type", "role"],
+      "properties": {
+        "actor_id": { "$ref": "#/$defs/identifier" },
+        "actor_type": { "enum": ["human", "agent", "service", "workflow"] },
+        "role": { "enum": ["maker", "checker", "operator", "reviewer"] },
+        "runtime_id": { "$ref": "#/$defs/identifier" },
+        "model_id": { "$ref": "#/$defs/identifier" },
+        "model_version": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "signature_algorithm": {
+      "enum": ["ED25519", "ECDSA_P256_SHA256", "ECDSA_P384_SHA384", "RSA_PSS_SHA256"]
+    },
+    "signature_envelope": {
+      "description": "Generic content-addressed signature binding, styled on in-toto Statement v1 / SLSA v1.2 provenance framing (source-validation doc item 7). The schema can require these fields to be well-formed; it CANNOT verify the cryptographic signature itself. That is out-of-band and out of WP1 scope -- semantic-validator.mjs only checks structural presence and that signed_digest matches the sibling document's recomputed canonical digest where the vector context supplies enough to do so, never real cryptographic verification.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "trust_domain", "canonical_form", "signed_digest", "signature_value"],
+      "properties": {
+        "algorithm": { "$ref": "#/$defs/signature_algorithm" },
+        "key_id": { "$ref": "#/$defs/identifier" },
+        "trust_domain": { "$ref": "#/$defs/identifier" },
+        "canonical_form": { "enum": ["SECB_CANONICAL_JSON_V1"] },
+        "signed_digest": { "$ref": "#/$defs/sha256_digest" },
+        "signature_value": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 4096,
+          "pattern": "^[A-Za-z0-9_=+/-]{32,4096}$"
+        }
+      }
+    },
+    "failure_class": {
+      "description": "Closed failure ontology, SECB-FAIL-LEARN-001 section 5. Which classes count as positive-control (a correctly denied request, never a malfunction) is NOT fixed here -- it is data owned by classification-taxonomy.schema.json / data/classification-taxonomy.instance.json, so the taxonomy stays the single, versioned source of truth.",
+      "enum": [
+        "POLICY_DENIAL_EXPECTED",
+        "NEGATIVE_TEST_PASS",
+        "POLICY_DENIAL_FALSE_POSITIVE",
+        "AUTHORITY_GAP",
+        "PRECONDITION_MISSING",
+        "IMPLEMENTATION_DEFECT",
+        "ENVIRONMENTAL_FAILURE",
+        "TRANSIENT_FAILURE",
+        "KNOWLEDGE_GAP",
+        "CAPABILITY_GAP",
+        "AMBIGUITY_FAILURE",
+        "INTEGRATION_DRIFT",
+        "EVALUATION_FAILURE",
+        "SECURITY_EVENT"
+      ]
+    },
+    "decision_result": {
+      "enum": ["denied", "failed", "timed_out", "cancelled", "partially_completed"]
+    },
+    "canonical_path": {
+      "description": "Bounded, root-anchored, forward-slash canonical filesystem path. Rejects traversal ('.', '..'), empty segments, trailing slash, backslash. Cannot resolve symlinks or verify workspace containment -- runtime concern, out of WP1 scope.",
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 4096,
+      "pattern": "^/(?:(?!\\.{1,2}(?:/|$))[A-Za-z0-9._-]+)(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9._-]+)*$"
+    },
+    "side_effect_class": {
+      "description": "Closed side-effect vocabulary for Skill Candidate manifests and test observations. CREDENTIAL_ACCESS is intentionally usable only as an OBSERVED value (test-case reporting) -- see skill-candidate.schema.json's declared_side_effects, which excludes it from the declarable set entirely, so any test case that observes it is structurally undeclared and always rejected (least-privilege by omission).",
+      "enum": ["NONE", "FILE_WRITE", "FILE_DELETE", "GIT_COMMIT", "GIT_PUSH", "NETWORK_CALL", "PROCESS_SPAWN", "CREDENTIAL_ACCESS"]
+    },
+    "declarable_side_effect_class": {
+      "description": "Subset of side_effect_class that a Skill Candidate manifest is permitted to declare. CREDENTIAL_ACCESS is deliberately excluded.",
+      "enum": ["NONE", "FILE_WRITE", "FILE_DELETE", "GIT_COMMIT", "GIT_PUSH", "NETWORK_CALL", "PROCESS_SPAWN"]
+    },
+    "action_class": {
+      "description": "Closed permission-class vocabulary, styled on the SecB auto-auth action_class enum (Package 018). Used both as the manifest's declarable permission set and as each test case's observed permission_class, so an undeclared permission_class is structurally detectable the same way an undeclared side effect is.",
+      "enum": ["READ_ONLY", "PREPARATION_WRITE", "EXECUTION_WRITE", "PROTECTED_BRANCH", "RELEASE_DEPLOY", "SECRETS_ACCESS", "PRIVILEGE_ELEVATION"]
+    },
+    "declarable_action_class": {
+      "description": "Subset of action_class a Skill Candidate manifest may declare at S0. Hard-deny classes (PROTECTED_BRANCH, RELEASE_DEPLOY, SECRETS_ACCESS, PRIVILEGE_ELEVATION) are structurally excluded -- least-privilege skill manifest, section 8.",
+      "enum": ["READ_ONLY", "PREPARATION_WRITE", "EXECUTION_WRITE"]
+    },
+    "object_type": {
+      "enum": ["FailureEvidence", "Experience", "Knowledge", "SkillCandidate"]
+    }
+  }
+}

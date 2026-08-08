@@ -1,0 +1,157 @@
+{
+  "vector_id": "pos-05-scenario5-tenant-lineage-consistent",
+  "description": "Experience Record's scope.tenant_id matches its cited Failure Evidence Envelope's scope.tenant_id.",
+  "scenario_refs": [
+    "SCEN-05"
+  ],
+  "matrix_row_refs": [
+    "ROW-1"
+  ],
+  "expected": {
+    "ajv": "PASS",
+    "semantic": "PASS"
+  },
+  "documents": {
+    "experience": {
+      "schema_version": "1.0",
+      "maturity_state": "X0",
+      "source_evidence_refs": [
+        {
+          "ref_id": "fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae",
+          "digest": "sha256:1c2b1ad57d26c50807e9aa1f1d4eaf64bacaae5e92f3d6803cf29fbb71bab44f"
+        }
+      ],
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "classification": "POLICY_DENIAL_EXPECTED",
+      "intended_outcome": "write should be blocked on a protected branch",
+      "observed_outcome": "write was blocked as expected",
+      "contributing_conditions": [
+        "target branch is protected"
+      ],
+      "immediate_cause": "policy rule rule-deny-protected-branch matched",
+      "systemic_factors": [],
+      "containment": "no mutation occurred",
+      "workaround": "",
+      "proposed_prevention": "none required, control worked as designed",
+      "reproducibility": {
+        "status": "NOT_ATTEMPTED",
+        "evidence_refs": []
+      },
+      "confidence": "medium",
+      "reviewer_status": {
+        "status": "UNREVIEWED",
+        "checker_id": null,
+        "checker_distinct_from_actor": false
+      },
+      "source_actor_id": "agent-producer-01",
+      "redaction_attestation": {
+        "redaction_applied": true,
+        "mechanism": "DENYLIST_PATTERN",
+        "policy_version": "redaction-policy-v1"
+      },
+      "created_at": "2026-07-20T18:25:00.000Z",
+      "experience_id": "exp_9e8e1fbdd74acde0c10d65a44352678d2f783393408c88cefba56b0c55d7f95d"
+    },
+    "experienceSourceEvidence": [
+      {
+        "schema_version": "1.0",
+        "occurred_at": "2026-07-20T18:20:00.000Z",
+        "captured_at": "2026-07-20T18:20:05.000Z",
+        "clock_source": "secb-trusted-clock-01",
+        "sequence": 1,
+        "scope": {
+          "organization_id": "org-alpha",
+          "tenant_id": "tenant-a",
+          "project_id": "proj-01",
+          "work_package_id": "wp1-fail-learn",
+          "session_id": "sess-01"
+        },
+        "actor": {
+          "actor_id": "agent-producer-01",
+          "actor_type": "agent",
+          "role": "maker"
+        },
+        "operation": {
+          "operation_type": "git_mutation",
+          "target_class": "repository",
+          "requested_capability": "write_file",
+          "command_digest": "sha256:7227d4867c62ac47131523309535b84e9cedb845e71ba774dc18d3e3cfac7fd7",
+          "input_digest": "sha256:40aca46cb9ebb03e5e09864ab8b89d6fd9c968845befcd5769970cdcac1830f6"
+        },
+        "decision": {
+          "result": "denied",
+          "policy_decision_id": "pdp-dec-01",
+          "policy_bundle_digest": "sha256:0380584c1e86e983bb67d9604e52bd5a00fd9fdbd822e91df9599808aff8f8db",
+          "matched_rules": [
+            "rule-deny-protected-branch"
+          ],
+          "fail_closed_applied": true
+        },
+        "failure": {
+          "failure_class": "POLICY_DENIAL_EXPECTED",
+          "error_type": "PolicyDenial",
+          "error_code": "E_POLICY_DENY",
+          "sanitized_message": "policy denied write to protected branch",
+          "stacktrace_reference": "encref:trace-01:sha256:4e2fbe7ae9c5146f4b7b0ba834f1e270843120629abed25b2d9a9de8ab51b23f",
+          "severity": "low"
+        },
+        "environment": {
+          "repository_commit": "6a35fc68ffb55f3ebb8cf8039efdaae0b8648cd4",
+          "worktree_id": "wt-01",
+          "operating_system": "linux-x86_64",
+          "dependency_lock_digest": "sha256:261a13c80be028517bccbd2237192ad581e97d2cff8fa9dce5ba92a7aad7adbd",
+          "configuration_digest": "sha256:a256fe80eb273e518019d1572c02d66ebe47b8afb4bbd837dfcb59873e9e9c30",
+          "tool_versions": {
+            "node": "22.0.0"
+          }
+        },
+        "outcome": {
+          "mutation_committed": false,
+          "affected_resources": [],
+          "rollback_required": false,
+          "containment_status": "contained"
+        },
+        "evidence": {
+          "log_refs": [
+            {
+              "ref_id": "log-01",
+              "digest": "sha256:b8842c7dd5ba2af27a2fd0cb07474a241277226589e9adbee98804d862b1ab43"
+            }
+          ],
+          "trace_refs": [],
+          "test_result_refs": [],
+          "artifact_refs": [],
+          "screenshot_refs": [],
+          "attestation_refs": []
+        },
+        "governance": {
+          "security_classification": "INTERNAL",
+          "contains_secrets": false,
+          "redaction_policy": "redact-v1",
+          "retention_policy": "retain-90d",
+          "admissibility_status": "admissible",
+          "redaction_attestation": {
+            "redaction_applied": true,
+            "mechanism": "DENYLIST_PATTERN",
+            "policy_version": "redaction-policy-v1"
+          },
+          "integrity_signature": {
+            "algorithm": "ED25519",
+            "key_id": "key-evidence-01",
+            "trust_domain": "secb.trust.evidence",
+            "canonical_form": "SECB_CANONICAL_JSON_V1",
+            "signed_digest": "sha256:8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae",
+            "signature_value": "sig-8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e"
+          }
+        },
+        "evidence_id": "fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae"
+      }
+    ]
+  }
+}

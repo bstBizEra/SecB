@@ -1,0 +1,62 @@
+{
+  "vector_id": "neg-10-scenario7-self-attestation-honestly-flagged",
+  "description": "Same self-attestation, but checker_distinct_from_actor is honestly set false while maturity_state still claims X1 -- this is the schema-layer catch (if/then), a distinct proof from neg-09's semantic-layer catch of the same underlying defect.",
+  "scenario_refs": [
+    "SCEN-07"
+  ],
+  "matrix_row_refs": [
+    "ROW-2"
+  ],
+  "expected": {
+    "ajv": "FAIL",
+    "semantic": "N/A"
+  },
+  "documents": {
+    "experience": {
+      "schema_version": "1.0",
+      "maturity_state": "X1",
+      "source_evidence_refs": [
+        {
+          "ref_id": "fev_8b4f053d0629190e69f01634dcb6403552c018e41039d671b116cbd31c9e4bae",
+          "digest": "sha256:1c2b1ad57d26c50807e9aa1f1d4eaf64bacaae5e92f3d6803cf29fbb71bab44f"
+        }
+      ],
+      "scope": {
+        "organization_id": "org-alpha",
+        "tenant_id": "tenant-a",
+        "project_id": "proj-01",
+        "work_package_id": "wp1-fail-learn",
+        "session_id": "sess-01"
+      },
+      "classification": "POLICY_DENIAL_EXPECTED",
+      "intended_outcome": "write should be blocked on a protected branch",
+      "observed_outcome": "write was blocked as expected",
+      "contributing_conditions": [
+        "target branch is protected"
+      ],
+      "immediate_cause": "policy rule rule-deny-protected-branch matched",
+      "systemic_factors": [],
+      "containment": "no mutation occurred",
+      "workaround": "",
+      "proposed_prevention": "none required, control worked as designed",
+      "reproducibility": {
+        "status": "INDEPENDENT_CHECKER_CONFIRMATION",
+        "evidence_refs": []
+      },
+      "confidence": "medium",
+      "reviewer_status": {
+        "status": "SELF_ATTESTED",
+        "checker_id": "agent-producer-01",
+        "checker_distinct_from_actor": false
+      },
+      "source_actor_id": "agent-producer-01",
+      "redaction_attestation": {
+        "redaction_applied": true,
+        "mechanism": "DENYLIST_PATTERN",
+        "policy_version": "redaction-policy-v1"
+      },
+      "created_at": "2026-07-20T18:25:00.000Z",
+      "experience_id": "exp_0b27f77affcf92950cb2a7bbfd1756ddd92358f930a8b4fcf499e28da98af803"
+    }
+  }
+}
