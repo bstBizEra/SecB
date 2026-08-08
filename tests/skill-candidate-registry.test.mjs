@@ -281,7 +281,15 @@ test("skill-resolver.mjs and sod-rules.mjs are byte-identical to main (S1 adds n
     "src/registry/skill-resolver.mjs": "e979fa055a30cb07ca27abf789a71a284f525d41046334f8778884337c17ff1f",
     // Repinned by mod-gov-s1-sod-rules-hardening-fix-001 (see
     // mod-gov-s1-sod-rules-hardening-fix-producer-verification-001.md).
-    "src/control/sod-rules.mjs": "2d951ed7935bebaab2951c4c0dee420e4169ebf9e3a2903c751328753a3a894f",
+    // Re-pinned by operator ratification, 2026-08-08, for 9d4da11: actor ids are
+    // admissibility-gated. checkPairwiseDistinct and checkProhibitedActors
+    // compared actor ids as raw strings, so "alice​" and "alice", and
+    // "аlice" (Cyrillic a) and "alice", each read as two principals and
+    // admitted a producer approving its own work. 9d4da11 refused to re-pin these
+    // guards itself — "it needs an owner who is neither of us" — and this is that
+    // owner. Both vectors are covered on both functions in tests/sod-rules.test.mjs
+    // (33/33) and the wired consumer authority-engine (15/15).
+    "src/control/sod-rules.mjs": "1e1d3f20b82cb5f153d23b14649787f50e067dea7d36066ed73aac22d5e4236d",
   };
   for (const [file, expected] of Object.entries(digests)) {
     const actual = createHash("sha256")

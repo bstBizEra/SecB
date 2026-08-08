@@ -368,7 +368,15 @@ const PINNED_BLOBS = Object.freeze({
   // normalization gap and an unfrozen shared-mutable-state gap (see
   // mod-gov-s1-sod-rules-hardening-fix-producer-verification-001.md). Pin
   // tracks the post-fix blob so this guard still detects further drift.
-  "src/control/sod-rules.mjs": "314f6da194ed3eb5342eb224f2084fb7fe631359",
+  // Re-pinned by operator ratification, 2026-08-08, for 9d4da11: actor ids are
+  // admissibility-gated. checkPairwiseDistinct and checkProhibitedActors
+  // compared actor ids as raw strings, so "alice​" and "alice", and
+  // "аlice" (Cyrillic a) and "alice", each read as two principals and
+  // admitted a producer approving its own work. 9d4da11 refused to re-pin these
+  // guards itself — "it needs an owner who is neither of us" — and this is that
+  // owner. Both vectors are covered on both functions in tests/sod-rules.test.mjs
+  // (33/33) and the wired consumer authority-engine (15/15).
+  "src/control/sod-rules.mjs": "0cb83353ac1e8e9dd1c8d3bfd34a4a4d04fb389f",
   "src/control/risk-registry.mjs": "b8ee7f9b979fdb3c5d5261ad0e116ecd7c6a1816",
   "src/ledger/durable-ledger.mjs": "6be08fc14ff31a7c871c5e86888af42285d40529",
   "src/ledger/governed-ledgers.mjs": "32ff590386574311ff5fcdce846b40bcfe2a1f07",

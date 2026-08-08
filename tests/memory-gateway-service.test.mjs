@@ -316,12 +316,22 @@ test("GUARD: temporal-ledgers.mjs and sod-rules.mjs match the reviewed boundary 
   // main's rationale attached to it — the branch would read as mergeable
   // precisely where it is not.
   //
-  // Both paths therefore stay in the loop, and both are expected RED until the
-  // queued slice ratifies them. A green result here would mean the queue was
-  // resolved, not that the check was satisfied by assumption.
-  for (const path of ["src/ledger/temporal-ledgers.mjs", "src/control/sod-rules.mjs"]) {
+  // temporal-ledgers.mjs is still compared live against main — untouched by
+  // this branch and required to stay that way.
+  for (const path of ["src/ledger/temporal-ledgers.mjs"]) {
     const onMain = execFileSync("git", ["show", `main:${path}`], { cwd: REPO_ROOT, encoding: "utf8" });
     const onBranch = readFileSync(resolve(REPO_ROOT, path), "utf8");
     assert.equal(normalize(onBranch), normalize(onMain), `${path} must be untouched vs main (wrap-not-modify, R3+ hard line)`);
   }
+  // sod-rules.mjs can no longer be compared against main: both parents changed
+  // it — main under mod-gov-s1-sod-rules-hardening-fix-001, this branch under
+  // 9d4da11, which closed a self-approval bypass in actor-id comparison.
+  // 9d4da11 refused to re-pin this guard itself ("it needs an owner who is
+  // neither of us"); the operator ratified it on 2026-08-08. Pinned to that
+  // ratified blob so the guard still bites on anything further.
+  assert.equal(
+    execFileSync("git", ["hash-object", resolve(REPO_ROOT, "src/control/sod-rules.mjs")], { cwd: REPO_ROOT, encoding: "utf8" }).trim(),
+    "0cb83353ac1e8e9dd1c8d3bfd34a4a4d04fb389f",
+    "sod-rules.mjs drifted from its operator-ratified blob"
+  );
 });
