@@ -477,11 +477,12 @@ test(`byte-identity: files read but not modified are unchanged vs main @ ${BASE_
   // this branch: c4025c5 (reverse manifest-completeness check over the four
   // AMD-002 paths) and 61940ac (expectedSchemas reconciled to the union of both
   // merge parents, 35 contracts; all three pin maps extended to match). Pinned
-  // to its post-61940ac blob so any UNAUTHORIZED further drift of the validator
-  // still fails this guard.
+  // then by the governed-contract position fix (a nested contracts/ subdirectory
+  // no longer silently joins the 35-contract set). Pinned to its post-fix blob so
+  // any UNAUTHORIZED further drift of the validator still fails this guard.
   assert.equal(
     execFileSync("git", ["hash-object", resolve(root, "tools/validate-foundation.mjs")], { cwd: root, encoding: "utf8" }).trim(),
-    "7bc1c5ef89551520413be1c15e5bbcaa93389f7e",
-    "validate-foundation.mjs pinned to its post-61940ac blob"
+    "cadc8b2a133aefd4b794e9f9226365ca33a0e510",
+    "validate-foundation.mjs pinned to its post-position-fix blob"
   );
 });

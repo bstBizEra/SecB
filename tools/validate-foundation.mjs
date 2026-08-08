@@ -79,9 +79,33 @@ for (const file of docsManifest.files) {
 // are asserted for set equality, so an unexpected addition or a missing entry
 // still fails closed in EITHER category — the split preserves the distinction
 // without narrowing what the gate covers.
+// A governed CONTRACT lives DIRECTLY in contracts/, not somewhere beneath it.
+// The prefix test this used to be (`startsWith("contracts/")`) was written when
+// contracts/ was flat, and it means any subdirectory added later silently joins
+// the governed set — its schemas would be required to appear in expectedSchemas
+// and in all three pin maps, and a slice that merely ships design-layer schemas
+// in its own folder would fail a gate it was never meant to be inside. Position
+// is now the test. Today this changes nothing: all 35 governed schemas are flat
+// and 0 are nested, so the filter selects exactly the same set.
+//
+// Nesting is not a hiding place either. Anything under contracts/ that is NOT a
+// flat contract must be named in NESTED_CONTRACT_SCHEMAS below, so adding one
+// stays a deliberate, reviewed act rather than a silent exemption.
 const allSchemaFiles = manifest.files.filter((file) => file.endsWith(".schema.json"));
-const schemaFiles = allSchemaFiles.filter((file) => file.startsWith("contracts/"));
+const isFlatContract = (file) => file.startsWith("contracts/") && file.split("/").length === 2;
+const schemaFiles = allSchemaFiles.filter(isFlatContract);
+const nestedContractSchemas = allSchemaFiles.filter((file) => file.startsWith("contracts/") && !isFlatContract(file));
 const subsystemSchemaFiles = allSchemaFiles.filter((file) => !file.startsWith("contracts/"));
+
+const NESTED_CONTRACT_SCHEMAS = [];
+assert(
+  nestedContractSchemas.length === NESTED_CONTRACT_SCHEMAS.length &&
+    NESTED_CONTRACT_SCHEMAS.every((file) => nestedContractSchemas.includes(file)),
+  "schemas.nested",
+  nestedContractSchemas.length === NESTED_CONTRACT_SCHEMAS.length
+    ? `${nestedContractSchemas.length} nested contract schema(s), all allowlisted`
+    : `nested contract schemas not allowlisted: ${nestedContractSchemas.filter((f) => !NESTED_CONTRACT_SCHEMAS.includes(f)).join(", ")}`
+);
 // 7 canonical bootstrap schemas plus governed extensions (P0-14 temporal
 // ledgers, skill resolver, MOD-MCP capability registry, MOD-WORK goal graph,
 // MOD-SKILL S1 skill-candidate intake, MOD-A2A S1 delegation-request

@@ -170,13 +170,23 @@ describe("secb-reviews / binding — the bug that made the first run worthless",
       return true;
     } catch { return false; }
   };
+  // An immutable SHA, not `origin/main`. Both cases below need a ref that is
+  // AHEAD of the base and contains it. Anchored to the moving branch, that
+  // stopped being true the moment origin/main advanced far enough to absorb
+  // every candidate — and these two did not fail when it happened, they SKIPPED.
+  // A skip reports nothing and reads as healthy in the summary, so the check
+  // that "could not fail" quietly stopped running at all. That is a worse
+  // outcome than a red test and it is what this constant prevents.
+  //
+  // 8be8c99 is origin/main immediately before the 2026-08-08 reconciliation.
+  const REVIEW_BASE = "8be8c9953716c06cadfc6a581fe248e819747380";
   const ahead = ["origin/fix/vf1-reviewed", "origin/fix/validate-foundation-exact-pins", "HEAD"].find(
-    (r) => has(r) && has("origin/main") &&
-      execFileSync("git", ["rev-list", "--count", `origin/main..${r}`], { encoding: "utf8" }).trim() !== "0" &&
-      contains(r, "origin/main"));
+    (r) => has(r) && has(REVIEW_BASE) &&
+      execFileSync("git", ["rev-list", "--count", `${REVIEW_BASE}..${r}`], { encoding: "utf8" }).trim() !== "0" &&
+      contains(r, REVIEW_BASE));
 
   it("a commit already on the base is NOT evidence about a branch", { skip: !ahead }, () => {
-    const base = execFileSync("git", ["rev-parse", "origin/main"], { encoding: "utf8" }).trim();
+    const base = execFileSync("git", ["rev-parse", REVIEW_BASE], { encoding: "utf8" }).trim();
 
     // A fabricated record naming ONLY a commit that is on main. Under the
     // original ancestor test this bound to every branch in the repository.

@@ -37,7 +37,19 @@ const has = (rev) => {
   } catch { return false; }
 };
 
-const MAIN = "origin/main";
+// An immutable SHA, not `origin/main`. These are HISTORICAL regression pins:
+// each one reproduces a specific PR-versus-main comparison that once went
+// wrong. Anchoring them to a moving ref meant they stopped reproducing the
+// moment main advanced — and they did not fail loudly at the point of the
+// change, they failed later, in a way that reads as "the tool is broken"
+// rather than "the anchor moved". That is the same shape as a pin that quietly
+// stops pinning, which these very tests exist to catch.
+//
+// 8be8c99 is origin/main immediately before the 2026-08-08 reconciliation
+// merge, and is the state against which all three scenarios demonstrably
+// reproduce. Advancing this SHA is a deliberate act: it means re-verifying that
+// each scenario below still says what it was written to say.
+const MAIN = "8be8c9953716c06cadfc6a581fe248e819747380";
 const PR94 = "origin/bst/mod-wspace-s2-overlap-case-fix-001";
 const PR91 = "origin/bst/mod-runtime-s1-checkpoint-ordering-fix-001";
 const PR88 = "origin/bst/mod-evid-s2-s3-ledger-rehydration-fix-001";
