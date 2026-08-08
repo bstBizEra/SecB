@@ -10,7 +10,7 @@
 | SECB-ARCH-006 | `architecture-options-tradeoffs` | Architecture Options and Trade-Off Analysis | R0 | A2 |
 | SECB-ARCH-007 | `c4-architecture-modeling` | C4 Architecture Modeling | R0 | A1 |
 | SECB-ARCH-008 | `arc42-architecture-documentation` | arc42 Architecture Documentation | R0 | A1 |
-| SECB-ARCH-009 | `architecture-decision-record` | Architecture Decision Record | R0 | A2 |
+| SECB-ARCH-009 | `architecture-decision-record` | Architecture Decision Record | R2 | A2 |
 | SECB-ARCH-010 | `domain-bounded-context-design` | Domain and Bounded Context Design | R0 | A1 |
 | SECB-ARCH-011 | `data-architecture-governance` | Data Architecture and Governance | R1 | A2 |
 | SECB-ARCH-012 | `api-integration-architecture` | API and Integration Architecture | R1 | A2 |

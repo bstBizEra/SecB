@@ -1,91 +1,97 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SecB Architecture Decision Record Candidate",
   "type": "object",
+  "additionalProperties": false,
   "required": [
     "decision_id",
     "title",
     "status",
+    "decision_mode",
+    "disposition",
+    "effective_status",
+    "reason_code",
+    "exact_target",
+    "baseline",
     "context",
     "options",
     "decision",
     "consequences",
     "evidence_refs",
-    "owner"
+    "authority_evidence_refs",
+    "owner",
+    "approver",
+    "review_triggers"
   ],
   "properties": {
-    "decision_id": {
-      "type": "string"
-    },
-    "title": {
-      "type": "string"
-    },
-    "status": {
-      "enum": [
-        "proposed",
-        "review-required",
-        "accepted",
-        "rejected",
-        "deprecated",
-        "superseded"
-      ]
-    },
-    "context": {
-      "type": "string"
-    },
+    "decision_id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["proposed", "review-required", "rejected", "deprecated", "superseded"] },
+    "decision_mode": { "enum": ["ADVISORY", "DECISION_CANDIDATE", "DENY"] },
+    "disposition": { "enum": ["ADVISORY_ONLY", "DECISION_CANDIDATE", "DENY_AUTHORITY_UNVERIFIED"] },
+    "effective_status": { "const": "NOT_EFFECTIVE" },
+    "reason_code": { "type": "string", "minLength": 1 },
+    "exact_target": { "$ref": "#/$defs/binding" },
+    "baseline": { "$ref": "#/$defs/binding" },
+    "context": { "type": "string", "minLength": 1 },
     "options": {
       "type": "array",
+      "minItems": 2,
       "items": {
         "type": "object",
-        "required": [
-          "name",
-          "summary"
-        ],
+        "additionalProperties": false,
+        "required": ["name", "summary", "tradeoffs"],
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "tradeoffs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
+          "name": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "tradeoffs": { "type": "array", "items": { "type": "string" } }
         }
-      },
-      "minItems": 2
-    },
-    "decision": {
-      "type": "string"
-    },
-    "consequences": {
-      "type": "array",
-      "items": {
-        "type": "string"
       }
     },
-    "evidence_refs": {
-      "type": "array",
-      "items": {
-        "type": "string"
+    "decision": { "type": "string", "minLength": 1 },
+    "consequences": { "type": "array", "items": { "type": "string" } },
+    "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "authority_evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "owner": { "type": "string", "minLength": 1 },
+    "approver": { "type": "null" },
+    "review_triggers": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "supersedes": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "digest"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "digest": { "type": "string", "minLength": 1 }
       }
-    },
-    "owner": {
-      "type": "string"
-    },
-    "approver": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "supersedes": {
-      "type": [
-        "string",
-        "null"
-      ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "disposition": { "const": "DECISION_CANDIDATE" } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "decision_mode": { "const": "DECISION_CANDIDATE" },
+          "status": { "const": "review-required" },
+          "authority_evidence_refs": { "minItems": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "DENY_AUTHORITY_UNVERIFIED" } }, "required": ["disposition"] },
+      "then": { "properties": { "decision_mode": { "const": "DENY" }, "status": { "const": "review-required" } } }
+    },
+    {
+      "if": { "properties": { "disposition": { "const": "ADVISORY_ONLY" } }, "required": ["disposition"] },
+      "then": {
+        "properties": {
+          "decision_mode": { "const": "ADVISORY" },
+          "status": { "const": "proposed" },
+          "authority_evidence_refs": { "maxItems": 0 }
+        }
+      }
+    }
+  ]
 }

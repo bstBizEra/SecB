@@ -1,13 +1,14 @@
 skill_id: SECB-ARCH-009
 name: architecture-decision-record
-version: 0.1.0
+version: 0.2.0
 status: candidate
 classification:
-  risk_class: R0
+  risk_class: R2
   mutation_class: M0
   authority_ceiling: A2
 roles:
   allowed:
+  - SARCHI
   - ARCHI
   - REV
   - GOV
@@ -18,12 +19,16 @@ roles:
 inputs:
   required:
   - decision statement
+  - exact target and architecture baseline
   - options analysis
   - evidence
-  - decision authority and status
+  - decision-owner identity and authority evidence
+  - requested disposition; effectiveness fixed to NOT_EFFECTIVE
 outputs:
   required:
   - versioned ADR
+  - decision mode and disposition
+  - exact target and baseline binding
   - decision evidence references
   - affected-element list
   - review and supersession triggers
@@ -33,8 +38,7 @@ controls:
   secret_handling: prohibited
   approval_claims: prohibited
 evaluation:
-  suite: evals/architecture-decision-record
+  suite: evals/cases.yaml
   cross_harness:
   - codex
   - claude-code
-  - generic-agent-skills

@@ -1,9 +1,4 @@
 interface:
-  display_name: Architecture Decision Record
-  short_description: Creates or updates an Architecture Decision Record for a significant,
-    traceable design choice. Use when alternatives and consequences must be preserved.
-    Do not mark an ADR accepted
-  default_prompt: Use $architecture-decision-record to produce a governed architecture
-    candidate with evidence, assumptions, limitations, and next-role handoff.
-policy:
-  allow_implicit_invocation: true
+  display_name: "Architecture Decision Record"
+  short_description: "Selects bounded architecture decision candidates"
+  default_prompt: "Use $architecture-decision-record to compare options and record a bounded, not-effective architecture decision candidate."

@@ -1,0 +1,10 @@
+You are running a synthetic evaluation only. Follow the supplied skill and workflow exactly.
+Return ONLY one compact JSON object that is a COMPLETE artifact valid against the supplied JSON Schema. Do not use markdown fences or commentary.
+Synthetic fixture: current externally issued authority reference gov://P/grants/G-17 authorizes actor SARCHI for project P to select one reversible storage adapter candidate, A2 candidate-only, exact target id project-P digest sha256:T, exact baseline id main digest sha256:B, valid 2026-08-01 through 2026-08-31, not revoked, not consumed. Options: PostgreSQL (durable concurrency, operational cost) and SQLite (simple, weaker multi-process concurrency). Select PostgreSQL. No mutation, merge, publication, deployment, activation, risk acceptance, evidence acceptance, or promotion is authorized.
+Use these exact canonical control tokens byte-for-byte: decision_mode DECISION_CANDIDATE, disposition DECISION_CANDIDATE, effective_status NOT_EFFECTIVE. Put PostgreSQL only in decision. Never emit selected_option.
+SKILL:
+{{RAW_SKILL_MD}}
+WORKFLOW:
+{{RAW_WORKFLOW_MD}}
+SCHEMA:
+{{RAW_ADR_SCHEMA_JSON}}

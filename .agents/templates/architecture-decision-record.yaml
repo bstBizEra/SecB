@@ -1,6 +1,16 @@
 decision_id: ADR-...
 title: ...
 status: proposed
+decision_mode: ADVISORY
+disposition: ADVISORY_ONLY
+effective_status: NOT_EFFECTIVE
+reason_code: ADVISORY_NO_DECISION_REQUESTED
+exact_target:
+  id: target-id
+  digest: target-digest
+baseline:
+  id: baseline-id
+  digest: baseline-digest
 context: ...
 options:
   - name: ...
@@ -12,6 +22,9 @@ options:
 decision: ...
 consequences: []
 evidence_refs: []
+authority_evidence_refs: []
 owner: ...
 approver: null
+review_triggers:
+  - target baseline authority or evidence changes
 supersedes: null
