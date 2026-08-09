@@ -91,7 +91,7 @@ Skills-compatible client) discover skills there.
 - **Status:** every skill is **CANDIDATE / NOT EFFECTIVE**, mutation-class **M0**
   (analyze/model/recommend/document only)
 
-### Registered skills (22)
+### Registered skills (23)
 
 ai-agent-system-architecture · api-integration-architecture ·
 arc42-architecture-documentation · architecture-decision-record ·
@@ -101,9 +101,19 @@ architecture-review-conformance · architecture-roadmap-work-packages ·
 c4-architecture-modeling · current-state-architecture-discovery ·
 data-architecture-governance · deployment-environment-architecture ·
 domain-bounded-context-design · event-driven-architecture ·
-mcp-a2a-federation-architecture · quality-attribute-scenarios ·
-runtime-resilience-observability · security-threat-modeling ·
-stakeholder-capability-mapping · system-context-boundaries
+**maker-evidence-audit** · mcp-a2a-federation-architecture ·
+quality-attribute-scenarios · runtime-resilience-observability ·
+security-threat-modeling · stakeholder-capability-mapping ·
+system-context-boundaries
+
+`maker-evidence-audit` (`SECB-ARCH-023`, pack 0.2.0, 2026-08-10) is adapted from
+the bOPEN pack skill of the same name. It audits a maker's own evidence
+adversarially before the commit that makes it a candidate, and its boundary is
+the one that matters here: it produces **findings, never a verdict**, and a
+subagent sharing the maker's engine does not satisfy the Maker ≠ Verifier rule in
+[`08-bopen-engineering-loop.md`](docs/12-execution/08-bopen-engineering-loop.md)
+§3.1. Its citations were re-pointed during adaptation, because the bOPEN original
+cites EBIV §3/§8 and loop §5 — sections SecB's own copy does not contain.
 
 ### Governing rules (additive to all rules above)
 
