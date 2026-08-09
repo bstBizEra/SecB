@@ -118,7 +118,7 @@ describe("WP-SK-01 / AC-04 — the corpus maps without fabrication", () => {
   const mapped = mapPackageRoot(".agents/skills", { repository: "SecB", commitSha: "d6610a7" });
 
   it("AC-04: every manifest-carrying package on disk maps to a valid descriptor", () => {
-    assert.equal(onDisk.length, 22, "the corpus is expected to hold 22 manifest-carrying packages");
+    assert.equal(onDisk.length, 23, "the corpus is expected to hold 23 manifest-carrying packages");
     assert.equal(mapped.length, readdirSync(SKILLS_ROOT, { withFileTypes: true }).filter((e) => e.isDirectory()).length,
       "the mapper must emit one entry per package directory, never skip one");
 
