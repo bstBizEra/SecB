@@ -363,3 +363,64 @@ export {
 } from "./control/approval-binding.mjs";
 export { forecastCollision } from "./control/integration-collision-forecast.mjs";
 export { WorkspaceLeaseLedger } from "./ledger/workspace-lease-ledger.mjs";
+
+// Slice 7 — the MOD-KNOW / MOD-MEM / MOD-WORK / MOD-EVID service facades. Every
+// one of the eight headers says UNWIRED, and the same two enforcement mechanisms
+// were swept rather than the word being judged again: no test among them mentions
+// src/index.mjs at all, and the only importer-scanning guard in the tree
+// constrains a different file.
+//
+// knowledge-claim-service and memory-gateway-service carry wrap-not-modify
+// guards that compare against `git show main:<path>` — a MOVING ref, and this
+// slice merges to main. Their compared path list is exactly
+// ["src/ledger/temporal-ledgers.mjs"] in both, which this slice does not touch,
+// so advancing main cannot turn them red. Checked rather than assumed: a guard
+// anchored to a branch name fails at the moment someone else moves the branch,
+// not at the moment they write the guard.
+//
+// The screen initially refused candidate-source-port on an absence guard at
+// candidate-source-port.test.mjs:105. That was a FALSE POSITIVE: the line is
+// `relevance: undefined` inside a test fixture, and check 4 matches an export
+// name and the token "undefined" on one line. It is included. A screen that
+// over-refuses costs a slice; one that under-refuses costs correctness — so
+// every REFUSED verdict gets read before it is believed, and this is the first
+// one that did not survive reading.
+export {
+  CANDIDATE_SOURCE_KINDS,
+  PORT_STAGE,
+  PORT_EXCLUSION_REASONS,
+  CandidateSourcePortError,
+  normalizeCandidateSources
+} from "./services/candidate-source-port.mjs";
+
+export {
+  EvidenceEnvelopeServiceError,
+  EvidenceEnvelopeService
+} from "./services/evidence-envelope-service.mjs";
+export { GoalGraphService } from "./services/goal-graph-service.mjs";
+
+export {
+  KnowledgeClaimConfigurationError,
+  createKnowledgeClaimService
+} from "./services/knowledge-claim-service.mjs";
+export {
+  KnowledgeLinkageConfigurationError,
+  createKnowledgeLinkageService
+} from "./services/knowledge-linkage-service.mjs";
+export {
+  KnowledgeCandidateProviderConfigurationError,
+  createKnowledgeCandidateProvider,
+  KNOWLEDGE_PROVIDER_STAGE,
+  KNOWLEDGE_PROVIDER_EXCLUSION_REASONS
+} from "./services/knowledge-candidate-provider.mjs";
+
+export {
+  MemoryGatewayConfigurationError,
+  createMemoryGateway
+} from "./services/memory-gateway-service.mjs";
+export {
+  MemoryCandidateProviderConfigurationError,
+  createMemoryCandidateProvider,
+  MEMORY_PROVIDER_STAGE,
+  MEMORY_PROVIDER_EXCLUSION_REASONS
+} from "./services/memory-candidate-provider.mjs";
