@@ -135,3 +135,12 @@ export {
   RUFLO_REVIEWER_ADAPTER,
   createRufloAdapterRegistration
 } from "./registry/ruflo-adapters.mjs";
+
+// Two DurableLedger subclasses that were delivered but never exported, so no
+// consumer could reach them while the base class was already on this surface.
+// Checked before wiring, per the process slice 1 paid for: no test forbids
+// either by name, and neither transitively reaches an adoption-guarded module —
+// both close over durable-ledger, contract-validator and lazy-ajv, all of which
+// are already reachable. Neither performs I/O or reads a clock at module scope.
+export { CheckpointLedger } from "./ledger/checkpoint-ledger.mjs";
+export { DelegationLedger } from "./ledger/delegation-ledger.mjs";
