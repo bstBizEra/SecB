@@ -324,3 +324,42 @@ export {
   DEFAULT_SWARM_CONFIG,
   validateSwarmConfig
 } from "./registry/ruflo-swarm-config.mjs";
+
+// Slice 6. Six modules, all of whose headers say "PURE AND UNWIRED" or "UNWIRED
+// CANDIDATE" — the same words that were enforced for one module in slice 5 and
+// merely descriptive for six others. Rather than re-run that judgement, the two
+// mechanisms that can enforce it were swept for directly:
+//
+//   - tests reading src/index.mjs as text: three exist, one carries absence
+//     assertions, and it names none of these six.
+//   - tests scanning for importers: the only enforced one is
+//     integration-collision-forecast.test.mjs, and it constrains
+//     src/ledger/integration-queue-ledger.mjs specifically — asserted against
+//     `git show HEAD:` of that one file, not against this surface.
+//
+// The screen also refused replay-assembler (absence guard at its own test:456)
+// and held access-mode-policy and event-family-policy, whose headers place
+// adoption in separately-governed work. Those three are not in this slice.
+//
+// FINDING, not fixed here: approval-binding.mjs re-declares
+// INDEPENDENT_REVIEW_ROLE and GOVERNANCE_ROLE with byte-identical values to
+// capability-registry-service.mjs, which slice 4 already put on this surface.
+// Its own header says it "extracts the duplicated N-5 approval-gate shape", so
+// the shape was deduplicated but the two constants naming the N-5 roles were
+// not. Both are exported below from the gateway module only — re-exporting the
+// same value under a second name would make the duplication permanent instead of
+// visible. Collapsing the two definitions changes a module's public identifiers
+// and belongs to whoever owns MOD-RUNTIME, not to the slice that reaches it.
+export { GRANT_ONLY_FIELDS, CompositionError, composeManifest } from "./skills/manifest-composition.mjs";
+export { mapPackageToDescriptor, mapPackageRoot } from "./skills/package-descriptor-mapper.mjs";
+export { ADMISSIBILITY, evaluatePromotion } from "./skills/promotion-evaluator.mjs";
+
+export {
+  APPROVAL_BOUND,
+  approvalWellFormed,
+  evaluateApprovalBinding,
+  bindApprovalDecision,
+  verifyApprovalBinding
+} from "./control/approval-binding.mjs";
+export { forecastCollision } from "./control/integration-collision-forecast.mjs";
+export { WorkspaceLeaseLedger } from "./ledger/workspace-lease-ledger.mjs";
