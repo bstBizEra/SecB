@@ -164,7 +164,41 @@ results, keep MANIFEST accurate in the same commit.
 
 ---
 
-## 7. What this analysis does not do
+## 7. Addendum — the gated set is 17, not 21
+
+Re-checked by reading each file's actual text rather than trusting the keyword
+match that produced §2. **Four of the 21 are not gated at all**, and no decision
+was needed to establish that:
+
+| File | Why it is not gated |
+|---|---|
+| `control/risk-registry.mjs` | `R3`/`R4` appear as **data**. It is the frozen, deny-by-default table that *defines* R0–R4 — it answers "what does R3 require?", it is not held by R3. |
+| `services/knowledge-linkage-service.mjs` | Its own header: *"knowledge-claim.schema.json is an R3 contract change (G7); sidecar records **keep S2 at R2**"*. The R3 belongs to a schema change the service deliberately avoids. |
+| `skills/package-descriptor-mapper.mjs` | The only occurrence is `const RISK_CLASSES = new Set(["R0", …, "R4"])` — a validation enum. |
+| `services/memory-candidate-provider.mjs` | *"reclassified MOD-MEM S3 from R3 → R2 on 2026-07-22 (operator decision …), … authorized R2 producer work, NOT a self-authorized gate change … PURE MAPPER, R2, ADDITIVE ONLY"*. The gate was lifted by an operator decision three weeks ago; the file records it. |
+
+Revised:
+
+| | Files |
+|---|---|
+| Already reachable | 64 |
+| Wireable by an implementation slice | **41** |
+| Requires a governance decision first | **17** |
+
+**The reason for the error is the same one that produced the reachability
+correction in §1, in a different costume.** There, following `import` statements
+missed modules loaded through registry tables. Here, matching the string `R3`
+could not distinguish a file *held by* a risk class from a file that is a *table
+of* risk classes, or one whose header narrates the class being lifted. Both
+times the shape of the code defeated the naive measure, and both times the fix
+was to read what the code actually does instead of what a pattern says about it.
+
+The same caution applies to the remaining 17: they are gated according to their
+own current text, which is better evidence than a keyword but is still the file's
+self-report. Before any of the five decision clusters is put to GOV, the governing
+record for that cluster should be read, not the source comment.
+
+## 8. What this analysis does not do
 
 It does not begin ACT. It does not wire anything, and it does not decide that
 wiring should happen — that is a scope question for the operator, and the answer
