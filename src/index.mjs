@@ -235,3 +235,92 @@ export { REQUIRED_CONTEXT_FIELDS, McpGatewayCore } from "./gateway/mcp-gateway-c
 // check missed this because the guard asserts the class is ABSENT, so it never
 // imports the module and names no path — it was found by running the suite, not
 // by reading it. Unreached is the correct state for this one, not a gap.
+
+// Slice 5. Seven pure modules that were delivered and left unreachable. Screened
+// the same five ways as slice 4, with two of the checks rebuilt because slice 4
+// proved them blind:
+//
+//   4. absence guards. A test asserting an export is NOT on this surface imports
+//      nothing and names no path, so the path-based screen could not see the one
+//      that refused RufloCommandBridge. Now scanned by export name.
+//   5. governing records. AGENTS.md, docs/AGENTS.md, docs/00-governance/ only.
+//      Candidate drafts under docs/03-project-control/ are excluded: they record
+//      that a module WAS unwired at review time, an observation rather than a
+//      prohibition, and including them produced 24 hits containing no gates.
+//      Read as paragraphs, not lines — in AGENTS.md the module names and the
+//      "(SEC/GOV-gated)" governing them are four wrapped lines apart.
+//
+// Check 5 held three modules this slice would otherwise have taken:
+// skill-candidate-registry, skill-promotion-ledger and skill-revocation-ledger
+// are named by the skills registry amendment as the eventual runtime registry,
+// wired only under SEC/GOV. They stay unreached until that decision exists.
+//
+// A seventh module was screened CLEAR and turned out not to be; see the note
+// further down, which has to describe it without naming it. None of the six
+// below performs I/O, reads a clock, or draws randomness at module scope;
+// event-normalizer imports randomBytes but only calls it inside functions.
+export {
+  LOCAL_BRIDGE_LOCATOR_MAX_TTL_MS,
+  LOCAL_BRIDGE_POSIX_PATH_MAX_BYTES,
+  LocalBridgeEndpointError,
+  resolveLocalBridgeEndpoint
+} from "./bridge/local-bridge-endpoint-resolver.mjs";
+export {
+  LOCAL_BRIDGE_PROOF_MAX_TTL_MS,
+  LocalBridgeInstallationProofError,
+  validateLocalBridgeInstallationProof
+} from "./bridge/local-bridge-installation-proof.mjs";
+
+// The Command Center snapshot composer under src/ui/ is NOT exported here, and
+// this slice's attempt to export it was refused twice. Its own test reads THIS
+// FILE as text and asserts the module's name does not appear in it at all —
+// "deny registry is frozen and module remains pure, unwired, and action-free".
+// Not the import: the NAME. The first revert removed the export and left an
+// explanation that used the name, and the guard stayed red, which is why this
+// paragraph talks around it.
+//
+// So "pure, unwired" in that module's header is enforced after all, and the
+// reasoning above — that unwired describes a state rather than constrains one —
+// was wrong about that one module. Two slices, two absence guards, neither
+// findable by reading: the first named only a class, the second builds the path
+// in a loop variable, so no single line carries both this file's path and the
+// module's name.
+//
+// Swept for the whole class rather than waiting to be caught a third time:
+// exactly three test files read src/index.mjs as text, and only that one carries
+// absence assertions. It is the last of its kind currently in the tree.
+export { createGoalRollupProjection } from "./ui/goal-rollup-projection.mjs";
+
+// event-normalizer's names are broad for a shared surface — ADAPTER_VERSION,
+// EVENT_TYPES, buildEnvelope. They are exported unrenamed because renaming a
+// delivered module's public identifiers is a behaviour change, not wiring, and
+// belongs to whoever owns the module rather than to the slice that reaches it.
+// Both constants are plain identity strings; neither carries a secret.
+export {
+  ADAPTER_VERSION,
+  RUNTIME_DEPLOYMENT_ID,
+  EVENT_TYPES,
+  buildEnvelope,
+  normalizeRufloHook,
+  mapRufloState
+} from "./events/event-normalizer.mjs";
+
+export {
+  RUNTIME_LIFECYCLE_STATES,
+  VALID_LIFECYCLE_TRANSITIONS,
+  FiveLayerRegistryError,
+  ProviderRegistry,
+  ModelRegistry,
+  RuntimeRegistryFiveLayer,
+  AgentRegistryFiveLayer,
+  SessionRegistry,
+  ModelPolicyRouter
+} from "./registry/five-layer-registry.mjs";
+export {
+  V3_TOPOLOGY_DEFAULT,
+  V3_MAX_AGENTS_DEFAULT,
+  V3_PERFORMANCE_TARGETS,
+  V3_AGENT_DOMAINS,
+  DEFAULT_SWARM_CONFIG,
+  validateSwarmConfig
+} from "./registry/ruflo-swarm-config.mjs";
