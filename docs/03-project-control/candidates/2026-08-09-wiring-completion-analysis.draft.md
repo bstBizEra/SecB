@@ -198,7 +198,84 @@ own current text, which is better evidence than a keyword but is still the file'
 self-report. Before any of the five decision clusters is put to GOV, the governing
 record for that cluster should be read, not the source comment.
 
-## 8. What this analysis does not do
+## 8. Addendum 2 — the gates are mostly not on these files
+
+Checking the governing records instead of the source comments, as §7 said must
+happen before anything went to GOV, dissolves most of the remaining 17.
+
+**Two modules had their risk class lowered by explicit operator decision on
+2026-07-22, and the source comments predate it:**
+
+| Module | Record |
+|---|---|
+| MOD-MEM | S3 candidate provider + compaction floor — *"operator R3→R2, 2026-07-22"*, ratified via PR #111 |
+| MOD-SKILL | S1 intake, S2 promotion ledger, S3 revocation components 1+2 — *"operator R3→R2, 2026-07-22; component 3 EXCLUDED by scope discipline"*, ratified via PR #111 |
+
+**And MOD-EVID's R4 was authorized when it was delivered:** *"S2 verify+accept
+ladder (**operator-authorized R4**)"*, `FINISHED_WITH_TRACKED_FOLLOWUPS`, REV
+`f403119`, PR #26. The R4 that appeared to gate
+`services/evidence-envelope-service.mjs` was granted three weeks ago.
+
+Every module owning one of the 17 carries a ratified completion verdict —
+MOD-GOV, MOD-WORK, MOD-RUNTIME, MOD-WSPACE (NOT_FINISHED, then flipped in
+rev-002), MOD-EVID, MOD-LIVE, MOD-MEM, MOD-KNOW, MOD-SKILL, MOD-INTEG.
+
+### The distinction that resolves it
+
+Reading the gate sentences together, they say the same thing in fifteen
+different ways:
+
+> The primitive is delivered and R2. Putting it in a position where it **denies
+> live traffic** is the later, separately-governed slice.
+
+`security/redaction-policy.mjs` is the clearest: the evaluator is delivered; what
+is SEC/GOV-gated is *"block-or-quarantine BEFORE writing"*. `live/access-mode-policy.mjs`
+deliberately does not import the transition engine. `ledger/skill-revocation-ledger.mjs`
+holds components 1+2 (R2) and names component 3 as the operator-gated follow-up —
+which is not in the file.
+
+So there are two different acts, and the analysis had been treating them as one:
+
+| Act | Class |
+|---|---|
+| Making a delivered primitive **reachable** — constructed, exported, importable | R2 implementation, pre-authorized under AMD-002 §1 |
+| Putting a primitive in an **enforcing** position where it denies live traffic | the gated act, and none of these 17 files performs it |
+
+**Wiring in the sense this plan means — reachability — is not the gated act.**
+The gate stands on the enforcement slice that would follow, and no file here
+contains one.
+
+### Genuinely still gated
+
+| Item | Why |
+|---|---|
+| MOD-SKILL revocation **component 3** | explicitly excluded by scope discipline; not present in any file |
+| MOD-INTEG **MI-4 / MI-5** | closure report: *"CLOSED; MI-4/MI-5 open R3/operator"* |
+| `self-pilot/read-only-self-pilot.mjs` | activation-gated, and activation is operator-only under working rule 5 |
+| MOD-UI | *"OPEN — other lane (Codex)"*, unsettled at a codex commit |
+
+Four items, of which one is a file. Not seventeen, and not twenty-one.
+
+### Revised again
+
+| | Files |
+|---|---|
+| Already reachable | 64 |
+| Wireable as R2 implementation work | **57** |
+| Genuinely gated | **1** (`read-only-self-pilot.mjs`) |
+
+The other three gated items are future slices and lane coordination, not files
+waiting in this tree.
+
+**Method note, third time.** §1 corrected a measurement that followed imports in
+a codebase that loads through registries. §7 corrected a classifier that read
+`R3` as data. This corrects reading a source comment as current when it was
+written before the decision that changed it. Each layer of evidence was better
+than the last and each was still self-report until checked against the record
+that governs it. The order that works is: record first, comment second, pattern
+last.
+
+## 9. What this analysis does not do
 
 It does not begin ACT. It does not wire anything, and it does not decide that
 wiring should happen — that is a scope question for the operator, and the answer
