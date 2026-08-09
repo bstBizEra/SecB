@@ -144,3 +144,53 @@ export {
 // are already reachable. Neither performs I/O or reads a clock at module scope.
 export { CheckpointLedger } from "./ledger/checkpoint-ledger.mjs";
 export { DelegationLedger } from "./ledger/delegation-ledger.mjs";
+
+// MOD-GOV / MOD-RUNTIME control primitives, delivered and ratified but absent
+// from this surface. Seven of the ten unreached control modules; the other three
+// — overlap-policy, policy-decision-point, write-set-policy — state in their own
+// headers that adoption is a later, separately governed step, and are held.
+//
+// SecBBootstrapExecutor writes files, so its fail-closed default was read rather
+// than assumed: the DENY_UNAUTHORIZED_BOOTSTRAP throw is unconditional and does
+// not depend on an authorization gate being injected. The gate is an optional
+// inline path to authorization, never the thing enforcement rests on, and the
+// constructor refuses without a registrationService. Exporting the class weakens
+// no default.
+export { BootstrapAuthorizationGate } from "./control/bootstrap-authorization-gate.mjs";
+export { BootstrapExecutorError, SecBBootstrapExecutor } from "./control/bootstrap-executor.mjs";
+
+export {
+  CHECKPOINT_DRIFT_DENY_CODES,
+  evaluateResume,
+  evaluateResumeFromLedger
+} from "./control/checkpoint-drift-comparator.mjs";
+
+export {
+  DENY_HUMAN_APPROVAL_REQUIRED,
+  ALLOW,
+  evaluateDelegation,
+  evaluateDelegationRequest,
+  buildDelegationDecisionRecord
+} from "./control/delegation-gate.mjs";
+
+export {
+  ESCALATION_ROLES,
+  ESCALATION_BOUND,
+  evaluateEscalationRoute,
+  bindEscalationRoute,
+  verifyEscalation
+} from "./control/escalation-route.mjs";
+
+export {
+  FAILURE_CLASSES,
+  RETRY_AUTHORIZED,
+  evaluateRetry,
+  buildRetryDecisionRecord
+} from "./control/retry-policy.mjs";
+
+export {
+  WORKSPACE_LEASE_DENY_CODES,
+  mintLease,
+  evaluateLease,
+  renewLease
+} from "./control/workspace-lease-policy.mjs";
