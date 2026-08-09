@@ -194,3 +194,44 @@ export {
   evaluateLease,
   renewLease
 } from "./control/workspace-lease-policy.mjs";
+
+// MOD-MCP gateway cores, delivered but unreachable from this surface. All four
+// declare themselves "pure in-process core only: no transport, port, filesystem,
+// network, credential access, or process spawning", and that claim was verified
+// rather than accepted: none imports node:fs, node:net, node:http, node:tls,
+// node:dgram or node:child_process, and none performs I/O or reads a clock at
+// module scope.
+//
+// Their headers also say "Runtime activation remains a separate operator-
+// authorized step". That governs standing a gateway up — binding a port, opening
+// a transport — not naming a pure class on a library surface. Exporting opens
+// nothing and is not activation.
+//
+// CredentialBroker was the one that needed more than the usual check. Its header
+// carries an ANTI-PASSTHROUGH BOUNDARY: resolveForAdapter() output is for adapter
+// process construction by the operator-authorized deployment step, and must never
+// reach McpGatewayCore.invoke() results, adapter results, receipts, evidence
+// envelopes or ledger entries. Until now nothing enforced that except the comment
+// and the accident that no consumer could reach the broker at all — and this
+// export removes the accident. So the boundary is pinned mechanically in
+// tests/gateway-purity-boundary.test.mjs before it is widened, not after:
+// mcp-gateway-core imports the broker nowhere, transitively or directly, and the
+// test fails if it ever does. The broker still refuses to construct without a
+// Sealer, a registryResolver and an append-only ledgerWriter; exporting the class
+// weakens no default.
+export {
+  INDEPENDENT_REVIEW_ROLE,
+  GOVERNANCE_ROLE,
+  CapabilityRegistryService
+} from "./gateway/capability-registry-service.mjs";
+export { CredentialBroker } from "./gateway/credential-broker.mjs";
+export { REQUIRED_CONTEXT_FIELDS, McpGatewayCore } from "./gateway/mcp-gateway-core.mjs";
+
+// RufloCommandBridge is the fourth gateway module and is NOT exported. This
+// slice tried to and was refused by runtime-provider-plugin.test.mjs: "legacy
+// bridge must not be publicly exported". The word doing the work is legacy — the
+// bridge was superseded by RuntimeProviderPluginRegistry, and putting it back on
+// the surface reopens the path the replacement exists to close. The pre-wiring
+// check missed this because the guard asserts the class is ABSENT, so it never
+// imports the module and names no path — it was found by running the suite, not
+// by reading it. Unreached is the correct state for this one, not a gap.
