@@ -275,7 +275,119 @@ than the last and each was still self-report until checked against the record
 that governs it. The order that works is: record first, comment second, pattern
 last.
 
-## 9. What this analysis does not do
+## 9. Addendum 3 — slice 1 ran, and the guard refused it
+
+MOD-OPS was the first slice. ACT added the three `src/ops/` modules to
+`src/index.mjs`; the exports loaded and worked (`assembleScorecard` returned 24
+entries and 24 findings over the real catalog), and reachability moved 64 → 67.
+VERIFY then failed one test:
+
+```text
+unsanctioned src/ or tools/ file imports the registry: ["src/index.mjs"]
+```
+
+The guard in `tests/kpi-registry.test.mjs` states its own reason:
+
+> the registry itself must still stay **unwired to every live / gateway / report
+> path** (adoption of the assembler is later, **separately governed work** —
+> assessment §5 #4)
+
+**The refusal is correct and §8 was too coarse.** That addendum split the world
+into making a primitive *reachable* (R2, pre-authorized) and putting it in an
+*enforcing* position (gated). MOD-OPS is neither: its own assessment governs
+**adoption** — being available to consumers at all. Exporting from the library
+surface is adoption.
+
+A textual dodge was available and was not taken. The guard greps for the
+basename `kpi-registry`, so exporting only `scorecard-assembler` from
+`src/index.mjs` would have passed — while pulling the registry in transitively
+and achieving exactly the adoption the guard forbids. The guard's own comment
+warns about precisely this class of move, calling an earlier version of it "a
+false fix" that passed while the file still genuinely imported the registry.
+Taking it would have been the same shape.
+
+Slice reverted in full. `npm test` 1985 · 1980 pass · 0 fail · 5 skipped;
+`validate-foundation` PASS; reachability back to 64.
+
+### A third category, and four known members
+
+| Category | Wiring act | Who |
+|---|---|---|
+| Ordinary delivered primitive | make reachable | R2, pre-authorized |
+| **Adoption-governed** | **make reachable** | **the module's own assessment** |
+| Enforcement | place in a denying path | R3/R4 + GOV |
+
+Modules whose tests enforce an adoption constraint today:
+
+| Module | Constraint |
+|---|---|
+| `ops/kpi-registry` | exactly one sanctioned importer: `ops/scorecard-assembler` |
+| `ledger/integration-queue-ledger` | not imported by any existing service or gateway |
+| `ledger/skill-promotion-ledger` | no `src/` module may reference it |
+| `ledger/skill-revocation-ledger` | no `src/` file other than its own definition may reference it |
+
+That list is what a keyword scan found; it is a floor, not a ceiling. **The "57
+wireable" figure in §8 is therefore unsafe as a plan input.** Before any further
+slice, each candidate must be checked for an adoption guard — which is a
+mechanical check, and cheaper than discovering it at VERIFY as this slice did.
+
+### What the slice actually produced
+
+No wiring, and a correction worth more than the wiring would have been. The loop
+did what it exists to do: ACT ran, VERIFY refused on a governed constraint the
+PLAN had not modelled, and the response was to stop and record rather than to
+widen the guard. Refusal-matrix R5 — never re-pin a guard the wiring trips in
+the same slice — was the rule that decided it.
+
+## 10. Addendum 4 — the adoption-guard sweep §9 asked for
+
+Every unreached module checked against the test suite for a guard that forbids
+its adoption. The scan flagged 9; reading each assertion leaves **5**.
+
+**Genuinely adoption-guarded — a wiring slice will be refused at VERIFY:**
+
+| Module | The assertion |
+|---|---|
+| `ops/kpi-registry` | *"the registry's only sanctioned importer is the S2 scorecard-assembler (otherwise unwired)"* |
+| `ledger/integration-queue-ledger` | *"must not import integration-queue-ledger.mjs (S1 stays unwired)"* |
+| `ledger/skill-promotion-ledger` | *"every other src/ module have no reference to SkillPromotionLedger (stays unwired)"* |
+| `ledger/skill-revocation-ledger` | *"no src/ file other than the ledger's own definition references SkillRevocationLedger"* |
+| `control/integration-collision-forecast` | *"does not import forecastCollision or this new file (still unwired)"* |
+
+**The four the scan got wrong, and why:**
+
+| Flagged | Actually |
+|---|---|
+| `control/approval-binding` | No prohibition names it. Matched on proximity to an unrelated guard. |
+| `control/risk-registry` | Same. |
+| `ops/scorecard-assembler` | It is the **SANCTIONED** importer — the permitted one, not the guarded one. The scan could not tell an exception from a prohibition. |
+| `registry/skill-candidate-registry` | It is the **checker**: *"skill-candidate-registry.mjs and every other src/ module have no reference to SkillPromotionLedger"*. The guarded subject is the other module. |
+
+A proximity match cannot distinguish the subject of a prohibition from a module
+merely named near one, so the scan is a shortlist to read, not a verdict. That is
+the right shape for it: a missed guard costs a reverted slice, a false hit costs
+one line of reading.
+
+### Where the count lands
+
+| | Files |
+|---|---|
+| Already reachable | 64 |
+| **Wireable** | **52** |
+| Adoption-guarded — needs the module's own governance | 5 |
+| Activation-gated | 1 (`self-pilot/read-only-self-pilot.mjs`) |
+
+The four remaining gated *items* from §8 — MOD-SKILL component 3, MOD-INTEG
+MI-4/MI-5, MOD-UI — are future slices and lane coordination, not files here.
+
+### The check that should have existed before slice 1
+
+This sweep took one pass over the test suite. Slice 1 discovered the same fact by
+running ACT, failing VERIFY, and reverting. The cost difference is the argument
+for making this check part of PLAN for every wiring slice, not a lesson learned
+once: **before wiring a module, grep the suite for a prohibition naming it.**
+
+## 11. What this analysis does not do
 
 It does not begin ACT. It does not wire anything, and it does not decide that
 wiring should happen — that is a scope question for the operator, and the answer
