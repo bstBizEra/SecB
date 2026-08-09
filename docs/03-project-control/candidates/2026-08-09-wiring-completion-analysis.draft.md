@@ -387,7 +387,64 @@ running ACT, failing VERIFY, and reverting. The cost difference is the argument
 for making this check part of PLAN for every wiring slice, not a lesson learned
 once: **before wiring a module, grep the suite for a prohibition naming it.**
 
-## 11. What this analysis does not do
+## 11. Addendum 5 — the sequence finished, and the metric was wrong about the remainder
+
+Slices 4 through 8 ran. Reachability from `src/index.mjs` moved 44 -> 85 of 122
+files; counting the CLI entry points that were missing from the original
+measurement, 78 -> 99. Slice 8 screened the last eleven candidates and **wired
+none of them**, which is the result rather than a failure of it.
+
+### Why each of the last eleven stays unreached
+
+| Module(s) | Reason | Kind of reason |
+|---|---|---|
+| `ops/cadence-policy`, `ops/kpi-registry`, `ops/scorecard-assembler` | All three headers place adoption in "later, separately-governed work" | Held by governance |
+| `self-pilot/read-only-self-pilot`, `self-pilot/fixtures` | P0-19 candidates. `p0-20-operator-activation-disposition-002.md` records the operator verdict "ACTIVATE (controlled)" at status `OPERATOR_VERDICT_TRANSCRIBED_PENDING_RATIFICATION` | Held pending ratification |
+| `plugins/ollama-sec-scanner`, `plugins/secb-graphify-adapter`, `plugins/secb-rootly-importer`, `plugins/secb-worktree-adapter` | **Measured against the wrong surface** — see below | Metric error |
+| `audit/packs`, `audit/corpus-expectation` | **Measured against the wrong surface** — see below | Metric error |
+
+Slice 1's refusal is also now properly closed. It was recorded as a refusal about
+`ops/kpi-registry`; in fact **all three** `ops` modules state the same adoption
+constraint in their own headers. The guard was right about a wider set than the
+one it named.
+
+### The metric error, stated plainly
+
+"Reachable from `src/index.mjs`" is not the definition of wired. It is the
+definition of *on the library surface*, and for two classes of module that is the
+wrong surface entirely:
+
+- **Plugins reach the system through the MCP server, not through `index.mjs`.**
+  The two plugin adapters that ARE reached — `secb-plane-adapter`,
+  `secb-openproject-adapter` — are imported by `src/mcp/secb-mcp-server.mjs`, and
+  `index.mjs` mentions neither. Exporting the four unreached plugins from
+  `index.mjs` would have invented a wiring pattern this repository does not use,
+  and the resulting green metric would have measured the invention.
+- **`audit/corpus-expectation` is test-support and belongs where it is.** It
+  carries `EXPECTED_CORPUS`, the tripwire that fails when the skill corpus
+  changes without anyone noticing. Its consumers are the audit tests. Putting a
+  test expectation on the public API surface would be a defect, not progress.
+- **`audit/packs` is a real gap, but not this one.** Nothing imports it except
+  tests — including `src/audit/run.mjs`, the audit's own entry point. So it is
+  unreached *from its own subsystem*, which is worth someone's attention, and the
+  remedy is a decision by whoever owns MOD-AUDIT about whether packs belongs in
+  the audit run. An `index.mjs` export would hide the gap behind a number.
+
+### What the number should be
+
+Of 122 modules: 99 reachable, and of the remaining 23, **17 are correctly
+unreached** — nine held by their own headers or by governance, four held by
+absence guards that name them, four plugins measured against the wrong surface.
+Two more are test-support. That leaves `audit/packs` and the SEC/GOV-gated skill
+registry trio as the only genuinely open items, and none of the four is a wiring
+task.
+
+**100% was never the correct target.** A repository whose every module is
+reachable from its library surface is one that has stopped distinguishing between
+delivered-and-adopted and delivered-and-deliberately-held, which is the
+distinction this programme's gates exist to keep.
+
+## 12. What this analysis does not do
 
 It does not begin ACT. It does not wire anything, and it does not decide that
 wiring should happen — that is a scope question for the operator, and the answer
