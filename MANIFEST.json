@@ -800,6 +800,7 @@
     "contracts/fail-learn/vectors/positive/pos-18-taxonomy-instance-conformant.json",
     "contracts/fail-learn/vectors/positive/pos-19-transition-table-conformant.json",
     "contracts/fail-learn/vectors/positive/pos-20-scenario3-redaction-attestation-explicit-external-scanner.json",
-    "tests/validate-foundation.test.mjs"
+    "tests/validate-foundation.test.mjs",
+    ".agents/skills/maker-evidence-audit/SKILL.md"
   ]
 }

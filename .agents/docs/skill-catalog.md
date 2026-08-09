@@ -24,3 +24,4 @@
 | SECB-ARCH-020 | `architecture-review-conformance` | Independent Architecture Review and Conformance | R1 | A3 |
 | SECB-ARCH-021 | `architecture-fitness-functions` | Architecture Fitness Functions | R1 | A2 |
 | SECB-ARCH-022 | `architecture-evidence-handoff` | Architecture Evidence and Handoff | R0 | A1 |
+| SECB-ARCH-023 | `maker-evidence-audit` | Maker Evidence Audit | R0 | A1 |

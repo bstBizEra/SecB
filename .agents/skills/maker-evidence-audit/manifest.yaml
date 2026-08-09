@@ -1,0 +1,47 @@
+skill_id: SECB-ARCH-023
+name: maker-evidence-audit
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A1
+roles:
+  allowed:
+  - ARCHI
+  - SARCHI
+  - ENGIN
+  - REV
+  - QA
+  - GOV
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+  - INDEPENDENT-VERIFIER
+inputs:
+  required:
+  - the uncommitted change and the claims about to be recorded with it
+  - each cited test read in full body
+  - the file and line asserting each named mechanism
+  - the declared acceptance checks and their last-run output
+outputs:
+  required:
+  - findings list with file and line for each
+  - direction each error ran, toward or away from flattering the build
+  - corrected claims and what they said before
+  - gaps registered as explicit unverified items
+  - statement that the audit is advisory and produced no verdict
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+  verdict_claims: prohibited
+  independent_verification_substitution: prohibited
+evaluation:
+  suite: evals/maker-evidence-audit
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills

@@ -1,0 +1,9 @@
+interface:
+  display_name: Maker Evidence Audit
+  short_description: Adversarially audit your own evidence, traceability and claims
+    before the commit that makes them a candidate. Catches errors that run in the
+    direction which flatters the build.
+  default_prompt: Use $maker-evidence-audit to adversarially check my claims, mechanisms
+    and coverage before I commit them as a candidate.
+policy:
+  allow_implicit_invocation: true

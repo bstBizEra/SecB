@@ -148,35 +148,67 @@ test("corpus shape", () => {
   assert.equal(facts.packages.filter((p) => !p.parseComplete).length, 0,
     "every cases file parsed completely; any unreadable line must surface as UNDECIDABLE, not as absence");
   const cases = facts.packages.reduce((n, p) => n + p.casesFiles.reduce((m, cf) => m + cf.cases.length, 0), 0);
-  assert.equal(cases, 88);
+  assert.equal(cases, 96, "22 template packages x 4 cases + 8 in maker-evidence-audit");
 });
 
-test("evals.expectation-diversity: 220 instances collapse to 10 distinct strings, 22.0 per string", () => {
+// The template packages, and the one package that is not a copy of them.
+//
+// This pin used to assert an IDENTITY — instances === distinct x packages —
+// which held exactly while every eval-bearing package was a copy of one
+// template, and whose comment said it "still fails the moment the boilerplate
+// stops being uniform". SECB-ARCH-023 stopped it: maker-evidence-audit carries
+// original cases, so the identity is false and the assertion did its job.
+//
+// Re-baselined by DECOMPOSITION rather than by summing to a new total. A total
+// would pass whether the corpus is 23 copies, 22 copies and an original, or 20
+// and 3 — which is the drift this pin exists to see. Asserting the template
+// cohort's uniformity AND naming the exception keeps every previous detection
+// and adds one: a 24th copy of the template appearing would now fail here.
+const TEMPLATE_EXPECTATIONS = 10;
+const NON_TEMPLATE_PACKAGES = ["maker-evidence-audit"];
+
+test("evals.expectation-diversity: 22 template packages collapse to 10 strings; one package does not", () => {
   const s = summaryOf("evals.expectation-diversity");
   assert.equal(s.verdict, VERDICT.VIOLATION);
-  assert.equal(s.evidence.distinct, 10);
   assert.equal(s.evidence.evalBearingPackages, corpus.counts.governed);
-  // The finding is an IDENTITY, not three numbers: every one of the ten strings
-  // appears once in every eval-bearing package, so instances is exactly
-  // distinct x packages. Asserting the identity keeps this true on any corpus
-  // and still fails the moment the boilerplate stops being uniform.
-  assert.equal(s.evidence.instances, s.evidence.distinct * s.evidence.evalBearingPackages);
-  assert.equal(s.evidence.instancesPerDistinctString, s.evidence.evalBearingPackages);
-  // All ten strings appear in all 22 eval-bearing packages, so all ten are boilerplate.
-  assert.equal(s.evidence.boilerplateStrings.length, 10);
-  for (const b of s.evidence.boilerplateStrings) {
-    assert.equal(b.packages, corpus.counts.governed,
-      `"${b.text}" is boilerplate only if it appears in EVERY eval-bearing package`);
-    assert.equal(b.instances, corpus.counts.governed);
-    assert.match(b.citation, /^[\w-]+\/evals\/cases\.yaml:\d+$/);
-  }
-  // Per-package: every package states 10 expectations, 10 distinct within itself,
-  // and 0 that appear nowhere else. Zero skill-specific expectation text.
-  assert.equal(s.evidence.perPackage.length, 22);
-  for (const row of s.evidence.perPackage) {
-    assert.equal(row.instances, 10, `${row.pkg}`);
-    assert.equal(row.distinct, 10, `${row.pkg}`);
+
+  const template = s.evidence.perPackage.filter((r) => !NON_TEMPLATE_PACKAGES.includes(r.pkg));
+  const original = s.evidence.perPackage.filter((r) => NON_TEMPLATE_PACKAGES.includes(r.pkg));
+  assert.equal(s.evidence.perPackage.length, corpus.counts.governed);
+  assert.equal(original.length, NON_TEMPLATE_PACKAGES.length,
+    "the named non-template packages must all be present; a rename would otherwise pass silently");
+
+  // The cohort identity, still asserted — over the packages it is a claim about.
+  for (const row of template) {
+    assert.equal(row.instances, TEMPLATE_EXPECTATIONS, `${row.pkg}`);
+    assert.equal(row.distinct, TEMPLATE_EXPECTATIONS, `${row.pkg}`);
     assert.equal(row.uniqueToPackage, 0, `${row.pkg} unexpectedly has package-unique expectation text`);
+  }
+  // The exception is pinned too, so it cannot quietly become boilerplate either.
+  for (const row of original) {
+    assert.ok(row.uniqueToPackage > 0, `${row.pkg} was added for its original cases and now has none`);
+    assert.equal(row.uniqueToPackage, 20, `${row.pkg}`);
+    assert.equal(row.instances, 25, `${row.pkg}`);
+    assert.equal(row.distinct, 25, `${row.pkg}`);
+  }
+
+  // Corpus totals follow from the decomposition rather than standing on their own.
+  const expectedInstances = template.length * TEMPLATE_EXPECTATIONS
+    + original.reduce((n, r) => n + r.instances, 0);
+  assert.equal(s.evidence.instances, expectedInstances);
+  assert.equal(s.evidence.distinct, 30,
+    "10 template strings + 20 unique to the one original package");
+
+  // Boilerplate is a majority property, so the ten template strings remain
+  // boilerplate at 22 of 23 — and one of them coincides with an expectation the
+  // original package independently wrote, which is why 23 appears here too.
+  assert.equal(s.evidence.boilerplateStrings.length, TEMPLATE_EXPECTATIONS);
+  for (const b of s.evidence.boilerplateStrings) {
+    assert.ok(b.packages >= template.length,
+      `"${b.text}" is boilerplate only if it appears in every template package`);
+    assert.ok(b.packages <= corpus.counts.governed);
+    assert.equal(b.instances, b.packages);
+    assert.match(b.citation, /^[\w-]+\/evals\/cases\.yaml:\d+$/);
   }
   // The summary cites a real, representative occurrence rather than asserting
   // the ratio without evidence.
@@ -188,12 +220,17 @@ test("evals.expectation-diversity: 220 instances collapse to 10 distinct strings
   assert.equal(count("evals.expectation-diversity", VERDICT.UNDECIDABLE), 0);
 });
 
-test("evals.negative-case-cannot-fail: 22 of 22 negative cases cannot fail", () => {
+// 22 of 24 now, not 22 of 22. maker-evidence-audit contributed the only two
+// negative cases in the corpus that an empty run cannot satisfy, because their
+// expectations assert presence rather than absence. Recording the ratio rather
+// than the total is the point: a new package copying the template would move
+// both numbers together and this pin would still show it.
+test("evals.negative-case-cannot-fail: 22 of 24 negative cases cannot fail", () => {
   const s = summaryOf("evals.negative-case-cannot-fail");
   assert.equal(s.verdict, VERDICT.VIOLATION);
-  assert.equal(s.evidence.negativeCases, 22);
+  assert.equal(s.evidence.negativeCases, 24);
   assert.equal(s.evidence.negativeCasesIncapableOfFailing, 22);
-  assert.equal(s.evidence.failureCases, 66, "negative + adversarial + boundary arms");
+  assert.equal(s.evidence.failureCases, 72, "negative + adversarial + boundary arms");
   assert.equal(s.evidence.failureCasesIncapableOfFailing, 22);
   assert.equal(s.evidence.nonFailureCasesIncapableOfFailing, 0);
 
@@ -225,18 +262,18 @@ test("evals.negative-case-cannot-fail: the criterion discriminates expectation b
   assert.equal(satisfiedByEmptyOutput("candidate status and authority boundary should be explicit"), false);
 });
 
-test("evals.undecidable-expectation: 176 of 220 instances (80%) from 8 distinct strings", () => {
+test("evals.undecidable-expectation: 185 of 245 instances (75.51%) from 14 distinct strings", () => {
   const s = summaryOf("evals.undecidable-expectation");
   assert.equal(s.verdict, VERDICT.UNDECIDABLE);
-  assert.equal(s.evidence.totalExpectations, 220);
-  assert.equal(s.evidence.undecidableExpectations, 176);
-  assert.equal(s.evidence.undecidableSharePercent, 80);
-  assert.equal(s.evidence.distinctUndecidableStrings, 8);
-  assert.equal(s.evidence.totalCases, 88);
+  assert.equal(s.evidence.totalExpectations, 245);
+  assert.equal(s.evidence.undecidableExpectations, 185);
+  assert.equal(s.evidence.undecidableSharePercent, 75.51);
+  assert.equal(s.evidence.distinctUndecidableStrings, 14);
+  assert.equal(s.evidence.totalCases, 96);
   assert.equal(s.evidence.fullyUndecidableCases, 44);
-  // 176 per-expectation findings + 1 summary. No VIOLATION: the claim is that
+  // 185 per-expectation findings + 1 summary. No VIOLATION: the claim is that
   // the case cannot be adjudicated, which is not the claim that it is wrong.
-  assert.equal(count("evals.undecidable-expectation", VERDICT.UNDECIDABLE), 177);
+  assert.equal(count("evals.undecidable-expectation", VERDICT.UNDECIDABLE), 186);
   assert.equal(count("evals.undecidable-expectation", VERDICT.VIOLATION), 0);
 });
 
@@ -285,7 +322,7 @@ test("evals.missing-eval-coverage: every governed manifest claims a suite that r
     // The claim does not resolve, yet a cases file DOES exist beside it. The
     // finding reports both so a reader can dispute the interpretation.
     assert.deepEqual(f.evidence.evalFilesActuallyPresent, [`${f.pkg}/evals/cases.yaml`]);
-    assert.equal(f.evidence.casesFoundElsewhereInPackage, 4);
+    assert.equal(f.evidence.casesFoundElsewhereInPackage, f.pkg === "maker-evidence-audit" ? 8 : 4);
     const manifest = readFileSync(join(SKILLS_ROOT, f.file), "utf8").split(/\r?\n/);
     assert.match(manifest[f.line - 1], /^\s+suite:/, `${f.file}:${f.line} should be the suite: line`);
   }
