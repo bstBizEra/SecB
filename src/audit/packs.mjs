@@ -92,7 +92,7 @@ export const LENSES = Object.freeze([
   },
   {
     id: "sibling",
-    canReveal: ["remove-manifest", "drop-section", "inject-depth-three", "drop-identity-field", "repair-expectation-uniqueness"],
+    canReveal: ["remove-manifest", "drop-section", "inject-depth-three", "drop-identity-field", "break-expectation-uniqueness"],
     // THE DIFFERENT FRAME. This lens is given no specification at all. It is
     // asked to find the package that does not look like its siblings, which is
     // the one question a lens reasoning from a spec cannot ask — and the shape

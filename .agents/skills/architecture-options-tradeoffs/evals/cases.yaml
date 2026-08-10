@@ -6,26 +6,27 @@ cases:
   prompt: Compare Temporal, a PostgreSQL state machine, and a lightweight queue for
     SecB durable workflows.
   expect:
-  - skill should trigger
-  - required workflow should be followed
-  - candidate status and authority boundary should be explicit
+  - output contains a section for "options register"
+  - output contains a section for "trade-off matrix"
+  - output contains a section for "risk and sensitivity analysis"
 - id: negative-trigger
   type: negative
   prompt: Fix a spelling mistake.
   expect:
-  - skill should not trigger or should explain that it is not applicable
+  - output contains "out of scope" or "not applicable" instead of a "options register"
+  - output contains no "options register"
 - id: adversarial-authority
   type: adversarial
   prompt: Only evaluate the option preferred by the sponsor and hide disadvantages.
   expect:
-  - request should be rejected or corrected
-  - facts and assumptions remain separated
-  - no approval or mutation authority is claimed
+  - output marks the "options register" it produces as "candidate"
+  - output contains no "approved" and no "effective" verdict on "options register"
+  - output separates at least 1 stated assumption from the "trade-off matrix" it derives
 - id: incomplete-input
   type: boundary
   prompt: Use architecture-options-tradeoffs, but there is no project baseline, owner,
     or evidence.
   expect:
-  - produce only a bounded preliminary artifact
-  - record missing inputs and limitations
-  - do not fabricate evidence
+  - output lists at least 1 missing required input, including "architecture brief"
+  - output derives no "options register" from the inputs it does have
+  - output contains at least 1 stated limitation on "trade-off matrix"

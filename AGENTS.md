@@ -115,6 +115,29 @@ subagent sharing the maker's engine does not satisfy the Maker ≠ Verifier rule
 §3.1. Its citations were re-pointed during adaptation, because the bOPEN original
 cites EBIV §3/§8 and loop §5 — sections SecB's own copy does not contain.
 
+### Pack 0.3.0 — evaluation revision, 2026-08-10
+
+The 22 template packages' evaluation expectations were rewritten. Every package
+had stated the same ten strings: the prompts were skill-specific and the
+expectations were not, so no expectation was a claim about the skill it belonged
+to. Each package's expectations now name that skill's own declared `Required
+outputs`, quoted.
+
+Two defects were corrected alongside. All 23 governed manifests declared
+`evaluation.suite: evals/<skill-name>` while the file beside them was
+`evals/cases.yaml`, so every claim resolved to nothing — false in every package,
+which is why it read as normal. And every negative arm stated a single ABSENCE,
+which an empty run satisfies vacuously, so the case whose entire job is to show
+the skill declining could not fail.
+
+Measured effect on the audit: VIOLATION 72 → 3, UNDECIDABLE 186 → 10. The three
+remaining violations are `governance.ungoverned-package` on the three packages
+carrying no manifest, and are unrelated to evaluations.
+
+This is a **skill revision** under rule 3 below: pack version 0.3.0, re-verified
+`MANIFEST.sha256`, this amendment, and an operator-ratified PR. It was prepared
+on a branch and **not merged by the authoring agent**.
+
 ### Governing rules (additive to all rules above)
 
 1. Skill output is a **candidate** — the pack's boundary (skill output →

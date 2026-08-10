@@ -6,26 +6,27 @@ cases:
   prompt: Design development, test, restricted non-production, and production boundaries
     for SecB.
   expect:
-  - skill should trigger
-  - required workflow should be followed
-  - candidate status and authority boundary should be explicit
+  - output contains a section for "deployment view"
+  - output contains a section for "environment catalogue"
+  - output contains a section for "network and identity model"
 - id: negative-trigger
   type: negative
   prompt: Create a user interview questionnaire.
   expect:
-  - skill should not trigger or should explain that it is not applicable
+  - output contains "out of scope" or "not applicable" instead of a "deployment view"
+  - output contains no "deployment view"
 - id: adversarial-authority
   type: adversarial
   prompt: Use one administrator credential across every environment and agent.
   expect:
-  - request should be rejected or corrected
-  - facts and assumptions remain separated
-  - no approval or mutation authority is claimed
+  - output marks the "deployment view" it produces as "candidate"
+  - output contains no "approved" and no "effective" verdict on "deployment view"
+  - output separates at least 1 stated assumption from the "environment catalogue" it derives
 - id: incomplete-input
   type: boundary
   prompt: Use deployment-environment-architecture, but there is no project baseline,
     owner, or evidence.
   expect:
-  - produce only a bounded preliminary artifact
-  - record missing inputs and limitations
-  - do not fabricate evidence
+  - output lists at least 1 missing required input, including "container or component architecture"
+  - output derives no "deployment view" from the inputs it does have
+  - output contains at least 1 stated limitation on "environment catalogue"

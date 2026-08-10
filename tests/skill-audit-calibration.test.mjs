@@ -93,16 +93,21 @@ describe("AC-AUDIT-01 — the calibration can report a miss", () => {
 
   it("a check that always fires is caught by the repair arm, not the detection arm", () => {
     // The failure mode a detection-only calibration cannot see.
+    // Stubs the check the repair arm targets. EVERY package, not only the
+    // governed ones: the repair gives an ungoverned package a manifest, so a
+    // stub filtering on `p.governed` would name it after the repair and miss it
+    // before — which is what a discriminating check does, and would make this
+    // test pass for the wrong reason.
     const always = CHECKS.map((c) =>
-      c.id === "evals.expectation-diversity"
-        ? { ...c, run: (corpus) => corpus.packages.filter((p) => p.governed).map((p) => ({
+      c.id === "governance.ungoverned-package"
+        ? { ...c, run: (corpus) => corpus.packages.map((p) => ({
             check: c.id, pkg: p.name, file: null, line: null,
             verdict: "VIOLATION", observation: "always", evidence: {}
           })) }
         : c);
     const { result } = calibrate(SEED, always);
 
-    const row = result.classes.find((c) => c.mutation === "repair-expectation-uniqueness");
+    const row = result.classes.find((c) => c.mutation === "repair-ungoverned-package");
     assert.equal(row.arm, "repair");
     assert.equal(row.caught, 0, "an indiscriminate check must fail the repair arm");
     assert.equal(row.covered, false);
@@ -169,10 +174,13 @@ describe("AC-AUDIT-01 — the default plant exercises every class it declares", 
 
   it("reaches the whole applicable pool on every seed, repair arm included", () => {
     // Measured before the fix on seeds s1/s2/s3: claim-prohibited-authority,
-    // repair-eval-suite-path and repair-expectation-uniqueness were absent from
-    // all three keys. Both repair classes — the arm the module's own header
-    // argues is the only thing separating "detects the defect" from "shouts
-    // unconditionally" — were the ones the prefix cut off.
+    // and both repair classes of the day were absent from all three keys --
+    // the arm the module's own header argues is the only thing separating
+    // "detects the defect" from "shouts unconditionally" was what the prefix cut
+    // off. Those two repair arms have since been retired: the corpus defects
+    // they repaired were fixed, so repairing changed nothing and scored as a
+    // miss. The repair arm is now repair-ungoverned-package, on the defect this
+    // corpus still carries.
     const base = loadCorpus();
     const applicable = applicableTo(base);
     const repairs = applicable.filter((m) => m.arm === "repair");
@@ -193,14 +201,14 @@ describe("AC-AUDIT-01 — the default plant exercises every class it declares", 
 
   it("a blinded repair check is STRUCK under the default count, not reported clean", () => {
     // The assertion the old default could not make. With nothing from the repair
-    // arm planted, score() built no row for evals.expectation-diversity, could
+    // arm planted, score() built no row for the repair class, could
     // not list it as uncovered, and printed "Every planted class was caught"
     // over a check that had been blinded outright.
     const base = loadCorpus();
     const { corpus, key } = plant(base, { seed: SEED });
     const run = (co, ch) => ch.flatMap((x) => { try { return x.run(co); } catch { return []; } });
     const blinded = CHECKS.map((c) =>
-      c.id === "evals.expectation-diversity" ? { ...c, run: () => [] } : c);
+      c.id === "governance.ungoverned-package" ? { ...c, run: () => [] } : c);
 
     const clean = score({ key, baseline: run(base, CHECKS), mutated: run(corpus, CHECKS) });
     assert.equal(clean.uncovered.length, 0, "the unblinded default run must be clean");
@@ -208,7 +216,7 @@ describe("AC-AUDIT-01 — the default plant exercises every class it declares", 
 
     const struck = score({ key, baseline: run(base, blinded), mutated: run(corpus, blinded) });
     assert.ok(
-      struck.uncovered.some((u) => u.targets === "evals.expectation-diversity" && u.arm === "repair"),
+      struck.uncovered.some((u) => u.targets === "governance.ungoverned-package" && u.arm === "repair"),
       "blinding a repair check must surface as an uncovered repair class"
     );
     assert.match(struck.instruction, /^STRIKE from claimed coverage/);

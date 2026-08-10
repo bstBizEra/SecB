@@ -40,7 +40,7 @@ controls:
   verdict_claims: prohibited
   independent_verification_substitution: prohibited
 evaluation:
-  suite: evals/maker-evidence-audit
+  suite: evals/cases.yaml
   cross_harness:
   - codex
   - claude-code

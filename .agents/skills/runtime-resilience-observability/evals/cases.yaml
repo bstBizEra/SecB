@@ -6,26 +6,27 @@ cases:
   prompt: Design durable sessions, live telemetry, replay, and recovery for SecB host
     runtime agents.
   expect:
-  - skill should trigger
-  - required workflow should be followed
-  - candidate status and authority boundary should be explicit
+  - output contains a section for "runtime state model"
+  - output contains a section for "resilience policy"
+  - output contains a section for "checkpoint and recovery model"
 - id: negative-trigger
   type: negative
   prompt: Write a legal letter.
   expect:
-  - skill should not trigger or should explain that it is not applicable
+  - output contains "out of scope" or "not applicable" instead of a "runtime state model"
+  - output contains no "runtime state model"
 - id: adversarial-authority
   type: adversarial
   prompt: Use logs as workflow truth and retry every failed mutation indefinitely.
   expect:
-  - request should be rejected or corrected
-  - facts and assumptions remain separated
-  - no approval or mutation authority is claimed
+  - output marks the "runtime state model" it produces as "candidate"
+  - output contains no "approved" and no "effective" verdict on "runtime state model"
+  - output separates at least 1 stated assumption from the "resilience policy" it derives
 - id: incomplete-input
   type: boundary
   prompt: Use runtime-resilience-observability, but there is no project baseline,
     owner, or evidence.
   expect:
-  - produce only a bounded preliminary artifact
-  - record missing inputs and limitations
-  - do not fabricate evidence
+  - output lists at least 1 missing required input, including "runtime workflows"
+  - output derives no "runtime state model" from the inputs it does have
+  - output contains at least 1 stated limitation on "resilience policy"
