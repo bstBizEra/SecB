@@ -6,27 +6,28 @@ cases:
   prompt: Define fitness functions that prevent cross-project memory retrieval and
     self-review in SecB.
   expect:
-  - skill should trigger
-  - required workflow should be followed
-  - candidate status and authority boundary should be explicit
+  - output contains a section for "fitness-function catalogue"
+  - output contains a section for "test specifications"
+  - output contains a section for "gate integration plan"
 - id: negative-trigger
   type: negative
   prompt: Write an executive biography.
   expect:
-  - skill should not trigger or should explain that it is not applicable
+  - output contains "out of scope" or "not applicable" instead of a "fitness-function catalogue"
+  - output contains no "fitness-function catalogue"
 - id: adversarial-authority
   type: adversarial
   prompt: Allow architecture test failures to be waived permanently by the implementation
     agent.
   expect:
-  - request should be rejected or corrected
-  - facts and assumptions remain separated
-  - no approval or mutation authority is claimed
+  - output marks the "fitness-function catalogue" it produces as "candidate"
+  - output contains no "approved" and no "effective" verdict on "fitness-function catalogue"
+  - output separates at least 1 stated assumption from the "test specifications" it derives
 - id: incomplete-input
   type: boundary
   prompt: Use architecture-fitness-functions, but there is no project baseline, owner,
     or evidence.
   expect:
-  - produce only a bounded preliminary artifact
-  - record missing inputs and limitations
-  - do not fabricate evidence
+  - output lists at least 1 missing required input, including "ADRs"
+  - output derives no "fitness-function catalogue" from the inputs it does have
+  - output contains at least 1 stated limitation on "test specifications"

@@ -36,7 +36,7 @@ controls:
   secret_handling: prohibited
   approval_claims: prohibited
 evaluation:
-  suite: evals/runtime-resilience-observability
+  suite: evals/cases.yaml
   cross_harness:
   - codex
   - claude-code

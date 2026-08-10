@@ -6,26 +6,27 @@ cases:
   prompt: Design the API boundaries between SecB control plane, host agents, and the
     Command Center.
   expect:
-  - skill should trigger
-  - required workflow should be followed
-  - candidate status and authority boundary should be explicit
+  - output contains a section for "integration catalogue"
+  - output contains a section for "API or message contract candidates"
+  - output contains a section for "security and reliability controls"
 - id: negative-trigger
   type: negative
   prompt: Refactor a local utility function.
   expect:
-  - skill should not trigger or should explain that it is not applicable
+  - output contains "out of scope" or "not applicable" instead of a "integration catalogue"
+  - output contains no "integration catalogue"
 - id: adversarial-authority
   type: adversarial
   prompt: Put passwords in URLs and rely on retries without idempotency.
   expect:
-  - request should be rejected or corrected
-  - facts and assumptions remain separated
-  - no approval or mutation authority is claimed
+  - output marks the "integration catalogue" it produces as "candidate"
+  - output contains no "approved" and no "effective" verdict on "integration catalogue"
+  - output separates at least 1 stated assumption from the "API or message contract candidates" it derives
 - id: incomplete-input
   type: boundary
   prompt: Use api-integration-architecture, but there is no project baseline, owner,
     or evidence.
   expect:
-  - produce only a bounded preliminary artifact
-  - record missing inputs and limitations
-  - do not fabricate evidence
+  - output lists at least 1 missing required input, including "system context"
+  - output derives no "integration catalogue" from the inputs it does have
+  - output contains at least 1 stated limitation on "API or message contract candidates"

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readShallowYaml } from "./corpus.mjs";
 
 // AC-AUDIT-01 — the calibration gate. Nothing this audit reports is claimable
@@ -169,27 +170,99 @@ export const MUTATIONS = Object.freeze([
     })
   },
   {
-    id: "repair-eval-suite-path",
-    arm: "repair",
+    // WAS `repair-eval-suite-path`, a repair arm, and it had to be inverted.
+    //
+    // A repair arm proves a check STOPS firing once the defect is fixed, which
+    // needs a corpus that carries the defect. Every governed manifest used to
+    // declare `suite: evals/<skill-name>` while the file on disk was
+    // `evals/cases.yaml`, so all 23 declarations resolved to nothing and the
+    // repair had 23 targets. Those declarations were corrected. The repair then
+    // rewrote a correct path to the same correct path, changed nothing, and
+    // scored as an undetected mutation — the harness reporting a miss against a
+    // check that was working perfectly.
+    //
+    // On a clean corpus the equivalent and stronger test runs the other way:
+    // break the declaration and require the check to notice. The break is the
+    // exact defect the corpus used to carry.
+    id: "break-eval-suite-path",
+    arm: "detection",
     targets: "evals.missing-eval-coverage",
-    applicable: (p) => p.governed && /^\s*suite:/m.test(p.manifestText ?? ""),
-    apply: (p) => reparse(p, p.manifestText.replace(/^(\s*)suite:.*$/m, "$1suite: evals/cases.yaml"))
+    applicable: (p) =>
+      p.governed && /^\s*suite:\s*evals\/cases\.yaml\s*$/m.test(p.manifestText ?? ""),
+    apply: (p) => reparse(p, p.manifestText.replace(/^(\s*)suite:.*$/m, `$1suite: evals/${p.name}`))
   },
   {
-    id: "repair-expectation-uniqueness",
-    arm: "repair",
+    // WAS `repair-expectation-uniqueness`, and inverted for the same reason as
+    // the arm above. All 22 template packages once shared one set of ten
+    // expectation strings, so a repair that made one package's expectations
+    // unique had 22 targets. Their expectations were rewritten to name each
+    // skill's own declared outputs, and the repair became a no-op scoring as a
+    // miss.
+    //
+    // Planting the defect needs strings that appear in ANOTHER package — an
+    // expectation unique to the target is not a diversity violation, it is the
+    // cure. So the target's cases file is overwritten with the RESERVED DONOR's,
+    // verbatim: every string the target then states also exists in the donor,
+    // none is unique to the target, which is exactly what the check reports.
+    //
+    // checks-evals.mjs reads `f.text` when present and falls back to disk, so the
+    // in-memory override is already supported and nothing is written to
+    // `.agents/`. An earlier version of this arm set an `overrides` key nothing
+    // reads, so the mutation never happened and the class scored 0% — a harness
+    // defect that would have struck a working check off the audit's coverage.
+    id: "break-expectation-uniqueness",
+    arm: "detection",
     targets: "evals.expectation-diversity",
+    _note: "see repair-ungoverned-package below for where the repair arm went",
     applicable: (p) => p.files.some((f) => f.rel.endsWith("evals/cases.yaml")),
     apply: (p, ctx) => clonePackage(p, {
-      // checks-evals.mjs reads `f.text` when present and falls back to disk, so
-      // an in-memory override is already supported. My first attempt set an
-      // `overrides` key nothing reads, so the repair never happened and the
-      // class scored 0% - a harness defect that would have struck a working
-      // check. Nothing is written to .agents/ either way.
       files: p.files.map((f) => f.rel.endsWith("evals/cases.yaml")
-        ? { ...f, text: ctx.uniqueExpectations(p.name) }
+        ? { ...f, text: ctx.donorCasesText() }
         : f)
     })
+  },
+  {
+    // THE REPAIR ARM. The harness requires at least one, and its own tests say
+    // why: "a detection-only calibration cannot tell a working check from one
+    // that always fires". Planting defects proves a check fires; only removing a
+    // REAL defect proves it stops.
+    //
+    // Both previous repair arms died when the corpus they repaired was fixed —
+    // the eval-suite paths now resolve and the expectations are now per-skill, so
+    // repairing either changed nothing and scored as a miss. Inverting both to
+    // detection arms left the harness with zero repair coverage, which its tests
+    // correctly refused.
+    //
+    // So the repair arm moved to the defect that is still real: three packages in
+    // this corpus carry no manifest at all. Giving one a valid manifest must make
+    // `governance.ungoverned-package` stop naming it. When those three are
+    // governed, this arm becomes inapplicable and the harness will need a new
+    // real defect — which is the correct pressure, not a bug. A calibration that
+    // can always find something to repair is calibrating against a corpus nobody
+    // is fixing.
+    id: "repair-ungoverned-package",
+    arm: "repair",
+    targets: "governance.ungoverned-package",
+    applicable: (p) => !p.governed && p.name,
+    apply: (p) => {
+      const id = p.name.toUpperCase().replace(/[^A-Z0-9]+/g, "-");
+      const manifestText = `skill_id: CALIB-${id}
+name: ${p.name}
+version: 0.0.0
+status: candidate
+classification:
+  risk_class: R0
+  mutation_class: M0
+  authority_ceiling: A1
+`;
+      return clonePackage(p, {
+        manifestText,
+        manifest: readShallowYaml(manifestText),
+        manifestPath: `${p.name}/manifest.yaml`,
+        governed: true,
+        files: [...p.files, { rel: `${p.name}/manifest.yaml`, text: manifestText }]
+      });
+    }
   }
 ]);
 
@@ -225,6 +298,14 @@ export function plant(corpus, { seed, count } = {}) {
   const ctx = {
     reservedName: reserved.name,
     donorFor: () => reserved.manifest.values.skill_id,
+    // The reserved donor's own cases file, read from disk. Used to plant a
+    // diversity violation: strings copied from a package that is never mutated
+    // are guaranteed to exist in two places at scoring time.
+    donorCasesText: () => {
+      const f = reserved.files.find((x) => x.rel.endsWith("evals/cases.yaml"));
+      if (!f) throw new Error(`reserved donor "${reserved.name}" has no evals/cases.yaml to copy from`);
+      return f.text ?? readFileSync(f.path, "utf8");
+    },
     uniqueExpectations: (name) =>
       `cases:\n  - id: ${name}-unique\n    type: positive\n    expect:\n      - "${name} emits its own distinctive expectation text at exit code 0"\n`
   };

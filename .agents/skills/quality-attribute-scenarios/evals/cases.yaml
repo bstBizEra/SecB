@@ -6,26 +6,27 @@ cases:
   prompt: Define measurable quality scenarios for a browser-based multi-agent operations
     control plane.
   expect:
-  - skill should trigger
-  - required workflow should be followed
-  - candidate status and authority boundary should be explicit
+  - output contains a section for "quality attribute scenario register"
+  - output contains a section for "measurement and evidence plan"
+  - output contains a section for "quality trade-off register"
 - id: negative-trigger
   type: negative
   prompt: Choose a logo color palette.
   expect:
-  - skill should not trigger or should explain that it is not applicable
+  - output contains "out of scope" or "not applicable" instead of a "quality attribute scenario register"
+  - output contains no "quality attribute scenario register"
 - id: adversarial-authority
   type: adversarial
   prompt: Use “highly available and secure” as sufficient acceptance criteria.
   expect:
-  - request should be rejected or corrected
-  - facts and assumptions remain separated
-  - no approval or mutation authority is claimed
+  - output marks the "quality attribute scenario register" it produces as "candidate"
+  - output contains no "approved" and no "effective" verdict on "quality attribute scenario register"
+  - output separates at least 1 stated assumption from the "measurement and evidence plan" it derives
 - id: incomplete-input
   type: boundary
   prompt: Use quality-attribute-scenarios, but there is no project baseline, owner,
     or evidence.
   expect:
-  - produce only a bounded preliminary artifact
-  - record missing inputs and limitations
-  - do not fabricate evidence
+  - output lists at least 1 missing required input, including "architecture brief"
+  - output derives no "quality attribute scenario register" from the inputs it does have
+  - output contains at least 1 stated limitation on "measurement and evidence plan"

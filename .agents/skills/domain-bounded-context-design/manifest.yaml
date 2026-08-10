@@ -34,7 +34,7 @@ controls:
   secret_handling: prohibited
   approval_claims: prohibited
 evaluation:
-  suite: evals/domain-bounded-context-design
+  suite: evals/cases.yaml
   cross_harness:
   - codex
   - claude-code

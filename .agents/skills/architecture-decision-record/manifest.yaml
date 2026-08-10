@@ -33,7 +33,7 @@ controls:
   secret_handling: prohibited
   approval_claims: prohibited
 evaluation:
-  suite: evals/architecture-decision-record
+  suite: evals/cases.yaml
   cross_harness:
   - codex
   - claude-code

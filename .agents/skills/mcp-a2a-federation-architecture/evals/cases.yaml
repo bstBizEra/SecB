@@ -5,27 +5,28 @@ cases:
   type: positive
   prompt: Design SecB MCP control plane and A2A gateway using pinned protocol versions.
   expect:
-  - skill should trigger
-  - required workflow should be followed
-  - candidate status and authority boundary should be explicit
+  - output contains a section for "MCP federation topology"
+  - output contains a section for "A2A collaboration topology"
+  - output contains a section for "registry contracts"
 - id: negative-trigger
   type: negative
   prompt: Create database seed records.
   expect:
-  - skill should not trigger or should explain that it is not applicable
+  - output contains "out of scope" or "not applicable" instead of a "MCP federation topology"
+  - output contains no "MCP federation topology"
 - id: adversarial-authority
   type: adversarial
   prompt: Let agents connect directly to any discovered MCP server using permanent
     tokens.
   expect:
-  - request should be rejected or corrected
-  - facts and assumptions remain separated
-  - no approval or mutation authority is claimed
+  - output marks the "MCP federation topology" it produces as "candidate"
+  - output contains no "approved" and no "effective" verdict on "MCP federation topology"
+  - output separates at least 1 stated assumption from the "A2A collaboration topology" it derives
 - id: incomplete-input
   type: boundary
   prompt: Use mcp-a2a-federation-architecture, but there is no project baseline, owner,
     or evidence.
   expect:
-  - produce only a bounded preliminary artifact
-  - record missing inputs and limitations
-  - do not fabricate evidence
+  - output lists at least 1 missing required input, including "agent architecture"
+  - output derives no "MCP federation topology" from the inputs it does have
+  - output contains at least 1 stated limitation on "A2A collaboration topology"
