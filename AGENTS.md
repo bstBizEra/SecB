@@ -194,3 +194,57 @@ The retained hard gates of AMD-002 are unchanged and are not restated here. Wher
 ### What this amendment does not do
 
 It does not activate the loop documents. They remain `DRAFT / NOT EFFECTIVE` under the bootstrap boundary until human GOV approves them. This amendment binds worker-agent behaviour to a specification; it does not confer effectiveness on the specification.
+
+## Evidence-backed governance candidate registration — 2026-08-10
+
+**Amendment ID:** SECB-AGENTS-AMD-005
+**Requested by:** Operator, 2026-08-10
+**Status:** DRAFT until merged to `main` by the operator; EFFECTIVE thereafter
+**Scope:** Registration only. This amendment grants nothing and narrows nothing.
+
+The repository carries a governance design candidate at
+[`BOPEN-GOV-EBAG-001`](docs/12-execution/12-evidence-backed-agent-governance.md) —
+*Evidence-Backed Agent Governance*, from an operator-supplied design of
+2026-08-10. It proposes replacing file-based protection with authority-delta
+classification (G0–G5), so that changes an agent can prove stay inside an already
+granted delegation envelope merge on evidence and independent ballots rather than
+on a repeated human approval.
+
+### Why it is registered rather than bound
+
+`SECB-AGENTS-AMD-004` bound worker-agent behaviour to the engineering loop
+because that specification constrains how agents work. This one changes **who may
+approve**, and a worker agent wrote it. Binding it here would be a self-grant:
+the document's own §1 records that, and the source design says the same thing in
+its closing paragraph. The candidate therefore stands registered and inert.
+
+Two findings from preparing it are worth carrying at this level, because both
+change what the proposal means for this repository:
+
+1. **The design's premise does not hold for SecB.** It reasons about a pull
+   request touching `ci.yml`, a policy bundle, an ADR and a classifier. This
+   repository tracks zero files under `.github/`, has no policy engine and no
+   classifier. Sections of the design that harden a CI pipeline protect nothing
+   here until such a pipeline exists.
+2. **The primitives, however, largely do exist.** Eight of the eleven named
+   mechanisms are delivered modules — approval binding, SoD rules, the N-5
+   independent-review/governance gate, the delegation gate, escalation routing,
+   evidence envelopes, hash-chained ledgers, and drift comparison — and all eight
+   are now reachable from `src/index.mjs`. What SecB lacks is not primitives but
+   a policy engine binding them, a surface to run them on, a signing identity,
+   and an external trust anchor.
+
+### Retained hard gates are unchanged
+
+The gates of `SECB-AGENTS-AMD-002` stand exactly as written. In particular
+`HUMAN_REQUIRED` is not retired, no change type is reclassified, no authority
+ladder exists, and working rule 5 continues to forbid configuring the external
+trusted verifier the design depends on. Where the candidate and a retained hard
+gate appear to conflict, the gate governs.
+
+### What would change this
+
+A human GOV act — the Genesis Ratification of §12 — and nothing else. Not a
+rubric score, not a unanimous agent council, not this amendment. The candidate's
+own §11 lists seven blocked actions; a worker agent may prepare implementation
+candidates for them on a branch under AMD-002 §3 and may activate none of them.
