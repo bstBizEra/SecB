@@ -7,6 +7,30 @@ import { secbWorktreeStatus, secbWorktreeListCrates, secbWorktreeInspectStorage 
 import { SecBSkillsHub } from "../src/skills/skills-hub-service.mjs";
 import { SecBMcpServer } from "../src/mcp/secb-mcp-server.mjs";
 
+/**
+ * A skills root containing one package with no manifest.
+ *
+ * These two tests used to point the hub at the REAL `.agents/skills` and name
+ * `worktree` and `secb-project-registry`, which carried no manifest.yaml. That
+ * made a genuine safety property -- the hub withholds a package with no governed
+ * identity -- depend on the corpus continuing to contain an ungoverned package.
+ * It stopped holding the moment those two were moved to `.agents/tool-notes/`,
+ * where they belonged. The property is unchanged and still asserted; only the
+ * subject is now built rather than borrowed.
+ */
+function withUngovernedPackage(run) {
+  const root = mkdtempSync(join(tmpdir(), "secb-skills-ungoverned-"));
+  try {
+    const pkg = join(root, "fixture-ungoverned");
+    mkdirSync(pkg, { recursive: true });
+    const body = ["# fixture-ungoverned", "", "No manifest, so no governed identity.", ""].join(String.fromCharCode(10));
+    writeFileSync(join(pkg, "SKILL.md"), body);
+    run(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function withWorktreeFixture(run) {
   const root = mkdtempSync(join(tmpdir(), "secb-worktree-fixture-"));
   try {
@@ -62,22 +86,25 @@ test("secbWorktreeInspectStorage inspects worktree-server storage", () => {
   });
 });
 
-// The worktree and secb-project-registry packages carry no manifest.yaml, so
-// they have no governed identity to resolve. They index for discovery and
-// withhold on access; previously the unwired-resolver path returned their
-// content outright.
-test("SecBSkillsHub withholds the ungoverned worktree package", () => {
-  const hub = new SecBSkillsHub({ services: { skillResolver: { resolveSkill: () => ({ skill: {}, code: "ALLOW" }) } } });
-  const context = { projectId: "prj_secb", runtime: "claude-code", dataClassification: "INTERNAL" };
+test("SecBSkillsHub withholds a package that carries no manifest", () => {
+  withUngovernedPackage((skillsDir) => {
+    const hub = new SecBSkillsHub({
+      skillsDir,
+      services: { skillResolver: { resolveSkill: () => ({ skill: {}, code: "ALLOW" }) } }
+    });
+    const context = { projectId: "prj_secb", runtime: "claude-code", dataClassification: "INTERNAL" };
 
-  const searchRes = hub.searchSkills("worktree", context);
-  assert.equal(searchRes.ok, true);
-  assert.equal(searchRes.count, 0);
-  assert.ok(searchRes.withheld_count >= 1);
+    // Indexes for discovery, withholds on access. The unwired-resolver path used
+    // to return such a package's content outright.
+    const searchRes = hub.searchSkills("fixture-ungoverned", context);
+    assert.equal(searchRes.ok, true);
+    assert.equal(searchRes.count, 0);
+    assert.ok(searchRes.withheld_count >= 1);
 
-  const skill = hub.getSkill("worktree", context);
-  assert.equal(skill.ok, false);
-  assert.equal(skill.deny_code, "DENY_UNGOVERNED_PACKAGE");
+    const skill = hub.getSkill("fixture-ungoverned", context);
+    assert.equal(skill.ok, false);
+    assert.equal(skill.deny_code, "DENY_UNGOVERNED_PACKAGE");
+  });
 });
 
 test("SecBMcpServer dispatches Worktree tools successfully", () => {
@@ -129,13 +156,15 @@ test("SecBWorktreeAdapter plugin inspects external worktree repository", async (
   });
 });
 
-test("SecBSkillsHub withholds the ungoverned secb-project-registry package", () => {
-  const hub = new SecBSkillsHub();
-  const skill = hub.getSkill("secb-project-registry", {
-    projectId: "prj_secb",
-    runtime: "claude-code",
-    dataClassification: "INTERNAL"
+test("SecBSkillsHub denies when no resolver is wired, before any governance question", () => {
+  withUngovernedPackage((skillsDir) => {
+    const hub = new SecBSkillsHub({ skillsDir });
+    const skill = hub.getSkill("fixture-ungoverned", {
+      projectId: "prj_secb",
+      runtime: "claude-code",
+      dataClassification: "INTERNAL"
+    });
+    assert.equal(skill.ok, false);
+    assert.equal(skill.deny_code, "DENY_NO_RESOLVER");
   });
-  assert.equal(skill.ok, false);
-  assert.equal(skill.deny_code, "DENY_NO_RESOLVER");
 });

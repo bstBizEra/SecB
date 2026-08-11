@@ -44,19 +44,22 @@ import { CORPUS_ROOT } from "./corpus.mjs";
  * feels like clearing a nuisance failure, that is the tripwire working.
  */
 export const EXPECTED_CORPUS = {
-  packages: 26,
+  packages: 23,
   governed: 23,
-  ungoverned: 3,
+  ungoverned: 0,
   /**
    * Named, not merely counted. A corpus that swapped one ungoverned package for
-   * another would keep every count identical.
+   * another would keep every count identical. The list is empty now, and an
+   * entry appearing in it is the signal that something ungoverned was added to
+   * `.agents/skills/` — which is how the last three got there.
    */
-  ungovernedNames: ["graphify", "secb-project-registry", "worktree"],
+  ungovernedNames: [],
   note:
-    "26 / 23 / 3 since SECB-ARCH-023 maker-evidence-audit was added to the pack " +
-    "at version 0.2.0 (2026-08-10), which moved governed 22 -> 23 and left the " +
-    "ungoverned three unchanged. Previously 25 / 22 / 3. On a tree without " +
-    "graphify, secb-project-registry and worktree this is 23 / 23 / 0."
+    "23 / 23 / 0 since 2026-08-11, when graphify, secb-project-registry and " +
+    "worktree were moved to .agents/tool-notes/. They were never skills: not one " +
+    "carried a mandatory section, and they arrived through tool-integration " +
+    "commits rather than the skills-pack route. Previously 26 / 23 / 3, and " +
+    "25 / 22 / 3 before SECB-ARCH-023."
 };
 
 /**

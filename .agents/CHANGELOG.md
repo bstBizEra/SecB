@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 — 2026-08-11
+
+- Moved `graphify`, `secb-project-registry` and `worktree` from `skills/` to
+  `tool-notes/`. They were never skills: not one carried a mandatory section,
+  `graphify`'s is a CLI reference down to the environment-variable table, and all
+  three arrived through tool-integration commits rather than the skills-pack
+  route. They were the audit's only remaining violations and every one of
+  `validate_pack.py`'s 12 errors.
+- `validate_pack.py`: 12 errors -> **PASS**. Skill audit: 3 violations -> **0**.
+- Four tests were found to depend on the corpus containing an ungoverned package
+  without saying so, and now build their own subject: the SkillsHub withholding
+  tests, the hub's AC-SKILLS-HUB-02 case, and the descriptor mapper's
+  no-manifest finding. Each asserts the same property; none needs the corpus to
+  carry a defect.
+- Registered skills unchanged at 23. The three were never in the registry list.
+
 ## 0.3.0 — 2026-08-10
 
 - Rewrote the evaluation expectations of all 22 template skill packages. Every

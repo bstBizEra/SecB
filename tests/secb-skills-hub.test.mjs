@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { TOOL_CATALOG } from '../src/mcp/tool-catalog.mjs';
 import { SecBSkillsHub } from '../src/skills/skills-hub-service.mjs';
 import { SkillResolver } from '../src/registry/skill-resolver.mjs';
@@ -87,14 +88,29 @@ describe('SecBSkillsHub discovery metadata', () => {
   });
 
   it('AC-SKILLS-HUB-02: packages without a governed manifest are discoverable but never authorized', () => {
-    const hub = new SecBSkillsHub({ services: { skillResolver: allowAll() } });
+    // The subject is BUILT. This used to name graphify, worktree and
+    // secb-project-registry, which carried no manifest.yaml -- so a real safety
+    // property depended on the corpus continuing to contain ungoverned packages,
+    // and stopped holding when those three were moved to .agents/tool-notes/
+    // where they belonged. Nothing in the test said it needed a defect.
+    const root = mkdtempSync(join(tmpdir(), 'secb-hub-ungoverned-'));
+    try {
+      for (const name of ['fixture-a', 'fixture-b', 'fixture-c']) {
+        const dir = join(root, name);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'SKILL.md'), ['# ' + name, '', 'No manifest, so no governed identity.', ''].join(String.fromCharCode(10)));
+      }
+      const hub = new SecBSkillsHub({ skillsDir: root, services: { skillResolver: allowAll() } });
 
-    for (const name of ['graphify', 'worktree', 'secb-project-registry']) {
-      const denied = hub.getSkill(name, CONTEXT);
-      assert.equal(denied.ok, false, `${name} carries no manifest.yaml and must not resolve`);
-      assert.equal(denied.deny_code, 'DENY_UNGOVERNED_PACKAGE');
+      for (const name of ['fixture-a', 'fixture-b', 'fixture-c']) {
+        const denied = hub.getSkill(name, CONTEXT);
+        assert.equal(denied.ok, false, `${name} carries no manifest.yaml and must not resolve`);
+        assert.equal(denied.deny_code, 'DENY_UNGOVERNED_PACKAGE');
+      }
+      assert.ok(hub.searchSkills('', CONTEXT).withheld_reasons.DENY_UNGOVERNED_PACKAGE >= 3);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
-    assert.ok(hub.searchSkills('', CONTEXT).withheld_reasons.DENY_UNGOVERNED_PACKAGE >= 3);
   });
 });
 
