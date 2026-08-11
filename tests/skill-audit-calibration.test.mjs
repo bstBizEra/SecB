@@ -33,9 +33,12 @@ const runAll = (corpus) => CHECKS.flatMap((c) => { try { return c.run(corpus); }
 // real default never produced and none of them could see the gap.
 function calibrate(seed = SEED, checks = CHECKS) {
   const base = loadCorpus();
-  const { corpus, key } = plant(base, { seed });
+  const { corpus, baselineCorpus, key } = plant(base, { seed });
   const run = (c) => checks.flatMap((x) => { try { return x.run(c); } catch { return []; } });
-  return { key, result: score({ key, baseline: run(base), mutated: run(corpus), reveal: true }) };
+  // baselineCorpus, not base. A repair arm that carries its own precondition has
+  // its target broken there; scoring against the corpus as loaded would report
+  // the repair as uncaught and strike a working check.
+  return { key, result: score({ key, baseline: run(baselineCorpus), mutated: run(corpus), reveal: true }) };
 }
 
 function digestAgents() {
@@ -139,8 +142,8 @@ describe("AC-AUDIT-01 — the harness is honest about itself", () => {
 
   it("withholds the answer key unless reveal is passed", () => {
     const base = loadCorpus();
-    const { corpus, key } = plant(base, { seed: SEED, count: 4 });
-    const hidden = score({ key, baseline: runAll(base), mutated: runAll(corpus) });
+    const { corpus, baselineCorpus, key } = plant(base, { seed: SEED, count: 4 });
+    const hidden = score({ key, baseline: runAll(baselineCorpus), mutated: runAll(corpus) });
     assert.equal(hidden.key, undefined, "a scorer that always returns the key makes blind calibration impossible");
     assert.ok(score({ key, baseline: [], mutated: [], reveal: true }).key);
   });
@@ -205,16 +208,16 @@ describe("AC-AUDIT-01 — the default plant exercises every class it declares", 
     // not list it as uncovered, and printed "Every planted class was caught"
     // over a check that had been blinded outright.
     const base = loadCorpus();
-    const { corpus, key } = plant(base, { seed: SEED });
+    const { corpus, baselineCorpus, key } = plant(base, { seed: SEED });
     const run = (co, ch) => ch.flatMap((x) => { try { return x.run(co); } catch { return []; } });
     const blinded = CHECKS.map((c) =>
       c.id === "governance.ungoverned-package" ? { ...c, run: () => [] } : c);
 
-    const clean = score({ key, baseline: run(base, CHECKS), mutated: run(corpus, CHECKS) });
+    const clean = score({ key, baseline: run(baselineCorpus, CHECKS), mutated: run(corpus, CHECKS) });
     assert.equal(clean.uncovered.length, 0, "the unblinded default run must be clean");
     assert.doesNotMatch(clean.instruction, /STRIKE/);
 
-    const struck = score({ key, baseline: run(base, blinded), mutated: run(corpus, blinded) });
+    const struck = score({ key, baseline: run(baselineCorpus, blinded), mutated: run(corpus, blinded) });
     assert.ok(
       struck.uncovered.some((u) => u.targets === "governance.ungoverned-package" && u.arm === "repair"),
       "blinding a repair check must surface as an uncovered repair class"
@@ -225,8 +228,23 @@ describe("AC-AUDIT-01 — the default plant exercises every class it declares", 
   it("a class with nowhere to plant throws instead of vanishing from the key", () => {
     const base = loadCorpus();
     const governed = base.packages.find((p) => p.governed && p.manifest.values.skill_id);
-    const ungoverned = base.packages.find((p) => !p.governed);
-    assert.ok(governed && ungoverned, "fixture needs one governed and one ungoverned package");
+    assert.ok(governed, "fixture needs one governed package");
+
+    // The ungoverned half is CONSTRUCTED, not found. It used to be picked out of
+    // the real corpus, so this test silently required the corpus to CONTAIN an
+    // ungoverned package -- and the only three are graphify, secb-project-registry
+    // and worktree, which are tool documents filed under .agents/skills/. Moving
+    // or governing them broke this test: a test depending on a defect it does not
+    // describe, and one of two things still tying the harness to that defect.
+    const ungoverned = Object.freeze({
+      ...governed,
+      name: "fixture-ungoverned",
+      manifestText: null,
+      manifest: null,
+      manifestPath: null,
+      governed: false,
+      files: governed.files.filter((f) => !f.rel.endsWith("/manifest.yaml"))
+    });
 
     // The governed package is reserved as the collision donor and is therefore
     // never a target, so every mutation gated on `p.governed` sits in the pool
