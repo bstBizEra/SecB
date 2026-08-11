@@ -74,7 +74,7 @@ const base = loadCorpus();
  * both repair-arm classes entirely.
  */
 const requestedCount = valueOf("--count", null);
-const { corpus: mutatedCorpus, key } = plant(base, {
+const { corpus: mutatedCorpus, baselineCorpus, key } = plant(base, {
   seed: valueOf("--seed", null),
   ...(requestedCount === null ? {} : { count: Number(requestedCount) })
 });
@@ -85,7 +85,10 @@ const runAll = (corpus) => checks.flatMap((c) => {
 
 const result = score({
   key,
-  baseline: runAll(base),
+  // baselineCorpus, not base. A repair arm may carry its own precondition, and
+  // its target is broken there rather than in the corpus as loaded. Scoring
+  // against `base` reports such a repair as uncaught and strikes a working check.
+  baseline: runAll(baselineCorpus),
   mutated: runAll(mutatedCorpus),
   reveal: has("--reveal")
 });

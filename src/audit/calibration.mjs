@@ -243,7 +243,19 @@ export const MUTATIONS = Object.freeze([
     id: "repair-ungoverned-package",
     arm: "repair",
     targets: "governance.ungoverned-package",
-    applicable: (p) => !p.governed && p.name,
+    // Applicable to any GOVERNED package, because the arm no longer waits for
+    // the corpus to be broken -- it breaks a package itself in `breaks`, and the
+    // repair is measured against that. Three packages currently carry no
+    // manifest, but this arm no longer depends on them: when they are governed
+    // or moved, it keeps working.
+    applicable: (p) => p.governed && p.manifestText,
+    breaks: (p) => clonePackage(p, {
+      manifestText: null,
+      manifest: null,
+      manifestPath: null,
+      governed: false,
+      files: p.files.filter((f) => !f.rel.endsWith("/manifest.yaml"))
+    }),
     apply: (p) => {
       const id = p.name.toUpperCase().replace(/[^A-Z0-9]+/g, "-");
       const manifestText = `skill_id: CALIB-${id}
@@ -274,6 +286,27 @@ export function plant(corpus, { seed, count } = {}) {
   const next = rng(seed);
   const key = [];
   const byName = new Map(corpus.packages.map((p) => [p.name, p]));
+
+  // A SECOND MAP, so a repair arm can carry its own precondition.
+  //
+  // `score()` counts a repair as caught when the check fired BEFORE and not
+  // after, so a repair arm only works where the corpus already carries the
+  // defect. Every repair arm this harness has had died that way: the defect was
+  // fixed, the repair became a no-op, and the class scored as an undetected
+  // mutation against a check that was working.
+  //
+  // A repair arm may now declare `breaks(p)` — the world as it looks before the
+  // repair — and the baseline for that package is built from it. The arm stops
+  // depending on the corpus being dirty, which is the property that let the
+  // previous two rot.
+  //
+  // `spurious` is NOT a substitute, and this was measured rather than assumed:
+  // stubbing a check to fire on every package still yields spurious 0, on a
+  // clean baseline as well as a dirty one, because score() receives a baseline
+  // computed with the SAME check set and subtracts its noise from itself. The
+  // repair arm is structurally the only thing that catches a check that always
+  // fires.
+  const baselineByName = new Map(corpus.packages.map((p) => [p.name, p]));
 
   // RESERVED DONOR. One governed package is held out of every mutation, and its
   // skill_id is what collide-skill-id collides against.
@@ -362,7 +395,12 @@ export function plant(corpus, { seed, count } = {}) {
     }
 
     const target = pick(candidates, next);
-    const seeded = mutation.apply(target, ctx);
+    // For a repair arm, the local baseline is the broken package; the repair is
+    // measured against that rather than against the corpus as shipped.
+    const localBase = mutation.arm === "repair" && mutation.breaks
+      ? mutation.breaks(target, ctx)
+      : target;
+    const seeded = mutation.apply(localBase, ctx);
 
     /**
      * A MUTATION THAT CHANGED NOTHING IS NOT A MUTATION.
@@ -398,7 +436,7 @@ export function plant(corpus, { seed, count } = {}) {
       (p.files ?? []).map((f) => [f.rel, f.text ?? null])
     ]);
 
-    if (shapeOf(seeded) === shapeOf(target)) {
+    if (shapeOf(seeded) === shapeOf(localBase)) {
       throw new Error(
         `calibration mutation "${mutation.id}" applied to "${target.name}" changed nothing. ` +
         "A no-op seed scores as an undetected class and would strike a working check. " +
@@ -407,6 +445,7 @@ export function plant(corpus, { seed, count } = {}) {
     }
 
     byName.set(target.name, seeded);
+    baselineByName.set(target.name, localBase);
     key.push({
       mutation: mutation.id,
       arm: mutation.arm,
@@ -420,7 +459,14 @@ export function plant(corpus, { seed, count } = {}) {
     ...corpus,
     packages: Object.freeze(corpus.packages.map((p) => byName.get(p.name)))
   });
-  return { corpus: mutated, key };
+  // `baselineCorpus` equals the input corpus unless a repair arm declared a
+  // precondition. Callers must score against THIS, not against the corpus they
+  // loaded, or a repair arm carrying its own precondition reads as uncaught.
+  const baselineCorpus = Object.freeze({
+    ...corpus,
+    packages: Object.freeze(corpus.packages.map((p) => baselineByName.get(p.name)))
+  });
+  return { corpus: mutated, baselineCorpus, key };
 }
 
 /**

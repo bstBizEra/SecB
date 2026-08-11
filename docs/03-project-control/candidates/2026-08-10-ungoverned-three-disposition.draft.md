@@ -87,6 +87,60 @@ the corpus is clean?** The honest options are a real remaining defect elsewhere,
 or a redesign in which the harness plants a defect and then repairs it within one
 run. The second is stronger and is not what the harness does today.
 
+
+## Correction and measurement, 2026-08-11
+
+The section above said the calibration "will need a new one in the same change"
+and left that sounding like bookkeeping. It was not, and the error ran in the
+direction that made the recommendation look cheaper than it is.
+
+**Measured, not assumed.** The obvious substitute for a repair arm is `spurious`
+— violations in packages nothing was planted in. Stubbing a check to fire on
+every package yields **spurious 0**, on a clean baseline as readily as a dirty
+one, because `score()` receives a baseline computed with the SAME check set and
+subtracts that check's noise from itself. The repair arm is structurally the only
+thing that catches a check that always fires, and no amount of corpus cleanliness
+changes that.
+
+**So the harness was made corpus-independent instead.** A repair arm may now
+declare `breaks(p)` — the world as it looks before the repair — and `plant()`
+returns a `baselineCorpus` built from it. The repair is scored against that
+rather than against the corpus as shipped, so the arm no longer waits for the
+corpus to be broken. This is what killed the two previous repair arms: their
+defects were fixed and they silently became no-ops.
+
+**Verified by simulating the move.** With `graphify`, `secb-project-registry` and
+`worktree` removed from `.agents/skills/`:
+
+| | |
+|---|---|
+| audit violations | **0** |
+| `skill-audit-calibration.test.mjs` | **0 failures** — the harness no longer needs them |
+| remaining failures | **3**, all corpus-shape tripwires |
+
+The three that remain are by design, and whoever performs the move must update
+them in the same commit:
+
+1. `the real corpus is the shape recorded in corpus-expectation.mjs` — whose own
+   comment reads *"UPDATE THIS DELIBERATELY, IN THE SAME COMMIT AS THE CORPUS
+   CHANGE. If updating it feels like clearing a nuisance failure, that is the
+   tripwire working."*
+2. `real-corpus counts are recorded, and every zero is accompanied by proof the
+   check can fire`
+3. `governance.ungoverned-package finds exactly the packages that lack a manifest`
+   — which names the three.
+
+A second, quieter dependency was found and removed while measuring: the test
+`a class with nowhere to plant throws instead of vanishing from the key` picked an
+ungoverned package **out of the real corpus**, so it silently required the corpus
+to contain one. It now constructs its own. A test depending on a defect it does
+not describe is the harder kind to find, because nothing about it mentions the
+defect.
+
+**Net effect on the recommendation: unchanged, and now costed.** Option A is a
+three-part change — move the directories, regenerate the pack manifest, update
+the three tripwires — with no redesign required, because the redesign is done.
+
 ## What this document does not do
 
 It moves nothing, authors no manifest, and changes no check. It records why the
