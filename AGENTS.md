@@ -138,6 +138,30 @@ This is a **skill revision** under rule 3 below: pack version 0.3.0, re-verified
 `MANIFEST.sha256`, this amendment, and an operator-ratified PR. It was prepared
 on a branch and **not merged by the authoring agent**.
 
+### Pack 0.4.0 — the three non-skills moved out, 2026-08-11
+
+`graphify`, `secb-project-registry` and `worktree` were moved from
+`.agents/skills/` to [`.agents/tool-notes/`](.agents/tool-notes/). They were the
+skill audit's only remaining violations and every one of `validate_pack.py`'s 12
+errors, and neither was a case of a skill mislaying its manifest: **not one
+carried a single mandatory section**, `graphify`'s document is a CLI reference
+down to the environment-variable table, and all three arrived through
+tool-integration commits rather than the skills-pack route.
+
+Authoring manifests for them would have meant inferring a skill's authority
+boundary, required inputs and completion gate from as little as 32 lines —
+manufacturing governance declarations for something whose purpose was guessed,
+which is the failure the audit exists to catch, committed in the act of
+satisfying the audit.
+
+Result: `validate_pack.py` **PASS** (was 12 errors), skill audit **0 violations**
+(was 3). Registered skills unchanged at 23; the three were never in the list.
+
+Four tests turned out to depend on the corpus containing an ungoverned package
+without saying so, and now construct their own. A test that needs a defect it
+does not describe is the hard kind to find, because nothing about it mentions the
+defect.
+
 ### Governing rules (additive to all rules above)
 
 1. Skill output is a **candidate** — the pack's boundary (skill output →

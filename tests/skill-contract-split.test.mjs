@@ -9,7 +9,8 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { validateContract } from "../src/contracts/contract-validator.mjs";
 import * as mapperModule from "../src/skills/package-descriptor-mapper.mjs";
@@ -134,13 +135,34 @@ describe("WP-SK-01 / AC-04 — the corpus maps without fabrication", () => {
     }
   });
 
-  it("the 3 packages with no manifest produce a finding rather than being skipped", () => {
-    const withoutManifest = mapped.filter((m) => !m.hasManifest);
-    assert.equal(withoutManifest.length, 3);
-    assert.deepEqual(
-      withoutManifest.map((m) => m.packageName).sort(),
-      ["graphify", "secb-project-registry", "worktree"]
-    );
+  it("a package with no manifest produces a finding rather than being skipped", () => {
+    // The subject is BUILT. This asserted that exactly 3 packages had no manifest
+    // and named graphify, secb-project-registry and worktree -- so the property
+    // "an ungoverned package is reported, not skipped" was only tested while the
+    // corpus happened to contain ungoverned packages. Moving those three to
+    // .agents/tool-notes/, where they belonged, would have left the property
+    // silently untested at 0 == 0 had the count not been asserted.
+    const root = mkdtempSync(join(tmpdir(), "secb-mapper-ungoverned-"));
+    try {
+      const dir = join(root, "fixture-ungoverned");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "SKILL.md"), ["# fixture-ungoverned", "", "No manifest.", ""].join(String.fromCharCode(10)));
+
+      const out = mapPackageRoot(root, { repository: "SecB", commitSha: "fixture" });
+      assert.equal(out.length, 1, "the package must be mapped, not skipped for lacking a manifest");
+      assert.equal(out[0].packageName, "fixture-ungoverned");
+      assert.equal(out[0].hasManifest, false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("the real corpus now carries no ungoverned package", () => {
+    // The other half of the pin above, kept as its own claim: the corpus is
+    // expected to be fully governed, and a package appearing here without a
+    // manifest is the signal that something ungoverned was added to
+    // .agents/skills/ again.
+    assert.deepEqual(mapped.filter((m) => !m.hasManifest).map((m) => m.packageName), []);
   });
 
   it("owner and licence are reported as findings, never invented", () => {
