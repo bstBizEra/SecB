@@ -185,8 +185,8 @@ test("evals.expectation-diversity: no expectation is shared across a majority of
     assert.ok(row.uniqueToPackage >= 10, `${row.pkg} has only ${row.uniqueToPackage} expectations of its own`);
   }
 
-  assert.equal(s.evidence.instances, 267);
-  assert.equal(s.evidence.distinct, 262, "267 instances, 5 of which name an output two skills both declare");
+  assert.equal(s.evidence.instances, 266);
+  assert.equal(s.evidence.distinct, 261, "266 instances, 5 of which name an output two skills both declare");
   assert.equal(count("evals.expectation-diversity", VERDICT.VIOLATION), 0);
 });
 
@@ -220,25 +220,34 @@ test("evals.negative-case-cannot-fail: the criterion discriminates expectation b
   assert.equal(satisfiedByEmptyOutput("candidate status and authority boundary should be explicit"), false);
 });
 
-// 9 of 267 (3.37%), down from 185 of 245 (75.51%). The template expectations
-// named nothing a procedure could look at -- "skill should trigger" -- and were
-// rewritten to quote each skill's own declared outputs, which is an observable
-// token by this check's own criterion. The nine that remain are in packages the
-// rewrite did not touch.
-test("evals.undecidable-expectation: 9 of 267 instances (3.37%) from 9 distinct strings", () => {
+// ZERO, down from 185 of 245 (75.51%). The template expectations named nothing a
+// procedure could look at -- "skill should trigger" -- and were rewritten to
+// quote each skill's own declared outputs, which is an observable token by this
+// check's own criterion.
+//
+// The last nine were in maker-evidence-audit, which the rewrite had skipped
+// because its cases were hand-written rather than generated. That was a reason
+// not to overwrite them mechanically, not a reason for the package that carries
+// the audit skill to be the only one still stating expectations nothing could
+// evaluate. They were rewritten by hand, keeping their substance.
+test("evals.undecidable-expectation: zero undecidable expectations remain", () => {
   const s = summaryOf("evals.undecidable-expectation");
-  assert.equal(s.verdict, VERDICT.UNDECIDABLE);
-  assert.equal(s.evidence.totalExpectations, 267);
-  assert.equal(s.evidence.undecidableExpectations, 9);
-  assert.equal(s.evidence.undecidableSharePercent, 3.37);
-  assert.equal(s.evidence.distinctUndecidableStrings, 9);
+  // NO_EVIDENCE, not UNDECIDABLE. The check reported UNDECIDABLE while it had
+  // expectations it could not adjudicate; with none left it has nothing to
+  // report, and the verdict moving is the observable difference between "cannot
+  // answer" and "nothing to answer about".
+  assert.equal(s.verdict, VERDICT.NO_EVIDENCE);
+  assert.equal(s.evidence.totalExpectations, 266);
+  assert.equal(s.evidence.undecidableExpectations, 0);
+  assert.equal(s.evidence.undecidableSharePercent, 0);
+  assert.equal(s.evidence.distinctUndecidableStrings, 0);
   assert.equal(s.evidence.totalCases, 96);
   assert.equal(s.evidence.fullyUndecidableCases, 0,
     "no case is undecidable end to end any more; every arm states at least one observable");
-  // 9 per-expectation findings + 1 summary, down from 185 + 1. No VIOLATION:
-  // the claim is that the expectation cannot be adjudicated, which is not the
-  // claim that it is wrong.
-  assert.equal(count("evals.undecidable-expectation", VERDICT.UNDECIDABLE), 10);
+  // 1: the summary alone. No per-expectation findings remain, and no VIOLATION --
+  // the claim was always that an expectation cannot be adjudicated, which is not
+  // the claim that it is wrong.
+  assert.equal(count("evals.undecidable-expectation", VERDICT.UNDECIDABLE), 0);
   assert.equal(count("evals.undecidable-expectation", VERDICT.VIOLATION), 0);
 });
 

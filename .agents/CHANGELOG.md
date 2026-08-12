@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1 — 2026-08-11
+
+- Rewrote `maker-evidence-audit`'s own evaluation expectations by hand. It was
+  the last package stating expectations nothing could mechanically evaluate --
+  "required workflow should be followed", "no verified status is claimed" -- and
+  it held all nine that remained, because the 0.3.0 rewrite skipped it.
+- The skip had a reason (its cases were hand-written, not generated) and that
+  reason covered *not overwriting them mechanically*. It did not cover exempting
+  the package that carries the audit skill from the standard the audit applies.
+- Skill audit: **VIOLATION 0, UNDECIDABLE 0** — clean on every check for the
+  first time. 266 expectations, 0 undecidable, 0 boilerplate strings, 0 negative
+  cases an empty run can satisfy.
+
 ## 0.4.0 — 2026-08-11
 
 - Moved `graphify`, `secb-project-registry` and `worktree` from `skills/` to
