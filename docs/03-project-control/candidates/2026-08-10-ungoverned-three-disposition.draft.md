@@ -146,3 +146,35 @@ the three tripwires — with no redesign required, because the redesign is done.
 It moves nothing, authors no manifest, and changes no check. It records why the
 last three violations survived pack 0.3.0 and why closing them the obvious way
 would be a defect.
+
+## Late disclosure for `717627b`, 2026-08-11
+
+`tools/dual-policy-check.mjs` returned **LOOSENED** on `717627b`
+(`tests/skill-audit-evals.test.mjs`, OLD FAIL → NEW PASS) and the merge went
+through in the same command, before the output was read. The tool's own
+instruction is that a LOOSENED verdict must be a disclosed decision rather than a
+green check, and that step was skipped. Recorded here rather than amended,
+because the commit is already pushed.
+
+**What the guard stopped catching: nothing.** The old version asserted corpus
+totals `instances === 267` and `distinct === 262`; the new asserts `266` and
+`261`. It failed because `maker-evidence-audit` went from 25 hand-written
+expectations to 24 while they were rewritten to be decidable. Every per-package
+invariant is unchanged — `distinct === instances`, `uniqueToPackage >= instances
+- 1`, `uniqueToPackage >= 10`, and `boilerplateStrings` empty.
+
+**Demonstrated rather than argued.** Failures in the current guard when the
+properties it protects are broken:
+
+```
+baseline                                       0
+one package repeats a string in its own file   2
+one package copies another's expectations      2
+restored                                       0
+```
+
+**The process lesson is the point of writing this down.** Running the check and
+the merge in one command means the verdict arrives after the decision it was
+meant to inform. The check belongs in its own step, read before the merge is
+typed — a control whose output is not read is not a control, which is the claim
+this repository applies to everything else.
