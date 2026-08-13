@@ -791,6 +791,7 @@
     "tools/dual-policy-check.mjs",
     "tools/generate-ops-report.mjs",
     "tools/run-secb-mcp-server.mjs",
+    "tools/secb-audit-packs.mjs",
     "tools/secb-graph.mjs",
     "tools/secb-guard-coverage.mjs",
     "tools/secb-mcp-config.mjs",
