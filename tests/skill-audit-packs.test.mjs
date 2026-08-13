@@ -68,10 +68,22 @@ describe("AC-AUDIT-03 — no two packs are alike, and one works from a different
     // structural defence: it is asked which package is unlike the others, which
     // a lens reasoning from a spec cannot ask, because a spec also tells you
     // what NOT to look for.
-    const sibling = LENSES.find((l) => l.id === "sibling");
-    assert.match(sibling.frame, /no specification/i);
+    const corpus = loadCorpus();
+    const pack = emitPacks(corpus, { ref: "t" }).find((p) => p.lens === "sibling");
 
-    const pack = emitPacks(loadCorpus(), { ref: "t" }).find((p) => p.lens === "sibling");
+    // Asserted on the EMITTED pack, not on the lens definition. A frame may be a
+    // function of the corpus, and what a lens actually receives is the resolved
+    // string -- checking the definition would pass on a function that resolves to
+    // anything at all.
+    assert.match(pack.frame, /no specification/i);
+
+    // The sibling count is DERIVED and asserted against the corpus. It used to be
+    // the literal "24 siblings" while the corpus held 23 packages, so the one
+    // lens whose whole method is comparing a package to its siblings was told the
+    // wrong number of them. Nothing reads a frame string for accuracy, which is
+    // why it went stale twice unnoticed.
+    assert.match(pack.frame, new RegExp((corpus.packages.length - 1) + " siblings"));
+
     const sample = pack.packages[0];
     assert.equal(sample.skill_text, undefined, "the sibling lens must not receive prose");
     assert.ok(Array.isArray(sample.skill_sections), "it receives structure instead");

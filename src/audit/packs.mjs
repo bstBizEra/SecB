@@ -97,7 +97,13 @@ export const LENSES = Object.freeze([
     // asked to find the package that does not look like its siblings, which is
     // the one question a lens reasoning from a spec cannot ask — and the shape
     // of the failure that a shared baseline hides.
-    frame: "there is no specification; each package is judged against what its 24 siblings look like",
+    // DERIVED, not written down. This said "its 24 siblings" while the corpus
+    // held 23 packages, so the one lens whose entire method is comparing a
+    // package against its siblings was being told the wrong number of them. The
+    // literal was true when the corpus had 25 and went stale twice without
+    // anyone noticing, because nothing reads a frame string for accuracy.
+    frame: (corpus) =>
+      `there is no specification; each package is judged against what its ${corpus.packages.length - 1} siblings look like`,
     brief:
       "You are given a structural summary of every package and NO specification. " +
       "Find the packages that do not resemble the others. You are not checking conformance to a rule; " +
@@ -127,7 +133,10 @@ export function emitPacks(corpus, { ref, lenses = LENSES } = {}) {
   return lenses.map((lens) => ({
     lens: lens.id,
     ref: ref ?? "unrecorded",
-    frame: lens.frame,
+    // A frame may be a function of the corpus. Any count a frame states is a
+    // fact about the corpus it is emitted for, and a fact written as a literal
+    // is a fact that goes stale silently.
+    frame: typeof lens.frame === "function" ? lens.frame(corpus) : lens.frame,
     brief: lens.brief,
     // Stated in the pack itself rather than only in the dispatcher's prompt, so
     // a lens reading the pack alone still knows what it may and may not claim.
