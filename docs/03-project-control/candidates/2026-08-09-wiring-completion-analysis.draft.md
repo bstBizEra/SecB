@@ -444,6 +444,34 @@ reachable from its library surface is one that has stopped distinguishing betwee
 delivered-and-adopted and delivered-and-deliberately-held, which is the
 distinction this programme's gates exist to keep.
 
+
+## Addendum 6 — the number in Addendum 5 went stale, 2026-08-11
+
+Addendum 5 recorded `78 -> 99` of 122 and called the sequence finished. It is now
+**100 of 122**. `src/audit/packs.mjs` became reachable when
+`tools/secb-audit-packs.mjs` was added, which was not a wiring slice at all — it
+was an entry point for a delivered capability that had none.
+
+Two things follow, and the second is the one worth keeping.
+
+**The count is a fact about the tree, and this document wrote it down.** That is
+the same defect this week found in `src/audit/packs.mjs`, where the sibling
+lens's frame stated "its 24 siblings" as a literal while the corpus held 23
+packages — true when written, stale twice since, unnoticed because nothing reads
+a prose number for accuracy. The frame was changed to derive its count. This
+document cannot derive anything, so the correction is the mechanism, and stating
+the measurement date beside the number is the least it should carry.
+
+**Reachability is not a target, and moving it was a side effect.** The tool was
+added because a capability with its own acceptance criterion and its own test
+file had no way to run. That it also moved the reachability count by one is
+incidental — the number followed the work rather than the work following the
+number, which is the only order in which such a metric is honest.
+
+Measured at `main` `ebe8941`: library surface 85 of 122, plus CLI and tool entry
+points 100 of 122. The 22 that remain are the set Addendum 5 accounts for, less
+`audit/packs`.
+
 ## 12. What this analysis does not do
 
 It does not begin ACT. It does not wire anything, and it does not decide that
