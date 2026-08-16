@@ -18,6 +18,7 @@
     "AGENTS.md",
     "README.md",
     "VERSION",
+    "config/mcp-registry-seed.candidate.json",
     "contracts/agent-enrollment-request.schema.json",
     "contracts/agent-registration.schema.json",
     "contracts/capability-record.schema.json",

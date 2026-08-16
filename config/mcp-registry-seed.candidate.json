@@ -1,0 +1,238 @@
+{
+  "seed_version": "1",
+  "policy_ceiling": "A2",
+  "registrations": [
+    {
+      "registration": {
+        "evaluation_status": "CANDIDATE",
+        "lifecycle_state": "PENDING",
+        "delegation_rights": [],
+        "project_scopes": [
+          "prj_secb_local"
+        ],
+        "workload_identity_ref": "",
+        "provider_id": "anthropic",
+        "runtime_product_id": "claude-code",
+        "runtime_deployment_id": "claude-code-local",
+        "agent_profile_id": "claude-code-motor",
+        "agent_instance_id": "agent_claude_code_001",
+        "runtime_version": "1.0.0",
+        "deployment_location": "local",
+        "owner": "secb-operator",
+        "permitted_roles": [
+          "ENGIN"
+        ],
+        "authority_ceiling": "A0",
+        "approved_models": [
+          "claude-opus-4-6",
+          "claude-sonnet-4"
+        ],
+        "approved_tools": [
+          "read",
+          "edit",
+          "write",
+          "grep",
+          "glob",
+          "bash"
+        ],
+        "approved_mcp_methods": [],
+        "approved_skills": [],
+        "repository_scopes": [
+          "secb"
+        ],
+        "environment_scopes": [
+          "local"
+        ],
+        "max_data_classification": "INTERNAL",
+        "evidence_obligations": [
+          "context-receipt",
+          "event-envelope"
+        ]
+      },
+      "approve": true,
+      "activate": true
+    },
+    {
+      "registration": {
+        "evaluation_status": "CANDIDATE",
+        "lifecycle_state": "PENDING",
+        "delegation_rights": [],
+        "project_scopes": [
+          "prj_secb_local"
+        ],
+        "workload_identity_ref": "",
+        "provider_id": "openai",
+        "runtime_product_id": "codex-cli",
+        "runtime_deployment_id": "codex-cli-local",
+        "agent_profile_id": "codex-motor",
+        "agent_instance_id": "agent_codex_cli_001",
+        "runtime_version": "1.0.0",
+        "deployment_location": "local",
+        "owner": "secb-operator",
+        "permitted_roles": [
+          "ENGIN"
+        ],
+        "authority_ceiling": "A0",
+        "approved_models": [
+          "codex"
+        ],
+        "approved_tools": [
+          "read",
+          "edit",
+          "write",
+          "grep",
+          "bash"
+        ],
+        "approved_mcp_methods": [],
+        "approved_skills": [],
+        "repository_scopes": [
+          "secb"
+        ],
+        "environment_scopes": [
+          "local"
+        ],
+        "max_data_classification": "INTERNAL",
+        "evidence_obligations": [
+          "context-receipt",
+          "event-envelope"
+        ]
+      },
+      "approve": true,
+      "activate": true
+    },
+    {
+      "registration": {
+        "evaluation_status": "CANDIDATE",
+        "lifecycle_state": "PENDING",
+        "delegation_rights": [],
+        "project_scopes": [
+          "prj_secb_local"
+        ],
+        "workload_identity_ref": "",
+        "provider_id": "google",
+        "runtime_product_id": "gemini-cli",
+        "runtime_deployment_id": "gemini-cli-local",
+        "agent_profile_id": "gemini-motor",
+        "agent_instance_id": "agent_gemini_cli_001",
+        "runtime_version": "1.0.0",
+        "deployment_location": "local",
+        "owner": "secb-operator",
+        "permitted_roles": [
+          "ENGIN",
+          "RESEARCH"
+        ],
+        "authority_ceiling": "A0",
+        "approved_models": [
+          "gemini-3.6-flash",
+          "gemini-3.6-pro"
+        ],
+        "approved_tools": [
+          "read",
+          "edit",
+          "write",
+          "grep",
+          "bash"
+        ],
+        "approved_mcp_methods": [],
+        "approved_skills": [],
+        "repository_scopes": [
+          "secb"
+        ],
+        "environment_scopes": [
+          "local"
+        ],
+        "max_data_classification": "INTERNAL",
+        "evidence_obligations": [
+          "context-receipt",
+          "event-envelope"
+        ]
+      },
+      "approve": true,
+      "activate": true
+    },
+    {
+      "registration": {
+        "evaluation_status": "CANDIDATE",
+        "lifecycle_state": "PENDING",
+        "delegation_rights": [],
+        "project_scopes": [
+          "prj_secb_local"
+        ],
+        "workload_identity_ref": "",
+        "provider_id": "moonshot",
+        "runtime_product_id": "kimi-cli",
+        "runtime_deployment_id": "kimi-cli-local",
+        "agent_profile_id": "kimi-motor",
+        "agent_instance_id": "agent_kimi_cli_001",
+        "runtime_version": "1.0.0",
+        "deployment_location": "local",
+        "owner": "secb-operator",
+        "permitted_roles": [
+          "ENGIN",
+          "RESEARCH"
+        ],
+        "authority_ceiling": "A0",
+        "approved_models": [
+          "kimi-k1.5"
+        ],
+        "approved_tools": [
+          "read",
+          "edit",
+          "write",
+          "grep",
+          "bash"
+        ],
+        "approved_mcp_methods": [],
+        "approved_skills": [],
+        "repository_scopes": [
+          "secb"
+        ],
+        "environment_scopes": [
+          "local"
+        ],
+        "max_data_classification": "INTERNAL",
+        "evidence_obligations": [
+          "context-receipt",
+          "event-envelope"
+        ]
+      },
+      "approve": true,
+      "activate": true
+    },
+    {
+      "registration": {
+        "evaluation_status": "CANDIDATE",
+        "lifecycle_state": "PENDING",
+        "delegation_rights": [],
+        "project_scopes": [
+          "prj_secb_local"
+        ],
+        "workload_identity_ref": "",
+        "provider_id": "generic",
+        "runtime_product_id": "generic-agent",
+        "runtime_deployment_id": "generic-local",
+        "agent_profile_id": "generic-observer",
+        "agent_instance_id": "agent_generic_agent_001",
+        "runtime_version": "0.0.0",
+        "deployment_location": "local",
+        "owner": "secb-operator",
+        "permitted_roles": [],
+        "authority_ceiling": "A0",
+        "approved_models": [],
+        "approved_tools": [],
+        "approved_mcp_methods": [],
+        "approved_skills": [],
+        "repository_scopes": [],
+        "environment_scopes": [
+          "local"
+        ],
+        "max_data_classification": "INTERNAL",
+        "evidence_obligations": [
+          "event-envelope"
+        ]
+      },
+      "approve": true,
+      "activate": true
+    }
+  ]
+}
