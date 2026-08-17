@@ -733,6 +733,7 @@
     "tests/memory-candidate-provider.test.mjs",
     "tests/memory-consolidation-service.test.mjs",
     "tests/memory-gateway-service.test.mjs",
+    "tests/module-disposition-register.test.mjs",
     "tests/module-recommender.test.mjs",
     "tests/ollama-sec-scanner.test.mjs",
     "tests/overlap-policy.test.mjs",
