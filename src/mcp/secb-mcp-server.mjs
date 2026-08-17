@@ -19,7 +19,6 @@ import { SecondBrainService } from "../brain/second-brain-service.mjs";
 import { KnowledgeMaturityPipeline } from "../brain/knowledge-maturity-pipeline.mjs";
 import { ProjectWorktreeManager } from "../project/project-worktree-manager.mjs";
 import { ProjectMilestoneService } from "../project/project-milestone-service.mjs";
-import { ImplementationMergeOrchestrator } from "../control/implementation-merge-orchestrator.mjs";
 import { SecBOpenProjectAdapter } from "../plugins/secb-openproject-adapter.mjs";
 import { SecBControlPlaneBus } from "../bus/secb-control-plane-bus.mjs";
 import { MemoryConsolidationService } from "../memory/memory-consolidation-service.mjs";
@@ -616,8 +615,32 @@ export class SecBMcpServer {
         return pms.inspectMilestone(args.milestone_id);
       }
       case "secb_implementation_merge_verify": {
-        const imo = s.implementationMergeOrchestrator ?? new ImplementationMergeOrchestrator();
-        return { status: "INSPECTED", release_id: args.release_id };
+        // WAS: construct an ImplementationMergeOrchestrator, discard it, and
+        // return { status: "INSPECTED", release_id } regardless of anything.
+        //
+        // The tool advertises "Verify pre-merge release invariants". It verified
+        // nothing and reported a result that reads as a verification — a control
+        // whose failure mode is a confident all-clear, which is worse than no
+        // control. No test named this tool, which is why it went unseen.
+        //
+        // It is NOT a forgotten call. orchestrateMergeRelease() requires
+        // projectId, allocationId, authorizationRecord and evidenceEnvelope; this
+        // tool's contract carries release_id alone, so the orchestrator cannot be
+        // invoked from what the caller supplies. Wiring it would mean inventing
+        // the other three, which is fabricating the evidence a verification is
+        // supposed to rest on.
+        //
+        // So it declines, in the shape this server already uses for a question it
+        // cannot answer (see secb_project_resolve_effective). Working rule 8:
+        // unknown fails closed.
+        return {
+          available: false,
+          reason:
+            "secb_implementation_merge_verify performs no verification. The orchestrator requires " +
+            "projectId, allocationId, authorizationRecord and evidenceEnvelope; this tool's contract " +
+            "supplies release_id only. Use the orchestrator directly with a full evidence envelope.",
+          release_id: args.release_id ?? null
+        };
       }
       case "secb_openproject_adapter_inspect": {
         const adapter = new SecBOpenProjectAdapter({ openprojectEndpoint: args.openprojectEndpoint, projectId: args.projectId });

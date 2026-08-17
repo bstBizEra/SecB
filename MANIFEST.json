@@ -728,6 +728,7 @@
     "tests/mcp-protocol-2026-07-28.test.mjs",
     "tests/mcp-server-deployment.test.mjs",
     "tests/mcp-server.test.mjs",
+    "tests/mcp-tool-coverage.test.mjs",
     "tests/mcp-upstream-proxy.test.mjs",
     "tests/mcp-upstream-registry.test.mjs",
     "tests/memory-candidate-provider.test.mjs",

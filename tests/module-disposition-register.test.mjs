@@ -68,6 +68,12 @@ const DISPOSITIONS = Object.freeze({
     decider: "SEC review",
     unblocks_when: "the SEC-reviewed verifier and replay store exist"
   },
+  "src/control/implementation-merge-orchestrator.mjs": {
+    held_by: HELD_BY.WRONG_SURFACE,
+    reason: "Lost its only consumer when secb_implementation_merge_verify stopped constructing it. That handler discarded the instance and returned a canned INSPECTED; the orchestrator could not be called from the tool's contract, which supplies release_id while orchestrateMergeRelease requires projectId, allocationId, authorizationRecord and evidenceEnvelope. Adopting it needs a tool contract that carries an evidence envelope.",
+    decider: "MOD-INTEG owner",
+    unblocks_when: "a tool contract exists that can supply orchestrateMergeRelease's inputs"
+  },
   "src/control/policy-decision-point.mjs": {
     held_by: HELD_BY.OWN_HEADER,
     reason: "MOD-GOV S3 PDP facade, declared UNWIRED. Named in src/index.mjs as held alongside overlap-policy and write-set-policy.",
