@@ -74,9 +74,12 @@ test("sweep drops callers whose window has emptied", () => {
 });
 
 test("the constructor rejects a nonsense configuration", () => {
-  assert.throws(() => new InvocationRateLimiter({ maxPerWindow: 0 }));
-  assert.throws(() => new InvocationRateLimiter({ maxPerWindow: 1.5 }));
-  assert.throws(() => new InvocationRateLimiter({ windowMs: 0 }));
+  // Named, not merely counted as three throws. A rate limiter that rejected
+  // every configuration -- including valid ones -- would satisfy a bare
+  // assert.throws three times over and report a working limiter.
+  assert.throws(() => new InvocationRateLimiter({ maxPerWindow: 0 }), /positive integer maxPerWindow/);
+  assert.throws(() => new InvocationRateLimiter({ maxPerWindow: 1.5 }), /positive integer maxPerWindow/);
+  assert.throws(() => new InvocationRateLimiter({ windowMs: 0 }), /positive integer windowMs/);
 });
 
 // --- enforcement in the governed core --------------------------------------

@@ -243,7 +243,8 @@ test("get returns frozen registration for known instance", () => {
   reg.register(registration());
   const entry = reg.get("inst_claude_001");
   assert.equal(entry.provider_id, "anthropic");
-  assert.throws(() => { entry.provider_id = "x"; });
+  assert.throws(() => { entry.provider_id = "x"; },
+    TypeError);
 });
 
 test("listByProduct filters correctly", () => {

@@ -43,8 +43,8 @@ function statusResolver(table) {
 
 test("factory fails closed on missing collaborators", () => {
   const service = makeGraph();
-  assert.throws(() => createGoalRollupProjection({}));
-  assert.throws(() => createGoalRollupProjection({ goalGraphService: service }));
+  assert.throws(() => createGoalRollupProjection({}), /requires a goalGraphService/);
+  assert.throws(() => createGoalRollupProjection({ goalGraphService: service }), /requires a workPackageResolver/);
   assert.throws(() => createGoalRollupProjection({ goalGraphService: {}, workPackageResolver: () => ({}) }));
   assert.throws(() => createGoalRollupProjection({ goalGraphService: service, workPackageResolver: 5 }));
 });
