@@ -48,8 +48,19 @@ export class SecBBootstrapExecutor {
 
     const resolvedTarget = resolve(targetPath);
 
-    // Prevent direct mutation of repository root main branch directly if specified as root
-    if (resolvedTarget === resolve(process.cwd()) && process.env.NODE_ENV === "production") {
+    // Prevent bootstrap from writing into the repository root.
+    //
+    // WAS GATED ON `process.env.NODE_ENV === "production"`, which meant it never
+    // fired: NODE_ENV appears exactly once in this entire repository -- in the
+    // condition itself. No npm script sets it, no test sets it, nothing in src/
+    // or tools/ reads it. A guard whose activation depends on a variable nobody
+    // sets is not a weak guard, it is dead code that reads as protection, and
+    // the failure mode was fail-OPEN on a containment boundary in a codebase
+    // whose whole discipline is fail-closed (working rule 8).
+    //
+    // Unconditional now. A caller that genuinely needs to write into the
+    // repository root must say so through a path that is not this one.
+    if (resolvedTarget === resolve(process.cwd())) {
       throw new BootstrapExecutorError("DENY_MAIN_BRANCH_MUTATION", "Direct bootstrap mutation on repository main root is prohibited");
     }
 
