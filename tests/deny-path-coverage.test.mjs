@@ -80,9 +80,7 @@ const UNDEMONSTRATED = Object.freeze([
   "DENY_RECEIPT_BINDING",
   "DENY_REGISTRATION_PATH",
   "DENY_SUPERSEDED",
-  "DENY_UNKNOWN_PARENT",
-  "DENY_UPSTREAM_UNAVAILABLE",
-  "DENY_UPSTREAM_UNSERIALISABLE"
+  "DENY_UNKNOWN_PARENT"
 ]);
 
 /** Modules reachable from the library surface or any CLI entry point. */
