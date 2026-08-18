@@ -57,11 +57,7 @@ const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
  * line should say why that was acceptable. Removing a line means a test now
  * triggers that code, which is the only direction this is meant to move.
  */
-const UNDEMONSTRATED = Object.freeze([
-  "DENY_INVALID_CONTRACT",
-  "DENY_INVALID_EVENT",
-  "DENY_SUPERSEDED"
-]);
+const UNDEMONSTRATED = Object.freeze([]);
 
 
 /**
@@ -99,6 +95,31 @@ const SHADOWED = Object.freeze({
   DENY_INVALID_EXPIRY: {
     shadowed_by: "contract validation (DENY_CONTRACT_INVALID) — the date-time format check on valid_until",
     asserted_by: "tests/work-package-service.test.mjs :: DENY_INVALID_EXPIRY is SHADOWED"
+  }
+});
+
+/**
+ * Refusals that cannot be reached because of a STRUCTURAL invariant, not because
+ * a stricter check stands in front of them.
+ *
+ * Kept separate from SHADOWED on purpose. SHADOWED means "another check gets
+ * there first"; this means the state never occurs at the position the check
+ * examines. Collapsing the two would make SHADOWED stop meaning anything, and
+ * the two lift for completely different reasons — a shadow lifts when a check
+ * loosens, a structural invariant lifts when a data structure changes.
+ *
+ * Each entry names the invariant and the test that fails if it breaks.
+ */
+const UNREACHABLE_BY_STRUCTURE = Object.freeze({
+  DENY_SUPERSEDED: {
+    invariant:
+      "#chainHead returns the TAIL of the version array, and the only line that writes SUPERSEDED "
+      + "(parent.status in compactReceipt) is immediately followed by pushing an ISSUED successor onto the "
+      + "same array. A superseded record is therefore never the tail, so #resolveHead never sees one. "
+      + "compactReceipt also refuses unless the head is ISSUED, so it cannot leave one there.",
+    asserted_by:
+      "tests/context-federation.test.mjs :: DENY_SUPERSEDED is unreachable — a superseded record is never "
+      + "the chain head (CF-12 asserts the same consequence from the consume side)"
   }
 });
 
@@ -230,6 +251,23 @@ test("a SHADOWED refusal is not also counted as debt, and still exists", () => {
       assert.ok(
         typeof entry[field] === "string" && entry[field].trim().length > 0,
         `${code}: ${field} is empty — a shadow nobody can check is a claim, not a control`
+      );
+    }
+  }
+});
+
+test("an UNREACHABLE_BY_STRUCTURE refusal is not also counted as debt, and still exists", () => {
+  const { onLive, onHeld } = denyCodes();
+  const known = new Set(UNDEMONSTRATED);
+  const shadowed = new Set(Object.keys(SHADOWED));
+  for (const [code, entry] of Object.entries(UNREACHABLE_BY_STRUCTURE)) {
+    assert.ok(!known.has(code), `${code} is both structurally unreachable and listed as debt; it is one or the other`);
+    assert.ok(!shadowed.has(code), `${code} is in two categories; a shadow and a structural invariant lift for different reasons`);
+    assert.ok(onLive.has(code) || onHeld.has(code), `${code} is recorded as unreachable but no longer exists in src/`);
+    for (const field of ["invariant", "asserted_by"]) {
+      assert.ok(
+        typeof entry[field] === "string" && entry[field].trim().length > 0,
+        `${code}: ${field} is empty — an invariant nobody can check is a claim, not a control`
       );
     }
   }
