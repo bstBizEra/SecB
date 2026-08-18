@@ -207,3 +207,62 @@ test("CF-15 composition: resolveEffective NONE denies even a well-formed request
   // (drive is not needed; use an unknown project to force no resolution)
   denies(() => h.issue({ document: { project_id: "prj_ghost", work_package_id: WP } }), "DENY_WORK_PACKAGE_NOT_EFFECTIVE");
 });
+
+// ---------------------------------------------------------------------------
+// Receipt chain integrity: the four refusals the deny-path ratchet carried.
+//
+// A context receipt is a claim about what a session was authorised to see. The
+// chain is what makes a compaction a NARROWING of that claim rather than a new
+// one wearing the same id, so each of these guards the point where a successor
+// could otherwise widen, fork, or resurrect a chain.
+// ---------------------------------------------------------------------------
+
+test("DENY_DUPLICATE_RECEIPT — an id may only begin a chain once", () => {
+  const { issue } = harness();
+  issue();
+  // Same id, same version 1, correctly sealed. Everything is valid except that
+  // the chain already exists: a second root would fork the provenance, leaving
+  // two version-1 receipts with equal claim to the same id.
+  denies(() => issue({ idempotencyKey: "idem_dup" }), "DENY_DUPLICATE_RECEIPT");
+});
+
+test("DENY_NOT_COMPACTABLE — a revoked chain cannot be compacted", () => {
+  const { svc, issue } = harness();
+  issue();
+  svc.revokeReceipt(PROJECT, "rc_1", { actorId: GOV, role: "GOV" });
+  // Compaction narrows a LIVE authorisation. Appending to a revoked chain would
+  // let a withdrawn receipt acquire a successor and read as current again.
+  denies(
+    () => svc.compactReceipt(PROJECT, "rc_1", receiptDoc({ version: 2, source_references: ["s1"] }),
+      { idempotencyKey: "idem_compact_revoked" }),
+    "DENY_NOT_COMPACTABLE"
+  );
+});
+
+test("DENY_CHAIN_IDENTITY — a compaction must name the chain it extends", () => {
+  const { svc, issue } = harness();
+  issue();
+  // Looked up as rc_1, but the document says rc_other. The lookup key and the
+  // document's own identity are separate inputs, and a service that trusted the
+  // key alone would file one chain's narrowing under another chain's history.
+  denies(
+    () => svc.compactReceipt(PROJECT, "rc_1", receiptDoc({ receipt_id: "rc_other", version: 2, source_references: ["s1"] }),
+      { idempotencyKey: "idem_chain_id" }),
+    "DENY_CHAIN_IDENTITY"
+  );
+});
+
+test("DENY_CHAIN_VERSION — a compaction must be exactly the next version", () => {
+  const { svc, issue } = harness();
+  issue();
+  // Not merely "greater than". A gap would leave a version nobody can produce
+  // and nobody can audit, and the chain's history would have a hole that reads
+  // as if a narrowing had been lost rather than never made.
+  for (const version of [1, 3, 10]) {
+    denies(
+      () => svc.compactReceipt(PROJECT, "rc_1", receiptDoc({ version, source_references: ["s1"] }),
+        { idempotencyKey: `idem_chain_v${version}` }),
+      "DENY_CHAIN_VERSION"
+    );
+  }
+});
