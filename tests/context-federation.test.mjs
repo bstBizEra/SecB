@@ -266,3 +266,50 @@ test("DENY_CHAIN_VERSION — a compaction must be exactly the next version", () 
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// DENY_SUPERSEDED is UNREACHABLE BY STRUCTURE.
+//
+// #resolveHead checks `head.status === "SUPERSEDED"`, but #chainHead returns the
+// TAIL of the version array, and the only line that writes SUPERSEDED —
+// `parent.status = "SUPERSEDED"` in compactReceipt — is immediately followed by
+// pushing an ISSUED successor onto the same array. The superseded record is
+// therefore never the tail, and the check never sees it.
+//
+// This is NOT the SHADOWED case. Nothing stricter stands in front of it; the
+// state simply never occurs at the position examined. The distinction is kept
+// because SHADOWED means "a stricter check gets there first", and stretching it
+// to cover a structural invariant would make the category stop meaning anything.
+//
+// CF-12 already asserts the consequence — a stale parent consumes as ALLOW at
+// v2, via the chain head. What this adds is a test whose FAILURE says the thing
+// a reader of the ratchet needs to hear.
+// ---------------------------------------------------------------------------
+
+test("DENY_SUPERSEDED is unreachable — a superseded record is never the chain head", () => {
+  const h = harness();
+  h.issue();
+  h.svc.compactReceipt(PROJECT, "rc_1", receiptDoc({ version: 2, source_references: ["s1"] }), { idempotencyKey: "k_unreach" });
+
+  const ctx = { sessionId: "ses_1", actorId: REV, baseline: BASE };
+  for (const [what, out] of [
+    ["verify", h.svc.verifyReceipt(PROJECT, "rc_1", ctx)],
+    ["consume", h.svc.consumeReceipt(PROJECT, "rc_1", ctx)]
+  ]) {
+    assert.equal(
+      out.code,
+      "ALLOW",
+      `${what} returned ${out.code} for a chain whose parent is SUPERSEDED. If that code is ` +
+        "DENY_SUPERSEDED, the structural invariant has broken and the refusal is now LIVE and " +
+        "undemonstrated — move it back to UNDEMONSTRATED in tests/deny-path-coverage.test.mjs."
+    );
+    assert.equal(out.version, 2, `${what} did not resolve to the successor`);
+  }
+
+  // The invariant restated at its source: compaction refuses unless the head is
+  // ISSUED, so it can never leave a SUPERSEDED record at the tail.
+  denies(
+    () => h.svc.compactReceipt(PROJECT, "rc_1", receiptDoc({ version: 2, source_references: ["s1"] }), { idempotencyKey: "k_twice" }),
+    "DENY_CHAIN_VERSION"
+  );
+});

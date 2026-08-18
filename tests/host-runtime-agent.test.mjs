@@ -203,3 +203,83 @@ test("suspended adapter is blocked from emitting after initial approval", () => 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// DENY_INVALID_EVENT, and the sequence number a rejected event must not consume.
+//
+// emitEvent builds the envelope itself, so most fields cannot be made invalid
+// from outside. What a caller controls is observedFact, eventType and
+// classification — and the guard above the schema check is only `!observedFact`,
+// so a truthy value of the wrong TYPE passes it and is caught by the schema.
+//
+// The property worth pinning is the line right before the throw: `#sequence--`.
+// Event ids are `evt_<session>_<n>`, and the ledger append asserts
+// expectedSequence, so a rejected event that consumed a number would leave a
+// permanent gap and desynchronise every subsequent append from the ledger.
+// ---------------------------------------------------------------------------
+
+test("DENY_INVALID_EVENT — a caller-supplied field that fails the envelope schema", () => {
+  const { dir, registry, agent } = setup();
+  try {
+    registerAndActivate(registry, CLAUDE_CODE_ADAPTER, "inst_schema");
+    // observed_fact is declared `type: object`. A non-blank string passes the
+    // `!observedFact` guard and reaches the schema — which is the whole point of
+    // having both checks.
+    for (const observedFact of ["a string", 42, true]) {
+      assert.throws(
+        () => agent.emitEvent("inst_schema", {
+          eventType: "session.started",
+          observedFact,
+          idempotencyKey: "idem_schema"
+        }),
+        (error) => {
+          assert.ok(error instanceof HostAgentError, `${String(observedFact)}: wrong error class`);
+          assert.equal(error.code, "DENY_INVALID_EVENT", `${String(observedFact)}: wrong code`);
+          return true;
+        }
+      );
+    }
+
+    // DISTINCT FROM DENY_INCOMPLETE_EVENT, which is the guard above it. A falsy
+    // observedFact never reaches the schema at all, and reporting the two as one
+    // would hide which check actually fired.
+    assert.throws(
+      () => agent.emitEvent("inst_schema", {
+        eventType: "session.started",
+        observedFact: null,
+        idempotencyKey: "idem_schema"
+      }),
+      (error) => error.code === "DENY_INCOMPLETE_EVENT"
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a rejected event does not consume a sequence number", () => {
+  const { dir, registry, agent } = setup();
+  try {
+    registerAndActivate(registry, CLAUDE_CODE_ADAPTER, "inst_seq");
+    const emit = (observedFact, idempotencyKey) => agent.emitEvent("inst_seq", {
+      eventType: "session.started", observedFact, idempotencyKey
+    });
+
+    const first = emit({ action: "one" }, "idem_seq_1");
+    assert.equal(first.event.event_id, "evt_sess_test_1");
+    assert.equal(first.ledgerSequence, 1);
+
+    // Rejected: the counter was incremented while building the envelope and must
+    // be put back.
+    assert.throws(() => emit("not an object", "idem_seq_bad"), (e) => e.code === "DENY_INVALID_EVENT");
+
+    // THE ASSERTION THAT MATTERS. If the decrement were dropped, this id would
+    // be evt_sess_test_3 and the ledger's expectedSequence would no longer line
+    // up — a gap that nothing else in the suite would notice, because every
+    // other test emits only valid events.
+    const second = emit({ action: "two" }, "idem_seq_2");
+    assert.equal(second.event.event_id, "evt_sess_test_2");
+    assert.equal(second.ledgerSequence, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
