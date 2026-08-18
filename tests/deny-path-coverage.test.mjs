@@ -272,3 +272,30 @@ test("an UNREACHABLE_BY_STRUCTURE refusal is not also counted as debt, and still
     }
   }
 });
+
+test("the code-name blind spot now has a way to be measured", () => {
+  // The UNDEMONSTRATED comment says no mechanical check HERE can tell which site
+  // a test reached. That is still true of this file, and it is why the tool
+  // exists: it renames a code in ONE module, runs the tests referencing that
+  // module, and reports whether anything failed. A check outside the test files
+  // can do what a check inside them cannot.
+  const tool = read("tools/per-site-demonstration.mjs");
+
+  // The tool mutates files in src/ and restores them with `git checkout --`. If
+  // it is killed mid-run — which happened twice while it was being built,
+  // because a synchronous test run blocks the event loop and signal handlers
+  // cannot fire — the leftover file is identified by a MARKER string. That
+  // recovery is only sound while the marker appears NOWHERE ELSE in the tree.
+  const marker = /const MARKER = "([A-Z_]+)"/.exec(tool)?.[1];
+  assert.ok(marker, "the tool no longer declares a MARKER");
+
+  const elsewhere = [...ls("src/"), ...ls("tests/"), ...ls("tools/")]
+    .filter((f) => f.endsWith(".mjs") && f !== "tools/per-site-demonstration.mjs")
+    .filter((f) => read(f).includes(marker));
+  assert.deepEqual(
+    elsewhere,
+    [],
+    `${marker} appears outside the tool. Its crash recovery restores any src/ file containing that ` +
+      "string, so a second home for it would make the tool discard real work."
+  );
+});
