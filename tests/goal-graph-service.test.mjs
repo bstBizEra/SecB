@@ -39,8 +39,11 @@ function seedChain(service) {
 }
 
 test("constructor fails closed on missing collaborators", () => {
-  assert.throws(() => new GoalGraphService({}));
-  assert.throws(() => new GoalGraphService({ schemaValidator }));
+  // Each names the dependency it is missing. A bare assert.throws would pass on
+  // either error, which makes the two lines interchangeable: swapping the order
+  // of the constructor's two guards would not be caught by anything.
+  assert.throws(() => new GoalGraphService({}), /requires a schemaValidator/);
+  assert.throws(() => new GoalGraphService({ schemaValidator }), /requires an append-only ledgerWriter/);
   assert.throws(() => new GoalGraphService({ schemaValidator, ledgerWriter: () => {} }));
   assert.throws(() => new GoalGraphService({ schemaValidator, ledgerWriter: () => {}, workPackageResolver: () => true, now: 5 }));
 });

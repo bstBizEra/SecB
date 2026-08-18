@@ -312,8 +312,8 @@ test("registry_resolve never leaks another instance's full identity", () => {
 });
 
 test("constructor requires registry and a fail-closed invocation log", () => {
-  assert.throws(() => new SecBMcpServer({ services: {}, invocationLog: () => {} }));
-  assert.throws(() => new SecBMcpServer({ services: { registry: { resolve: () => {} } } }));
+  assert.throws(() => new SecBMcpServer({ services: {}, invocationLog: () => {} }), /requires services\.registry\.resolve/);
+  assert.throws(() => new SecBMcpServer({ services: { registry: { resolve: () => {} } } }), /requires an invocationLog/);
 });
 
 test("secb_graph_build is strictly pure read-only with zero disk side-effects (GOV-MCP-03)", () => {

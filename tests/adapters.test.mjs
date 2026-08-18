@@ -41,7 +41,8 @@ test("all adapters start as CANDIDATE/PENDING", () => {
 
 test("all adapters are frozen", () => {
   for (const adapter of Object.values(KNOWN_ADAPTERS)) {
-    assert.throws(() => { adapter.provider_id = "mutated"; });
+    assert.throws(() => { adapter.provider_id = "mutated"; },
+    TypeError);
   }
 });
 
