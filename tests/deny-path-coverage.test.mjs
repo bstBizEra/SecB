@@ -50,7 +50,6 @@ const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
  * triggers that code, which is the only direction this is meant to move.
  */
 const UNDEMONSTRATED = Object.freeze([
-  "DENY_AUTHORITY_SOURCE",
   "DENY_AUTHORITY_VERSION_UNBOUND",
   "DENY_CHAIN_IDENTITY",
   "DENY_CHAIN_VERSION",
@@ -64,7 +63,6 @@ const UNDEMONSTRATED = Object.freeze([
   "DENY_EVIDENCE_INDEPENDENCE",
   "DENY_INVALID_CONTRACT",
   "DENY_INVALID_EVENT",
-  "DENY_INVALID_EXPIRY",
   "DENY_INVALID_PROJECT_ID",
   "DENY_INVALID_TARGET_PATH",
   "DENY_LINKAGE_SERVICE_ERROR",
@@ -77,6 +75,27 @@ const UNDEMONSTRATED = Object.freeze([
   "DENY_REGISTRATION_PATH",
   "DENY_SUPERSEDED"
 ]);
+
+
+/**
+ * Refusals a STRICTER check always reaches first, so no caller can trigger them
+ * through the public API.
+ *
+ * These are not debt. Recording them as undemonstrated would ask someone to
+ * write a test that cannot be written without first weakening the check that
+ * shadows them. They are defence in depth and should stay: each becomes
+ * reachable the moment its shadowing check loosens.
+ *
+ * Each entry names the check that shadows it and the test that asserts the
+ * shadowing still holds. That test, not this list, is what fails if the shadow
+ * ever lifts.
+ */
+const SHADOWED = Object.freeze({
+  DENY_INVALID_EXPIRY: {
+    shadowed_by: "contract validation (DENY_CONTRACT_INVALID) — the date-time format check on valid_until",
+    asserted_by: "tests/work-package-service.test.mjs :: DENY_INVALID_EXPIRY is SHADOWED"
+  }
+});
 
 /** Modules reachable from the library surface or any CLI entry point. */
 function liveModules() {
@@ -193,5 +212,20 @@ test("the nine closed in this change stay closed", () => {
     "DENY_PROOF_TRANSCRIPT_MISMATCH"
   ]) {
     assert.ok(named.has(code), `${code} was demonstrated and is no longer named by any test`);
+  }
+});
+
+test("a SHADOWED refusal is not also counted as debt, and still exists", () => {
+  const { onLive, onHeld } = denyCodes();
+  const known = new Set(UNDEMONSTRATED);
+  for (const [code, entry] of Object.entries(SHADOWED)) {
+    assert.ok(!known.has(code), `${code} is both shadowed and listed as debt; it is one or the other`);
+    assert.ok(onLive.has(code) || onHeld.has(code), `${code} is recorded as shadowed but no longer exists in src/`);
+    for (const field of ["shadowed_by", "asserted_by"]) {
+      assert.ok(
+        typeof entry[field] === "string" && entry[field].trim().length > 0,
+        `${code}: ${field} is empty — a shadow nobody can check is a claim, not a control`
+      );
+    }
   }
 });
