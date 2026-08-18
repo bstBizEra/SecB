@@ -441,3 +441,80 @@ function realStackWithSupersession() {
   const provider = createKnowledgeCandidateProvider({ claimService, linkageService, now: clock });
   return { provider, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
+
+// ---------------------------------------------------------------------------
+// What happens when a knowledge lookup cannot answer.
+//
+// The three refusals the deny-path ratchet carried are all EXCLUSION codes, not
+// throws: an unresolvable reference is dropped from the candidate set with a
+// typed reason rather than failing the whole request. That is the right shape --
+// one unanswerable reference must not deny the other nine -- but it means the
+// code is the only thing distinguishing "the claim said no" from "the service
+// could not be reached", and a caller routes on exactly that difference.
+//
+// Two of the three are FALLBACK codes, used only when a denying service supplies
+// no code of its own. They are what stands between a codeless denial and an
+// exclusion nobody can classify.
+// ---------------------------------------------------------------------------
+
+test("DENY_CLAIM_UNRESOLVED — a claim service that denies without saying why", () => {
+  const provider = createKnowledgeCandidateProvider({
+    // A denial carrying no code. The provider must not pass an undefined code
+    // through into the exclusion record: an excluded reference whose code is
+    // blank is indistinguishable from one nobody looked at.
+    claimService: { getClaim: () => ({ decision: "DENY", data_untrusted: true, reason: "no reason given" }) },
+    linkageService: { resolveCurrent: () => ({ decision: "ALLOW" }) },
+    now: () => FIXED
+  });
+  const out = provider.toCandidateSources({ project_id: PROJECT, refs: ["kc_a"] });
+
+  // The REQUEST still succeeds. One unanswerable reference must not deny the
+  // other nine, which is why these are exclusion codes rather than throws.
+  assert.equal(out.decision, "ALLOW");
+  assert.equal(out.sources.length, 0);
+  assert.equal(out.exclusions.length, 1);
+  assert.equal(out.exclusions[0].code, "DENY_CLAIM_UNRESOLVED");
+  assert.equal(out.exclusions[0].stage, "knowledge-provider");
+  assert.equal(out.exclusions[0].reason, "KNOWLEDGE_UNRESOLVED");
+  // The accounting must balance: included + excluded === requested, always.
+  assert.equal(out.accounting.requested, out.accounting.included + out.exclusions.length);
+});
+
+test("DENY_CLAIM_UNRESOLVED yields to a code the service DID supply", () => {
+  // The fallback must not overwrite a real answer. A service saying
+  // DENY_UNKNOWN_CLAIM is telling the caller something more specific, and a
+  // provider that flattened every denial to its own default would erase it.
+  const provider = createKnowledgeCandidateProvider({
+    claimService: { getClaim: () => ({ decision: "DENY", code: "DENY_UNKNOWN_CLAIM", reason: "absent" }) },
+    linkageService: { resolveCurrent: () => ({ decision: "ALLOW" }) },
+    now: () => FIXED
+  });
+  const out = provider.toCandidateSources({ project_id: PROJECT, refs: ["kc_a"] });
+  assert.equal(out.exclusions[0].code, "DENY_UNKNOWN_CLAIM");
+});
+
+test("DENY_LINKAGE_SERVICE_ERROR — the currency walk throws rather than answers", () => {
+  // Distinct from a denial: the linkage service was unreachable, so nothing is
+  // known about whether this claim is current. Collapsing that into "denied"
+  // would report an outage as a governance decision.
+  const provider = createKnowledgeCandidateProvider({
+    claimService: fakeClaimService({ kc_a: { claim: baseClaim() } }),
+    linkageService: { resolveCurrent: () => { throw new Error("linkage offline"); } },
+    now: () => FIXED
+  });
+  const out = provider.toCandidateSources({ project_id: PROJECT, refs: ["kc_a"] });
+  assert.equal(out.exclusions[0].code, "DENY_LINKAGE_SERVICE_ERROR");
+  assert.equal(out.sources.length, 0);
+});
+
+test("DENY_CURRENT_UNRESOLVED — the currency walk answers, but not with a decision", () => {
+  const provider = createKnowledgeCandidateProvider({
+    claimService: fakeClaimService({ kc_a: { claim: baseClaim() } }),
+    // Denies with no code, like the claim case: the fallback is what keeps the
+    // exclusion classifiable.
+    linkageService: { resolveCurrent: () => ({ decision: "DENY", reason: "no reason given" }) },
+    now: () => FIXED
+  });
+  const out = provider.toCandidateSources({ project_id: PROJECT, refs: ["kc_a"] });
+  assert.equal(out.exclusions[0].code, "DENY_CURRENT_UNRESOLVED");
+});
