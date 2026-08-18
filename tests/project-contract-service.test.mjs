@@ -412,3 +412,69 @@ test("effective resolutions are deeply frozen snapshots", () => {
 function hasCode(code) {
   return (error) => error instanceof ProjectContractServiceError && error.code === code;
 }
+
+// ---------------------------------------------------------------------------
+// The two refusals the deny-path ratchet carried for this service.
+// ---------------------------------------------------------------------------
+
+test("DENY_CONFIGURATION — a service cannot be built on collaborators it cannot call", () => {
+  // The defaults are fail-closed: authorize defaults to () => ({ allowed: false })
+  // and now to a real clock, so a NULLISH argument is coalesced and is NOT a
+  // misconfiguration. Only a truthy non-function is, which is why null and
+  // undefined are absent from this list -- the same coalescing I once asserted
+  // against in work-package-service and was wrong about.
+  for (const authorize of ["authorize", 42, {}, []]) {
+    assert.throws(
+      () => new ProjectContractService({ authorize }),
+      hasCode("DENY_CONFIGURATION"),
+      `authorize ${JSON.stringify(authorize)} must be refused`
+    );
+  }
+  for (const now of ["now", 0.5, {}, []]) {
+    assert.throws(() => new ProjectContractService({ now }), hasCode("DENY_CONFIGURATION"),
+      `now ${JSON.stringify(now)} must be refused`);
+  }
+  // Nullish really does construct -- and the default really DENIES, which is the
+  // assertion that matters. Checking only that construction succeeds passes
+  // whether the default is allowed:false or allowed:true, and I proved that on
+  // myself: flipping the default to allowed:true left this file entirely green
+  // until the check below was added.
+  const defaulted = new ProjectContractService({ now: () => new Date("2026-07-17T15:00:00+07:00") });
+  defaulted.register(candidate());
+  assert.throws(
+    () => defaulted.submitForReview(request()),
+    hasCode("DENY_AUTHORITY"),
+    "a service built on the default authorize must refuse a governed transition"
+  );
+  // The default denies through THREE independent conditions, not one: the
+  // verdict must be allowed, carry a non-empty decisionId, AND declare
+  // serverDerived === true. Flipping `allowed` alone leaves it denying, which is
+  // why a single-field mutation does not move this assertion -- the safety does
+  // not rest on any one field.
+
+});
+
+test("DENY_CONTRACT_WINDOW — a validity window that cannot bound anything", () => {
+  const service = createService();
+  // An INVERTED window is the case that matters: both bounds are well-formed
+  // date-times, so the schema admits them, and only this check catches that the
+  // contract expires before it begins. A contract with such a window is never
+  // in force, and treating it as merely odd would let a project run under an
+  // authorisation that was never valid at any instant.
+  assert.throws(
+    () => service.register(candidate({
+      valid_from: "2026-07-17T18:00:00+07:00",
+      valid_until: "2026-07-17T14:00:00+07:00"
+    })),
+    hasCode("DENY_CONTRACT_WINDOW")
+  );
+  // Equal bounds are refused too. A zero-width window is in force for no
+  // instant, which is the same defect stated more quietly.
+  assert.throws(
+    () => service.register(candidate({
+      valid_from: "2026-07-17T14:00:00+07:00",
+      valid_until: "2026-07-17T14:00:00+07:00"
+    })),
+    hasCode("DENY_CONTRACT_WINDOW")
+  );
+});
