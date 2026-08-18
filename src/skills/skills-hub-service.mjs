@@ -196,7 +196,7 @@ export function parseManifestSections(text) {
     if (nestedIndent === null) nestedIndent = indent;
     const parsed = finish(nested[2], i);
     i = parsed.index;
-    if (nested[1] in blocks[block]) { duplicated.add(`${block} ${nested[1]}`); continue; }
+    if (nested[1] in blocks[block]) { duplicated.add(`${block}\u0000${nested[1]}`); continue; }
     if (parsed.value === "") {
       sequenceKey = nested[1];
       blocks[block][sequenceKey] = [];
@@ -210,8 +210,8 @@ export function parseManifestSections(text) {
   // duplicated dotted key such as `risk_class.x` split on '.' and deleted an
   // unrelated sibling (`risk_class`) while leaving the duplicate in place.
   for (const key of duplicated) {
-    if (key.includes(" ")) {
-      const [outer, inner] = key.split(" ");
+    if (key.includes("\u0000")) {
+      const [outer, inner] = key.split("\u0000");
       if (blocks[outer]) delete blocks[outer][inner];
     } else {
       delete scalars[key];
