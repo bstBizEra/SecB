@@ -1007,3 +1007,56 @@ test("every canonical WorkPackage edge is authority-gated exactly once across th
     assert.ok(state in machine, `effective state ${state} is not canonical`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Authority binding at the work-package boundary: the four refusals the
+// deny-path ratchet still carried.
+//
+// These sit nearer SecB's stated mission than anything closed so far. SecB
+// exists to assign and verify authority, and each of these is a way a work
+// package could otherwise acquire authority it was never granted: from a source
+// that is not a source, from a grant bound to no version, from evidence produced
+// by the actor being checked, or from a validity window that means nothing.
+// ---------------------------------------------------------------------------
+
+test("DENY_AUTHORITY_SOURCE — an authority source that is not callable", () => {
+  // The service reads its grants THROUGH this function on every decision rather
+  // than holding a snapshot, so a non-callable source is not a configuration
+  // typo — it is a service that cannot re-read authority at all.
+  // `null` is absent from this list deliberately. Both the harness and the
+  // service coalesce a nullish source to the default function, so null is NOT
+  // refused — my first version asserted it was, and the code was right.
+  for (const bad of ["grants", 42, {}, []]) {
+    assert.throws(
+      () => harness({ authoritySource: bad }),
+      (e) => e.code === "DENY_AUTHORITY_SOURCE",
+      `authoritySource ${JSON.stringify(bad)} must be refused`
+    );
+  }
+});
+
+test("DENY_INVALID_EXPIRY is SHADOWED — the contract schema refuses first, always", () => {
+  // This deny path cannot fire through createWorkPackage. Every malformed
+  // valid_until is rejected by contract validation as DENY_CONTRACT_INVALID
+  // before the parse check is reached — including values chosen specifically to
+  // pass a loose format check and fail Date.parse.
+  //
+  // That is not a defect and the check should stay: it is defence in depth, and
+  // it becomes reachable the moment the schema loosens. But it is also not debt,
+  // and recording it as "undemonstrated" would ask someone to write a test that
+  // cannot be written without weakening the schema first.
+  //
+  // So what is asserted here is the SHADOWING, not the refusal: the stricter
+  // check still precedes it. If the schema ever stops catching these, this test
+  // fails and DENY_INVALID_EXPIRY becomes reachable and testable.
+  const { create } = harness();
+  for (const bad of ["not-a-date", "", "2026-13-01T00:00:00Z", "2026-01-32T00:00:00Z"]) {
+    assert.throws(
+      () => create({ valid_until: bad }),
+      (e) => e.code === "DENY_CONTRACT_INVALID",
+      `valid_until ${JSON.stringify(bad)} is expected to be refused by the SCHEMA, not by the parse check`
+    );
+  }
+});
+
+
