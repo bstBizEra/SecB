@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
-import { ProjectRegistrationService } from "../src/project/project-registration-service.mjs";
+import { ProjectRegistrationService, ProjectRegistrationError } from "../src/project/project-registration-service.mjs";
 import { projectRegistrationProjection } from "../src/ui/registration-projection.mjs";
 import { SecBPlaneAdapter, PlaneAdapterError } from "../src/plugins/secb-plane-adapter.mjs";
 import { BootstrapAuthorizationGate } from "../src/control/bootstrap-authorization-gate.mjs";
@@ -198,4 +198,75 @@ test("DENY_MAIN_BRANCH_MUTATION — the repository root is refused in EVERY envi
     if (previous === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previous;
   }
+});
+
+// ---------------------------------------------------------------------------
+// The same refusal code guards three different entry points, and each throws
+// from its OWN module. Demonstrating it once would have satisfied the ratchet
+// while leaving two of the three never shown to fire.
+//
+// The gate and the executor guard with `!projectId`, so a truthy non-string such
+// as 42 passes them and is caught further in. Only falsy ids are refused here --
+// stated rather than papered over, because a test that fed 42 to these two and
+// asserted "it throws" would be asserting a refusal from a different module.
+// ---------------------------------------------------------------------------
+
+test("DENY_INVALID_PROJECT_ID — the authorization gate refuses before it touches the registration service", () => {
+  const regService = new ProjectRegistrationService({ stagingBaseDir: testStagingDir });
+  const gate = new BootstrapAuthorizationGate({ registrationService: regService });
+
+  for (const projectId of [undefined, null, "", 0, false]) {
+    assert.throws(
+      () => gate.authorizeBootstrap({
+        projectId,
+        authorizationRecord: { approver: "operator" },
+        reviewerSignature: "sig"
+      }),
+      (error) => {
+        assert.ok(error instanceof ProjectRegistrationError);
+        assert.equal(error.code, "DENY_INVALID_PROJECT_ID", `${String(projectId)}: wrong code`);
+        return true;
+      }
+    );
+  }
+
+  // ORDER MATTERS. The id check precedes the signed-authorization check, so a
+  // caller supplying neither gets DENY_INVALID_PROJECT_ID, not
+  // DENY_UNAUTHORIZED_MUTATION. Asserting the order keeps the two from being
+  // silently reordered into a state where a missing signature is reported as a
+  // missing id.
+  assert.throws(
+    () => gate.authorizeBootstrap({ projectId: "", authorizationRecord: null, reviewerSignature: null }),
+    (error) => error.code === "DENY_INVALID_PROJECT_ID"
+  );
+});
+
+test("DENY_INVALID_PROJECT_ID — the bootstrap executor refuses on its own error class", () => {
+  const regService = new ProjectRegistrationService({ stagingBaseDir: testStagingDir });
+  const gate = new BootstrapAuthorizationGate({ registrationService: regService });
+  const executor = new SecBBootstrapExecutor({ registrationService: regService, authorizationGate: gate });
+
+  for (const projectId of [undefined, null, "", 0, false]) {
+    assert.throws(
+      () => executor.executeBootstrap({ projectId, targetPath: testBootstrapDir }),
+      (error) => {
+        // THE SAME CODE ON A DIFFERENT CLASS. The executor throws
+        // BootstrapExecutorError where the gate throws ProjectRegistrationError.
+        // A caller catching ProjectRegistrationError around executeBootstrap
+        // would not catch this, so the class is part of the contract.
+        assert.ok(error instanceof BootstrapExecutorError, `${String(projectId)}: wrong error class`);
+        assert.ok(!(error instanceof ProjectRegistrationError));
+        assert.equal(error.code, "DENY_INVALID_PROJECT_ID", `${String(projectId)}: wrong code`);
+        return true;
+      }
+    );
+  }
+
+  // The id is checked before the target path, so a call missing both names the
+  // id. Same reasoning as the gate: an untrusted id must be settled before
+  // anything downstream is allowed to read it.
+  assert.throws(
+    () => executor.executeBootstrap({ projectId: "", targetPath: "" }),
+    (error) => error.code === "DENY_INVALID_PROJECT_ID"
+  );
 });

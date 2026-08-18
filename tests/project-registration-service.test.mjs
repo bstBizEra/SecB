@@ -169,3 +169,60 @@ test("projectId cannot escape the staging boundary on any path", () => {
   assert.equal(ok.project_id, "SECB-CONFINED-OK");
   assert.equal(existsSync(join(testStagingDir, "SECB-CONFINED-OK", "registration-package.json")), true);
 });
+
+// ---------------------------------------------------------------------------
+// The two registration refusals the deny-path ratchet carried.
+//
+// They look redundant and are not. registerDraft's own guard rejects a falsy or
+// non-string projectId; the path boundary rejects a string that is blank once
+// trimmed. `"   "` passes the first and is caught by the second, which is the
+// evidence that these are LAYERED rather than one shadowing the other -- and the
+// second layer is the one at the filesystem boundary, where the id is about to
+// become a directory name.
+// ---------------------------------------------------------------------------
+
+test("DENY_INVALID_PROJECT_ID — registerDraft refuses a missing or non-string projectId", () => {
+  const service = new ProjectRegistrationService({ stagingBaseDir: testStagingDir });
+  for (const projectId of [undefined, null, "", 0, 42, {}, ["SECB-ARRAY"]]) {
+    assert.throws(
+      () => service.registerDraft({ projectId, name: "denial case" }),
+      (error) => {
+        // The CLASS is asserted alongside the code. Callers catch
+        // ProjectRegistrationError; a refusal that carried the right code on the
+        // wrong class would pass a code-only assertion and still escape them.
+        assert.ok(error instanceof ProjectRegistrationError, `${String(projectId)}: wrong error class`);
+        assert.equal(error.code, "DENY_INVALID_PROJECT_ID", `${String(projectId)}: wrong code`);
+        return true;
+      }
+    );
+  }
+});
+
+test("DENY_REGISTRATION_PATH — a blank projectId is refused at the filesystem boundary", () => {
+  const service = new ProjectRegistrationService({ stagingBaseDir: testStagingDir });
+
+  // inspectRegistration has NO guard of its own, so the path boundary is the
+  // only thing standing between an untrusted id and a resolve() against the
+  // staging root. That is the design -- confinement is enforced where the
+  // boundary actually is -- but it means this refusal is load-bearing, not
+  // decorative.
+  for (const projectId of [undefined, null, "", "   ", 42]) {
+    assert.throws(
+      () => service.inspectRegistration(projectId),
+      (error) => {
+        assert.ok(error instanceof ProjectRegistrationError);
+        assert.equal(error.code, "DENY_REGISTRATION_PATH", `${String(projectId)}: wrong code`);
+        return true;
+      }
+    );
+  }
+
+  // The whitespace case reaches the SAME refusal through registerDraft, whose
+  // own `!projectId` check does not see it. Distinct from
+  // DENY_REGISTRATION_PATH_ESCAPE, which is a well-formed id that resolves
+  // outside the boundary; this is an id that names nothing at all.
+  assert.throws(
+    () => service.registerDraft({ projectId: "   ", name: "blank after trim" }),
+    (error) => error.code === "DENY_REGISTRATION_PATH"
+  );
+});
