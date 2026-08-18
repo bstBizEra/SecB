@@ -371,3 +371,57 @@ test("candidate plugin cannot become operational and effectiveness is rechecked 
     reason: "DENY_PLUGIN_NOT_EFFECTIVE"
   });
 });
+
+// ---------------------------------------------------------------------------
+// The two plugin-registry refusals the deny-path ratchet carried.
+//
+// Both defend the same invariant from opposite sides: a plugin id at a given
+// version may be registered ONCE. One catches the repeat that arrives after the
+// first finished; the other catches the repeat that arrives while it is still
+// running. Idempotency does not cover this -- these are DIFFERENT idempotency
+// keys, so the caller is not replaying, it is registering twice.
+// ---------------------------------------------------------------------------
+
+test("DENY_PLUGIN_VERSION_EXISTS — a second registration of a version that already landed", async () => {
+  const { instance } = registry();
+  await instance.registerCandidate({
+    descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN,
+    idempotency_key: "idem-plugin-first"
+  });
+
+  // A DIFFERENT idempotency key, so this is not a replay: the caller is asking
+  // to register the same plugin version a second time. Accepting it would give
+  // one plugin id at one version two candidate records, and nothing downstream
+  // could say which one an authorisation referred to.
+  await assert.rejects(
+    () => instance.registerCandidate({
+      descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN,
+      idempotency_key: "idem-plugin-second"
+    }),
+    (error) => error.code === "DENY_PLUGIN_VERSION_EXISTS"
+  );
+});
+
+test("DENY_PLUGIN_VERSION_IN_FLIGHT — a second registration that arrives before the first finishes", async () => {
+  const { instance } = registry();
+  // Deliberately NOT awaited. The in-flight entry is recorded before the
+  // registration's own async work begins, which is what makes the window
+  // observable at all -- and the window is the point: without this refusal two
+  // concurrent callers would both pass the "already exists" check, because
+  // neither had finished writing when the other looked.
+  const first = instance.registerCandidate({
+    descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN,
+    idempotency_key: "idem-concurrent-a"
+  });
+  const second = instance.registerCandidate({
+    descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN,
+    idempotency_key: "idem-concurrent-b"
+  });
+
+  await assert.rejects(() => second, (error) => error.code === "DENY_PLUGIN_VERSION_IN_FLIGHT");
+  // The first must still succeed. A refusal aimed at the second caller that also
+  // broke the first would turn a concurrency guard into a denial of service.
+  const landed = await first;
+  assert.equal(landed.status, "CANDIDATE");
+  assert.equal(landed.operationally_effective, false);
+});
