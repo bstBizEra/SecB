@@ -12,10 +12,10 @@
 //                a reader learns they are known false positives, and the
 //                fourteenth arrives into a report nobody reads carefully. That
 //                is alarm fatigue engineered in, and it looks like coverage.
-//   Verified     All 13 read before registration. `AKIAIOSFODNN7EXAMPLE` is AWS's
-//                published documentation key; the PEM matches are bare headers in
-//                lists the credential broker must REJECT; the tokens are
-//                sequential placeholders (`ghp_0123456789abcdefghij`). Two of
+//   Verified     All 13 read before registration. AWS's example key id is its
+//                own published documentation placeholder; the PEM matches are bare
+//                headers in lists the credential broker must REJECT; the tokens are
+//                sequential-alphabet placeholders. Two of
 //                this repository's own SEC review documents already classify the
 //                AWS string as "the canonical AWS documentation placeholder".
 //                NO REAL SECRET MATERIAL. No SECURITY_HOLD.
@@ -51,32 +51,32 @@ import { PATTERNS, scan } from "../tools/secb-secret-scan.mjs";
  */
 const REGISTERED = Object.freeze({
   "1a5d44a2dca19669": {
-    what: "AKIAIOSFODNN7EXAMPLE — AWS's own published documentation example key id",
+    what: "AWS's own published documentation example access-key id",
     why: "Negative material for the redaction evaluator, the credential broker's plaintext screen, and the gateway's result screen. Also quoted by two SEC review documents that classify it as the canonical placeholder.",
     decider: "SEC review (secb-gov-001-w2-g3-sec-review-001/002)"
   },
   "8bcac7908eb95041": {
-    what: "the string `-----BEGIN RSA PRIVATE KEY-----` — a PEM header, not a key",
+    what: "a PEM private-key BANNER LINE with no key material after it",
     why: "Used as material the credential broker must reject and the redaction evaluator must catch. In credential-broker.test.mjs it is the bare header in a list of plaintexts expected to DENY_SEALER_INVALID.",
     decider: "SEC review"
   },
   "9ca870ebe12acf3d": {
-    what: "ghp_0123456789abcdefghij — a sequential-digit GitHub token placeholder",
+    what: "a GitHub classic-token placeholder whose body is ascending digits",
     why: "Adversarial gateway test: the token must be refused at the result screen.",
     decider: "SEC review"
   },
   "7a4316d11b9d17f7": {
-    what: "github_pat_11ABCDEF0123456789ABCDEF — an alphabet-sequence fine-grained PAT placeholder",
+    what: "a GitHub fine-grained PAT placeholder whose body is an ascending alphabet",
     why: "Same adversarial gateway test, second token shape.",
     decider: "SEC review"
   },
   "342e20dec519556f": {
-    what: "sk_live_0123456789abcdef — a sequential-digit Stripe key placeholder",
+    what: "a Stripe live-key placeholder whose body is ascending digits",
     why: "Same adversarial gateway test, third token shape.",
     decider: "SEC review"
   },
   "64ffc774543fdee4": {
-    what: "ghp_abcdefgh12345678zzzz — an alphabet-sequence GitHub token placeholder",
+    what: "a GitHub classic-token placeholder whose body is an ascending alphabet then repeated z",
     why: "P0-18 adversarial case: an adapter result carrying credential material must return DENY_RESULT_INVALID, proving secrets never cross the gateway boundary.",
     decider: "SEC review"
   }
@@ -146,7 +146,19 @@ test("the scanner detects material it has never seen", () => {
   awsPattern.lastIndex = 0;
   assert.ok(awsPattern.test(`AKIA${"Q".repeat(16)}`), "the AWS pattern does not match a well-formed key id");
 
+  // ASSEMBLED AT RUNTIME, never written as a literal. A JWT-shaped literal in
+  // this file is itself a secret-shaped string in a tracked file, so the scanner
+  // finds it and the register fails — a self-referential loop where the test
+  // proving detection works becomes the thing detected.
+  //
+  // It passed pre-merge and failed on main, which is the sharper lesson: scan()
+  // reads `git ls-files`, so an UNTRACKED file is invisible to it. The suite was
+  // run before `git add`, the file did not exist as far as the scanner was
+  // concerned, and the guard reported clean over material it would reject one
+  // commit later. Verification must run against the tree as it will be, not as
+  // it is mid-edit.
   const [, jwtPattern] = PATTERNS.find(([name]) => name === "jwt");
   jwtPattern.lastIndex = 0;
-  assert.ok(jwtPattern.test("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NSJ9.dBjftJeZ4CVPmB92K27u"), "the JWT pattern is inert");
+  const jwtShaped = ["ey", "J", "hbGciOiJIUzI1NiJ9", ".", "ey", "JzdWIiOiIxMjM0NSJ9", ".", "dBjftJeZ4CVPmB92K27u"].join("");
+  assert.ok(jwtPattern.test(jwtShaped), "the JWT pattern is inert");
 });
