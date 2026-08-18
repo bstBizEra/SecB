@@ -140,3 +140,62 @@ test("SecBMcpServer dispatches secb_project_registration_projection and secb_pla
   assert.equal(planeRes.id, 101);
   assert.equal(planeRes.result.data.plugin_name, "secb-plane-adapter");
 });
+
+// ---------------------------------------------------------------------------
+// Containment: where the bootstrap executor may write.
+//
+// These two refusals are the executor's boundary, and one of them had never
+// fired in this repository's history.
+// ---------------------------------------------------------------------------
+
+test("DENY_INVALID_TARGET_PATH — the executor refuses before it resolves anything", () => {
+  const executor = new SecBBootstrapExecutor({
+    registrationService: { inspectRegistration: () => { throw new Error("must not be consulted"); } }
+  });
+  for (const targetPath of [undefined, null, ""]) {
+    assert.throws(
+      () => executor.executeBootstrap({ projectId: "PROJ", targetPath }),
+      (e) => e instanceof BootstrapExecutorError && e.code === "DENY_INVALID_TARGET_PATH",
+      `targetPath ${JSON.stringify(targetPath)} must be refused`
+    );
+  }
+  // The registration service throws if consulted. Reaching it would mean the
+  // executor had begun work on a request with no destination.
+});
+
+test("DENY_MAIN_BRANCH_MUTATION — the repository root is refused in EVERY environment", () => {
+  // This guard was gated on `process.env.NODE_ENV === "production"` and had
+  // therefore never fired: NODE_ENV appears exactly once in this repository, in
+  // the condition itself, and nothing sets it. Measured before the fix —
+  // undefined, "test" and "development" all walked past it; only "production"
+  // refused. A guard whose activation depends on a variable nobody sets is dead
+  // code that reads as protection.
+  //
+  // proposed_changes is EMPTY on purpose. If the guard ever regresses, this test
+  // must not become the thing that writes into the repository root.
+  const authorized = {
+    status: "AUTHORIZED_FOR_BOOTSTRAP",
+    repository_mutation_authorized: true,
+    registration_id: "reg_containment",
+    proposed_changes: []
+  };
+  const executor = new SecBBootstrapExecutor({
+    registrationService: { inspectRegistration: () => authorized }
+  });
+
+  const previous = process.env.NODE_ENV;
+  try {
+    for (const env of [undefined, "test", "development", "production"]) {
+      if (env === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = env;
+      assert.throws(
+        () => executor.executeBootstrap({ projectId: "PROJ", targetPath: process.cwd() }),
+        (e) => e instanceof BootstrapExecutorError && e.code === "DENY_MAIN_BRANCH_MUTATION",
+        `the repository root must be refused with NODE_ENV=${String(env)}`
+      );
+    }
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});
