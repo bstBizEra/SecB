@@ -50,14 +50,11 @@ const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
  * triggers that code, which is the only direction this is meant to move.
  */
 const UNDEMONSTRATED = Object.freeze([
-  "DENY_CLAIM_UNRESOLVED",
   "DENY_CONFIGURATION",
   "DENY_CONTRACT_WINDOW",
-  "DENY_CURRENT_UNRESOLVED",
   "DENY_INVALID_CONTRACT",
   "DENY_INVALID_EVENT",
   "DENY_INVALID_PROJECT_ID",
-  "DENY_LINKAGE_SERVICE_ERROR",
   "DENY_NOT_CANDIDATE",
   "DENY_PLUGIN_VERSION_EXISTS",
   "DENY_PLUGIN_VERSION_IN_FLIGHT",
