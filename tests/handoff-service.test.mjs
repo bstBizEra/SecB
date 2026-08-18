@@ -185,3 +185,152 @@ test("returned records are frozen and detached", () => {
   const offered = h.offer();
   assert.throws(() => { offered.state = "ACCEPTED"; }, TypeError);
 });
+
+// ---------------------------------------------------------------------------
+// Handoff provenance: the five refusals the deny-path ratchet still carried.
+//
+// All five defend one invariant — a handoff may only descend from a parent that
+// exists, was accepted, binds the same work package, sits within the depth cap,
+// and carries a receipt bound to this exact project/work-package/session/
+// baseline. Chain integrity is what makes a handoff evidence about anything; a
+// chain that accepts an unknown or unaccepted parent is a provenance claim with
+// no provenance.
+//
+// Extends this file's harness rather than adding another. Two cases need a
+// service configured differently (a depth cap, a receipt resolver), so they
+// build one from the same work-package service the harness already drove to
+// RUNNING.
+// ---------------------------------------------------------------------------
+
+test("DENY_UNKNOWN_PARENT — a handoff cannot descend from a parent that does not exist", () => {
+  const { offer } = harness();
+  denies(() => offer({ request: { parentHandoffId: "ho_does_not_exist" } }), "DENY_UNKNOWN_PARENT");
+});
+
+test("DENY_PARENT_NOT_ACCEPTED — an offered but unaccepted parent cannot be descended from", () => {
+  const { offer } = harness();
+  offer({ envelope: { handoff_id: "ho_parent" }, idempotencyKey: "idem_parent" });
+  // The parent exists and is OFFERED, never ACCEPTED. Descending from it would
+  // let a chain inherit authority the destination role never took up.
+  denies(
+    () => offer({
+      envelope: { handoff_id: "ho_child" },
+      idempotencyKey: "idem_child",
+      request: { parentHandoffId: "ho_parent" }
+    }),
+    "DENY_PARENT_NOT_ACCEPTED"
+  );
+});
+
+test("DENY_CHAIN_DEPTH — a chain deeper than the cap is refused, not truncated", () => {
+  const { wp } = harness();
+  // depthCap 0 admits a root handoff and refuses any child. The refusal must be
+  // a denial rather than a silent truncation: a chain quietly cut at the cap
+  // would present a child as a root and lose the provenance entirely.
+  const svc = new HandoffService({ workPackageService: wp, now: () => new Date("2026-07-18T10:00:00Z"), depthCap: 0 });
+  const base = {
+    actorId: ENGIN, authorityRef: "g_engin", sourceSessionId: "ses_src", baseline: BASELINE,
+    ceiling: { riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: [], transitions: [] }
+  };
+  const root = svc.offerHandoff({ ...base, envelope: envelope({ handoff_id: "ho_root" }), idempotencyKey: "i_root" });
+  assert.equal(root.depth, 0, "a root handoff sits at depth 0 and is admitted by a cap of 0");
+  svc.acceptHandoff(PROJECT, "ho_root", {
+    actorId: REV, authorityRef: "g_rev", sessionId: "ses_rev", baseline: BASELINE, idempotencyKey: "i_accept_root"
+  });
+  denies(
+    () => svc.offerHandoff({
+      ...base, envelope: envelope({ handoff_id: "ho_deep" }),
+      idempotencyKey: "i_deep", parentHandoffId: "ho_root"
+    }),
+    "DENY_CHAIN_DEPTH"
+  );
+});
+
+test("DENY_RECEIPT_BINDING — a receipt that resolves ALLOW but binds a different subject", () => {
+  const { wp } = harness();
+  // The resolver says ALLOW. That is the point: a receipt can be perfectly valid
+  // and still be about something else, and a service that checked only the
+  // verdict would accept another work package's context as this one's evidence.
+  //
+  // contextReceiptRef must be an OBJECT carrying receipt_id. Passing the bare
+  // string denied as DENY_MALFORMED_REQUEST, and the strict helper refused to
+  // accept that as this case passing — which is the whole reason the helper
+  // matches on exact code rather than on "it threw".
+  const wrongSubject = {
+    project_id: "prj_other", work_package_id: "wp_other",
+    session_id: "ses_other", baseline_version: "baseline_other"
+  };
+  const svc = new HandoffService({
+    workPackageService: wp,
+    now: () => new Date("2026-07-18T10:00:00Z"),
+    receiptResolver: () => ({ code: "ALLOW", receipt: wrongSubject })
+  });
+  denies(
+    () => svc.offerHandoff({
+      envelope: envelope({ handoff_id: "ho_receipt" }),
+      actorId: ENGIN, authorityRef: "g_engin", sourceSessionId: "ses_src", baseline: BASELINE,
+      ceiling: { riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: [], transitions: [] },
+      idempotencyKey: "i_receipt", contextReceiptRef: { receipt_id: "rc_wrong" }
+    }),
+    "DENY_RECEIPT_BINDING"
+  );
+});
+
+test("DENY_PARENT_SCOPE — a chain may not cross work packages", () => {
+  // Needs a SECOND work package in the same project, because the parent is
+  // looked up by (project, handoffId) and only then compared on work package.
+  // A chain that crossed work packages would let evidence gathered under one
+  // authorised scope be presented as provenance under another — the parent
+  // exists, was accepted, and is still the wrong parent.
+  const WP2 = "wp_handoff_002";
+  const both = [
+    ...grants(),
+    ...grants().map((g) => ({ ...g, workPackageId: WP2, grantId: `${g.grantId}_2`, decisionId: `${g.decisionId}_2` }))
+  ];
+  const clock = () => new Date("2026-07-18T10:00:00Z");
+  const wp = new WorkPackageContractService({ grants: both, authoritySource: () => both, now: clock });
+
+  const drive = (workPackageId, suffix) => {
+    wp.createWorkPackage({ ...draft(), work_package_id: workPackageId }, {
+      idempotencyKey: `c_${suffix}`, actorId: ENGIN, authorityRef: `g_engin${suffix}`
+    });
+    const steps = [
+      ["PLANNED", ENGIN, `g_engin${suffix}`], ["REVIEWED", REV, `g_rev${suffix}`],
+      ["AUTHORIZED", GOV, `g_gov${suffix}`], ["READY", ENGIN, `g_engin${suffix}`],
+      ["RUNNING", ENGIN, `g_engin${suffix}`]
+    ];
+    let seq = 0;
+    for (const [state, actorId, authorityRef] of steps) {
+      wp.submitTransition({
+        projectId: PROJECT, workPackageId, version: 1, requestedState: state,
+        actorId, authorityRef, policyDecision: "ALLOW", evidence: [{ ref: `ev_${state}` }],
+        idempotencyKey: `t_${suffix}_${seq++}`, reasonCode: "STEP"
+      });
+    }
+  };
+  drive(WP, "");
+  drive(WP2, "_2");
+
+  const svc = new HandoffService({ workPackageService: wp, now: clock });
+  const base = {
+    actorId: ENGIN, authorityRef: "g_engin", sourceSessionId: "ses_src", baseline: BASELINE,
+    ceiling: { riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: [], transitions: [] }
+  };
+
+  svc.offerHandoff({ ...base, envelope: envelope({ handoff_id: "ho_wp1" }), idempotencyKey: "i_wp1" });
+  svc.acceptHandoff(PROJECT, "ho_wp1", {
+    actorId: REV, authorityRef: "g_rev", sessionId: "ses_rev", baseline: BASELINE, idempotencyKey: "i_acc_wp1"
+  });
+
+  // Parent exists and IS accepted — the only thing wrong is its work package.
+  denies(
+    () => svc.offerHandoff({
+      ...base,
+      authorityRef: "g_engin_2",
+      envelope: envelope({ handoff_id: "ho_wp2", work_package_id: WP2 }),
+      idempotencyKey: "i_wp2",
+      parentHandoffId: "ho_wp1"
+    }),
+    "DENY_PARENT_SCOPE"
+  );
+});
