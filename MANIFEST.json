@@ -799,6 +799,7 @@
     "tools/create-pilot-work-package.mjs",
     "tools/dual-policy-check.mjs",
     "tools/generate-ops-report.mjs",
+    "tools/per-site-demonstration.mjs",
     "tools/run-secb-mcp-server.mjs",
     "tools/secb-audit-packs.mjs",
     "tools/secb-graph.mjs",
