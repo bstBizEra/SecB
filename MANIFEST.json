@@ -781,6 +781,7 @@
     "tests/skip-disposition-register.test.mjs",
     "tests/sod-rules.test.mjs",
     "tests/state-machine.test.mjs",
+    "tests/supply-chain-integrity.test.mjs",
     "tests/swarm-execution-contract.test.mjs",
     "tests/system-settings.test.mjs",
     "tests/temporal-ledgers.test.mjs",
