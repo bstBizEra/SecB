@@ -778,6 +778,7 @@
     "tests/skill-promotion-ledger.test.mjs",
     "tests/skill-resolution-time-authority.test.mjs",
     "tests/skill-revocation-ledger.test.mjs",
+    "tests/skip-disposition-register.test.mjs",
     "tests/sod-rules.test.mjs",
     "tests/state-machine.test.mjs",
     "tests/swarm-execution-contract.test.mjs",
