@@ -788,6 +788,7 @@
     "tests/swarm-execution-contract.test.mjs",
     "tests/system-settings.test.mjs",
     "tests/temporal-ledgers.test.mjs",
+    "tests/upstream-deny-paths.test.mjs",
     "tests/validate-foundation.test.mjs",
     "tests/work-package-service.test.mjs",
     "tests/workspace-lease-ledger.test.mjs",
