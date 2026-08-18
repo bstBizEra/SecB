@@ -66,7 +66,19 @@ export class AgentEnrollmentService {
 
     const instanceId = this.#idFactory();
     const receipt = this.#receiptFactory();
-    const proposedAt = this.#now().toISOString();
+    // The clock is read defensively because it is INJECTED and this service
+    // trusts none of its dependencies. `new Date("nonsense").toISOString()`
+    // throws a RangeError, so reading it directly made the finiteness check
+    // below unreachable: an unparseable clock escaped as a raw "Invalid time
+    // value" instead of the { ok: false, deny_code } this service contracts to
+    // return. Measured before the change. A caller cannot route on an internal
+    // error shape, and a dead guard condition reads as protection.
+    let proposedAt = null;
+    try {
+      proposedAt = this.#now().toISOString();
+    } catch {
+      proposedAt = null;
+    }
     if (!nonBlank(instanceId) || !nonBlank(receipt) || !Number.isFinite(Date.parse(proposedAt))) {
       return deny("DENY_ENROLLMENT_RUNTIME");
     }
