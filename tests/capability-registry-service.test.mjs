@@ -4,6 +4,8 @@
 // PROMOTED-only resolve/gateway projection.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { validateContract } from "../src/contracts/contract-validator.mjs";
 import {
   CapabilityRegistryService,
@@ -301,4 +303,73 @@ test("toGatewayRegistry projects only PROMOTED records and feeds the gateway", a
   }, {});
   assert.equal(outcome.ok, true);
   assert.equal(outcome.receipt.adapter_id, "fs-read");
+});
+
+// ---------------------------------------------------------------------------
+// DENY_NOT_CANDIDATE is SHADOWED, not debt.
+//
+// promote() checks, in order:
+//   1. entry.status === "REVOKED"                  -> DENY_REVOKED
+//   2. ANY version of the capability is PROMOTED   -> DENY_ALREADY_PROMOTED
+//   3. entry.status !== "CANDIDATE"                -> DENY_NOT_CANDIDATE
+//
+// `entry` is versions.get(version), so `entry` is itself among the values check
+// 2 iterates. With a status domain of exactly {CANDIDATE, PROMOTED, REVOKED},
+// REVOKED is taken by 1 and PROMOTED by 2, leaving only CANDIDATE to reach 3 --
+// where the condition is false. No caller can trigger it through the public API.
+//
+// That makes it defence in depth and it should stay. Writing a test that
+// triggers it would require first weakening one of the two checks that shadow
+// it, which is the move this repository forbids. What is asserted instead is
+// that the shadow still HOLDS -- and this test is what fails if it ever lifts.
+// ---------------------------------------------------------------------------
+
+test("DENY_NOT_CANDIDATE is SHADOWED — the two checks ahead of it take every non-candidate status", () => {
+  // Shadow 1: a REVOKED entry is refused as REVOKED, never as not-candidate.
+  {
+    const { service } = build();
+    service.registerCandidate(validRecord());
+    assert.equal(service.revoke("filesystem.read", "known-bad release", governanceOnly()).ok, true);
+    assert.equal(service.promote("filesystem.read", "1.0.0", gateApprovals()).deny_code, "DENY_REVOKED");
+  }
+
+  // Shadow 2: a PROMOTED entry is refused as ALREADY_PROMOTED. This is the
+  // subtle arm -- it works only because the loop includes the entry itself, so
+  // re-promoting the SAME version is caught by a check written for the case of a
+  // DIFFERENT version already being promoted.
+  {
+    const { service } = build();
+    service.registerCandidate(validRecord());
+    assert.equal(service.promote("filesystem.read", "1.0.0", gateApprovals()).ok, true);
+    assert.equal(service.promote("filesystem.read", "1.0.0", gateApprovals()).deny_code, "DENY_ALREADY_PROMOTED");
+  }
+});
+
+test("the shadow rests on a three-value status domain, asserted against the source", () => {
+  // The load-bearing premise. If a fourth status is ever introduced -- SUSPENDED,
+  // DEPRECATED, anything -- an entry could hold it, pass both shadowing checks,
+  // and reach DENY_NOT_CANDIDATE. At that moment the code stops being shadowed
+  // and becomes a live refusal that no test has demonstrated. This assertion is
+  // the tripwire for that day; it is deliberately mechanical rather than a
+  // comment, because a comment would not have failed.
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "src", "gateway", "capability-registry-service.mjs"),
+    "utf8"
+  );
+  const written = new Set(
+    [...source.matchAll(/status:\s*"([A-Z_]+)"/g), ...source.matchAll(/\.status\s*=\s*"([A-Z_]+)"/g)]
+      .map((m) => m[1])
+  );
+  assert.deepEqual(
+    [...written].sort(),
+    ["CANDIDATE", "PROMOTED", "REVOKED"],
+    "the status domain changed; DENY_NOT_CANDIDATE may no longer be shadowed — re-check the promote() order " +
+      "and move it back to UNDEMONSTRATED in tests/deny-path-coverage.test.mjs if it is now reachable"
+  );
+
+  // And nothing external can seed a status: intake forces CANDIDATE regardless
+  // of what was submitted, which two tests above already assert. Stated here so
+  // the shadow's premises are all visible in one place.
+  const { service } = build();
+  assert.equal(service.registerCandidate(validRecord({ status: "PROMOTED" })).status, "CANDIDATE");
 });

@@ -60,8 +60,6 @@ const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
 const UNDEMONSTRATED = Object.freeze([
   "DENY_INVALID_CONTRACT",
   "DENY_INVALID_EVENT",
-  "DENY_NOT_CANDIDATE",
-  "DENY_PROOF_TRANSCRIPT_VALIDATOR_UNAVAILABLE",
   "DENY_SUPERSEDED"
 ]);
 
@@ -87,6 +85,16 @@ const SHADOWED = Object.freeze({
       "Independence can only fail when a covering item's actor is the executor, and the evidence filter " +
       "admits a REVIEW-stage item only from the reviewer, so the reviewer would have to BE the executor.",
     asserted_by: "tests/work-package-service.test.mjs :: DENY_EVIDENCE_INDEPENDENCE is SHADOWED"
+  },
+  DENY_NOT_CANDIDATE: {
+    shadowed_by:
+      "promote(), twice and in order -- a REVOKED entry is taken by DENY_REVOKED, and a PROMOTED entry is "
+      + "taken by DENY_ALREADY_PROMOTED because that loop iterates versions.values(), which INCLUDES the "
+      + "entry itself. With a status domain of exactly {CANDIDATE, PROMOTED, REVOKED}, only CANDIDATE "
+      + "reaches the check, where the condition is false.",
+    asserted_by:
+      "tests/capability-registry-service.test.mjs :: DENY_NOT_CANDIDATE is SHADOWED, and :: the shadow "
+      + "rests on a three-value status domain (the second is the tripwire for a fourth status)"
   },
   DENY_INVALID_EXPIRY: {
     shadowed_by: "contract validation (DENY_CONTRACT_INVALID) — the date-time format check on valid_until",
