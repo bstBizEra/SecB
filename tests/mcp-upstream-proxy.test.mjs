@@ -911,3 +911,78 @@ test("a reserved delimiter in the upstream id half cannot name a real upstream",
     assert.equal(res.error.data.code, "DENY_UNKNOWN_TOOL");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The two proxy refusals that the deny-path ratchet still carried.
+//
+// Both were left ratcheted in the previous round because they need a proxy
+// harness rather than a fake child. That harness already existed in this file —
+// coreServer, pinClient, the call() helper — so this extends it instead of
+// standing up a second one.
+//
+// Both refusals route through a tool that must first be EXPOSED: the proxy
+// checks #isToolExposed before it looks up the client, so a call to a tool that
+// was never listed refuses for a different reason entirely. Each case therefore
+// lists first and only then provokes the failure, which is what makes the code
+// it asserts the code under test.
+// ---------------------------------------------------------------------------
+
+test("DENY_UPSTREAM_UNAVAILABLE — the upstream was listed and is no longer ready", async () => {
+  const calls = [];
+  // Mutable on purpose: the tool is exposed while the client is ready, then the
+  // client degrades. That ordering is the real failure — an upstream that dies
+  // between advertisement and invocation — and it cannot be reached by starting
+  // from an absent client, which fails the exposure check instead.
+  const client = { state: "ready", listTools: async () => [toolDef()], callTool: async () => ({ ok: true }) };
+  const proxy = new SecBMcpUpstreamProxy({
+    core: coreServer(calls),
+    clients: new Map([["up", client]]),
+    invocationLog: (entry) => calls.push(entry),
+    now: () => new Date("2026-07-30T00:00:00Z")
+  });
+
+  await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+  client.state = "failed";
+
+  const res = await call(proxy, "up__search", { q: "x" });
+  assert.equal(res.error.data.code, "DENY_UPSTREAM_UNAVAILABLE");
+  assert.match(res.error.message, /not available/i);
+  // The refusal is audited before it is returned. A denial the ledger never saw
+  // is a denial nobody can reconstruct.
+  assert.ok(
+    calls.some((entry) => JSON.stringify(entry).includes("DENY_UPSTREAM_UNAVAILABLE")),
+    "the refusal must reach the invocation log"
+  );
+});
+
+test("DENY_UPSTREAM_UNSERIALISABLE — the upstream replies with something JSON.stringify cannot render", async () => {
+  const calls = [];
+  const circular = { name: "loop" };
+  circular.self = circular;
+  const client = {
+    state: "ready",
+    listTools: async () => [toolDef()],
+    callTool: async () => circular
+  };
+  const proxy = new SecBMcpUpstreamProxy({
+    core: coreServer(calls),
+    clients: new Map([["up", client]]),
+    invocationLog: (entry) => calls.push(entry),
+    now: () => new Date("2026-07-30T00:00:00Z")
+  });
+
+  await proxy.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { callerInstanceId: "inst_ok" });
+
+  const res = await call(proxy, "up__search", { q: "x" });
+  assert.equal(res.error.data.code, "DENY_UPSTREAM_UNSERIALISABLE");
+  // The module's own comment records why this guard exists: JSON.parse is
+  // iterative but JSON.stringify recurses, so a deeply nested reply parses and
+  // then throws here. Unguarded it escaped the proxy and killed the whole hub —
+  // one upstream taking down the other fifteen. The assertion that matters is
+  // therefore that the OTHER upstreams survive this one's bad reply.
+  const survivors = await proxy.handle(
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    { callerInstanceId: "inst_ok" }
+  );
+  assert.ok(Array.isArray(survivors.result.tools), "the proxy still serves after an unserialisable reply");
+});
