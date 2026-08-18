@@ -50,7 +50,6 @@ const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
  * triggers that code, which is the only direction this is meant to move.
  */
 const UNDEMONSTRATED = Object.freeze([
-  "DENY_AUTHORITY_VERSION_UNBOUND",
   "DENY_CHAIN_IDENTITY",
   "DENY_CHAIN_VERSION",
   "DENY_CLAIM_UNRESOLVED",
@@ -60,7 +59,6 @@ const UNDEMONSTRATED = Object.freeze([
   "DENY_DUPLICATE_RECEIPT",
   "DENY_ENROLLMENT_RUNTIME",
   "DENY_ENROLLMENT_UNAVAILABLE",
-  "DENY_EVIDENCE_INDEPENDENCE",
   "DENY_INVALID_CONTRACT",
   "DENY_INVALID_EVENT",
   "DENY_INVALID_PROJECT_ID",
@@ -91,6 +89,14 @@ const UNDEMONSTRATED = Object.freeze([
  * ever lifts.
  */
 const SHADOWED = Object.freeze({
+  DENY_EVIDENCE_INDEPENDENCE: {
+    shadowed_by:
+      "separation of duties, twice — SOD_ROLE_CONFLICT refuses an ENGIN/REV grant when the authority " +
+      "engine is built, and DENY_SOD bars any actor in executorActorIds from entering REVIEW or QA. " +
+      "Independence can only fail when a covering item's actor is the executor, and the evidence filter " +
+      "admits a REVIEW-stage item only from the reviewer, so the reviewer would have to BE the executor.",
+    asserted_by: "tests/work-package-service.test.mjs :: DENY_EVIDENCE_INDEPENDENCE is SHADOWED"
+  },
   DENY_INVALID_EXPIRY: {
     shadowed_by: "contract validation (DENY_CONTRACT_INVALID) — the date-time format check on valid_until",
     asserted_by: "tests/work-package-service.test.mjs :: DENY_INVALID_EXPIRY is SHADOWED"

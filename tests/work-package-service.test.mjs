@@ -1060,3 +1060,73 @@ test("DENY_INVALID_EXPIRY is SHADOWED — the contract schema refuses first, alw
 });
 
 
+
+test("DENY_AUTHORITY_VERSION_UNBOUND — a grant that loses its version binding after creation", () => {
+  // Reachable through submitTransition, NOT through createWorkPackage: that
+  // caller wraps the same internal verdict as DENY_CREATE_AUTHORITY. The route
+  // that matters is a grant which DEGRADES between creation and transition,
+  // which is possible precisely because the service re-reads its authority
+  // source on every decision instead of holding a snapshot.
+  let live = grants();
+  const service = new WorkPackageContractService({
+    grants: live,
+    authoritySource: () => live,
+    now: () => new Date("2026-07-18T10:00:00Z")
+  });
+  service.createWorkPackage(draft(), { idempotencyKey: "c_vu", actorId: ENGIN, authorityRef: "grant_engin" });
+
+  // The grant is still present and still ACTIVE. Only its binding to a work
+  // package VERSION is gone — which is the whole point: an authority that no
+  // longer says which version it authorises cannot authorise anything.
+  live = grants().map((g) => (g.grantId === "grant_engin" ? { ...g, workPackageVersion: 0 } : g));
+
+  denies(
+    () => service.submitTransition({
+      projectId: PROJECT, workPackageId: WP, version: 1, requestedState: "PLANNED",
+      actorId: ENGIN, authorityRef: "grant_engin", policyDecision: "ALLOW",
+      evidence: [{ ref: "ev_vu" }], idempotencyKey: "t_vu", reasonCode: "STEP"
+    }),
+    "DENY_AUTHORITY_VERSION_UNBOUND",
+    // TransitionDeniedError, not WorkPackageServiceError: this refusal is raised
+    // by the transition engine rather than by the service wrapper, which is why
+    // the same verdict surfaces as DENY_CREATE_AUTHORITY on the create path.
+    TransitionDeniedError
+  );
+});
+
+test("DENY_EVIDENCE_INDEPENDENCE is SHADOWED — separation of duties refuses twice, first", () => {
+  // Independence fails only when a covering item's actor is in executorActorIds.
+  // The evidence filter admits a REVIEW-stage item only from record.reviewerActorId,
+  // so the reviewer would have to BE the executor. Two SoD layers make that
+  // impossible, and this asserts both rather than the refusal itself.
+  //
+  // Layer 1, configuration: a grant combining ENGIN and REV is refused when the
+  // authority engine is built, before any work package exists.
+  const conflicted = grants().map((g) =>
+    g.grantId === "grant_engin" ? { ...g, roles: ["ENGIN", "REV"] } : g);
+  assert.throws(
+    () => new WorkPackageContractService({
+      grants: conflicted, authoritySource: () => conflicted, now: () => new Date("2026-07-18T10:00:00Z")
+    }),
+    (e) => e.code === "SOD_ROLE_CONFLICT",
+    "an ENGIN/REV actor must be unconfigurable"
+  );
+
+  // Layer 2, runtime: even a non-conflicting pair is barred from entering REVIEW
+  // once it has executed. The existing DUAL (ENGIN+QA) case asserts the QA half;
+  // this asserts that the prohibition set is the EXECUTOR set, which is what
+  // makes the reviewer-is-executor case unreachable rather than merely unusual.
+  const h = harness();
+  h.create();
+  advanceTo(h, "AUTHORIZED");
+  h.send({ requestedState: "READY", actorId: ENGIN, authorityRef: "grant_engin" });
+  h.send({ requestedState: "RUNNING", actorId: DUAL, authorityRef: "grant_dual" });
+  h.send({
+    requestedState: "SELF_VERIFIED", actorId: DUAL, authorityRef: "grant_dual",
+    evidence: [{ ref: "ev_self", obligation: "self:unit-tests" }]
+  });
+  denies(
+    () => h.send({ requestedState: "REVIEW", actorId: DUAL, authorityRef: "grant_dual" }),
+    "DENY_SOD"
+  );
+});
