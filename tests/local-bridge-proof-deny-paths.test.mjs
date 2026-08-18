@@ -151,3 +151,44 @@ test("DENY_PROOF_TRANSCRIPT_MISMATCH — a bound field other than installation o
     )
   );
 });
+
+// ---------------------------------------------------------------------------
+// A TENTH, found later — and how it was missed is the point.
+//
+// validateCandidate is called twice: once for the proof, once for the
+// transcript, each with its own unavailable code. The proof arm was already
+// demonstrated in local-bridge-phase-contracts.test.mjs. The transcript arm,
+// the exact mirror one line below it, never was. Symmetric code invites the
+// assumption that covering one arm covers both; on a security boundary the
+// uncovered arm is a validator that can go missing without anything noticing.
+// ---------------------------------------------------------------------------
+
+test("DENY_PROOF_TRANSCRIPT_VALIDATOR_UNAVAILABLE — no transcript validator, or one that is not callable", () => {
+  // Missing entirely. A validator absent from options must fail closed: the
+  // alternative is a transcript admitted because nothing was there to judge it.
+  denies("DENY_PROOF_TRANSCRIPT_VALIDATOR_UNAVAILABLE", () =>
+    validateLocalBridgeInstallationProof(proof, transcript, { ...options, validateTranscript: undefined })
+  );
+
+  // Present but not callable. The check is `typeof validator !== "function"`,
+  // so a truthy non-function is refused too — a config that supplied a
+  // validator NAME where a function was expected would otherwise look supplied.
+  for (const notAFunction of [null, "validateTranscript", {}, [], 1]) {
+    denies("DENY_PROOF_TRANSCRIPT_VALIDATOR_UNAVAILABLE", () =>
+      validateLocalBridgeInstallationProof(proof, transcript, { ...options, validateTranscript: notAFunction })
+    );
+  }
+
+  // DISTINCT FROM THE PROOF ARM. Asserting the exact code is what keeps the two
+  // from collapsing: with only "it throws", swapping the two unavailable codes
+  // would pass, and the report would name the wrong missing validator.
+  denies("DENY_PROOF_VALIDATOR_UNAVAILABLE", () =>
+    validateLocalBridgeInstallationProof(proof, transcript, { ...options, validateProof: undefined })
+  );
+
+  // A validator that IS callable but returns false is a different refusal
+  // altogether — unavailable is about absence, invalid is about judgement.
+  denies("DENY_PROOF_TRANSCRIPT_INVALID", () =>
+    validateLocalBridgeInstallationProof(proof, transcript, { ...options, validateTranscript: () => false })
+  );
+});
