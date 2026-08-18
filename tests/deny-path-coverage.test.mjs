@@ -44,6 +44,14 @@ const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
 /**
  * Refusals on the live surface that no test has ever triggered.
  *
+ * KEYED BY CODE NAME, WHICH IS COARSER THAN THE TRUTH. One code can be thrown
+ * from several modules -- DENY_INVALID_PROJECT_ID was thrown from three, on two
+ * different error classes -- and a single test naming it anywhere clears the
+ * entry for all of them. No mechanical check here can tell which SITE a test
+ * reached, so this is stated rather than guarded: when you close an entry, look
+ * for the code's other homes and close those too. The round that closed
+ * DENY_INVALID_PROJECT_ID demonstrated all three sites for exactly this reason.
+ *
  * THIS LIST MAY SHRINK. Adding to it is not a fix — it records that a new
  * refusal shipped without ever being shown to fire, and the commit that adds a
  * line should say why that was acceptable. Removing a line means a test now
@@ -52,10 +60,8 @@ const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
 const UNDEMONSTRATED = Object.freeze([
   "DENY_INVALID_CONTRACT",
   "DENY_INVALID_EVENT",
-  "DENY_INVALID_PROJECT_ID",
   "DENY_NOT_CANDIDATE",
   "DENY_PROOF_TRANSCRIPT_VALIDATOR_UNAVAILABLE",
-  "DENY_REGISTRATION_PATH",
   "DENY_SUPERSEDED"
 ]);
 
@@ -129,7 +135,7 @@ function denyCodes() {
 /**
  * Every DENY_ code named anywhere under tests/, EXCLUDING THIS FILE.
  *
- * The exclusion is load-bearing. This file lists all 36 undemonstrated codes by
+ * The exclusion is load-bearing. This file lists every undemonstrated code by
  * name, so a corpus that includes it reports every one of them as demonstrated
  * and the ratchet inverts into a rubber stamp — it failed exactly that way on
  * first run. Third occurrence of this shape in two rounds: a register that reads
