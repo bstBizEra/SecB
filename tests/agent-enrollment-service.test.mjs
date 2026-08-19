@@ -193,3 +193,60 @@ test("DENY_ENROLLMENT_UNAVAILABLE — the audit trail or the registry refuses th
   assert.equal(viaRegistry.ok, false);
   assert.equal(viaRegistry.deny_code, "DENY_ENROLLMENT_UNAVAILABLE");
 });
+
+// ---------------------------------------------------------------------------
+// Instance identity: the two refusals that keep an actor from being two things.
+//
+// Found by tools/per-site-demonstration.mjs. Both codes are demonstrated in
+// runtime-registry, so the ratchet — which keys by code name — read them as
+// covered while this service's copies had never fired.
+//
+// They matter here because in SecB an agent INSTANCE is the actor. Every
+// separation-of-duties check downstream compares actor ids, so an id that can
+// be enrolled twice, or acted on without a record, is an identity the authority
+// model cannot reason about.
+// ---------------------------------------------------------------------------
+
+test("DENY_DUPLICATE_INSTANCE — the same instance id cannot be enrolled twice", () => {
+  const { service, registry } = enrollmentHarness();
+
+  const first = service.propose({ ...REQUEST });
+  assert.equal(first.ok, true);
+  assert.ok(registry.get("inst_server_generated_001"), "the first proposal must have registered");
+
+  // The id factory is fixed, so the second proposal generates the SAME id — the
+  // exact collision the guard exists for. A different idempotency key, so this
+  // is a genuinely new request rather than a replay.
+  const second = service.propose({ ...REQUEST, idempotency_key: "idem-second-enrollment" });
+  assert.equal(second.deny_code, "DENY_DUPLICATE_INSTANCE");
+});
+
+test("DENY_UNKNOWN_INSTANCE — a receipt that is valid while the registry has no record", () => {
+  // REACHABLE BY CONSTRUCTION, NOT BY MONKEYPATCHING. RuntimeRegistry has no
+  // delete, so with the real registry this cannot fire. But `registry` is an
+  // injected dependency, and this guard is what stops the service from
+  // concluding "a receipt exists, therefore the record exists". Those are two
+  // separate stores, and only one of them belongs to this service.
+  const real = new RuntimeRegistry({ policyCeiling: "A0" });
+  let forget = false;
+  const service = new AgentEnrollmentService({
+    registry: {
+      register: (record) => real.register(record),
+      get: (id) => (forget ? null : real.get(id))
+    },
+    ledgerWriter: () => {},
+    now: () => new Date("2026-07-31T00:00:00Z"),
+    idFactory: () => "inst_server_generated_001",
+    receiptFactory: () => "receipt-secret-001"
+  });
+
+  service.propose({ ...REQUEST });
+  // The receipt is genuine and still matches; only the record is gone.
+  forget = true;
+  assert.equal(service.inspect("inst_server_generated_001", "receipt-secret-001").deny_code, "DENY_UNKNOWN_INSTANCE");
+
+  // And the ORDER holds: a bad receipt is refused as a receipt problem even when
+  // the record is also missing. Collapsing the two would tell a caller its
+  // instance is unknown when the real fault was an unverifiable receipt.
+  assert.equal(service.inspect("inst_server_generated_001", "wrong-receipt").deny_code, "DENY_ENROLLMENT_RECEIPT");
+});
