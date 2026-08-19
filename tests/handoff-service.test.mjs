@@ -334,3 +334,62 @@ test("DENY_PARENT_SCOPE — a chain may not cross work packages", () => {
     "DENY_PARENT_SCOPE"
   );
 });
+
+// ---------------------------------------------------------------------------
+// Fail-closed construction.
+//
+// Found by tools/per-site-demonstration.mjs: DENY_CONFIG is demonstrated in
+// four other services, so the ratchet — which keys by code name — read it as
+// covered while this constructor's two guards had never fired.
+//
+// They are the reason a HandoffService cannot exist without the authority it
+// depends on. A handoff decides whether work may pass from one actor to
+// another; built against a workPackageService that cannot resolve effective
+// contracts or produce a decision ledger, it would answer that question with no
+// authority behind it and no record of having done so.
+// ---------------------------------------------------------------------------
+
+test("DENY_CONFIG — a work-package service that cannot answer is refused at construction", () => {
+  const partial = {
+    resolveEffective: () => ({ code: "ALLOW" })
+    // getDecisionLedger deliberately absent
+  };
+  for (const [what, workPackageService] of [
+    ["missing entirely", undefined],
+    ["null", null],
+    ["a plain object with neither method", {}],
+    ["resolveEffective only", partial],
+    ["getDecisionLedger only", { getDecisionLedger: () => ({}) }],
+    ["both present but not callable", { resolveEffective: true, getDecisionLedger: "ledger" }]
+  ]) {
+    assert.throws(
+      () => new HandoffService({ workPackageService }),
+      (error) => {
+        assert.ok(error instanceof HandoffServiceError, `${what}: wrong error class`);
+        assert.equal(error.code, "DENY_CONFIG", `${what}: wrong code`);
+        return true;
+      },
+      what
+    );
+  }
+});
+
+test("DENY_CONFIG — receiptResolver is optional, but not optional in TYPE", () => {
+  const wp = { resolveEffective: () => ({ code: "ALLOW" }), getDecisionLedger: () => ({}) };
+
+  // null is the documented R1 state and must construct.
+  assert.ok(new HandoffService({ workPackageService: wp, receiptResolver: null }));
+  assert.ok(new HandoffService({ workPackageService: wp }));
+
+  // Anything else non-callable is refused. The distinction matters because the
+  // resolver is what flips context_receipt_ref to verifiable: a truthy
+  // non-function would be silently treated as "a resolver is present" while
+  // being unable to resolve anything.
+  for (const receiptResolver of [{}, "consumeReceipt", 0, true, []]) {
+    assert.throws(
+      () => new HandoffService({ workPackageService: wp, receiptResolver }),
+      (error) => error.code === "DENY_CONFIG",
+      String(receiptResolver)
+    );
+  }
+});
