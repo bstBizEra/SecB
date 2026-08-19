@@ -664,3 +664,55 @@ test("GUARD: knowledge-claim schema, temporal-ledgers, sod-rules AND the S1 faca
     assert.equal(normalize(onBranch), normalize(onBase), `${path} must be untouched vs S2 base ${S2_BASE.slice(0, 7)} (sidecar, wrap-not-modify)`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// The S1 read path failing closed.
+//
+// Found by tools/per-site-demonstration.mjs. DENY_LEDGER_UNAVAILABLE is
+// demonstrated in knowledge-claim-service, so the deny-path ratchet — which
+// keys by code name — read it as covered while this module's two sites had
+// never fired.
+//
+// resolveViaS1 is the ONLY claim read path this service is allowed to use; the
+// constructor enforces that. So its failure handling is what stands between a
+// broken claim ledger and a supersession recorded against evidence nobody could
+// read. Both sites are covered here: the read THROWING, and the read returning
+// something that is not an ALLOW.
+// ---------------------------------------------------------------------------
+
+test("DENY_LEDGER_UNAVAILABLE — the S1 read path throws", () => {
+  withHarness(
+    { claimService: { getClaim: () => { throw new Error("knowledge ledger is unreadable"); } } },
+    ({ service }) => {
+      const out = service.recordSupersession(supersessionRequest());
+      assert.equal(out.code, "DENY_LEDGER_UNAVAILABLE");
+      // The failing ref is named. A refusal that said only "a read failed" would
+      // leave an operator with two claim ids and no way to tell which one is
+      // unreadable.
+      assert.equal(out.failed_ref, "kc_b");
+    }
+  );
+});
+
+test("DENY_LEDGER_UNAVAILABLE — the S1 read path returns something that is not an ALLOW", () => {
+  // The second site, and the one that is easy to get wrong: a resolution that is
+  // merely absent, malformed, or a denial WITHOUT a code of its own must still
+  // refuse. Treating an unrecognised answer as anything but a failure is how a
+  // read path stops being fail-closed.
+  for (const resolution of [null, undefined, "ALLOW", {}, { decision: "ALLOW" }, { decision: "DENY" }]) {
+    withHarness({ claimService: { getClaim: () => resolution } }, ({ service }) => {
+      const out = service.recordSupersession(supersessionRequest());
+      assert.equal(out.code, "DENY_LEDGER_UNAVAILABLE", `resolution ${JSON.stringify(resolution) ?? "undefined"}`);
+    });
+  }
+
+  // A denial that DOES carry its own code is surfaced VERBATIM instead — the
+  // distinction the fallback exists to preserve. Collapsing the two would report
+  // an authorization refusal as a ledger outage.
+  withHarness(
+    { claimService: { getClaim: () => ({ decision: "DENY", code: "DENY_CLAIM_REVOKED", reason: "revoked" }) } },
+    ({ service }) => {
+      assert.equal(service.recordSupersession(supersessionRequest()).code, "DENY_CLAIM_REVOKED");
+    }
+  );
+});
