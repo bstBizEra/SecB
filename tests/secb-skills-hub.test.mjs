@@ -619,3 +619,66 @@ describe('SkillsHub — half an identity never reaches the resolver', () => {
       'a complete identity must reach the resolver');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The withheld tally names a refusal by its own code.
+//
+// Found by tools/per-site-demonstration.mjs, which reported DENY_REVOKED as
+// undemonstrated in this module even though the file names it. The tool was
+// right and the distinction is worth stating precisely: AC-SKILLS-HUB-04
+// asserts the SKILL IS WITHHELD, and that still holds. What nothing asserted is
+// that the aggregate tally reports the withholding under the right name.
+//
+// DENY_CODES has exactly one consumer — the withheld_reasons tally in
+// searchSkills. Its ten resolver-supplied entries exist for no other purpose,
+// and the existing tally assertions cover only HUB-LOCAL codes
+// (DENY_UNGOVERNED_PACKAGE, DENY_NO_RESOLVER). So every resolver code could
+// have been dropped from the set without a single test failing, and an operator
+// watching the tally for revocations would have seen "unresolved" instead.
+// ---------------------------------------------------------------------------
+
+describe('withheld tally fidelity', () => {
+  const RESOLVER_CODES = [
+    'DENY_UNBOUND_CONTEXT',
+    'DENY_DATA_CLASSIFICATION',
+    'DENY_UNKNOWN_SKILL',
+    'DENY_NOT_PUBLISHED',
+    'DENY_REVOKED',
+    'DENY_PROJECT_SCOPE',
+    'DENY_RUNTIME',
+    'DENY_PROMOTION_NOT_EFFECTIVE',
+    'DENY_UNBOUND_SUBJECT',
+    'DENY_SUBJECT_MISMATCH'
+  ];
+
+  const hubDenying = (code) => new SecBSkillsHub({
+    services: { skillResolver: { resolveSkill: () => ({ skill: null, code }) } }
+  });
+
+  it('every governed resolver code appears in withheld_reasons under its own name', () => {
+    for (const code of RESOLVER_CODES) {
+      const result = hubDenying(code).searchSkills('', CONTEXT);
+      assert.ok(result.withheld_count > 0, `${code}: nothing was withheld, so the tally proves nothing`);
+      assert.ok(
+        result.withheld_reasons[code] > 0,
+        `${code} was bucketed as ${Object.keys(result.withheld_reasons).join(', ')} instead of itself. ` +
+          'A revocation reported as "unresolved" reads as a lookup failure rather than a governance decision.'
+      );
+    }
+  });
+
+  it('a code the hub does not vouch for is bucketed, so the allowlist is not decorative', () => {
+    // The other half. Without this, the test above is satisfied by a hub that
+    // passes ANY resolver string straight into an output key — which is exactly
+    // what the allowlist exists to prevent, since the resolver is an injected
+    // dependency whose codes are not this module's to vouch for.
+    const result = hubDenying('DENY_SOMETHING_THE_RESOLVER_INVENTED').searchSkills('', CONTEXT);
+    assert.ok(result.withheld_count > 0);
+    assert.ok(result.withheld_reasons.DENY_UNRESOLVED > 0, 'an unvouched code must bucket to DENY_UNRESOLVED');
+    assert.equal(
+      result.withheld_reasons.DENY_SOMETHING_THE_RESOLVER_INVENTED,
+      undefined,
+      'an injected dependency wrote its own key into the hub output'
+    );
+  });
+});
