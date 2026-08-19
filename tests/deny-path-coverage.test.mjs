@@ -299,3 +299,47 @@ test("the code-name blind spot now has a way to be measured", () => {
       "string, so a second home for it would make the tool discard real work."
   );
 });
+
+test("a refusal exported as a CONSTANT is still asserted by some test that imports it", () => {
+  // The hole neither this ratchet nor the per-site tool can see by renaming.
+  //
+  // Five modules export their deny codes as named constants. A test that
+  // imports the constant and asserts `result.code === DENY_X` moves BOTH sides
+  // together when the literal changes, so a rename-based probe reports "nothing
+  // failed" and cannot tell a covered module from an uncovered one. The screen
+  // in tools/per-site-demonstration.mjs first called all three of
+  // event-family-policy, replay-assembler and redaction-policy blind for
+  // exactly this reason; they are not, and it now says INCONCLUSIVE instead.
+  //
+  // What CAN be checked without mutation is this: some test imports the module
+  // and names the constant. That is weaker than demonstrating the refusal, and
+  // is labelled as weaker — but it fails outright if a constant is exported and
+  // never referenced anywhere, which is the state a rename probe is blind to.
+  const importsOf = (source) =>
+    [...source.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((m) => m[1]);
+  const testSources = ls("tests/")
+    .filter((f) => f.endsWith(".mjs") && f !== SELF)
+    .map((f) => [f, read(f)]);
+
+  const unreferenced = [];
+  for (const file of ls("src/").filter((f) => f.endsWith(".mjs"))) {
+    const exported = [...read(file).matchAll(/export const (DENY_[A-Z0-9_]+)\s*=/g)].map((m) => m[1]);
+    if (exported.length === 0) continue;
+    const base = file.split("/").pop();
+    const importers = testSources.filter(([, s]) => importsOf(s).some((spec) => spec.endsWith(base)));
+    for (const name of exported) {
+      // `\\b`. A bare \b inside a template literal is the BACKSPACE character,
+      // so the pattern matches nothing and every constant reads as unreferenced.
+      const seen = importers.some(([, s]) => new RegExp(`\\b${name}\\b`).test(s));
+      if (!seen) unreferenced.push(`${file} :: ${name}`);
+    }
+  }
+
+  assert.deepEqual(
+    unreferenced,
+    [],
+    "These refusals are exported as constants and no test that imports their module ever names them. " +
+      "A rename-based probe cannot see this — it reports success either way — so this assertion is the " +
+      "only thing standing behind them."
+  );
+});

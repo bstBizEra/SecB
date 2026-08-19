@@ -58,10 +58,30 @@ const MARKER = "DENY_PER_SITE_PROBE";
 /** Restore a file to HEAD. Uses git, so "restored" means byte-identical to HEAD. */
 const restore = (rel) => git("checkout", "--", rel);
 
+/**
+ * Test files that actually IMPORT the module, directly or transitively.
+ *
+ * The first version matched the module's basename anywhere in the file, which
+ * counted PROSE. tests/upstream-deny-paths.test.mjs names upstream-proxy in its
+ * header comment while importing only upstream-client and upstream-registry, so
+ * the proxy was being screened against a file that never loads it.
+ *
+ * That over-match was CONSERVATIVE — extra files can only add failures, so it
+ * could not have turned an undemonstrated site into a demonstrated one — but it
+ * wasted runs and pointed at the wrong tests. Matching import specifiers instead.
+ */
 function testsReferencing(moduleRel) {
-  const base = moduleRel.split("/").pop().replace(/\.mjs$/, "");
-  return ls("tests/").filter((f) => f.endsWith(".mjs") && read(f).includes(base));
+  const base = moduleRel.split("/").pop();
+  const direct = ls("tests/").filter((f) => f.endsWith(".mjs") && importsOf(read(f)).some((spec) => spec.endsWith(base)));
+  if (direct.length > 0) return direct;
+  // Fall back to the basename scan when nothing imports it directly: the module
+  // may be reached transitively through a barrel or a sibling service.
+  const stem = base.replace(/\.mjs$/, "");
+  return ls("tests/").filter((f) => f.endsWith(".mjs") && read(f).includes(stem));
 }
+
+const importsOf = (source) =>
+  [...source.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)].map((m) => m[1]);
 
 /** Failure count from a test run. Inherited NODE_TEST_CONTEXT makes a failing
  *  `node --test` exit 0, so it is stripped — the same trap dual-policy-check hit. */
@@ -78,7 +98,138 @@ function failures(testFiles) {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * SCREEN MODE — the cheap generalisation.
+ *
+ * Per-code sweeping answers "is this refusal demonstrated where it lives", but
+ * costs one test run per (code, module) pair. 433 codes across 122 modules is
+ * far more than can be run.
+ *
+ * So screen instead: rename EVERY DENY_ literal in one module at once and run
+ * that module's tests. If nothing fails, NONE of that module's refusals is
+ * demonstrated — a strong finding for one run. If something fails, the module
+ * has at least some real coverage and deserves a per-code sweep to find which.
+ *
+ * It cannot tell WHICH refusal is covered. That is the trade: 122 runs instead
+ * of thousands, in exchange for a yes/no per module.
+ */
+function screen(argv) {
+  const onlyAt = argv.indexOf("--only");
+  const only = onlyAt >= 0 ? argv[onlyAt + 1] : null;
+  const limitAt = argv.indexOf("--limit");
+  const limit = limitAt >= 0 ? Number(argv[limitAt + 1]) : Infinity;
+
+  recoverResidue();
+  const dirty = git("status", "--porcelain", "--", "src/").trim();
+  if (dirty) {
+    console.error(`src/ is not clean; refusing to run.
+${dirty}`);
+    return 2;
+  }
+
+  const modules = ls("src/")
+    .filter((f) => f.endsWith(".mjs") && /["'](DENY_[A-Z0-9_]+)["']/.test(read(f)))
+    .filter((f) => (only ? f.includes(only) : true))
+    .slice(0, limit);
+
+  console.log(`screen — ${modules.length} module(s) that emit at least one DENY_ code
+`);
+  const blind = [];
+  for (const rel of modules) {
+    const tests = testsReferencing(rel);
+    const name = rel.replace(/^src\//, "");
+    const codes = new Set([...read(rel).matchAll(/["'](DENY_[A-Z0-9_]+)["']/g)].map((m) => m[1]));
+    if (tests.length === 0) {
+      console.log(`  ${name.padEnd(50)} NO TEST FILE REFERENCES THIS MODULE`);
+      blind.push([rel, codes.size]);
+      continue;
+    }
+    try {
+      writeFileSync(resolve(REPO, rel), read(rel).replace(/["'](DENY_[A-Z0-9_]+)["']/g, `"${MARKER}"`), "utf8");
+      const n = failures(tests);
+      if (n === 0) {
+        const viaConstants = assertsViaOwnConstants(rel, tests);
+        if (viaConstants) {
+          console.log(
+            `  ${name.padEnd(50)} INCONCLUSIVE — ${viaConstants.file.replace("tests/", "")} asserts through this ` +
+            `module's own exported constants (${viaConstants.names.join(", ")}), which a literal rename cannot detect`
+          );
+        } else {
+          console.log(`  ${name.padEnd(50)} NONE OF ITS ${String(codes.size).padStart(2)} REFUSALS IS DEMONSTRATED`);
+          blind.push([rel, codes.size]);
+        }
+      } else if (n === null) {
+        console.log(`  ${name.padEnd(50)} could not read a failure count`);
+      }
+    } finally {
+      restore(rel);
+    }
+  }
+
+  const still = git("status", "--porcelain", "--", "src/").trim();
+  if (still) {
+    console.error(`
+src/ DID NOT RESTORE CLEANLY:
+${still}`);
+    return 2;
+  }
+  console.log(`
+src/ restored to HEAD.`);
+  if (blind.length === 0) {
+    console.log("Every module screened has at least one demonstrated refusal.");
+    return 0;
+  }
+  console.log(`
+${blind.length} module(s) where renaming EVERY deny code changed nothing:`);
+  for (const [rel, count] of blind) console.log(`  ${rel}  (${count} code(s))`);
+  return 1;
+}
+
+function recoverResidue() {
+  for (const rel of ls("src/")) {
+    if (!rel.endsWith(".mjs")) continue;
+    if (!read(rel).includes(MARKER)) continue;
+    restore(rel);
+    console.error(`recovered ${rel} — a previous run was killed while it was mutated.`);
+  }
+}
+
+
+/**
+ * Does any of these tests assert through the module's OWN exported DENY_
+ * constants rather than through a literal?
+ *
+ * If so, a literal rename is INVISIBLE: the module returns the renamed value and
+ * the test compares it against the same renamed value, imported from the same
+ * place. Both sides move together and nothing fails.
+ *
+ * This is not a hypothetical. The screen first reported
+ * src/security/redaction-policy.mjs as having none of its three refusals
+ * demonstrated. tests/conformance-v011-redaction.test.mjs imports all three
+ * constants and asserts result.code against them — the refusals ARE
+ * demonstrated, and the tool was wrong. A "0 failures" result there means
+ * "this method cannot see it", not "nothing covers it", and the two must not
+ * print the same word.
+ */
+function assertsViaOwnConstants(moduleRel, testFiles) {
+  const exported = [...read(moduleRel).matchAll(/export const (DENY_[A-Z0-9_]+)\s*=/g)].map((m) => m[1]);
+  if (exported.length === 0) return null;
+  const base = moduleRel.split("/").pop();
+  for (const f of testFiles) {
+    const source = read(f);
+    if (!importsOf(source).some((spec) => spec.endsWith(base))) continue;
+    // `\\b`, not `\b`: inside a template literal a bare \b is the BACKSPACE
+    // character, so the pattern silently matched nothing and every module came
+    // back as blind. Fourth time an escape has collapsed on its way into a file
+    // in this repository; it is always this shape.
+    const used = exported.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
+    if (used.length > 0) return { file: f, names: used };
+  }
+  return null;
+}
+
 function main(argv) {
+  if (argv.includes("--screen")) return screen(argv);
   const code = argv.find((a) => a.startsWith("DENY_"));
   if (!code) {
     console.error("usage: node tools/per-site-demonstration.mjs DENY_SOME_CODE [--limit N]");
@@ -145,7 +296,15 @@ function main(argv) {
       writeFileSync(resolve(REPO, rel), read(rel).replaceAll(`"${code}"`, `"${MARKER}"`), "utf8");
       const n = failures(tests);
       if (n === null) console.log(`  ${name.padEnd(50)} COULD NOT READ A FAILURE COUNT`);
-      else if (n === 0) { console.log(`  ${name.padEnd(50)} UNDEMONSTRATED`); undemonstrated.push(rel); }
+      else if (n === 0) {
+        const viaConstants = assertsViaOwnConstants(rel, tests);
+        if (viaConstants) {
+          console.log(`  ${name.padEnd(50)} INCONCLUSIVE — asserted via this module's own exported constant`);
+        } else {
+          console.log(`  ${name.padEnd(50)} UNDEMONSTRATED`);
+          undemonstrated.push(rel);
+        }
+      }
       else console.log(`  ${name.padEnd(50)} demonstrated (${n} failing)`);
     } finally {
       restore(rel);
