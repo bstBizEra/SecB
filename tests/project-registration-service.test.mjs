@@ -226,3 +226,62 @@ test("DENY_REGISTRATION_PATH — a blank projectId is refused at the filesystem 
     (error) => error.code === "DENY_REGISTRATION_PATH"
   );
 });
+
+// ---------------------------------------------------------------------------
+// The service's OWN refusal on an authorized transition.
+//
+// Found by tools/per-site-demonstration.mjs, and findable no other way here:
+// DENY_UNAUTHORIZED_MUTATION is demonstrated in bootstrap-authorization-gate,
+// so the deny-path ratchet — which keys by code name — read it as covered while
+// this module's copy had never fired.
+//
+// It had never fired because the gate refuses first with its own check, so no
+// call THROUGH the gate reaches this one. transitionState is public, though, and
+// a caller reaching it directly bypasses the gate entirely. This is the last
+// line, and a last line nobody has seen fire is not a line.
+// ---------------------------------------------------------------------------
+
+test("DENY_UNAUTHORIZED_MUTATION — no state becomes AUTHORIZED without a signed record", () => {
+  const service = new ProjectRegistrationService({ stagingBaseDir: testStagingDir });
+  service.registerDraft({ projectId: "SECB-AUTHZ-001", name: "authorization boundary" });
+
+  // BOTH authorized states, not one. A guard that covered only
+  // AUTHORIZED_FOR_BOOTSTRAP would pass a test that exercised only that state,
+  // and AUTHORIZED_FOR_IMPLEMENTATION is the one that permits repository writes.
+  for (const targetState of ["AUTHORIZED_FOR_BOOTSTRAP", "AUTHORIZED_FOR_IMPLEMENTATION"]) {
+    for (const [what, record] of [
+      ["no record at all", undefined],
+      ["an explicitly null record", null],
+      ["a record with no reviewer signature", { approver: "operator" }],
+      ["a record whose signature is blank", { approver: "operator", reviewerSignature: "" }]
+    ]) {
+      assert.throws(
+        () => service.transitionState("SECB-AUTHZ-001", targetState, record),
+        (error) => {
+          assert.ok(error instanceof ProjectRegistrationError, `${targetState} / ${what}: wrong error class`);
+          assert.equal(error.code, "DENY_UNAUTHORIZED_MUTATION", `${targetState} / ${what}: wrong code`);
+          return true;
+        },
+        `${targetState} / ${what}`
+      );
+    }
+  }
+});
+
+test("the authorization requirement is scoped to the authorized states, not blanket", () => {
+  // The other half of the property. A guard that demanded a signed record for
+  // EVERY transition would satisfy the test above completely while breaking the
+  // ordinary lifecycle — and nothing above would notice, because refusing too
+  // much looks identical to refusing correctly when you only test refusals.
+  const service = new ProjectRegistrationService({ stagingBaseDir: testStagingDir });
+  service.registerDraft({ projectId: "SECB-AUTHZ-002", name: "unauthorized stages still move" });
+
+  const moved = service.transitionState("SECB-AUTHZ-002", "REVIEW_REQUIRED");
+  assert.equal(moved.status, "REVIEW_REQUIRED");
+
+  // And an unknown stage is a different refusal entirely.
+  assert.throws(
+    () => service.transitionState("SECB-AUTHZ-002", "AUTHORIZED_FOR_EVERYTHING"),
+    (error) => error.code === "INVALID_LIFECYCLE_STAGE"
+  );
+});
