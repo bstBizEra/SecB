@@ -425,3 +425,83 @@ test("DENY_PLUGIN_VERSION_IN_FLIGHT — a second registration that arrives befor
   assert.equal(landed.status, "CANDIDATE");
   assert.equal(landed.operationally_effective, false);
 });
+
+// ---------------------------------------------------------------------------
+// The request shape itself.
+//
+// Found by tools/per-site-demonstration.mjs. DENY_MALFORMED_REQUEST is
+// demonstrated in twelve other modules, so the ratchet read the name as covered
+// while all four of this module's sites had never fired — including in the
+// round where I added the two version refusals to this very file. Covering some
+// of a module's refusals is what makes the rest look covered.
+//
+// REQUEST_KEYS is an allowlist, not a checklist. The registry accepts exactly
+// { descriptor, idempotency_key } and refuses anything else, which is what stops
+// a caller from smuggling a field past a boundary whose whole job is to decide
+// what a plugin is allowed to be.
+// ---------------------------------------------------------------------------
+
+test("DENY_MALFORMED_REQUEST — a registration request that is not a plain object", async () => {
+  const { instance } = registry();
+  for (const request of [undefined, null, "descriptor", 42, [], () => {}, new Map()]) {
+    await assert.rejects(
+      () => instance.registerCandidate(request),
+      (error) => error.code === "DENY_MALFORMED_REQUEST",
+      String(request)
+    );
+  }
+});
+
+test("DENY_MALFORMED_REQUEST — an unknown field is refused, not ignored", async () => {
+  const { instance } = registry();
+  const valid = { descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN, idempotency_key: "idem-shape" };
+
+  // Silently dropping an extra field is how a caller comes to believe it set
+  // something it did not. On a registry that decides what a plugin may be, the
+  // field a caller thinks it sent and the field the registry read must be the
+  // same set.
+  for (const extra of [
+    { operationally_effective: true },
+    { boundaries: { authority_source: "ELSEWHERE" } },
+    { descriptor_fingerprint: "0".repeat(64) },
+    { __proto__: null, status: "PROMOTED" }
+  ]) {
+    await assert.rejects(
+      () => instance.registerCandidate({ ...valid, ...extra }),
+      (error) => {
+        assert.equal(error.code, "DENY_MALFORMED_REQUEST");
+        // The refusal names the offending field. A caller told only "malformed"
+        // has to guess which of its keys the registry objected to.
+        assert.match(error.message, /Unknown registration fields/);
+        return true;
+      },
+      JSON.stringify(Object.keys(extra))
+    );
+  }
+});
+
+test("DENY_MALFORMED_REQUEST — a descriptor that is not an object, and a lookup that is not by string", async () => {
+  const { instance } = registry();
+  for (const descriptor of [undefined, null, "runtime-provider-ruflo", 1, [], () => {}]) {
+    await assert.rejects(
+      () => instance.registerCandidate({ descriptor, idempotency_key: "idem-desc" }),
+      (error) => error.code === "DENY_MALFORMED_REQUEST",
+      String(descriptor)
+    );
+  }
+
+  // getCandidate is synchronous and guards separately. Asserted here so the two
+  // are not assumed to share a code path they do not share.
+  for (const [pluginId, pluginVersion] of [
+    [undefined, "1.0.0"],
+    ["runtime-provider-ruflo", undefined],
+    [1, "1.0.0"],
+    ["runtime-provider-ruflo", ["1.0.0"]]
+  ]) {
+    assert.throws(
+      () => instance.getCandidate(pluginId, pluginVersion),
+      (error) => error.code === "DENY_MALFORMED_REQUEST",
+      `${String(pluginId)} / ${String(pluginVersion)}`
+    );
+  }
+});
