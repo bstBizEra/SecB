@@ -393,3 +393,49 @@ test("DENY_CONFIG — receiptResolver is optional, but not optional in TYPE", ()
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// Who may revoke a handoff.
+//
+// Found by tools/per-site-demonstration.mjs. DENY_REVOKE_AUTHORITY is
+// demonstrated in context-federation-service, so the ratchet read the name as
+// covered while this one had never fired — meaning any actor at all could have
+// revoked any handoff and nothing in the suite would have noticed.
+//
+// Revocation is not a small power here. A handoff is how work and its ceiling
+// pass from one actor to another; a third party able to revoke can strip an
+// actor of work it holds, and can do it repeatedly.
+// ---------------------------------------------------------------------------
+
+test("DENY_REVOKE_AUTHORITY — only the source actor or GOV may revoke a handoff", () => {
+  const h = harness();
+  h.offer();
+
+  // Neither the TARGET of the handoff nor an unrelated actor may revoke it.
+  // REV is the party the work was offered to, which is the case most likely to
+  // be waved through as "involved enough".
+  for (const actorId of [REV, REV2, "someone-else"]) {
+    denies(() => h.handoff.revokeHandoff(PROJECT, "ho_1", { actorId }), "DENY_REVOKE_AUTHORITY");
+  }
+
+  // The source actor may.
+  assert.equal(h.handoff.revokeHandoff(PROJECT, "ho_1", { actorId: ENGIN }).state, "REVOKED");
+});
+
+test("the GOV escape is a LITERAL actor id, not a GOV-role actor", () => {
+  // Recording the R1 limitation the source comments describe rather than
+  // asserting the behaviour someone would assume. The check is
+  // `actorId !== "GOV"`, so the governance actor of this fixture — "gov-actor",
+  // the id that actually holds GOV grants on the work package — is REFUSED,
+  // while the bare string "GOV" is accepted by any caller that types it.
+  //
+  // That is grant plumbing this service does not have at R1. The test exists so
+  // the day it arrives, this fails and says what to replace.
+  const byRoleActor = harness();
+  byRoleActor.offer();
+  denies(() => byRoleActor.handoff.revokeHandoff(PROJECT, "ho_1", { actorId: GOV }), "DENY_REVOKE_AUTHORITY");
+
+  const byLiteral = harness();
+  byLiteral.offer();
+  assert.equal(byLiteral.handoff.revokeHandoff(PROJECT, "ho_1", { actorId: "GOV" }).state, "REVOKED");
+});
