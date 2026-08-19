@@ -98,3 +98,74 @@ test("unknown contract kinds fail closed", () => {
     (error) => error instanceof ContractValidationError && error.code === "DENY_UNKNOWN_CONTRACT"
   );
 });
+
+// ---------------------------------------------------------------------------
+// validateContract NEVER throws an error without a code — and two modules
+// depend on that without saying so.
+//
+// tools/per-site-demonstration.mjs reported DENY_CONTRACT_INVALID as
+// undemonstrated in src/mcp/secb-mcp-server.mjs and
+// src/runtime/runtime-provider-plugin-registry.mjs. Both reach it the same way:
+//
+//     deny(error?.code ?? "DENY_CONTRACT_INVALID", ...)
+//
+// The `??` branch is UNREACHABLE through the public API, because this validator
+// converts every failure into a coded ContractValidationError. It is not
+// shadowed — nothing stricter stands in front of it — and it is not a data
+// structure invariant. It is a GUARANTEE OF THIS MODULE that those two call
+// sites rely on implicitly.
+//
+// So the guarantee is asserted here rather than left implicit. If it ever
+// breaks, this fails, and at that moment those two fallbacks stop being dead
+// code and become live refusals that no test demonstrates.
+//
+// HOW THE GUARANTEE IS ACTUALLY PROVIDED, because it is not what it looks like.
+// This module contains NO try/catch. Every throw here is an explicit
+// ContractValidationError. Awkward documents do not become coded errors by
+// being caught — they become coded errors because ajv RETURNS FALSE for them
+// instead of throwing. That makes the guarantee a property of the ajv version,
+// which tests/supply-chain-integrity.test.mjs pins by lockfile AND by the
+// version actually loaded at runtime. An unpinned ajv upgrade could change this
+// without changing a line of SecB.
+// ---------------------------------------------------------------------------
+
+test("every failure mode of validateContract throws an error carrying a code", () => {
+  const circular = { a: 1 };
+  circular.self = circular;
+  const throwingGetter = {};
+  Object.defineProperty(throwingGetter, "boom", { get() { throw new Error("getter exploded"); }, enumerable: true });
+
+  const cases = {
+    "a document that fails its schema": ["runtimeProviderPlugin", {}],
+    "an unknown contract kind": ["noSuchContractKind", {}],
+    "an undefined kind": [undefined, {}],
+    "a non-string kind": [42, {}],
+    "an undefined document": ["runtimeProviderPlugin", undefined],
+    // The four below are the ones that could plausibly throw UNCODED — a
+    // circular or BigInt-bearing document is exactly what makes structuredClone
+    // and JSON paths raise DataCloneError or TypeError. They do not, today.
+    // The getter case is the weakest of the four and is labelled as such: ajv
+    // may simply never read a property the schema does not mention, so it may
+    // be passing for a reason unrelated to error coding.
+    "a document that cannot be structured-cloned": ["runtimeProviderPlugin", circular],
+    "a document holding a BigInt": ["runtimeProviderPlugin", { n: 1n }],
+    "a document holding a Symbol": ["runtimeProviderPlugin", { s: Symbol("x") }],
+    "a document with a throwing getter": ["runtimeProviderPlugin", throwingGetter]
+  };
+
+  for (const [what, [kind, document]] of Object.entries(cases)) {
+    let thrown = null;
+    try {
+      validateContract(kind, document);
+    } catch (error) {
+      thrown = error;
+    }
+    assert.ok(thrown, `${what}: returned instead of throwing`);
+    assert.ok(
+      typeof thrown.code === "string" && thrown.code.startsWith("DENY_"),
+      `${what}: threw ${thrown.constructor.name} with code ${String(thrown.code)}. Two modules fall back to ` +
+        "DENY_CONTRACT_INVALID when this validator throws without a code; that fallback is dead only while " +
+        "this holds. It no longer holds."
+    );
+  }
+});
