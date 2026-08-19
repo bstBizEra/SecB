@@ -505,3 +505,18 @@ test("DENY_MALFORMED_REQUEST — a descriptor that is not an object, and a looku
     );
   }
 });
+
+test("DENY_IDEMPOTENCY_KEY — a registration without a usable key is refused", async () => {
+  // The fourth site the per-site sweep found in this module. Distinct from
+  // DENY_MALFORMED_REQUEST above: the request SHAPE is fine, the key is not.
+  // Reporting them as one code would tell a caller its request was malformed
+  // when the only thing wrong was a blank string.
+  const { instance } = registry();
+  for (const idempotency_key of [undefined, null, "", "   ", 0, 1, {}, []]) {
+    await assert.rejects(
+      () => instance.registerCandidate({ descriptor: RUFLO_RUNTIME_PROVIDER_PLUGIN, idempotency_key }),
+      (error) => error.code === "DENY_IDEMPOTENCY_KEY",
+      String(idempotency_key)
+    );
+  }
+});

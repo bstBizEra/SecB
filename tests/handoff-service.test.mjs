@@ -439,3 +439,115 @@ test("the GOV escape is a LITERAL actor id, not a GOV-role actor", () => {
   byLiteral.offer();
   assert.equal(byLiteral.handoff.revokeHandoff(PROJECT, "ho_1", { actorId: "GOV" }).state, "REVOKED");
 });
+
+// ---------------------------------------------------------------------------
+// Idempotency, live effectiveness, and the version bound at offer time.
+//
+// Three more per-site findings, all in this module. DENY_IDEMPOTENCY_KEY,
+// DENY_WORK_PACKAGE_NOT_EFFECTIVE and DENY_VERSION_SUPERSEDED are each
+// demonstrated in context-federation-service, so a code-name-keyed check read
+// all three as covered while none of this service's four sites had ever fired.
+//
+// The pattern is worth naming: handoff-service consistently shares refusal
+// vocabulary with the federation service, which is why it accumulated the most
+// borrowed coverage of any module in the repository.
+// ---------------------------------------------------------------------------
+
+test("DENY_IDEMPOTENCY_KEY — a blank key is refused before anything is recorded", () => {
+  const h = harness();
+  // Called directly rather than through the harness helper: that helper
+  // coalesces a missing key to a default, so `undefined` and `null` would never
+  // reach the guard. A harness convenience quietly covering the case under test
+  // is exactly how this site stayed undemonstrated.
+  for (const idempotencyKey of [undefined, null, "", "   ", 0, {}]) {
+    denies(
+      () => h.handoff.offerHandoff({
+        envelope: envelope(), actorId: ENGIN, authorityRef: "g_engin", sourceSessionId: "ses_src",
+        baseline: BASELINE,
+        ceiling: { riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: ["read"], transitions: [] },
+        idempotencyKey
+      }),
+      "DENY_IDEMPOTENCY_KEY"
+    );
+  }
+  // And nothing was written on the way out: a refused offer must leave no
+  // handoff behind for a later call to find.
+  denies(() => h.handoff.getHandoff(PROJECT, "ho_1"), "DENY_UNKNOWN_HANDOFF");
+});
+
+test("DENY_WORK_PACKAGE_NOT_EFFECTIVE — effectiveness is resolved LIVE at offer and again at accept", () => {
+  // Two separate sites, and the second is the one that matters. A handoff
+  // offered while the work package was effective must not be acceptable after
+  // it stops being effective — otherwise the offer becomes a stored permission
+  // that outlives the authority it was drawn from.
+  const real = harness();
+  let effective = true;
+  const gate = {
+    resolveEffective: (p, w, opts) => (effective ? real.wp.resolveEffective(p, w, opts) : { code: "DENY_EXPIRED" }),
+    getDecisionLedger: (...a) => real.wp.getDecisionLedger(...a)
+  };
+  const handoff = new HandoffService({ workPackageService: gate, now: () => new Date("2026-07-18T10:00:00Z") });
+
+  effective = false;
+  denies(
+    () => handoff.offerHandoff({
+      envelope: envelope(), actorId: ENGIN, authorityRef: "g_engin", sourceSessionId: "ses_src",
+      baseline: BASELINE,
+      ceiling: { riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: ["read"], transitions: [] },
+      idempotencyKey: "idem_not_effective"
+    }),
+    "DENY_WORK_PACKAGE_NOT_EFFECTIVE"
+  );
+
+  // Now offer while effective, then withdraw effectiveness before acceptance.
+  effective = true;
+  handoff.offerHandoff({
+    envelope: envelope(), actorId: ENGIN, authorityRef: "g_engin", sourceSessionId: "ses_src",
+    baseline: BASELINE,
+    ceiling: { riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: ["read"], transitions: [] },
+    idempotencyKey: "idem_offer_live"
+  });
+  effective = false;
+  denies(
+    () => handoff.acceptHandoff(PROJECT, "ho_1", { actorId: REV, authorityRef: "g_rev", sessionId: "ses_dst", baseline: BASELINE, idempotencyKey: "idem_acc" }),
+    "DENY_WORK_PACKAGE_NOT_EFFECTIVE"
+  );
+});
+
+test("DENY_VERSION_SUPERSEDED — a handoff cannot be accepted under a contract version it was not offered under", () => {
+  // The time-of-check/time-of-use guard on authority itself. The offer records
+  // the version it resolved; acceptance re-resolves and refuses if the answer
+  // moved. Without it, a handoff negotiated against version 1 would be honoured
+  // under version 2 — a ceiling agreed against a contract nobody re-read.
+  const real = harness();
+  let bump = 0;
+  const shifting = {
+    resolveEffective: (p, w, opts) => {
+      const r = real.wp.resolveEffective(p, w, opts);
+      return bump ? { ...r, version: r.version + bump } : r;
+    },
+    getDecisionLedger: (...a) => real.wp.getDecisionLedger(...a)
+  };
+  const handoff = new HandoffService({ workPackageService: shifting, now: () => new Date("2026-07-18T10:00:00Z") });
+
+  handoff.offerHandoff({
+    envelope: envelope(), actorId: ENGIN, authorityRef: "g_engin", sourceSessionId: "ses_src",
+    baseline: BASELINE,
+    ceiling: { riskClass: "R2", dataClassification: "INTERNAL", paths: ["src/services"], tools: ["read"], transitions: [] },
+    idempotencyKey: "idem_version_bound"
+  });
+
+  bump = 1;
+  denies(
+    () => handoff.acceptHandoff(PROJECT, "ho_1", { actorId: REV, authorityRef: "g_rev", sessionId: "ses_dst", baseline: BASELINE, idempotencyKey: "idem_acc" }),
+    "DENY_VERSION_SUPERSEDED"
+  );
+
+  // Unchanged version still accepts, so the guard is a version check and not a
+  // blanket refusal of every acceptance.
+  bump = 0;
+  assert.equal(
+    handoff.acceptHandoff(PROJECT, "ho_1", { actorId: REV, authorityRef: "g_rev", sessionId: "ses_dst", baseline: BASELINE, idempotencyKey: "idem_acc" }).state,
+    "ACCEPTED"
+  );
+});
