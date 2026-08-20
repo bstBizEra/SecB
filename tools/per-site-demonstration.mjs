@@ -40,6 +40,18 @@
  *   node tools/per-site-demonstration.mjs DENY_CLOCK_UNAVAILABLE --limit 5
  *   node tools/per-site-demonstration.mjs DENY_AUDIT_UNAVAILABLE --only services/
  *
+ * Two screening modes, both one run per module rather than per code:
+ *
+ *   --screen         rename EVERY deny code in a module; nothing failing means
+ *                    none of that module's refusals is demonstrated
+ *   --over-refusal   force EVERY guard to fire; nothing failing means no test
+ *                    exercises a path THROUGH those guards, so the module's
+ *                    permit behaviour is unverified
+ *
+ * The second is the mirror of the first, and the one a refusal-focused suite is
+ * least likely to have covered: a module that refuses everything satisfies every
+ * test that only ever asserts refusals.
+ *
  * Exit 0 if every emitting module demonstrates the refusal, 1 otherwise.
  */
 
@@ -54,6 +66,12 @@ const ls = (p) => git("ls-files", "--", p).split("\n").filter(Boolean);
 const read = (rel) => readFileSync(resolve(REPO, rel), "utf8");
 
 const MARKER = "DENY_PER_SITE_PROBE";
+
+// Built rather than written as a literal: an escaped newline inside a string
+// has collapsed on its way into this file seven times while it was being
+// developed, each time producing a syntax error or a pattern that matched
+// nothing. String.fromCharCode leaves nothing to collapse.
+const NEWLINE = String.fromCharCode(10);
 
 /** Restore a file to HEAD. Uses git, so "restored" means byte-identical to HEAD. */
 const restore = (rel) => git("checkout", "--", rel);
@@ -185,6 +203,118 @@ ${blind.length} module(s) where renaming EVERY deny code changed nothing:`);
   return 1;
 }
 
+
+/**
+ * OVER-REFUSAL SCREEN — the mirror of everything else this tool does.
+ *
+ * Every measurement here so far asks "is this refusal demonstrated". A suite
+ * that only ever asserts refusals is satisfied by a module that refuses
+ * EVERYTHING, and on a governance control plane that is not a harmless failure:
+ * refusing legitimate work is how a system that looks maximally safe stops
+ * being usable, and nothing in a refusal-only suite would say so.
+ *
+ * So: force every one-line `if (COND) deny(...)` guard in one module to fire,
+ * and run that module's tests. If they still pass, no test exercises a path THROUGH
+ * those guards — the module's permit behaviour is unverified.
+ *
+ * LIMIT, STATED. Only the one-line shape is rewritten: 245 of 910 refusal sites
+ * in src/. A module whose guards are all multi-line is not exercised by this and
+ * is reported as NOT APPLICABLE rather than as passing.
+ */
+function overRefusal(argv) {
+  const onlyAt = argv.indexOf("--only");
+  const only = onlyAt >= 0 ? argv[onlyAt + 1] : null;
+
+  recoverResidue();
+  const dirty = git("status", "--porcelain", "--", "src/").trim();
+  if (dirty) {
+    console.error(`src/ is not clean; refusing to run.
+${dirty}`);
+    return 2;
+  }
+
+  // Two guard shapes, both rewritten to `if (true)`. Done line-wise rather than
+  // with a cross-line regex: the multi-line shape is `if (COND) {` followed by a
+  // line whose first statement is the refusal, and matching that with a single
+  // pattern across newlines is exactly the kind of regex that silently matches
+  // nothing. Line-wise, a miss is visible as a lower guard count.
+  const forceGuards = (source) => {
+    const lines = source.split(NEWLINE);
+    let forced = 0;
+    const isRefusal = (l) => /^\s*(return\s+)?deny\(|^\s*throw new \w*Error\(/.test(l);
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (!/^\s*if \(/.test(line) || /^\s*if \(true\)/.test(line)) continue;
+      const oneLine = /^(\s*)if \(.*\)\s*(return\s+)?(deny|throw)/.exec(line);
+      if (oneLine) {
+        lines[i] = line.replace(/^(\s*)if \(.*?\)(\s*)/, "$1if (true)$2");
+        forced += 1;
+        continue;
+      }
+      // `if (COND) {` whose block opens with the refusal.
+      if (/\)\s*\{\s*$/.test(line) && i + 1 < lines.length && isRefusal(lines[i + 1])) {
+        lines[i] = line.replace(/^(\s*)if \(.*\)(\s*\{\s*)$/, "$1if (true)$2");
+        forced += 1;
+      }
+    }
+    return { source: lines.join(NEWLINE), forced };
+  };
+  const modules = ls("src/")
+    .filter((f) => f.endsWith(".mjs"))
+    .filter((f) => (only ? f.includes(only) : true));
+
+  console.log("over-refusal screen — forcing every one-line guard to fire");
+  console.log("");
+  const unverified = [];
+  let applicable = 0;
+  for (const rel of modules) {
+    const source = read(rel);
+    const { source: forcedSource, forced } = forceGuards(source);
+    if (forced === 0) continue;
+    const guards = { length: forced };
+    const tests = testsReferencing(rel);
+    const name = rel.replace(/^src\//, "");
+    if (tests.length === 0) continue;
+    applicable += 1;
+    try {
+      writeFileSync(resolve(REPO, rel), forcedSource, "utf8");
+      const n = failures(tests);
+      if (n === 0) {
+        console.log(`  ${name.padEnd(50)} PERMIT PATH UNVERIFIED (${guards.length} guard(s) forced)`);
+        unverified.push([rel, guards.length]);
+      } else if (n === null) {
+        console.log(`  ${name.padEnd(50)} could not read a failure count`);
+      } else {
+        // Printed rather than passed over in silence. A screen that only speaks
+        // on failure is indistinguishable from one whose mutation never applied
+        // — both are quiet. This number is the evidence that forcing the guards
+        // actually changed something a test could see.
+        console.log(`  ${name.padEnd(50)} ${String(n).padStart(3)} test(s) notice (${guards.length} forced)`);
+      }
+    } finally {
+      restore(rel);
+    }
+  }
+
+  const still = git("status", "--porcelain", "--", "src/").trim();
+  if (still) {
+    console.error(`
+src/ DID NOT RESTORE CLEANLY:
+${still}`);
+    return 2;
+  }
+  console.log(`
+${applicable} module(s) had a one-line guard to force. src/ restored to HEAD.`);
+  if (unverified.length === 0) {
+    console.log("Every applicable module has a test that notices when its guards refuse everything.");
+    return 0;
+  }
+  console.log(`
+${unverified.length} module(s) whose tests pass while the module refuses everything:`);
+  for (const [rel, count] of unverified) console.log(`  ${rel}  (${count} guard(s))`);
+  return 1;
+}
+
 function recoverResidue() {
   for (const rel of ls("src/")) {
     if (!rel.endsWith(".mjs")) continue;
@@ -230,6 +360,7 @@ function assertsViaOwnConstants(moduleRel, testFiles) {
 
 function main(argv) {
   if (argv.includes("--screen")) return screen(argv);
+  if (argv.includes("--over-refusal")) return overRefusal(argv);
   const code = argv.find((a) => a.startsWith("DENY_"));
   if (!code) {
     console.error("usage: node tools/per-site-demonstration.mjs DENY_SOME_CODE [--limit N]");
