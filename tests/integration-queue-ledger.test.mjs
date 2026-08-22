@@ -620,8 +620,12 @@ test("the ordinary, non-racing case is unaffected: a ledger whose read() accesso
 // --- Byte-identity guard: this additive slice modified no file it read -------
 
 test(`byte-identity: all OTHER contract schemas and sibling ledgers unchanged vs ${BASE}`, () => {
+  // src/ledger/checkpoint-ledger.mjs is intentionally EXCLUDED here by
+  // mod-runtime-s1-checkpoint-ordering-fix-001: an authorized, disclosed
+  // cross-cutting fix (resolveLatest content-order bug + a
+  // preWriteCheck-based regression/actor_id gate), not drift this guard
+  // should protect against.
   const guarded = [
-    "src/ledger/checkpoint-ledger.mjs",
     "src/ledger/workspace-lease-ledger.mjs",
     "src/ledger/delegation-ledger.mjs",
     "src/control/overlap-policy.mjs",

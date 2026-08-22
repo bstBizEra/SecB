@@ -263,6 +263,22 @@ test("V-016 composition: a tampered checkpoint ledger surfaces LEDGER_INTEGRITY_
 //   Proves every ledger/contract primitive this candidate composes is unmodified.
 //   If any pinned blob drifts, the candidate has silently mutated a primitive and
 //   this fails.
+//
+//   DISCLOSED, ATTRIBUTED UPDATE (bst/mod-runtime-s1-checkpoint-ordering-fix-001):
+//   src/ledger/checkpoint-ledger.mjs's pin below is intentionally re-pinned to
+//   this branch's post-fix blob. This branch closes
+//   mod-runtime-s1-checkpoint-ledger-second-independent-review-001 §1
+//   (REQUEST_CHANGES) by deliberately modifying checkpoint-ledger.mjs itself
+//   (resolveLatest now resolves by sequence_at_checkpoint content order, and
+//   appendCheckpoint gained a preWriteCheck-based write-side regression +
+//   actor_id-continuity gate) — that file is the fix's own target, not a
+//   primitive this candidate merely composes unmodified. This mirrors the
+//   precedent set by bst/mod-work-sod-version-spoof-fix-001's disclosed
+//   update to approval-binding.test.mjs's analogous F4 guard when
+//   goal-graph-service.mjs legitimately diverged for the same reason. Every
+//   OTHER pinned blob below (durable-ledger.mjs, contract-validator.mjs,
+//   canonical-fingerprint.mjs) is unchanged and still pinned to main @
+//   ec5aa76, proving this fix touched only its intended target.
 
 function repoPath(rel) {
   return fileURLToPath(new URL(`../${rel}`, import.meta.url));
@@ -276,7 +292,7 @@ function gitBlobSha1(rel) {
 }
 
 const PINNED_BLOBS = Object.freeze({
-  "src/ledger/checkpoint-ledger.mjs": "4df391f892f8bac2b569c5bf9fd627ee0101c542",
+  "src/ledger/checkpoint-ledger.mjs": "c072a6207e2fa409a498429be76d95df4f363cf7",
   "src/ledger/durable-ledger.mjs": "6be08fc14ff31a7c871c5e86888af42285d40529",
   // Re-pinned after 61940ac: the registration map is the union of both merge
   // parents (24 ours + 20 main -> 31, nothing dropped, nothing invented).
