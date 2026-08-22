@@ -620,11 +620,15 @@ test("the ordinary, non-racing case is unaffected: a ledger whose read() accesso
 // --- Byte-identity guard: this additive slice modified no file it read -------
 
 test(`byte-identity: all OTHER contract schemas and sibling ledgers unchanged vs ${BASE}`, () => {
+  // src/control/overlap-policy.mjs is intentionally EXCLUDED here by
+  // mod-wspace-s2-overlap-case-fix-001: an authorized, disclosed
+  // cross-cutting fix (case-sensitivity gap with live blast radius through
+  // integration-collision-forecast.mjs), not drift this guard should protect
+  // against.
   const guarded = [
     "src/ledger/checkpoint-ledger.mjs",
     "src/ledger/workspace-lease-ledger.mjs",
     "src/ledger/delegation-ledger.mjs",
-    "src/control/overlap-policy.mjs",
     "src/control/write-set-policy.mjs"
   ];
   // Every contract schema that EXISTED AT THIS SLICE'S OWN BASE, except the

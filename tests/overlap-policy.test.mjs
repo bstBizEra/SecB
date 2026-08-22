@@ -75,6 +75,122 @@ test("O2: prefix-ancestor overlap (dir vs file under it) is derived as same file
   assert.equal(res.overlapClass, "O2");
 });
 
+// ===========================================================================
+// F-1 regression — case-sensitivity silent-fail-open (second independent
+// review, mod-wspace-s2-overlap-policy-second-independent-review-001).
+// Two write sets naming the SAME file with different case must classify as a
+// real collision (O2+), not O0/Parallel. Reproduces the reviewer's exact
+// probe: writeSetA:["src/Foo.js"], writeSetB:["src/foo.js"], all four doctrine
+// dimensions false. Before the fix this returned O0; the fix reuses write-
+// set-policy's existing case-folded PROHIBITED-branch comparison (built
+// originally to defeat a case-varying bypass of a declared prohibited prefix)
+// as a fallback, rather than reimplementing case-folding logic here.
+// ===========================================================================
+
+test("F-1 regression: same file, differing case -> O2 (real collision), NOT O0", () => {
+  const res = evaluateOverlap({
+    writeSetA: ["src/Foo.js"],
+    writeSetB: ["src/foo.js"],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.overlapClass, "O2", "case-differing same-file pair must NOT classify as O0");
+  assert.equal(res.control, "Reservation and conflict forecast");
+});
+
+test("F-1 regression: case-fold applies symmetrically regardless of argument order", () => {
+  const forward = evaluateOverlap({
+    writeSetA: ["src/Foo.js"],
+    writeSetB: ["src/foo.js"],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  const reversed = evaluateOverlap({
+    writeSetA: ["src/foo.js"],
+    writeSetB: ["src/Foo.js"],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  assert.equal(forward.overlapClass, "O2");
+  assert.equal(reversed.overlapClass, "O2");
+});
+
+test("F-1 regression: case-fold applies to ancestor/descendant paths too", () => {
+  const res = evaluateOverlap({
+    writeSetA: ["src/Shared"],
+    writeSetB: ["src/shared/nested/deep.mjs"],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  assert.equal(res.overlapClass, "O2", "case-differing ancestor bound must still overlap its descendant");
+});
+
+test("F-1 no-regression: prefix-confusion boundary stays NOT-overlap even under case folding", () => {
+  // src/Foo vs src/foobar must still NOT overlap: case-folding must not turn the
+  // classic prefix-confusion boundary into a false collision.
+  const res = evaluateOverlap({
+    writeSetA: ["src/Foo"],
+    writeSetB: ["src/foobar"],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  assert.equal(res.overlapClass, "O0", "case-varying prefix-confusion pair must remain non-overlapping");
+});
+
+test("F-1 no-regression: disjoint case-varying paths remain O0", () => {
+  const res = evaluateOverlap({
+    writeSetA: ["src/Alpha.mjs"],
+    writeSetB: ["src/Beta.mjs"],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  assert.equal(res.overlapClass, "O0", "genuinely different files must not collide merely because casing differs");
+});
+
+// ===========================================================================
+// F-2 regression — deny-code order-dependence on doubly-malformed input
+// (second independent review, same record, §2.4). evaluateOverlap(A,B) and
+// evaluateOverlap(B,A) must return the SAME deny code (never a different
+// verdict — this was already true) when both write sets are independently
+// malformed in different ways.
+// ===========================================================================
+
+test("F-2 regression: doubly-malformed input yields the same deny code regardless of argument order", () => {
+  const forward = evaluateOverlap({
+    writeSetA: [],
+    writeSetB: ["../etc/passwd"],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  const reversed = evaluateOverlap({
+    writeSetA: ["../etc/passwd"],
+    writeSetB: [],
+    sameModule: false,
+    sameSymbol: false,
+    protectedBranch: false,
+    globalConfig: false
+  });
+  assert.equal(forward.ok, false);
+  assert.equal(reversed.ok, false);
+  assert.equal(forward.code, reversed.code, "deny code must not depend on which malformed set landed in slot A");
+  assert.equal(forward.code, "DENY_OVERLAP_MALFORMED", "grammar violation outranks a merely-empty set");
+});
+
 test("O3: same symbol/API/schema -> Variant or serialize", () => {
   const res = evalO({ sameSymbol: true });
   assert.equal(res.overlapClass, "O3");
@@ -406,6 +522,15 @@ test("doc-parity: O0-O5 overlap + control match parallel-execution.md verbatim",
 // INDEPENDENT containment oracle (verbatim copy of context-federation's
 // pathSubset, which write-set-policy's containment mirrors). Keeps the reuse of
 // evaluateWriteSet honest; the byte-identity guard below pins the reused source.
+//
+// NOTE (second independent review, F-1): this oracle is intentionally
+// case-sensitive, same as it always was — it mirrors context-federation's
+// pathSubset verbatim and is NOT updated to model the case-fold fast-follow
+// applied to overlap-policy.mjs. Do not add a case-differing row to the table
+// below; it would spuriously "fail" this parity check even though the module's
+// case-fold behavior is correct (this oracle just doesn't model it). The
+// case-fold property itself is asserted directly by the F-1 regression tests
+// above, against the reviewer's exact scenario, not against this oracle.
 // ===========================================================================
 
 function referencePathSubset(candidate, bound) {

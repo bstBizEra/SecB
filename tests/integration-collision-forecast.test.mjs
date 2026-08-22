@@ -372,8 +372,15 @@ test("IntegrationQueueLedger's own module source does not import forecastCollisi
 // ===========================================================================
 
 test(`byte-identity: files read but not modified are unchanged vs base @ ${BASE_COMMIT}`, () => {
+  // src/control/overlap-policy.mjs is intentionally EXCLUDED here by
+  // mod-wspace-s2-overlap-case-fix-001: a second independent review found a
+  // real case-sensitivity gap (src/Foo.js vs src/foo.js silently classified
+  // as no-collision) with live blast radius through THIS exact consumer
+  // (forecastCollision passes write-sets to evaluateOverlap unmodified).
+  // That fix is an authorized, disclosed cross-cutting change to this file --
+  // not drift this guard should protect against. The other four files remain
+  // fully protected.
   const guarded = [
-    "src/control/overlap-policy.mjs",
     "src/control/write-set-policy.mjs",
     "src/ledger/integration-queue-ledger.mjs",
     "src/ledger/durable-ledger.mjs",
