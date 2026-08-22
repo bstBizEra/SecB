@@ -160,6 +160,45 @@ const RATIONALE_BY_OUTCOME = Object.freeze({
     "Delegation denied: the requested risk class is not a recognized risk-registry class (defense in depth; the comparator's own riskClass dimension check already fail-closes this earlier in the ordinary case)."
 });
 
+// --- Decision-record integrity binding ----------------------------------
+//
+// Closes the gap named in docs/03-project-control/candidates/
+// mod-a2a-s2-non-escalation-gate-third-independent-review-001.md §4:
+// `buildDelegationDecisionRecord` previously trusted its `evaluation`
+// argument at face value and never touched `requestedCeiling`/
+// `boundingCeiling` at all, so a hand-fabricated `{ ok: true, code:
+// "ALLOW" }` minted a schema-valid record indistinguishable from a
+// genuine one, even for ceilings a real `evaluateDelegation` call would
+// deny as an escalation.
+//
+// Fix mirrors the EXACT mechanism the sibling MOD-A2A S3 slice
+// (`escalation-route.mjs`'s `bindEscalationRoute`/`verifyEscalation`)
+// already established for this same class of problem — same naming
+// convention (`<module>:JSON.stringify([...actual fields])`), same
+// placement (the fingerprint lives in `evidence_refs`, no new schema
+// field, no `additionalProperties` violation), same split between a
+// minting side (bind) and an independent verification side (verify).
+// Nothing here reimplements or duplicates `evaluateDelegation`'s own
+// comparator/risk-registry logic — the binding at mint time is a pure
+// function of the actual `requestedCeiling`/`boundingCeiling`/outcome
+// (no re-decision); the ONE place this module recomputes the decision
+// is inside `verifyDelegationDecision`, which calls the existing
+// `evaluateDelegation` once (not a second parallel implementation) to
+// learn ground truth, exactly as `verifyEscalation` recomputes its own
+// expected `bindingRef` rather than trusting the stored record blindly.
+export const DENY_UNKNOWN_DELEGATION_DECISION = "DENY_UNKNOWN_DELEGATION_DECISION";
+export const DENY_WRONG_DECISION_TYPE = "DENY_WRONG_DECISION_TYPE";
+export const DENY_DECISION_MISMATCH = "DENY_DECISION_MISMATCH";
+
+// Injective binding string over the ACTUAL ceilings `evaluateDelegation`
+// was supposedly given plus the outcome recorded for them — same
+// construction as `escalation-route.mjs`'s `bindingRef`
+// (`` `escalation-route:${JSON.stringify([...])}` ``), just with this
+// module's own prefix and its own actual-input tuple.
+function delegationBindingRef(requestedCeiling, boundingCeiling, outcome) {
+  return `delegation-gate:${JSON.stringify([requestedCeiling, boundingCeiling, outcome])}`;
+}
+
 // Mints a decision-record CANDIDATE for a delegation-gate evaluation.
 // This function performs no I/O and holds no ledger authority — it does
 // not construct a `DecisionLedger`, does not open a file, and does not
@@ -178,7 +217,22 @@ const RATIONALE_BY_OUTCOME = Object.freeze({
 // fail-closed validates the full decision-record contract
 // (`DENY_CONTRACT_INVALID`) and this function must not duplicate or
 // shadow that gate.
-export function buildDelegationDecisionRecord(evaluation, identity = {}) {
+//
+// `boundCeilings` — `{ requestedCeiling, boundingCeiling }`, the ACTUAL
+// ceilings `evaluation` is claimed to have been produced from. This is
+// the fix for the third-independent-review §4 gap: the record is no
+// longer minted from `evaluation` alone (which carried zero trace of
+// what was actually compared) — its `evidence_refs` now also carries an
+// injective `delegationBindingRef` fingerprint over these actual
+// ceilings and the outcome, mirroring `escalation-route.mjs`'s
+// `bindEscalationRoute`/evidence_refs pattern exactly. This function
+// still does not re-derive `evaluateDelegation`'s own comparator logic
+// (no re-decision here — that would duplicate, not bind); the mint side
+// only binds. Truthful cross-checking of a minted record against the
+// ceilings that were actually supposed to produce it is
+// `verifyDelegationDecision`'s job, below (mirrors `verifyEscalation`).
+export function buildDelegationDecisionRecord(evaluation, identity = {}, boundCeilings = {}) {
+  const { requestedCeiling, boundingCeiling } = boundCeilings;
   const outcome = evaluation && evaluation.ok ? ALLOW : evaluation && evaluation.code;
   const rationale = RATIONALE_BY_OUTCOME[outcome] ?? "Delegation non-escalation disposition recorded.";
   const {
@@ -206,9 +260,47 @@ export function buildDelegationDecisionRecord(evaluation, identity = {}) {
     outcome,
     rationale,
     authority_ref: authorityRef,
-    evidence_refs: evidenceRefs,
+    evidence_refs: [
+      delegationBindingRef(requestedCeiling, boundingCeiling, outcome),
+      ...(Array.isArray(evidenceRefs) ? evidenceRefs : [])
+    ],
     decided_at: decidedAt,
     valid_from: validFrom,
     valid_until: validUntil
   };
+}
+
+// Independent, post-hoc verification that a minted `DISPOSITION` record
+// actually corresponds to a genuine `evaluateDelegation` outcome for a
+// SPECIFIC, exact `requestedCeiling`/`boundingCeiling` pair supplied by
+// the verifier (e.g. a downstream ledger consumer or auditor who holds
+// the real ceilings a wiring layer claims to have evaluated). Mirrors
+// `escalation-route.mjs`'s `verifyEscalation` exactly: recomputes the
+// expected fingerprint from ground truth (calling the existing
+// `evaluateDelegation` ONCE — the single source of truth, not a second
+// parallel implementation of its comparator logic) and checks the
+// record's own `evidence_refs` against it. A record minted from a
+// fabricated `evaluation` that does not match what `evaluateDelegation`
+// actually produces for the given ceilings — the third-independent-review
+// §4 scenario — fails this check with `DENY_DECISION_MISMATCH`.
+export function verifyDelegationDecision(decision, { requestedCeiling, boundingCeiling } = {}) {
+  if (!decision || typeof decision !== "object") {
+    return { ok: false, code: DENY_UNKNOWN_DELEGATION_DECISION };
+  }
+  if (decision.decision_type !== "DISPOSITION") {
+    return { ok: false, code: DENY_WRONG_DECISION_TYPE };
+  }
+
+  const trueEvaluation = evaluateDelegation({ requestedCeiling, boundingCeiling });
+  const trueOutcome = trueEvaluation.ok ? ALLOW : trueEvaluation.code;
+  const expected = delegationBindingRef(requestedCeiling, boundingCeiling, trueOutcome);
+
+  if (decision.outcome !== trueOutcome) {
+    return { ok: false, code: DENY_DECISION_MISMATCH };
+  }
+  if (!Array.isArray(decision.evidence_refs) || !decision.evidence_refs.includes(expected)) {
+    return { ok: false, code: DENY_DECISION_MISMATCH };
+  }
+
+  return { ok: true };
 }

@@ -7,9 +7,13 @@ import test from "node:test";
 import {
   ALLOW,
   buildDelegationDecisionRecord,
+  DENY_DECISION_MISMATCH,
   DENY_HUMAN_APPROVAL_REQUIRED,
+  DENY_UNKNOWN_DELEGATION_DECISION,
+  DENY_WRONG_DECISION_TYPE,
   evaluateDelegation,
-  evaluateDelegationRequest
+  evaluateDelegationRequest,
+  verifyDelegationDecision
 } from "../src/control/delegation-gate.mjs";
 import { withinCeiling } from "../src/services/non-escalation-comparator.mjs";
 import { riskProfile } from "../src/control/risk-registry.mjs";
@@ -325,8 +329,9 @@ function identity(overrides = {}) {
 }
 
 test("buildDelegationDecisionRecord mints a DISPOSITION candidate with outcome ALLOW on authorization", () => {
-  const evaluation = evaluateDelegation(ceilingPair());
-  const record = buildDelegationDecisionRecord(evaluation, identity());
+  const inputs = ceilingPair();
+  const evaluation = evaluateDelegation(inputs);
+  const record = buildDelegationDecisionRecord(evaluation, identity(), inputs);
   assert.equal(record.decision_type, "DISPOSITION");
   assert.equal(record.outcome, ALLOW);
   assert.ok(record.rationale.length > 0);
@@ -335,29 +340,149 @@ test("buildDelegationDecisionRecord mints a DISPOSITION candidate with outcome A
 });
 
 test("buildDelegationDecisionRecord mints a DISPOSITION candidate whose outcome is the exact deny code", () => {
-  const evaluation = evaluateDelegation(
-    ceilingPair({ requestedCeiling: { riskClass: "R3" }, boundingCeiling: { riskClass: "R3" } })
-  );
-  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_002" }));
+  const inputs = ceilingPair({ requestedCeiling: { riskClass: "R3" }, boundingCeiling: { riskClass: "R3" } });
+  const evaluation = evaluateDelegation(inputs);
+  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_002" }), inputs);
   assert.equal(record.decision_type, "DISPOSITION");
   assert.equal(record.outcome, DENY_HUMAN_APPROVAL_REQUIRED);
   assert.ok(record.rationale.includes("human approval"));
 });
 
 test("buildDelegationDecisionRecord performs no I/O — a candidate can be built without any ledger existing", () => {
-  const evaluation = evaluateDelegation(ceilingPair());
-  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_003" }));
+  const inputs = ceilingPair();
+  const evaluation = evaluateDelegation(inputs);
+  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_003" }), inputs);
   assert.equal(typeof record, "object");
+});
+
+// --- Decision-record integrity binding (third-independent-review §4) ----
+//
+// Reproduces docs/03-project-control/candidates/
+// mod-a2a-s2-non-escalation-gate-third-independent-review-001.md's exact
+// finding: `buildDelegationDecisionRecord` previously trusted its
+// `evaluation` argument at face value, with no trace of the actual
+// ceilings evaluated, so a hand-fabricated `{ ok: true, code: "ALLOW" }`
+// minted a schema-valid record byte-for-byte identical to a genuine one
+// — even for a ceiling pair `evaluateDelegation` itself would deny as a
+// real escalation attempt.
+
+test("legitimate case: a record built from evaluateDelegation's real output for its real inputs verifies clean", () => {
+  const inputs = ceilingPair();
+  const evaluation = evaluateDelegation(inputs);
+  assert.deepEqual(evaluation, { ok: true, code: ALLOW });
+  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_bind_001" }), inputs);
+
+  // Unchanged core fields (byte-for-byte, aside from the new binding
+  // fingerprint now present in evidence_refs): still exactly as before.
+  assert.equal(record.decision_type, "DISPOSITION");
+  assert.equal(record.outcome, ALLOW);
+  assert.equal(record.decision_id, "dec_delegation_bind_001");
+  assert.equal(record.project_id, IDS.project);
+  assert.ok(record.rationale.length > 0);
+
+  // The caller-supplied evidenceRefs are preserved verbatim alongside the
+  // new binding fingerprint (prepended), mirroring escalation-route.mjs.
+  assert.ok(record.evidence_refs.includes("ev_delegation_gate_001"));
+  assert.equal(record.evidence_refs.length, 2);
+
+  assert.deepEqual(verifyDelegationDecision(record, inputs), { ok: true });
+});
+
+test("legitimate case: a genuine deny disposition also verifies clean", () => {
+  const inputs = ceilingPair({ requestedCeiling: { riskClass: "R2" }, boundingCeiling: { riskClass: "R1" } });
+  const evaluation = evaluateDelegation(inputs);
+  assert.equal(evaluation.code, "DENY_ESCALATION");
+  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_bind_002" }), inputs);
+  assert.equal(record.outcome, "DENY_ESCALATION");
+  assert.deepEqual(verifyDelegationDecision(record, inputs), { ok: true });
+});
+
+test("REGRESSION (third-independent-review §4): a hand-fabricated {ok:true, code:'ALLOW'} evaluation for a ceiling pair evaluateDelegation would actually deny is caught by verifyDelegationDecision, not silently trusted", () => {
+  // Exact reviewer scenario: requested R4/RESTRICTED/broad paths+tools
+  // against a narrow R0/PUBLIC/empty bounding ceiling — evaluateDelegation
+  // itself denies this as DENY_ESCALATION.
+  const hostileInputs = {
+    requestedCeiling: { riskClass: "R4", dataClassification: "RESTRICTED", paths: ["/"], tools: ["*"], transitions: [] },
+    boundingCeiling: { riskClass: "R0", dataClassification: "PUBLIC", paths: [], tools: [], transitions: [] }
+  };
+  const trueEvaluation = evaluateDelegation(hostileInputs);
+  assert.equal(trueEvaluation.ok, false);
+  assert.equal(trueEvaluation.code, "DENY_ESCALATION");
+
+  // The attacker never calls evaluateDelegation — hand-fabricates it.
+  const fabricatedEval = { ok: true, code: "ALLOW" };
+  const forgedRecord = buildDelegationDecisionRecord(
+    fabricatedEval,
+    identity({ decisionId: "dec_delegation_forged_001" }),
+    hostileInputs
+  );
+
+  // The record itself still reflects the caller's forged outcome (build
+  // performs no re-decision — see module comment) ...
+  assert.equal(forgedRecord.outcome, "ALLOW");
+
+  // ... but a verifier who supplies the SAME actual ceilings recomputes
+  // ground truth via evaluateDelegation and catches the mismatch: this is
+  // exactly the audit-trail-forgery gap the third-independent-review
+  // named, and it is now closed.
+  assert.deepEqual(verifyDelegationDecision(forgedRecord, hostileInputs), {
+    ok: false,
+    code: DENY_DECISION_MISMATCH
+  });
+});
+
+test("REGRESSION: a forged record cannot be laundered by pairing it with different (also-fabricated) ceilings at verify time", () => {
+  // Even if a forger tries to re-present different ceilings alongside the
+  // forged record at verification time (hoping some pair makes it stick),
+  // the binding fingerprint embedded at mint time was computed over the
+  // ORIGINAL hostile ceilings, so it will not match the fingerprint the
+  // verifier recomputes from a different set of "innocent-looking" ones.
+  const hostileInputs = {
+    requestedCeiling: { riskClass: "R4", dataClassification: "RESTRICTED", paths: ["/"], tools: ["*"], transitions: [] },
+    boundingCeiling: { riskClass: "R0", dataClassification: "PUBLIC", paths: [], tools: [], transitions: [] }
+  };
+  const forgedRecord = buildDelegationDecisionRecord(
+    { ok: true, code: "ALLOW" },
+    identity({ decisionId: "dec_delegation_forged_002" }),
+    hostileInputs
+  );
+  const innocentInputs = ceilingPair();
+  assert.deepEqual(verifyDelegationDecision(forgedRecord, innocentInputs), {
+    ok: false,
+    code: DENY_DECISION_MISMATCH
+  });
+});
+
+test("verifyDelegationDecision denies fail-closed on a null/non-object decision", () => {
+  assert.deepEqual(verifyDelegationDecision(null, ceilingPair()), { ok: false, code: DENY_UNKNOWN_DELEGATION_DECISION });
+  assert.deepEqual(verifyDelegationDecision(undefined, ceilingPair()), { ok: false, code: DENY_UNKNOWN_DELEGATION_DECISION });
+});
+
+test("verifyDelegationDecision denies fail-closed on the wrong decision_type", () => {
+  const inputs = ceilingPair();
+  const record = buildDelegationDecisionRecord(evaluateDelegation(inputs), identity(), inputs);
+  const wrongType = { ...record, decision_type: "GOVERNANCE" };
+  assert.deepEqual(verifyDelegationDecision(wrongType, inputs), { ok: false, code: DENY_WRONG_DECISION_TYPE });
+});
+
+test("verifyDelegationDecision denies when evidence_refs is missing or tampered", () => {
+  const inputs = ceilingPair();
+  const record = buildDelegationDecisionRecord(evaluateDelegation(inputs), identity(), inputs);
+  const strippedRefs = { ...record, evidence_refs: ["ev_delegation_gate_001"] };
+  assert.deepEqual(verifyDelegationDecision(strippedRefs, inputs), { ok: false, code: DENY_DECISION_MISMATCH });
+  const noRefs = { ...record, evidence_refs: undefined };
+  assert.deepEqual(verifyDelegationDecision(noRefs, inputs), { ok: false, code: DENY_DECISION_MISMATCH });
 });
 
 // --- Real ledger recording: every disposition is genuinely appended -----
 
 test("an allowed delegation disposition is genuinely appended to DecisionLedger and hash-chain verifies", () => withTempLedger((directory) => {
   const ledger = new DecisionLedger({ filePath: join(directory, "decisions.ndjson") });
-  const evaluation = evaluateDelegation(ceilingPair());
+  const inputs = ceilingPair();
+  const evaluation = evaluateDelegation(inputs);
   assert.deepEqual(evaluation, { ok: true, code: ALLOW });
 
-  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_allowed_001" }));
+  const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: "dec_delegation_allowed_001" }), inputs);
   const appended = ledger.appendDecision(record, { expectedSequence: 0, idempotencyKey: "idem_delegation_allowed_001" });
   assert.equal(appended.sequence, 1);
 
@@ -402,7 +527,7 @@ test("every denial disposition in the matrix is genuinely appended to DecisionLe
   for (const { name, input } of denialCases) {
     const evaluation = evaluateDelegation(input);
     assert.equal(evaluation.ok, false);
-    const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: `dec_delegation_deny_${name}` }));
+    const record = buildDelegationDecisionRecord(evaluation, identity({ decisionId: `dec_delegation_deny_${name}` }), input);
     const appended = ledger.appendDecision(record, { expectedSequence, idempotencyKey: `idem_delegation_deny_${name}` });
     expectedSequence = appended.sequence;
   }
