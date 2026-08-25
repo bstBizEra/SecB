@@ -1,0 +1,27 @@
+version: 0.1.0
+name: bizscout-evidence
+fields:
+  evidence_id: required|string
+  research_run_id: required|string
+  claim: required|string
+  claim_type: required|enum[FACT,REPORTED_FACT,ASSUMPTION,HYPOTHESIS,INFERENCE,RECOMMENDATION]
+  source:
+    type: object
+    required: [title, url]
+    fields:
+      title: string
+      url: string
+      publisher: string|null
+      published_at: datetime|null
+      retrieved_at: datetime
+      source_level: enum[INTERNAL,PRIMARY,SECONDARY,PROFESSIONAL,NEWS,COMMUNITY,AGGREGATOR,UNVERIFIED]
+  evidence_extract: string|null
+  data_point: object|null
+  geography: string|null
+  time_period: string|null
+  verification_status: enum[UNVERIFIED,SINGLE_SOURCE,PRIMARY_SOURCE,MULTI_SOURCE]
+  confidence: enum[HIGH,MEDIUM,LOW]
+  corroborating_sources: array[string]
+  contradicting_sources: array[string]
+  limitations: array[string]
+  created_at: datetime
