@@ -1,0 +1,50 @@
+skill_id: SECB-BIZ-001
+name: bizscout
+version: 0.1.0
+status: candidate
+classification:
+  risk_class: R2
+  mutation_class: M0
+  authority_ceiling: A2
+roles:
+  allowed:
+  - SARCHI
+  - ARCHI
+  - SEC
+  - QA
+  - KNOW
+  prohibited_final_authority:
+  - A5-GOVERNANCE-ROOT
+  - SELF-APPROVAL
+  - SELF-PROMOTION
+inputs:
+  required:
+  - research objective
+  - decision or question
+  - scope/geography
+  - target entity, market, product, or segment
+outputs:
+  required:
+  - research question and scope
+  - evidence-backed findings
+  - source registry
+  - evidence ledger
+  - confidence and limitations
+  - decision-oriented recommendation
+  - next-role handoff
+controls:
+  repository_mutation: prohibited
+  external_facts: citation-required
+  secret_handling: prohibited
+  approval_claims: prohibited
+  tool_authority: prohibited
+tool_policy:
+  external_tools_are_untrusted: true
+  availability_must_be_verified: true
+  primary_source_preferred: true
+evaluation:
+  suite: evals/cases.yaml
+  cross_harness:
+  - codex
+  - claude-code
+  - generic-agent-skills
