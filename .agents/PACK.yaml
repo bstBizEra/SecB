@@ -1,10 +1,10 @@
 pack_id: SECB-ARCH-SKILLS-PACK-001
 name: SecB Architecture Skills Pack
-version: 0.4.1
+version: 0.5.0
 status: candidate
 effective: false
-generated_at: '2026-08-10T00:00:00Z'
-skills: 23
+generated_at: '2026-08-25T00:00:00Z'
+skills: 24
 mutation_authorized: false
 protocol_baselines:
   agent_skills: current as accessed 2026-07-22

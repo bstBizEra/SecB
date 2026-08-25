@@ -44,8 +44,8 @@ import { CORPUS_ROOT } from "./corpus.mjs";
  * feels like clearing a nuisance failure, that is the tripwire working.
  */
 export const EXPECTED_CORPUS = {
-  packages: 23,
-  governed: 23,
+  packages: 24,
+  governed: 24,
   ungoverned: 0,
   /**
    * Named, not merely counted. A corpus that swapped one ungoverned package for
@@ -55,10 +55,11 @@ export const EXPECTED_CORPUS = {
    */
   ungovernedNames: [],
   note:
-    "23 / 23 / 0 since 2026-08-11, when graphify, secb-project-registry and " +
-    "worktree were moved to .agents/tool-notes/. They were never skills: not one " +
-    "carried a mandatory section, and they arrived through tool-integration " +
-    "commits rather than the skills-pack route. Previously 26 / 23 / 3, and " +
+    "24 / 24 / 0 since 2026-08-25, when bizscout (SECB-BIZ-001) arrived through " +
+    "the skills-pack route with a manifest, the seven shared sections, and a " +
+    "hand-written eval suite. Previously 23 / 23 / 0 since 2026-08-11, when " +
+    "graphify, secb-project-registry and worktree were moved to " +
+    ".agents/tool-notes/ — they were never skills. 26 / 23 / 3 before that, and " +
     "25 / 22 / 3 before SECB-ARCH-023."
 };
 

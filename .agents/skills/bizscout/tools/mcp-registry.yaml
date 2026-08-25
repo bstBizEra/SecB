@@ -31,6 +31,7 @@ servers:
     status: candidate
     role: research-artifact-storage
     preferred_for: [evidence-ledger, research-packets, local-artifacts]
+    notes: Artifact writes go to a host-designated artifact directory outside any governed repository. Writing into the skills pack or a governed repo exceeds M0.
   fetch:
     status: candidate
     role: direct-webpage-retrieval

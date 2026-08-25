@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 — 2026-08-25
+
+- Added `bizscout` (SECB-BIZ-001), the first Business Research Intelligence
+  skill: market, product, competitive, customer, industry, trend, pricing, and
+  opportunity research behind eight sub-skills, an evidence schema, and an
+  MCP/tool candidate registry. Candidate / M0 / R2 / A2 — research output only,
+  no approval, mutation, deployment, or self-promotion authority.
+- Brought the package to the corpus bar the 0.4.1 audit established: the seven
+  shared SKILL.md sections, `assets/output-template.md`,
+  `references/workflow.md`, and a hand-written evaluation suite whose eight
+  cases cover positive/negative/adversarial/boundary arms with expectations a
+  procedure can actually evaluate — every expectation carries an observable
+  token, and every case keeps at least one expectation an empty run fails.
+- Registered skills 23 -> 24. `src/audit/corpus-expectation.mjs` updated in the
+  same change, deliberately.
+
 ## 0.4.1 — 2026-08-11
 
 - Rewrote `maker-evidence-audit`'s own evaluation expectations by hand. It was

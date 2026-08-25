@@ -10,6 +10,8 @@ BizScout orchestrates evidence-backed research across markets, products, custome
 
 - Main skill: `SKILL.md`
 - Governance manifest: `manifest.yaml`
+- Workflow reference: `references/workflow.md`
+- Decision-packet template: `assets/output-template.md`
 - Sub-skills: `subskills/*/SKILL.md`
 - MCP/tool registry: `tools/mcp-registry.yaml`
 - Evidence schema: `schemas/evidence.yaml`
