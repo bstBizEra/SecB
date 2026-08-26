@@ -148,7 +148,7 @@ test("corpus shape", () => {
   assert.equal(facts.packages.filter((p) => !p.parseComplete).length, 0,
     "every cases file parsed completely; any unreadable line must surface as UNDECIDABLE, not as absence");
   const cases = facts.packages.reduce((n, p) => n + p.casesFiles.reduce((m, cf) => m + cf.cases.length, 0), 0);
-  assert.equal(cases, 96, "22 template packages x 4 cases + 8 in maker-evidence-audit");
+  assert.equal(cases, 104, "22 template packages x 4 cases + 8 in maker-evidence-audit + 8 in bizscout");
 });
 
 // Every eval-bearing package now states expectations that are its own.
@@ -185,21 +185,21 @@ test("evals.expectation-diversity: no expectation is shared across a majority of
     assert.ok(row.uniqueToPackage >= 10, `${row.pkg} has only ${row.uniqueToPackage} expectations of its own`);
   }
 
-  assert.equal(s.evidence.instances, 266);
-  assert.equal(s.evidence.distinct, 261, "266 instances, 5 of which name an output two skills both declare");
+  assert.equal(s.evidence.instances, 292);
+  assert.equal(s.evidence.distinct, 287, "292 instances, 5 of which name an output two skills both declare");
   assert.equal(count("evals.expectation-diversity", VERDICT.VIOLATION), 0);
 });
 
-// 0 of 24 now. Every negative and adversarial arm gained an expectation that
+// 0 of 26 now. Every negative and adversarial arm gained an expectation that
 // asserts PRESENCE -- the skill must say something -- so an empty run satisfies
 // none of them. The arm whose entire job is to show the skill declining can now
 // fail, which is what makes running it worth anything.
 test("evals.negative-case-cannot-fail: no failure-arm case is satisfied by an empty run", () => {
   const s = summaryOf("evals.negative-case-cannot-fail");
   assert.equal(s.verdict, VERDICT.NO_EVIDENCE);
-  assert.equal(s.evidence.negativeCases, 24);
+  assert.equal(s.evidence.negativeCases, 26);
   assert.equal(s.evidence.negativeCasesIncapableOfFailing, 0);
-  assert.equal(s.evidence.failureCases, 72, "negative + adversarial + boundary arms");
+  assert.equal(s.evidence.failureCases, 78, "negative + adversarial + boundary arms");
   assert.equal(s.evidence.failureCasesIncapableOfFailing, 0);
   assert.equal(s.evidence.nonFailureCasesIncapableOfFailing, 0);
   assert.equal(count("evals.negative-case-cannot-fail", VERDICT.VIOLATION), 0);
@@ -237,11 +237,11 @@ test("evals.undecidable-expectation: zero undecidable expectations remain", () =
   // report, and the verdict moving is the observable difference between "cannot
   // answer" and "nothing to answer about".
   assert.equal(s.verdict, VERDICT.NO_EVIDENCE);
-  assert.equal(s.evidence.totalExpectations, 266);
+  assert.equal(s.evidence.totalExpectations, 292);
   assert.equal(s.evidence.undecidableExpectations, 0);
   assert.equal(s.evidence.undecidableSharePercent, 0);
   assert.equal(s.evidence.distinctUndecidableStrings, 0);
-  assert.equal(s.evidence.totalCases, 96);
+  assert.equal(s.evidence.totalCases, 104);
   assert.equal(s.evidence.fullyUndecidableCases, 0,
     "no case is undecidable end to end any more; every arm states at least one observable");
   // 1: the summary alone. No per-expectation findings remain, and no VIOLATION --

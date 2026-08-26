@@ -1,0 +1,59 @@
+version: 0.1.0
+status: candidate
+policy:
+  availability: environment-dependent
+  verify-before-use: true
+  tool-output-is-evidence: false
+  human-authorization: required by host for tool invocation
+servers:
+  perplexity-comet:
+    status: candidate
+    role: agentic-browser-and-deep-research
+    preferred_for: [deep-web-investigation, dynamic-sites, multi-step-browsing]
+    notes: Use only when the environment exposes a trusted Comet MCP server. Do not infer availability from this registry.
+  duckduckgo:
+    status: candidate
+    role: independent-web-search
+    preferred_for: [discovery, corroboration, alternative-search-index]
+  brave-search:
+    status: candidate
+    role: independent-web-search-and-rich-results
+    preferred_for: [discovery, corroboration, news, media]
+  firecrawl:
+    status: candidate
+    role: web-crawl-and-page-extraction
+    preferred_for: [source-inspection, structured-extraction, crawling]
+  github:
+    status: candidate
+    role: software-and-company-intelligence
+    preferred_for: [open-source-research, repository-analysis, release-signals]
+  filesystem:
+    status: candidate
+    role: research-artifact-storage
+    preferred_for: [evidence-ledger, research-packets, local-artifacts]
+    notes: Artifact writes go to a host-designated artifact directory outside any governed repository. Writing into the skills pack or a governed repo exceeds M0.
+  fetch:
+    status: candidate
+    role: direct-webpage-retrieval
+    preferred_for: [primary-source-inspection]
+  wikipedia:
+    status: candidate
+    role: general-reference
+    preferred_for: [orientation-only]
+  arxiv:
+    status: candidate
+    role: academic-research
+    preferred_for: [technology-research, scientific-literature]
+  news:
+    status: candidate
+    role: current-events-research
+    preferred_for: [recent-signals, strategic-moves]
+  regulatory:
+    status: future
+    role: government-and-regulatory-source-retrieval
+    preferred_for: [regulatory-research]
+selection:
+  discovery: use independent search providers when feasible
+  verification: prefer primary source retrieval
+  corroboration: use a second independent source for material claims where practical
+  failure: record unavailable-tool limitations rather than substituting unsupported claims

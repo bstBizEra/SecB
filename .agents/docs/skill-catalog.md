@@ -25,3 +25,4 @@
 | SECB-ARCH-021 | `architecture-fitness-functions` | Architecture Fitness Functions | R1 | A2 |
 | SECB-ARCH-022 | `architecture-evidence-handoff` | Architecture Evidence and Handoff | R0 | A1 |
 | SECB-ARCH-023 | `maker-evidence-audit` | Maker Evidence Audit | R0 | A1 |
+| SECB-BIZ-001 | `bizscout` | Business Research Intelligence: market, product, competitive, customer, industry, trend, pricing, and opportunity research | R2 | A2 |

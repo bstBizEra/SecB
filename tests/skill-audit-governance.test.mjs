@@ -246,15 +246,15 @@ test("governance.duplicate-identity finds no collision, and says NO_EVIDENCE rat
   assert.equal(violations("governance.duplicate-identity").length, 0);
   assert.equal(findings.length, 1);
   assert.equal(findings[0].verdict, VERDICT.NO_EVIDENCE);
-  assert.equal(findings[0].evidence.examined, 23);
+  assert.equal(findings[0].evidence.examined, 24);
 
   // The check must actually be capable of seeing the 22 identities it compared;
   // a zero produced by not looking is the failure mode this pins.
   const ids = realCorpus.packages
     .filter((p) => p.manifest !== null)
     .map((p) => p.manifest.values.skill_id);
-  assert.equal(ids.length, 23);
-  assert.equal(new Set(ids).size, 23, "the corpus itself has duplicate skill_ids and the check missed them");
+  assert.equal(ids.length, 24);
+  assert.equal(new Set(ids).size, 24, "the corpus itself has duplicate skill_ids and the check missed them");
 });
 
 test("every governed manifest is fully readable, so unreadable-manifest returns NO_EVIDENCE", () => {
@@ -264,7 +264,7 @@ test("every governed manifest is fully readable, so unreadable-manifest returns 
   // represent — either way, downstream checks would start reasoning over
   // content that was never parsed, and that is the failure to catch early.
   const governed = realCorpus.packages.filter((p) => p.manifest !== null);
-  assert.equal(governed.length, 23);
+  assert.equal(governed.length, 24);
   for (const p of governed) {
     assert.deepEqual(
       p.manifest.unreadable,
@@ -277,7 +277,7 @@ test("every governed manifest is fully readable, so unreadable-manifest returns 
   assert.equal(undecidable("governance.unreadable-manifest").length, 0);
   assert.equal(findings.length, 1);
   assert.equal(findings[0].verdict, VERDICT.NO_EVIDENCE);
-  assert.equal(findings[0].evidence.examined, 23);
+  assert.equal(findings[0].evidence.examined, 24);
 });
 
 test("the corpus really is parsed at depth 2, not flattened into its parent key", () => {
@@ -302,7 +302,7 @@ test("the corpus really is parsed at depth 2, not flattened into its parent key"
       );
     }
   }
-  assert.equal(checked, 23, "expected all 23 governed manifests to expose split role lists");
+  assert.equal(checked, 24, "expected all 24 governed manifests to expose split role lists");
 });
 
 test("HISTORY: the 110 unreadable lines were a parser defect, not a corpus property", () => {
@@ -339,7 +339,7 @@ test("governance.identity-fields finds no missing identity, and says NO_EVIDENCE
   const findings = findingsFor.get("governance.identity-fields");
   assert.equal(findings.length, 1);
   assert.equal(findings[0].verdict, VERDICT.NO_EVIDENCE);
-  assert.equal(findings[0].evidence.examined, 23);
+  assert.equal(findings[0].evidence.examined, 24);
 
   // Independent confirmation that the zero is a real zero: all 22 manifests do
   // carry all four identity fields as non-empty scalars.
