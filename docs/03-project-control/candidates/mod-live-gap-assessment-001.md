@@ -1,0 +1,141 @@
+# MOD-LIVE Gap Assessment 001 — Live Operations
+
+**Record ID:** MOD-LIVE-000 / mod-live-gap-assessment-001
+**Status:** DRAFT / ADVISORY — NOT EFFECTIVE
+**Assessed baseline:** unified `main` @ `280d32c5b0c2067ae55907cb3ff580aad5688a76`
+**Author:** claude-cortex-live-assess-01 (BST-SA cortex, module-loop planner)
+**Date:** 2026-07-21
+**Catalog scope under assessment:** MOD-LIVE "Live Operations" — `docs/10-platform/03-module-catalog.md` row 1: "Events, terminal, diff, intervention and replay" (High priority); `docs/14-delivery/01-module-allocation.md` lines 12–13: Live Operations Backend lead ENGIN — Codex, review OPS + SEC; Live Operations UX prototype Antigravity / production Codex, review QA + DOMAIN.
+**Tracker:** `docs/03-project-control/candidates/module-completion-tracker-001.md` row 9 — "QUEUED — partial (event envelope, P0-17 observer report)".
+**Doctrine under assessment:** `docs/05-live-operations/event-envelope.md` (SECB-LIVE-EVENT-001), `docs/05-live-operations/intervention-and-replay.md` (SECB-LIVE-CONTROL-001), `docs/05-live-operations/live-operations-architecture.md` (SECB-LIVE-OPS-ARCH-001), `docs/17-operations/01-live-operations.md` — all DRAFT / NOT EFFECTIVE.
+**Governance frame:** AMD-002 rev 2 advise-and-proceed (candidate preparation only); operator-only merge; no push.
+**Method:** all findings below were read first-hand from the actual source, contracts, tests, and docs at the cited baseline. `git grep -in "MOD-LIVE"` finds only the catalog/tracker/allocation rows — no prior MOD-LIVE gap-assessment or slice branch exists before this record. `npm test` (validator + full suite) was run first-hand in an isolated worktree before drafting: **734 tests / 729 pass / 0 fail / 5 skip**, `node tools/validate-foundation.mjs` exit 0.
+
+---
+
+## 1. Existing-surface inventory (main @ 280d32c)
+
+The catalog names five concerns — **events, terminal, diff, intervention, replay**. Two have real code substrate (the event stream and a static observer report); the rest are declared doctrine with no code counterpart. What exists:
+
+| # | Surface | Live-ops behavior | Notes |
+|---|---|---|---|
+| 1 | `contracts/event-envelope.schema.json` | Closed schema, 13 required fields: `event_id`, `version`, `project_id`, `work_package_id`, `session_id`, `actor_id`, `event_type`, `occurred_at`, `observed_fact`, `source`, `idempotency_key`, `classification`, `content_hash`. | This is a **minimal subset** of the doctrine envelope. SECB-LIVE-EVENT-001 requires ~20 elements the code schema omits: trace/span identifiers, in-stream sequence, prior-event hash + signature reference, observed-fact/provider-assertion/inference classification, data-classification **and** content-capture level, normalized-payload + provider-native reference split, redaction status, and evidence-candidate flag. There is **no event-family taxonomy** in the schema (`session.*`, `tool.*`, …). Widening this live schema is R3 (§5 #6). |
+| 2 | `src/ledger/governed-ledgers.mjs:32` | `EventLedger extends DurableLedger` (`ledgerId: "secb-event-ledger"`); `appendEvent(event, { expectedSequence })` runs `validateContract("eventEnvelope", …)` then appends. | The durable event **stream primitive** exists: hash-chain, monotonic sequence, idempotency-key replay collapse, optimistic concurrency, `verify()`/`read()` — all inherited from `DurableLedger` (`durable-ledger.mjs:52-167`). This is real, tested substrate; the missing pieces below are *evaluators over* this stream, not the stream itself. |
+| 3 | `src/host/host-runtime-agent.mjs:42-86` | `HostRuntimeAgent.emitEvent(...)` mints a well-formed envelope, validates it, appends to the `EventLedger`; `observe(...)` is the read-only Observe-mode producer (`{ read_only: true }`). | In-process event **emission** exists, keyed to a resolved, non-quarantined adapter (`registry.resolve`). Sequence is tracked in-instance (`#sequence`). No trace/span, no family tagging, no capture-policy gate. |
+| 4 | `src/ui/ops-report-generator.mjs` + `src/ui/report-projections.mjs` | P0-17 static, read-only, zero-network ops report. `verify()` precedes `read()` unconditionally; any `LedgerError` yields a full-stop integrity-failure page; classification ceiling is a **display-plane** floor (fail-closed on unrecognized class → RESTRICTED). | This is the **only** replay-adjacent surface, and it is a *snapshot renderer* of two ledgers (events + evidence) into static HTML — **not** a structured replay package. It performs no cross-stream correlation, surfaces no gaps/clock-offset/contradiction, bundles no context receipts / handoff envelopes / policy decisions, and does not distinguish provider-assertion vs. inference vs. human-annotation vs. missing data. Its own banner states it "is not evidence." |
+| 5 | `src/control/state-machine.mjs:31-45` `STATE_MACHINES.Session` | `CREATED→CONTEXT_BINDING→READY→RUNNING→{REVIEW_HANDOFF,PAUSED,BLOCKED,QUARANTINED,FAILED,TERMINATED}`; `PAUSED→RUNNING`, `QUARANTINED→TERMINATED`. | Emergency-mode *target* states (`PAUSED`, `QUARANTINED`, `TERMINATED`) exist and are authority-gated by `TransitionEngine`. But there is **no access-mode ladder** (Observe→Annotate→Approve→Steer→Control→Emergency) modeled anywhere, and no `STEERED`/`CONTROLLED`/`INTERVENED` semantics. Widening this kernel file is R3 (§5 #5). |
+| 6 | `src/ledger/checkpoint-ledger.mjs` (MOD-RUNTIME S1) | `CheckpointLedger extends DurableLedger`: session-scoped, hash-chained resume points; `resolveLatest(sessionId)` fail-closed. | **Adjacent, must not be folded into.** A checkpoint is *forward* "resumable execution state at a sequence position"; a replay package is *backward* "reconstructed observation record across channels." Different directions, different records (B2). |
+| 7 | `src/registry/adapters.mjs:30,51,72` | Adapter descriptors carry `evidence_obligations: ["context-receipt", "event-envelope"]` / `["event-envelope"]`. | Confirms adapters are **event producers** by obligation, and that `event-envelope` and `evidence-envelope` are **separate** obligations — reinforcing B3 (events ≠ evidence). |
+| 8 | `docs/05-live-operations/event-envelope.md` (SECB-LIVE-EVENT-001) | 19 event families (`session.*` … `incident.*`); per-event required-field list; ordering rule ("Sequence is authoritative within a session stream"; W3C trace propagation; "Late or duplicate events are retained but marked and reconciled"; "contradictions become findings rather than silent overwrites"). | The family taxonomy and the ordering/correlation doctrine are **DRAFT prose** with no code classifier or reconciler (G1, G4). Same "codify what's already named" shape as MOD-GOV S2's risk-class table and MOD-WSPACE S2's overlap table. |
+| 9 | `docs/05-live-operations/intervention-and-replay.md` (SECB-LIVE-CONTROL-001) | Access-mode table (Observe/Annotate/Approve/Steer/Control/Emergency; "Observe is the default. Each higher mode requires separate authority and is fully audited"); 12-element replay-package list; privacy rule ("Do not capture hidden chain-of-thought"). | The access-mode ladder (G2) and the structured replay package (G3) are **DRAFT prose** with no code. Intervention is authority-adjacent — its *evaluators* can be pure (R2), its *actuation* cannot (R3/R4). |
+| 10 | `docs/05-live-operations/live-operations-architecture.md` (SECB-LIVE-OPS-ARCH-001) + `docs/17-operations/01-live-operations.md` | Three synchronized channels (semantic events / execution telemetry / terminal streams); Host Runtime Agent responsibilities incl. "Windows ConPTY / PowerShell / WSL", "PTY support", "workspace and namespace enforcement", terminal capture; "No browser connects directly to a host shell." | Channel 3 (terminal/PTY capture) and host-side supervision **spawn processes and touch the host** — explicitly outside the pure in-process candidate posture (G5). R3/R4, operational; not a slice here. |
+
+## 2. Gap table
+
+| ID | Capability | Status | Evidence |
+|---|---|---|---|
+| G1 | Event-family classifier + envelope-doctrine conformance evaluator — map an `event_type` to its canonical family (`session.*` … `incident.*`); surface which doctrine-required envelope elements (trace/span, sequence, prior-hash, fact-classification, capture level, redaction status, evidence-candidate flag) are absent from a given event, as **findings** | **partial** | The family taxonomy exists only as prose (item #8); the live schema (item #1) is a 13-field subset with no family enum and no fact-classification. `grep -rin "family\|event_type" src/` finds emission (item #3) but no classifier. A **pure** evaluator over a supplied event is directly additive; it must **not** widen the live schema (R3) and must **not** re-validate schema shape (B6). |
+| G2 | Access-mode authorization ladder evaluator — given a requested access mode and a claimed granted authority, return fail-closed allow/deny with monotonic ordering (Observe default; each higher mode needs explicit authority) | **missing** | The ladder is prose only (item #9). No code models the six modes or their ordering. A **pure** ladder evaluator (data in → allow/deny out) is R2; it decides *authorization*, it does **not** perform intervention. Actual pause/steer/control/emergency **actuation** mutates live `STATE_MACHINES.Session` via `TransitionEngine` → R3/R4 (B5). |
+| G3 | Replay-package assembler — from already-verified event/evidence records + context receipts + handoff envelopes + policy decisions, produce a structured, frozen replay manifest that distinguishes observed-fact / provider-assertion / human-annotation / inference / redaction / missing-data and flags gaps | **partial** | The P0-17 report (item #4) renders an HTML *snapshot of two ledgers* only — no correlation, no source-class distinction, no gap/contradiction surfacing, no receipt/handoff/policy bundling. A **pure** assembler producing the structured manifest model (which a report/UI would later consume) is additive; it must **not** read ledgers/FS itself and must **not** fold into or replace the report (B1). |
+| G4 | Ordering / correlation reconciliation evaluator — over an assembled multi-source event set, detect declared-sequence-vs-arrival disorder, mark duplicates, and raise provider/host contradictions as **findings** (not silent overwrites) | **partial** | `DurableLedger` gives per-ledger sequence + idempotency-dup rejection *at append* (item #2), but nothing reconciles **across** streams or turns contradictions into findings per the doctrine (item #8). A pure evaluator over a supplied record set is additive; advanced by S3, fully closed by a later dedicated slice. |
+| G5 | Terminal / desktop stream channel + capture-policy enforcement (channel 3; PTY/ConPTY recording under the "no hidden chain-of-thought" privacy rule) | **missing / operational-only** | Channel 3 capture spawns PTY/processes and touches the host (item #10, Host Runtime Agent) — forbidden by the pure in-process posture. Capture-policy enforcement is also authority-adjacent. R3/R4, operator-gated (B4). Not a slice. |
+| G6 | Session state-machine coverage for intervention/access states (`STEERED`, `CONTROLLED`, `INTERVENED`) | **partial** | `STATE_MACHINES.Session` (item #5) has emergency target states but no access-mode-bearing states. Widening `state-machine.mjs` edits a live authority-semantics-bearing kernel file (consumed by `TransitionEngine`) — the identical situation MOD-RUNTIME rated R3 (its MR-4) and MOD-WSPACE made non-goal #2. Out of additive scope. |
+| G7 | Contract-validator / foundation-validator registration for any future live contract kind (mechanical) | **missing (mechanical)** | Adding any new live schema (e.g., a persisted access-mode grant or replay manifest) would touch the fail-closed set-equality schema set in `src/contracts/contract-validator.mjs` (`schemaPaths`) and `tools/validate-foundation.mjs` (`expectedSchemas` + `mandatoryIdentityFields`) — the exact mechanical gap MOD-RUNTIME's MR-8, MOD-WORK's G1, and MOD-WSPACE's G6 hit. **Not triggered by this plan** (S1–S3 add no schema); flagged for a future schema-bearing slice. |
+| G8 | P0 backlog anchor for MOD-LIVE beyond the P0-17 observer report | **missing** | `docs/09-delivery/backlog-p0.md` names the P0-17 observer report but no line for intervention, access-mode governance, structured replay, or the three-channel model. Like MOD-RUNTIME's MR-9 and MOD-WSPACE's G7, this is an operator scope-anchoring question a slice plan cannot resolve on its own. |
+
+**Gap counts: partial 4 (G1, G3, G4, G6) · missing 3 (G2, G5, G8) · missing-mechanical 1 (G7, not triggered this round). Reusable substrate: the `EventLedger`/`DurableLedger` stream (item #2) and `report-projections.mjs`'s pure verified-records-in / frozen-view-out discipline (item #4) are directly the pattern S3 extends — no new persistence need be invented for the pure evaluators.**
+
+## 3. Boundary notes (no-duplication rulings)
+
+- **B1 — Replay-package assembler vs. P0-17 ops report (MOD-LIVE internal).** `ops-report-generator.mjs` renders a static HTML *snapshot* of the event + evidence ledgers with a display-plane classification floor. S3's assembler produces the *structured, source-classified manifest model* with ordering/gap/contradiction findings — no HTML, no ledger/FS reads (records are supplied by the caller, mirroring `report-projections.mjs`'s purity). The report may later consume S3's model; S3 is a peer, **not** a hook into or replacement of the report, and does not touch its integrity-failure or CSP posture.
+- **B2 — Replay package vs. Checkpoint resume (MOD-RUNTIME).** `checkpoint-ledger.mjs` records *forward* resumable execution state keyed by `(project, work_package, session)`; a replay package is *backward* reconstruction of the observation record across channels. Both build on `DurableLedger`; **neither folds into the other.**
+- **B3 — Event envelope (MOD-LIVE) vs. Evidence envelope (MOD-EVID).** Events are observations of what happened (`event-envelope.schema.json`, `EventLedger`); evidence is attested artifact for acceptance (`evidence-envelope.schema.json`, `EvidenceLedger`, `verification_status`). `adapters.mjs` lists them as separate `evidence_obligations` (item #7). The S1 classifier operates over the `event_type` taxonomy only; it must **not** classify, wrap, or touch evidence envelopes.
+- **B4 — Terminal/PTY capture + capture-policy vs. pure in-process posture.** Channel-3 capture (ConPTY/PTY recording) and host supervision spawn processes and touch the host (item #10) — outside the in-process candidate posture. G5 is R3/R4 operational; **not** proposed as a slice.
+- **B5 — Access-mode evaluator vs. actual intervention actuation.** S2's ladder evaluator **decides** whether a requested mode is authorized given a claimed grant. It mints no grant, reads no session, and is wired to nothing. Actually pausing / steering / controlling / emergency-halting a live session mutates `STATE_MACHINES.Session` via `TransitionEngine` — a live authority path; R3/R4, operator-gated. S2 does not touch it.
+- **B6 — Event-family classifier vs. event-envelope schema validation.** `contract-validator`'s `eventEnvelope` validation checks the minimal closed-schema shape. S1 operates one plane up: given an already-well-formed event, classify its family and surface *conformance findings* (doctrine elements the minimal schema does not yet require). S1 must **not** re-validate, replace, or widen the live schema (widening is R3, §5 #6).
+- **B7 — Ordering/correlation findings vs. DurableLedger sequencing.** `DurableLedger` already enforces per-ledger monotonic sequence and idempotency-dup rejection at append time. S3's ordering findings operate over an already-assembled *multi-source* record set (cross-stream), surfacing declared-vs-arrival disorder and cross-source contradictions as **findings** — it never re-implements, replaces, or mutates ledger sequencing.
+
+## 4. Bounded producer work plan (max 3 slices)
+
+Scope discipline mirrors the prior module assessments (MOD-RUNTIME, MOD-GOV, MOD-CONTEXT, MOD-WSPACE): every slice is additive, behavior-preserving, wrap-not-modify. No existing module (`event-ledger`/`governed-ledgers`, `host-runtime-agent`, `ops-report-generator`, `report-projections`, `state-machine`, `event-envelope.schema.json`) is rewired or widened in this plan; adoption/wiring is deferred to later, separately-governed slices. House style throughout: structured denials `{ ok: false, code, message }`, deny-by-default on malformed input, injected dependencies, deep-frozen outputs, no live wiring. **Fail-closed extraction (WSPACE-S1 lesson):** every property read off a caller-supplied input is a **single contained read** into a local const *before* use — no re-entrant property access, so a hostile getter/proxy cannot return one value to the guard and another to the body.
+
+### Slice S1 — Event-family classifier + doctrine-conformance evaluator, PURE + UNWIRED (closes G1) — R2, dispatchable now
+
+- **Files:** new `src/live/event-family-policy.mjs`; new `tests/event-family-policy.test.mjs`; `MANIFEST.json` updated. **No new schema, no new ledger, no I/O** — a pure evaluator over data the caller passes in.
+- **Behavior:** frozen-result functions in the `report-projections.mjs` / `risk-registry.mjs` house style.
+  - `classifyEventType(input)` → `Object.freeze({ ok: true, family })` or `Object.freeze({ ok: false, code, message })`. A **single** contained read of `input?.eventType` into a local const; then: `DENY_EVENT_TYPE_MALFORMED` (non-string / blank / prototype-key smuggling), `DENY_EVENT_FAMILY_UNKNOWN` (dotted prefix not in the SECB-LIVE-EVENT-001 family set). The 19 families are codified **verbatim** from `docs/05-live-operations/event-envelope.md`, guarded by a **doc-parity fixture test** so code/doc drift fails the suite (mirrors MOD-GOV S2 / MOD-WSPACE S2 doc-parity discipline).
+  - `assessEnvelopeConformance(event)` → `Object.freeze({ ok, findings })` where `findings` is a frozen list of typed advisory codes for each doctrine-required element **absent** from the supplied event (e.g. `MISSING_TRACE_ID`, `MISSING_SEQUENCE`, `MISSING_FACT_CLASSIFICATION`, `MISSING_CAPTURE_LEVEL`, `MISSING_EVIDENCE_CANDIDATE_FLAG`). It reports; it does **not** mutate the event, re-validate the closed schema (B6), or widen it.
+  - **Audit-before-effect:** the evaluator's only output is its returned frozen decision/findings record; it has no side effect, so "audit precedes effect" holds by construction.
+- **Acceptance checks:** unit tests for every deny code incl. fail-closed malformed-input cases (non-object, non-string `eventType`, blank, `null`, prototype-key); positive family cases across several families; doc-parity fixture; conformance-findings tests for the subset gap; frozen-output assertion; `npm test` green incl. the new suite; `node tools/validate-foundation.mjs` exit 0; no existing test's behavior changes.
+- **Est. size:** ~120–170 LOC + tests.
+- **R-class:** **R2** — pure additive policy evaluator; no authority semantics, no wiring, no I/O, no schema change. **This is the slice a motor producer can start immediately.**
+
+### Slice S2 — Access-mode authorization ladder evaluator, PURE + UNWIRED (closes G2 evaluator plane) — R2
+
+- **Files:** new `src/live/access-mode-policy.mjs`; new `tests/access-mode-policy.test.mjs`; `MANIFEST.json` updated. No schema, no ledger, no I/O.
+- **Behavior:** `evaluateAccessMode(input)` → `Object.freeze({ ok: true, mode })` or `Object.freeze({ ok: false, code, message })`. Single contained reads of `input?.requestedMode` and `input?.grantedAuthority`. Monotonic ladder codified **verbatim** from the SECB-LIVE-CONTROL-001 access-mode table: `Observe(0) < Annotate < Approve < Steer < Control < Emergency(5)`. Deny-by-default: unknown/blank/malformed mode or authority → **most-restrictive** deny (`DENY_ACCESS_MODE_UNKNOWN` / `DENY_AUTHORITY_UNKNOWN`); `requestedMode` rank > `grantedAuthority` rank → `DENY_INSUFFICIENT_AUTHORITY`; Observe is the permitted default only when a grant of at least Observe is present. A **doc-parity fixture** embeds the table rows so drift fails the suite. The evaluator decides authorization only — it mints no grant, performs no intervention, and is wired to nothing (B5).
+- **Acceptance checks:** rank-by-rank unit tests for each of the six modes at each authority level; most-restrictive-on-malformed tests (unknown mode, unknown authority, non-string, `null`, prototype-key); insufficient-authority denial; Observe-default case; doc-parity fixture; frozen output; `npm test` green; validator exit 0.
+- **Est. size:** ~110–150 LOC + tests.
+- **R-class:** **R2** — pure doctrine codification; no wiring into any live session/gateway/intervention path. Actual intervention actuation remains R3/R4 (B5, §5 #2).
+
+### Slice S3 — Replay-package assembler + ordering-reconciliation, PURE + UNWIRED (closes G3, advances G4) — R2
+
+- **Files:** new `src/live/replay-package.mjs`; new `tests/replay-package.test.mjs`; `MANIFEST.json` updated. No schema, no ledger, no I/O.
+- **Behavior:** `assembleReplayPackage(input, { now })` where `input` carries **already-verified** record arrays the caller supplies (`eventRecords`, `evidenceRecords`, `contextReceipts`, `handoffEnvelopes`, `policyDecisions`) — the assembler reads **no** ledger and **no** filesystem (mirrors `report-projections.mjs` purity; the caller runs `verify()`/`read()` first, exactly as `ops-report-generator` does). Returns `Object.freeze({ ok, package })` or a structured deny. The frozen `package`:
+  - segregates entries into source classes — `observed_fact` / `provider_assertion` / `human_annotation` / `inference` / `redaction` / `missing` — per the SECB-LIVE-CONTROL-001 "Replay must distinguish …" rule;
+  - computes **ordering findings**: declared-sequence-vs-arrival disorder, duplicate idempotency keys, and cross-source contradictions raised as **findings** (never silent overwrites), per SECB-LIVE-EVENT-001;
+  - flags `gaps` (sequence holes) and records injected `assembledAt` from `now` (no ambient clock).
+  - Deny-by-default: malformed record shape / non-array inputs / prototype-key smuggling → `DENY_REPLAY_MALFORMED`. Single contained read of each input array before use.
+- **Boundary:** produces the structured manifest **model** only; it does **not** render HTML, read ledgers, or fold into / replace the P0-17 report (B1), and its ordering findings never mutate or re-sequence any ledger (B7).
+- **Acceptance checks:** source-class segregation tests; ordering-disorder, duplicate, and contradiction-finding tests; gap-flag test; malformed/`null`/non-array/prototype-key deny tests; injected-`now` determinism; frozen (deep) output assertion; `npm test` green; validator exit 0; no existing behavior changes.
+- **Est. size:** ~160–220 LOC + tests.
+- **R-class:** **R2** — pure additive assembler over caller-supplied verified records; no wiring, no I/O, no schema. Wiring it into any live report/UI/ledger read path is later, separately-governed work.
+
+**Sequencing:** S1, S2, S3 are mutually independent (no shared mutable files, no ordering dependency). S1 is the recommended first dispatch — smallest, purest, and it establishes the doc-parity fixture discipline S2 and S3 both reuse. Any order among the three is safe.
+
+## 5. Explicit non-goals
+
+1. No terminal/PTY/ConPTY capture or channel-3 stream (G5) — spawning PTY/recording processes touches the host, forbidden by the in-process candidate posture; R3/R4 operator-gated (B4).
+2. No actual intervention **actuation** — pausing, steering, controlling, or emergency-halting a live session mutates `STATE_MACHINES.Session` via `TransitionEngine`; S2 evaluates authorization only and is wired to nothing (B5). R3/R4.
+3. No widening of `STATE_MACHINES.Session` with intervention/access states (G6) — `state-machine.mjs` is a live authority-semantics-bearing kernel file; widening it is R3 kernel work requiring parity tests + SEC/GOV review (mirrors MOD-RUNTIME non-goal #2, MOD-WSPACE non-goal #2).
+4. No widening of `contracts/event-envelope.schema.json` toward the full SECB-LIVE-EVENT-001 field set — the schema is a live enforcement contract consumed by `host-runtime-agent`, `EventLedger`, and `contract-validator`; changing it is R3. S1 surfaces the subset gap as **findings** only (B6).
+5. No rewiring of `ops-report-generator.mjs`, `report-projections.mjs`, `host-runtime-agent.mjs`, or any live path onto the S1/S2/S3 primitives — adoption is later, separately-governed work.
+6. No new contract kind and no change to `contract-validator.mjs` `schemaPaths` or `tools/validate-foundation.mjs` `expectedSchemas` (G7) — S1–S3 add no schema. A future persisted access-mode grant or replay-manifest kind would carry that mechanical work under its own slice.
+7. No enforcement hook that actually gates a live event append, access request, or replay export — all three slices are unwired evaluators, per the "candidate, not activation" discipline the prior module slices held to.
+8. No new P0 backlog line (G8) — adding one is an operator/portfolio decision.
+
+## 6. R-class flags
+
+| Item | Flag |
+|---|---|
+| S1 (event-family classifier + conformance findings) | **R2** — pure additive policy function; no wiring, no I/O, no schema. |
+| S2 (access-mode ladder evaluator) | **R2** — pure doctrine codification; no wiring, no intervention. |
+| S3 (replay-package assembler + ordering findings) | **R2** — pure assembler over caller-supplied verified records; no I/O, no schema. |
+| G5 (terminal/PTY capture, channel 3) | **R3/R4, out of this plan** — host process spawning + capture policy; operator-gated. |
+| G2 actuation / G6 (intervention actuation + session-state widening) | **R3/R4, out of this plan** — live authority path + kernel file; non-goals #2, #3. |
+| G1 actuation (event-envelope schema widening) | **R3, out of this plan** — live enforcement contract; non-goal #4. |
+| Adoption of S1/S2/S3 by report/host/live paths | **R2 for the pure primitives, R3 for rewiring live services** — deferred; non-goal #5. |
+
+## 7. AMD-002 rev 2 authorization analysis
+
+- **Pre-authorized now, no fresh Human-GOV needed:** producing S1, S2, and S3 as bounded additive slices under `src/**` and `tests/**` on this non-main branch, with scope + acceptance checks declared and exact results reported. None touches authority, identity, evidence acceptance, remote/external actions, the live event schema, the session state machine, or any intervention actuation path — so no per-step halt applies. This is squarely AMD-002 rule 1's standing implementation authorization, the same footing MOD-RUNTIME S1/S2 and MOD-WSPACE S1–S3 stood on.
+- **Would need the SEC + GOV review AMD-002 reserves, not a new amendment:** (a) terminal/PTY capture (G5); (b) any intervention **actuation** or widening of `STATE_MACHINES.Session` (G2 actuation / G6); (c) widening `event-envelope.schema.json` (G1 actuation); (d) wiring any of the three primitives into `ops-report-generator`, `host-runtime-agent`, or any live event/replay/intervention path. All four are explicit non-goals (§5) and none is proposed for producer dispatch here.
+- **Conclusion:** this gap assessment and its bounded S1–S3 plan do not require a *new* Human-GOV authorization beyond AMD-002 rev 2's standing pre-authorization for additive candidate slices. What would require the reserved SEC+GOV review is any subsequent *activation/wiring* step — which this plan does not include.
+
+## 8. Advisory status fields
+
+```yaml
+truth_status: verified_true            # all evidence read directly from cited files at 280d32c; npm test run first-hand (734/729/0/5), validator exit 0
+authority_status: advisory_only
+implementation_status: candidate       # this record proposes; it authorizes nothing
+risk_class: R1                         # the record itself: documentation candidate on a non-main branch
+self_certification:
+  agent_id: claude-cortex-live-assess-01
+  peer_agent_id: null
+  certification_scope: advisory_only
+  execution_authority: false
+  approval_authority: false
+  ready_for_operator_review: true
+```
+
+> Recommend improvements only. Do not execute them. Producer round scope is bounded to S1–S3 above; anything else — including any wiring/activation step named in §5 and §7 — is a new decision.

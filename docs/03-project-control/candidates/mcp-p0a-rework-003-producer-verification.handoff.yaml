@@ -1,0 +1,95 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_003_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Codex ENGIN producer verification, 2026-07-19T19:00:15.8189282+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: "codex-engin-mcp-p0a-rework-003"
+  limitations:
+    - "Producer checks are evidence candidates, not independent REV, QA, SEC, evidence acceptance, or governance acceptance."
+    - "A final revocation check immediately precedes adapter dispatch, but an in-process revocation cannot atomically cancel an adapter after invocation begins; runtime admission requires a separately reviewed isolation and cancellation boundary."
+    - "Timed-out hooks retain their invocation capacity reservation until settlement. Clock and adapter late settlements append best-effort evidence, but an uncooperative Promise can retain capacity indefinitely."
+    - "The normalized secret-like key and value detector is a bounded default control, not a complete DLP system."
+    - "No merge to main, push, transport binding, registry promotion, deployment, evidence acceptance, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-003-PRODUCER-VERIFY"
+  sequence: 3
+  source_role: "ENGIN_PRODUCER"
+  source_agent_instance_id: "codex-engin-mcp-p0a-rework-003"
+  destination_role: "FRESH_INDEPENDENT_REV"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  original_target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  prior_lineage_handoff_commit: "f42b110a0000174d867fd30a52412c52b3e0f0e1"
+  reviewed_rework_002_target_commit: "daaa4ac11e79916748de63e0d7862883902192ea"
+  implementation_parent_commit: "daaa4ac11e79916748de63e0d7862883902192ea"
+  implementation_commit: "c64566c75b33cbdddbb46697b7d70ce2a74d733a"
+  rework_target_commit: "c64566c75b33cbdddbb46697b7d70ce2a74d733a"
+  branch: "producer/mcp/p0a-gateway-core-rework-003"
+  review_scope_note: "Review the complete implementation diff daaa4ac..c64566c. This later handoff commit is provenance only and is not part of the frozen implementation target."
+
+  closure_claims:
+    - control_id: "MCP-R3-GLOBAL-CAPACITY"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "One global reservation is acquired before request normalization, clock, audit, or any injected hook; overflow runs no hook, and timed-out unsettled operations retain the reservation without double charging."
+    - control_id: "MCP-R3-TIMER-BOUND"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Every configured timeout is a positive safe integer no greater than Node's 2147483647 millisecond timer maximum."
+    - control_id: "MCP-R3-CLOCK-CONTAINMENT"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Date metadata is read through exception-contained Date.prototype.getTime.call; proxied and hostile clock values deny without escaping."
+    - control_id: "MCP-R3-FULL-BOUNDARY-SIZING"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Request sizing includes the complete caller context and params before audit/dispatch; response sizing includes result and complete receipt envelope before success release."
+    - control_id: "MCP-R3-OUTPUT-KEY-NORMALIZATION"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "NFKC and separator-insensitive key normalization blocks camelCase and punctuation variants while the injected result validator remains narrowing-only."
+    - control_id: "MCP-R3-PUBLIC-DENIAL"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "All public denials use a generic message and do not echo caller, adapter, tool, capability, or exception identifiers."
+    - control_id: "MCP-R3-DISPATCH-REVOCATION"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "Revocation is checked once before the allow audit and again directly before adapter invocation; a changed decision denies without adapter dispatch. Atomic cancellation after invocation begins remains a runtime isolation residual."
+    - control_id: "MCP-R3-TIMEOUT-EVIDENCE"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "Adapter and clock timeouts are non-terminal pending dispositions; late settlement evidence is appended when possible, the original operation is never redispatched, and capacity stays held until settlement."
+    - control_id: "MCP-R3-NO-IO"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Static scan found no filesystem, network, HTTP, process, environment, listener, fetch, spawn, or exec capability in the gateway core."
+
+  final_checks:
+    dependency_restore: "npm ci --offline --ignore-scripts: 6 packages installed, 0 vulnerabilities"
+    focused_gateway_tests: "35 total, 35 pass, 0 fail, 0 skip"
+    full_suite: "187 total, 174 pass, 0 fail, 13 pre-existing blocked skips"
+    foundation_validator: "PASS, including git.local-only after removing clone-created origin metadata"
+    diff_check: "PASS"
+    static_scope_check: "PASS: no node:fs, node:net, node:http, node:https, node:child_process, fetch, listen, spawn, exec, or process.env capability in src/gateway/mcp-gateway-core.mjs"
+
+  changed_files:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core-adversarial.test.mjs"
+
+  retained_residuals:
+    - "Project path, repository, branch, workspace lease freshness, egress destination, credential-handle issuance, and data-class policy remain outside this pure gateway core."
+    - "Durable evidence-envelope persistence, evidence acceptance, external corroboration, and retention enforcement remain unimplemented here."
+    - "Forced termination and atomic revocation of an already-started in-process hook require a separately reviewed isolation/runtime boundary."
+    - "An uncooperative timed-out Promise can retain a capacity reservation indefinitely; an outer process/worker supervisor remains required for runtime recovery."
+    - "SECB-MCP-P0-001 and the MCP work packages remain DRAFT / NOT EFFECTIVE."
+    - "Transport, adapter intake, private-registry promotion, runtime admission, deployment, and activation remain denied."
+
+  requested_review:
+    - "A reviewer from a different agent instance reruns focused and full tests from immutable target c64566c75b33cbdddbb46697b7d70ce2a74d733a."
+    - "REV challenges capacity reservation races, timeout settlement bookkeeping, hostile request/clock objects, complete-envelope byte accounting, normalized DLP bypasses, public denial disclosure, and final revocation ordering."
+    - "Distinct QA and SEC execute fresh checks after REV; no producer output is acceptance evidence by itself."
+
+self_certification:
+  producer_id: "codex-engin-mcp-p0a-rework-003"
+  producer_verified: true
+  independent_review: false
+  qa_acceptance: false
+  sec_acceptance: false
+  evidence_acceptance: false
+  governance_acceptance: false
+  merge_authority: false
+  activation_authority: false
