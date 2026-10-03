@@ -1,0 +1,86 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_004_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Codex ENGIN producer verification, 2026-07-19T19:21:00.8183721+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: "codex-engin-mcp-p0a-rework-004"
+  limitations:
+    - "Producer checks are evidence candidates, not independent REV, QA, SEC, evidence acceptance, or governance acceptance."
+    - "The synchronous dispatch guard and adapter start share one JavaScript call stack. Revocation after adapter start cannot forcibly cancel in-process work; runtime admission still requires an independently reviewed isolation and cancellation boundary."
+    - "Every timed-out injected hook retains capacity until settlement and receives best-effort late-settlement evidence when the audit sink is available. An uncooperative Promise can retain capacity indefinitely."
+    - "Non-ASCII output keys and normalized secret-like ASCII keys fail closed, and resultValidator is mandatory. This bounded lexical/schema boundary is not a complete DLP system."
+    - "No merge to main, push, transport binding, registry promotion, deployment, evidence acceptance, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-004-PRODUCER-VERIFY"
+  sequence: 4
+  source_role: "ENGIN_PRODUCER"
+  source_agent_instance_id: "codex-engin-mcp-p0a-rework-004"
+  destination_role: "FRESH_INDEPENDENT_REV"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  original_target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  prior_lineage_handoff_commit: "d4509a16d273da3cb0d54fcfe8a0a6f292114516"
+  reviewed_rework_003_target_commit: "c64566c75b33cbdddbb46697b7d70ce2a74d733a"
+  implementation_parent_commit: "c64566c75b33cbdddbb46697b7d70ce2a74d733a"
+  implementation_commit: "b1e0f7bef7b0e173e72851bd5c005659568b2573"
+  rework_target_commit: "b1e0f7bef7b0e173e72851bd5c005659568b2573"
+  branch: "producer/mcp/p0a-gateway-core-rework-004"
+  review_scope_note: "Review the complete implementation diff c64566c..b1e0f7b. This later handoff commit is provenance only and is not part of the frozen implementation target."
+
+  closure_claims:
+    - control_id: "MCP-R4-PROTOTYPE-SAFE-BOUNDARY"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Normalization writes enumerable own properties onto null-prototype objects with defineProperty and rejects __proto__, constructor, and prototype keys. Request and complete-response regression probes with 5000-byte prototype payloads deny before release."
+    - control_id: "MCP-R4-TERMINAL-EVIDENCE"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "Ordinary DENY dispositions are terminal evidence candidates with per-invocation monotonic sequence. Clock, policy, audit, revocation, adapter, and result-validator timeouts record pending and best-effort late settlement; an unavailable audit sink cannot guarantee durable evidence."
+    - control_id: "MCP-R4-DISPATCH-REVOCATION"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "A synchronous final dispatchGuard and adapter start execute in one call stack. The queued-microtask revocation regression denies before adapter start; async revocation resolution requires a separate synchronous guard. Cancellation after start remains outside this core."
+    - control_id: "MCP-R4-OUTPUT-KEY-POLICY"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "Successful result keys are ASCII-only, normalized secret-like keys fail closed, returned objects have null prototypes, and the constructor requires an injected resultValidator. Full DLP and data-class enforcement remain external gates."
+    - control_id: "MCP-R4-NO-IO"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Static scan found no filesystem, network, HTTP, process, environment, listener, fetch, spawn, or exec capability in the gateway core."
+
+  final_checks:
+    dependency_restore: "npm ci --offline: 6 packages installed, 0 vulnerabilities"
+    focused_gateway_tests: "40 total, 40 pass, 0 fail, 0 skip"
+    full_suite: "192 total, 179 pass, 0 fail, 13 pre-existing blocked skips"
+    foundation_validator: "PASS, including git.local-only in a clone with only its clone-created origin metadata removed"
+    worktree_full_suite_attempt: "BLOCKED before tests by the immutable baseline git.local-only validator because the governed worktree inherited the parent repository origin; no source failure"
+    diff_check: "PASS"
+    static_scope_check: "PASS: no node:fs, node:net, node:http, node:https, node:child_process, fetch, listen, spawn, exec, or process.env capability in src/gateway/mcp-gateway-core.mjs"
+
+  changed_files:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core-adversarial.test.mjs"
+    - "tests/mcp-gateway-core.test.mjs"
+
+  retained_residuals:
+    - "Project path, repository, branch, workspace lease freshness, egress destination, credential-handle issuance, and data-class policy remain outside this pure gateway core."
+    - "Durable evidence-envelope persistence, evidence acceptance, external corroboration, and retention enforcement remain unimplemented here."
+    - "Forced termination and atomic revocation of an already-started in-process hook require a separately reviewed isolation/runtime boundary."
+    - "An uncooperative timed-out Promise can retain a capacity reservation indefinitely; an outer process/worker supervisor remains required for runtime recovery."
+    - "ASCII-only keys plus a mandatory injected result validator are bounded fail-closed controls, not complete DLP or an independently accepted output schema."
+    - "SECB-MCP-P0-001 and the MCP work packages remain DRAFT / NOT EFFECTIVE."
+    - "Transport, adapter intake, private-registry promotion, runtime admission, deployment, and activation remain denied."
+
+  requested_review:
+    - "A reviewer from a different agent instance reruns focused and full tests from immutable target b1e0f7bef7b0e173e72851bd5c005659568b2573."
+    - "REV challenges prototype-key handling and complete byte accounting, denial terminality and sequence, every hook timeout path, audit unavailability, Unicode confusables, mandatory result validation, and dispatch-guard ordering."
+    - "Distinct QA and SEC execute fresh checks after REV; no producer output is acceptance evidence by itself."
+
+self_certification:
+  producer_id: "codex-engin-mcp-p0a-rework-004"
+  producer_verified: true
+  independent_review: false
+  qa_acceptance: false
+  sec_acceptance: false
+  evidence_acceptance: false
+  governance_acceptance: false
+  merge_authority: false
+  activation_authority: false

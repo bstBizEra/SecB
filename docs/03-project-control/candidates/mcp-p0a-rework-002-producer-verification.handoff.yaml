@@ -1,0 +1,90 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_002_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Codex ENGIN producer verification, 2026-07-19T18:34:22.3243716+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: "codex-engin-mcp-p0a-rework-002"
+  limitations:
+    - "Producer checks are evidence candidates, not independent REV, QA, SEC, evidence acceptance, or governance acceptance."
+    - "Pure in-process JavaScript cannot forcibly terminate an uncooperative timed-out Promise; each such operation remains charged against the concurrency cap until it settles. Runtime admission still requires an isolation and cancellation control decision."
+    - "The secret-like output detector is a bounded default control, not a complete DLP system; independent SEC must challenge false negatives and false positives before any runtime admission."
+    - "No merge to main, push, transport binding, registry promotion, deployment, evidence acceptance, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-002-PRODUCER-VERIFY"
+  sequence: 2
+  source_role: "ENGIN_PRODUCER"
+  source_agent_instance_id: "codex-engin-mcp-p0a-rework-002"
+  destination_role: "FRESH_INDEPENDENT_REV"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  original_target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  prior_rework_target_commit: "393b4896f252c38464541e088abd5d7bafdab2e0"
+  lineage_handoff_commit: "1f4465d92a6a2aa9f8c16d9e6ad374622ee8334c"
+  implementation_parent_commit: "1f4465d92a6a2aa9f8c16d9e6ad374622ee8334c"
+  implementation_commits:
+    - "c5fce37708555538368816604d9a86a81d4ff161"
+    - "daaa4ac11e79916748de63e0d7862883902192ea"
+  rework_target_commit: "daaa4ac11e79916748de63e0d7862883902192ea"
+  branch: "producer/mcp/p0a-gateway-core-rework-002"
+  review_scope_note: "Review the complete implementation range 1f4465d..daaa4ac. This later handoff commit is provenance only and is not part of the frozen implementation range."
+
+  closure_claims:
+    - control_id: "MCP-R2-HOSTILE-METADATA"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Capability and adapter metadata are read into immutable snapshots through exception-contained property access; invalid or throwing access metadata returns audited DENY_INVALID_CAPABILITY without coercion."
+    - control_id: "MCP-R2-SIZE-BOUNDS"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "JSON-like request and response envelopes have configurable positive safe-integer byte limits and stable DENY_REQUEST_INVALID or DENY_RESULT_INVALID outcomes."
+    - control_id: "MCP-R2-TIMEOUT-CONCURRENCY"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Clock, policy, audit, adapter, revocation, and result-validator hooks have configurable gateway-response timeouts; capacity overflow is immediately DENY_CONCURRENCY_LIMIT, and timed-out operations remain charged until settlement."
+    - control_id: "MCP-R2-OUTPUT-CONTROL"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Default JSON output normalization rejects secret-like keys and values, non-plain values, cycles, and oversize results; the injected result validator can only narrow acceptance and fails closed."
+    - control_id: "MCP-R2-TERMINAL-DISPOSITION"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "ALLOW_DISPATCH remains pre-dispatch and is followed by terminal SUCCESS, FAILURE_ADAPTER, or FAILURE_RESULT audit records marked EVIDENCE_CANDIDATE_NOT_ACCEPTED."
+    - control_id: "MCP-R2-REVOCATION"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Construction requires an injected revocationCheck; true, throwing, rejected, or timed-out checks deny before dispatch with stable codes."
+    - control_id: "MCP-R2-NO-IO"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Static scan found no filesystem, network, HTTP, process, environment, listener, fetch, spawn, or exec capability in the gateway core."
+
+  final_checks:
+    focused_gateway_tests: "25 total, 25 pass, 0 fail, 0 skip"
+    full_suite: "177 total, 164 pass, 0 fail, 13 pre-existing blocked skips"
+    foundation_validator: "PASS"
+    diff_check: "PASS"
+    static_scope_check: "PASS: no fs, net, http, https, child_process, fetch, listen, spawn, exec, or process.env capability in src/gateway/mcp-gateway-core.mjs"
+    dependency_restore: "npm ci --offline --ignore-scripts: 6 packages installed, 0 vulnerabilities"
+
+  changed_files:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core.test.mjs"
+    - "tests/mcp-gateway-core-adversarial.test.mjs"
+
+  retained_residuals:
+    - "Project path, repository, branch, workspace lease freshness, egress destination, credential-handle issuance, and data-class policy remain outside this pure gateway core."
+    - "Durable evidence-envelope persistence, evidence acceptance, external corroboration, and retention enforcement remain unimplemented here."
+    - "Forced termination of uncooperative in-process hooks requires a separately reviewed isolation/runtime boundary; current fail-closed behavior withholds results and retains capacity reservations."
+    - "SECB-MCP-P0-001 and the MCP work packages remain DRAFT / NOT EFFECTIVE."
+    - "Transport, adapter intake, private-registry promotion, runtime admission, deployment, and activation remain denied."
+
+  requested_review:
+    - "A reviewer from a different agent instance reruns focused and full tests from immutable target daaa4ac11e79916748de63e0d7862883902192ea."
+    - "REV challenges every closure claim, especially timeout leakage, getter/proxy attacks, byte accounting, DLP bypasses, audit terminality, revocation ordering, and capacity races."
+    - "Distinct QA and SEC must execute fresh checks after REV; no producer output is acceptance evidence by itself."
+
+self_certification:
+  producer_id: "codex-engin-mcp-p0a-rework-002"
+  producer_verified: true
+  independent_review: false
+  qa_acceptance: false
+  sec_acceptance: false
+  evidence_acceptance: false
+  governance_acceptance: false
+  merge_authority: false
+  activation_authority: false

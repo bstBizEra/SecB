@@ -1,0 +1,91 @@
+schema_version: "1.0"
+record_metadata:
+  record_id: "handoff_mcp_p0a_rework_005_producer_verification_v1_candidate"
+  record_status: "PRODUCER_VERIFIED_REVIEW_REQUIRED_NOT_EFFECTIVE"
+  source: "Codex ENGIN producer verification, 2026-07-19T19:59:45.0978939+07:00"
+  producer_runtime: "Codex"
+  producer_actor_id: "codex-engin-mcp-p0a-rework-005"
+  producer_helper: "codex-engin-r5-test-design, read-only implementation advice only"
+  limitations:
+    - "Producer checks and helper analysis are evidence candidates, not independent REV, QA, SEC, evidence acceptance, or governance acceptance."
+    - "Only primitive false from the synchronous dispatch guard authorizes adapter start. Revocation after adapter start cannot forcibly cancel in-process work; runtime admission requires an independently reviewed isolation and cancellation boundary."
+    - "Concurrency-denial evidence uses a serialized, separately accounted in-memory audit-only lane. If its sink never settles, later overflow evidence waits indefinitely rather than bypassing the lane."
+    - "Timed-hook and audit late-settlement evidence is best-effort and in-memory. It is sequenced after sink recovery but is not durable evidence acceptance."
+    - "Null-prototype output plus ASCII/secret-key filtering and mandatory resultValidator remain bounded controls, not a complete DLP system."
+    - "No merge to main, push, transport binding, registry promotion, deployment, evidence acceptance, or activation is authorized."
+
+handoff:
+  handoff_id: "HANDOFF-MCP-P0A-REWORK-005-PRODUCER-VERIFY"
+  sequence: 5
+  source_role: "ENGIN_PRODUCER"
+  source_agent_instance_id: "codex-engin-mcp-p0a-rework-005"
+  destination_role: "FRESH_INDEPENDENT_REV"
+  project_id: "prj_secb_local"
+  work_package_id: "wp_secb_mcp_a_gateway_core_001"
+  original_target_commit: "270dacfc7fad75e82014809743ba1545a66fc5f2"
+  prior_lineage_handoff_commit: "1d54aa60595d07781cc255d1581758245ea5c151"
+  reviewed_rework_004_target_commit: "b1e0f7bef7b0e173e72851bd5c005659568b2573"
+  implementation_parent_commit: "b1e0f7bef7b0e173e72851bd5c005659568b2573"
+  implementation_commit: "60bbb6acfd3914728e29add7b8562457a704614a"
+  rework_target_commit: "60bbb6acfd3914728e29add7b8562457a704614a"
+  branch: "producer/mcp/p0a-gateway-core-rework-005"
+  review_scope_note: "Review the complete implementation diff b1e0f7b..60bbb6a. This later handoff commit is provenance only and is not part of the frozen implementation target."
+
+  closure_claims:
+    - control_id: "MCP-R5-PRIMITIVE-DISPATCH-GUARD"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "Only primitive false authorizes dispatch; primitive true denies revoked; every other return or throw denies unavailable without reading an attacker-controlled then property. Guard and adapter start remain in one synchronous call stack."
+    - control_id: "MCP-R5-TIMED-HOOK-EVIDENCE"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "Original hook settlement is retained independently of timeout-marker audit success, then its late evidence waits for ordered audit recovery. In-memory evidence still depends on eventual sink settlement."
+    - control_id: "MCP-R5-CONCURRENCY-DENIAL-EVIDENCE"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "DENY_CONCURRENCY_LIMIT receives terminal sequence-1 evidence through a serialized audit-only lane. Overflow runs no clock, policy, revocation, dispatch guard, or adapter hook and does not consume execution capacity. The lane is not a durable queue."
+    - control_id: "MCP-R5-PROTOTYPE-INDEPENDENT-SIZING"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Request/result objects, arrays, success envelopes, receipts, denials, and audit entries use null-prototype hardened containers where applicable. Own-property serialization ignores inherited Object.prototype.toJSON and Array.prototype.toJSON hooks for byte accounting."
+    - control_id: "MCP-R5-AUDIT-TIMEOUT-SEQUENCE"
+      producer_claim: "CLOSED_CANDIDATE_WITH_RESIDUAL"
+      evidence: "A timed-out audit produces one nonterminal TIMEOUT_AUDIT_PENDING and one terminal LATE_SETTLEMENT_AUDIT_SUCCESS or FAILURE through a nonrecursive recovery path, with monotonic per-invocation sequence. Durable sink guarantees remain external."
+    - control_id: "MCP-R5-NO-IO"
+      producer_claim: "CLOSED_CANDIDATE"
+      evidence: "Static scan found no filesystem, network, HTTP, process, environment, listener, fetch, spawn, or exec capability in the gateway core."
+
+  final_checks:
+    dependency_restore: "npm ci --offline: 6 packages installed, 0 vulnerabilities"
+    focused_gateway_tests: "43 total, 43 pass, 0 fail, 0 skip"
+    full_suite: "195 total, 182 pass, 0 fail, 13 pre-existing blocked skips"
+    foundation_validator: "PASS, including git.local-only in a clone with only its clone-created origin metadata removed"
+    diff_check: "PASS"
+    static_scope_check: "PASS: no node:fs, node:net, node:http, node:https, node:child_process, fetch, listen, spawn, exec, or process.env capability in src/gateway/mcp-gateway-core.mjs"
+
+  changed_files:
+    - "src/gateway/mcp-gateway-core.mjs"
+    - "tests/mcp-gateway-core-adversarial.test.mjs"
+
+  retained_residuals:
+    - "Project path, repository, branch, workspace lease freshness, egress destination, credential-handle issuance, and data-class policy remain outside this pure gateway core."
+    - "Durable evidence-envelope persistence, accepted sequence/signature authority, external corroboration, and retention enforcement remain unimplemented here."
+    - "The audit-only overflow lane is serialized but in-memory; sustained overflow can accumulate waiting callers, and an uncooperative sink can stall that lane indefinitely."
+    - "Forced termination and atomic revocation of an already-started in-process hook require a separately reviewed isolation/runtime boundary."
+    - "An uncooperative timed-out hook can retain an execution reservation indefinitely; an outer process/worker supervisor remains required for runtime recovery."
+    - "Null-prototype arrays intentionally expose no inherited Array methods; adapter result validators must use own-property or intrinsic operations."
+    - "ASCII-only keys plus a mandatory injected result validator are bounded fail-closed controls, not complete DLP or an independently accepted output schema."
+    - "SECB-MCP-P0-001 and the MCP work packages remain DRAFT / NOT EFFECTIVE."
+    - "Transport, adapter intake, private-registry promotion, runtime admission, deployment, and activation remain denied."
+
+  requested_review:
+    - "A reviewer from a different agent instance reruns focused and full tests from immutable target 60bbb6acfd3914728e29add7b8562457a704614a."
+    - "REV challenges non-primitive and throwing dispatch guards, overflow evidence-lane accounting, sink non-settlement, original hook/audit recovery ordering, prototype/toJSON poisoning, null-prototype arrays, and complete-envelope sizing."
+    - "Distinct QA and SEC execute fresh checks after REV; no producer output is acceptance evidence by itself."
+
+self_certification:
+  producer_id: "codex-engin-mcp-p0a-rework-005"
+  producer_verified: true
+  independent_review: false
+  qa_acceptance: false
+  sec_acceptance: false
+  evidence_acceptance: false
+  governance_acceptance: false
+  merge_authority: false
+  activation_authority: false
