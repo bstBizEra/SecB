@@ -106,7 +106,13 @@ function uniquePatches(cwd, base, sha) {
  * Classify every local branch. Pure read: nothing is modified.
  * Each row: { branch, sha, action: "DELETE"|"KEEP", reason, unique? }
  */
-export function planSweep({ cwd = process.cwd(), base = "main", protect = DEFAULT_PROTECT } = {}) {
+export const DELETE_CLASSES = ["merged", "noop"];
+
+export function planSweep({
+  cwd = process.cwd(), base = "main", protect = DEFAULT_PROTECT, classes = DELETE_CLASSES
+} = {}) {
+  const unknown = classes.filter((c) => !DELETE_CLASSES.includes(c));
+  if (unknown.length || !classes.length) throw new Error(`classes must be a non-empty subset of ${DELETE_CLASSES.join(",")}`);
   const baseSha = git(cwd, "rev-parse", "--verify", "--quiet", `refs/heads/${base}`)?.trim();
   if (!baseSha) throw new Error(`base branch not found: ${base}`);
   const protectRe = new RegExp(protect);
@@ -126,6 +132,12 @@ export function planSweep({ cwd = process.cwd(), base = "main", protect = DEFAUL
     const unique = uniquePatches(cwd, baseSha, sha);
     return unique > 0 ? keep("unique", { unique }) : keep("patch-equivalent");
   });
+
+  // A qualifying class the caller did not select is held, and says so, rather
+  // than silently reported as if it carried unique work.
+  for (const r of rows) {
+    if (r.action === "DELETE" && !classes.includes(r.reason)) Object.assign(r, { action: "KEEP", reason: `${r.reason}-held` });
+  }
 
   // A detached worktree HEAD outside the base must stay reachable. If every
   // branch reaching it is slated for deletion, keep all of them.
@@ -178,11 +190,12 @@ function summarize(rows) {
 }
 
 function parseArgs(argv) {
-  const opts = { apply: false, json: false, base: "main", protect: DEFAULT_PROTECT, restore: null };
+  const opts = { apply: false, json: false, base: "main", protect: DEFAULT_PROTECT, restore: null, classes: DELETE_CLASSES };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--apply") opts.apply = true;
     else if (a === "--json") opts.json = true;
+    else if (a === "--classes" && argv[i + 1] !== undefined) opts.classes = argv[++i].split(",").filter(Boolean);
     else if (["--base", "--protect", "--restore"].includes(a) && argv[i + 1] !== undefined) opts[a.slice(2)] = argv[++i];
     else throw new Error(`unknown or incomplete argument: ${a}`);
   }
@@ -192,7 +205,7 @@ function parseArgs(argv) {
 function main(argv) {
   let opts;
   try { opts = parseArgs(argv); } catch (e) {
-    process.stderr.write(`${e.message}\nusage: secb-branch-sweep [--apply] [--base main] [--protect REGEX] [--restore FILE] [--json]\n`);
+    process.stderr.write(`${e.message}\nusage: secb-branch-sweep [--apply] [--classes merged,noop] [--base main] [--protect REGEX] [--restore FILE] [--json]\n`);
     return 2;
   }
   let plan;
@@ -201,7 +214,7 @@ function main(argv) {
   if (opts.json && !opts.apply) { process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`); return 0; }
   process.stdout.write(`base ${plan.base} @ ${plan.baseSha.slice(0, 8)} — ${plan.rows.length} local branch(es)\n`);
   for (const [k, n] of summarize(plan.rows)) process.stdout.write(`  ${k.padEnd(24)} ${n}\n`);
-  for (const r of plan.rows.filter((row) => row.reason === "patch-equivalent" || row.reason === "pins-worktree")) {
+  for (const r of plan.rows.filter((row) => ["patch-equivalent", "pins-worktree", "noop-held"].includes(row.reason))) {
     process.stdout.write(`  keep ${r.reason}: ${r.branch}\n`);
   }
   const doomed = plan.rows.filter((r) => r.action === "DELETE").length;

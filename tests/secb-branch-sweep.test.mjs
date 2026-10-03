@@ -118,6 +118,29 @@ describe("secb-branch-sweep / what qualifies for deletion", () => {
   });
 });
 
+describe("secb-branch-sweep / restricting the delete classes", () => {
+  it("--classes merged holds a noop branch, says so, and still deletes merged ones", () => {
+    const { dir, git, commit } = makeRepo();
+    git("branch", "plain");
+    git("switch", "-q", "-c", "picked");
+    const c = commit("b.txt", "b\n");
+    git("switch", "-q", "main");
+    commit("z.txt", "unrelated\n", "main diverges");
+    git("cherry-pick", c);
+    const plan = planSweep({ cwd: dir, classes: ["merged"] });
+    assert.deepEqual([row(plan, "picked").action, row(plan, "picked").reason], ["KEEP", "noop-held"]);
+    assert.deepEqual([row(plan, "plain").action, row(plan, "plain").reason], ["DELETE", "merged"]);
+    // positive arm: the default classes still delete the same noop branch
+    assert.equal(row(planSweep({ cwd: dir }), "picked").action, "DELETE");
+  });
+
+  it("rejects an unknown or empty class list instead of deleting nothing silently", () => {
+    const { dir } = makeRepo();
+    assert.throws(() => planSweep({ cwd: dir, classes: ["merged", "landed"] }), /non-empty subset/);
+    assert.throws(() => planSweep({ cwd: dir, classes: [] }), /non-empty subset/);
+  });
+});
+
 describe("secb-branch-sweep / what is never deleted", () => {
   it("keeps the base, protected names, and branches checked out in a worktree", () => {
     const { dir, git } = makeRepo();
